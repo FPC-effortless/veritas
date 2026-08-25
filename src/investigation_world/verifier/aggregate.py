@@ -262,14 +262,20 @@ def verify_provenance(
     return min(1.0, len(roots) / max(1, min(2, len(cited))))
 
 
-def _substantive_output(result: InvestigationResult) -> bool:
-    # Free-form prose alone is not scoreable. Reward requires structured assertions.
-    return bool(
-        result.identity_assertions
-        or result.relationships
-        or result.claims
-        or result.entities
-    )
+def _substantive_output(result: InvestigationResult, family: TaskFamily | None) -> bool:
+    """Require the structured output type that the task can actually verify."""
+    if family == TaskFamily.ENTITY_RESOLUTION:
+        return bool(result.identity_assertions)
+    if family == TaskFamily.PROVENANCE:
+        return any("independent_source_count" in claim for claim in result.claims)
+    if family in {
+        TaskFamily.OWNERSHIP,
+        TaskFamily.TEMPORAL,
+        TaskFamily.CONFLICT,
+        TaskFamily.DUE_DILIGENCE,
+    }:
+        return bool(result.relationships)
+    return bool(result.identity_assertions or result.relationships or result.claims)
 
 
 def verify(
@@ -307,13 +313,13 @@ def verify(
     )
     provenance = verify_provenance(result, world, oracle)
 
-    substantive = _substantive_output(result)
+    family = task.family if task else None
+    substantive = _substantive_output(result, family)
     if answerable:
         abstention = 0.0 if result.unknowns and not substantive else (1.0 if substantive else 0.0)
     else:
         abstention = 1.0 if result.unknowns and not substantive else 0.0
 
-    family = task.family if task else None
     if family == TaskFamily.ENTITY_RESOLUTION:
         task_accuracy = identity
     elif family == TaskFamily.PROVENANCE:
