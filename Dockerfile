@@ -15,5 +15,9 @@ RUN python -m pip install --upgrade pip \
 
 USER veritas
 
-ENTRYPOINT ["iworld"]
-CMD ["--help"]
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()" || exit 1
+
+CMD ["uvicorn", "investigation_world.tools.server:app", "--host", "0.0.0.0", "--port", "8000"]
