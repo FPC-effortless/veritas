@@ -7,9 +7,14 @@ from investigation_world.core.models import CanonicalWorld, SourceType
 
 
 class FrozenSearchIndex:
+    COLUMNS = ["document_id", "source_type", "published_at", "title", "body"]
+
     def __init__(self, path: str = ":memory:"):
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        existing = [row[1] for row in self.db.execute("PRAGMA table_info(documents)")]
+        if existing and existing != self.COLUMNS:
+            self.db.execute("DROP TABLE documents")
         self.db.execute(
             "CREATE VIRTUAL TABLE IF NOT EXISTS documents USING fts5("
             "document_id UNINDEXED, source_type UNINDEXED, published_at UNINDEXED, title, body)"
