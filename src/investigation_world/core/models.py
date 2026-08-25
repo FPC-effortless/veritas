@@ -123,7 +123,7 @@ class Source(BaseModel):
     source_id: str
     name: str
     source_type: SourceType
-    reliability_baseline: float = 0.5
+    reliability_baseline: float = Field(default=0.5, ge=0.0, le=1.0)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -200,15 +200,21 @@ class CanonicalWorld(BaseModel):
             return self.domains[entity_id].hostname
         return entity_id
 
-    def resolve_entity_ref(self, reference: str) -> set[str]:
-        """Resolve an agent-visible label to zero or more hidden canonical entities."""
+    def resolve_entity_ref(
+        self,
+        reference: str,
+        *,
+        allow_canonical_ids: bool = False,
+    ) -> set[str]:
+        """Resolve an observable label without accepting hidden IDs unless explicitly privileged."""
         needle = reference.strip().casefold()
         if not needle:
             return set()
         resolved: set[str] = set()
-        all_ids = set(self.people) | set(self.organizations) | set(self.addresses) | set(self.domains)
-        if reference in all_ids:
-            resolved.add(reference)
+        if allow_canonical_ids:
+            all_ids = set(self.people) | set(self.organizations) | set(self.addresses) | set(self.domains)
+            if reference in all_ids:
+                resolved.add(reference)
         for entity_id, person in self.people.items():
             labels = [person.canonical_name, *person.aliases, *person.identifiers.values()]
             if any(label.casefold() == needle for label in labels):
@@ -223,7 +229,11 @@ class CanonicalWorld(BaseModel):
             if any(label.casefold() == needle for label in labels):
                 resolved.add(entity_id)
         for entity_id, address in self.addresses.items():
-            labels = [address.synthetic_line, f"{address.synthetic_line}, {address.city}", address.postal_code]
+            labels = [
+                address.synthetic_line,
+                f"{address.synthetic_line}, {address.city}",
+                address.postal_code,
+            ]
             if any(label.casefold() == needle for label in labels):
                 resolved.add(entity_id)
         for entity_id, domain in self.domains.items():
@@ -249,6 +259,14 @@ class CanonicalWorld(BaseModel):
     def validate(self) -> bool:
         ids = set(self.people) | set(self.organizations) | set(self.addresses) | set(self.domains)
         assert len(ids) == len(self.people) + len(self.organizations) + len(self.addresses) + len(self.domains)
+        assert len({person.canonical_name for person in self.people.values()}) == len(self.people)
+        assert len({organization.legal_name for organization in self.organizations.values()}) == len(
+            self.organizations
+        )
+        for organization in self.organizations.values():
+            assert organization.dissolution_date is None or organization.incorporation_date <= organization.dissolution_date
+            for period in organization.name_history:
+                assert period.valid_to is None or period.valid_from <= period.valid_to
         for relationship in self.relationships:
             assert relationship.subject_id in ids
             assert relationship.object_id in ids
@@ -262,6 +280,7 @@ class CanonicalWorld(BaseModel):
             assert claim.subject_id in ids
             assert claim.object_id is None or claim.object_id in ids
             assert not source_ids or claim.origin_source_id in source_ids
+            assert claim.valid_to is None or claim.valid_from is None or claim.valid_from <= claim.valid_to
         for document in self.documents:
             assert not source_ids or document.source_id in source_ids
             assert all(claim_id in claim_ids for claim_id in document.claim_ids)
@@ -270,12 +289,14 @@ class CanonicalWorld(BaseModel):
 
 
 class InvestigationBudget(BaseModel):
-    total_cost: int = 40
-    max_tool_calls: int = 30
-    spent: int = 0
-    calls: int = 0
+    total_cost: int = Field(default=40, ge=1)
+    max_tool_calls: int = Field(default=30, ge=1)
+    spent: int = Field(default=0, ge=0)
+    calls: int = Field(default=0, ge=0)
 
     def charge(self, cost: int) -> None:
+        if cost < 0:
+            raise ValueError("tool cost cannot be negative")
         if self.calls >= self.max_tool_calls or self.spent + cost > self.total_cost:
             raise ValueError("investigation budget exhausted")
         self.calls += 1
