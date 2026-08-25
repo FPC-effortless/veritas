@@ -86,5 +86,37 @@ def build_index(world: Path, database: Path = Path("search.sqlite")):
     typer.echo(f"indexed {database}")
 
 
+@app.command()
+def validate_companyworld(dataset: Path):
+    """Validate a CompanyWorld dataset before compiling operational episodes."""
+    from investigation_world.companyworld import CompanyWorldAdapter
+
+    report = CompanyWorldAdapter(dataset).validate()
+    typer.echo(json.dumps(report.model_dump(mode="json"), indent=2, default=str))
+    raise typer.Exit(0 if report.valid else 1)
+
+
+@app.command()
+def compile_companyworld_cmd(
+    dataset: Path,
+    output: Path = Path("companyworld_episodes.json"),
+    oracle_output: Path | None = None,
+    limit: int | None = None,
+):
+    """Compile CompanyWorld into public Veritas episodes plus optional private oracles."""
+    from investigation_world.companyworld import write_companyworld_bundle
+
+    result = write_companyworld_bundle(
+        dataset,
+        output,
+        oracle_output=oracle_output,
+        limit=limit,
+    )
+    typer.echo(json.dumps(result, indent=2, default=str))
+    if not result["validation"]["errors"]:
+        return
+    raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
