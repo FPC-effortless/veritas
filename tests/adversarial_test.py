@@ -26,6 +26,25 @@ def _relationship_instance(world):
     raise AssertionError("expected an answerable relationship task")
 
 
+def _identity_instance(world):
+    for instance in generate_task_bundle(world, count=90, seed=4):
+        if instance.public.family == TaskFamily.ENTITY_RESOLUTION and instance.oracle.answerable:
+            return instance
+    raise AssertionError("expected an answerable identity task")
+
+
+def _provenance_instance(world):
+    for instance in generate_task_bundle(world, count=90, seed=6):
+        if (
+            instance.public.family == TaskFamily.PROVENANCE
+            and instance.oracle.answerable
+            and instance.oracle.provenance_root_count is not None
+            and instance.oracle.provenance_document_ids
+        ):
+            return instance
+    raise AssertionError("expected an answerable provenance task")
+
+
 def _perfect_relationships(world, instance):
     return [
         {
@@ -88,13 +107,7 @@ def test_answer_stuffing_reduces_reward():
 
 def test_false_entity_merge_is_penalized_against_hidden_identity():
     world = _benchmark_world(8)
-    identity_instances = [
-        instance
-        for instance in generate_task_bundle(world, count=80, seed=4)
-        if instance.public.family == TaskFamily.ENTITY_RESOLUTION and instance.oracle.answerable
-    ]
-    assert identity_instances
-    instance = identity_instances[0]
+    instance = _identity_instance(world)
     target = instance.oracle.identity_truth[0]
     correct = InvestigationResult(
         identity_assertions=[
@@ -111,8 +124,52 @@ def test_false_entity_merge_is_penalized_against_hidden_identity():
     correct_score = verify(correct, world, task=instance.public, oracle=instance.oracle)
     wrong_score = verify(wrong, world, task=instance.public, oracle=instance.oracle)
     assert correct_score["overall_reward"] > wrong_score["overall_reward"]
+    assert wrong_score["overall_reward"] == 0.0
     if not target.same_entity:
         assert wrong_score["false_merge_count"] == 1
+
+
+def test_off_target_identity_pair_cannot_substitute_for_requested_pair():
+    world = _benchmark_world(10)
+    instance = _identity_instance(world)
+    target_refs = {ref.casefold() for ref in instance.public.target_refs}
+    alternatives = [
+        person.canonical_name
+        for person in world.people.values()
+        if person.canonical_name.casefold() not in target_refs
+    ]
+    assert len(alternatives) >= 2
+    off_target = InvestigationResult(
+        identity_assertions=[
+            {"left": alternatives[0], "right": alternatives[1], "same_entity": False}
+        ],
+        overall_confidence=1.0,
+    )
+    score = verify(off_target, world, task=instance.public, oracle=instance.oracle)
+    assert score["identity"] == 0.0
+    assert score["overall_reward"] == 0.0
+
+
+def test_provenance_requires_the_task_documents_to_be_cited():
+    world = _benchmark_world(12)
+    instance = _provenance_instance(world)
+    claim = [{"independent_source_count": instance.oracle.provenance_root_count}]
+    uncited = InvestigationResult(claims=claim, overall_confidence=1.0)
+    uncited_score = verify(uncited, world, task=instance.public, oracle=instance.oracle)
+    assert uncited_score["provenance"] == 0.0
+    assert uncited_score["overall_reward"] == 0.0
+
+    cited = InvestigationResult(
+        claims=claim,
+        evidence=[
+            {"document_id": document_id}
+            for document_id in instance.oracle.provenance_document_ids
+        ],
+        overall_confidence=1.0,
+    )
+    cited_score = verify(cited, world, task=instance.public, oracle=instance.oracle)
+    assert cited_score["provenance"] == 1.0
+    assert cited_score["overall_reward"] > 0.0
 
 
 def test_ownership_transfer_changes_temporal_truth():
