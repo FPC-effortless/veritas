@@ -96,7 +96,7 @@ def validate_companyworld(dataset: Path):
     raise typer.Exit(0 if report.valid else 1)
 
 
-@app.command()
+@app.command("compile-companyworld")
 def compile_companyworld_cmd(
     dataset: Path,
     output: Path = Path("companyworld_episodes.json"),
