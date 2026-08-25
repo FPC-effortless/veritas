@@ -6,6 +6,19 @@ from collections.abc import Iterable
 from investigation_world.core.models import CanonicalWorld, SourceType
 
 
+_BASE_SELECT = "SELECT document_id, source_type, published_at, title, body FROM documents WHERE documents MATCH ?"
+_FILTERED_SEARCH_SQL = {
+    1: f"{_BASE_SELECT} AND source_type IN (?) LIMIT ?",
+    2: f"{_BASE_SELECT} AND source_type IN (?,?) LIMIT ?",
+    3: f"{_BASE_SELECT} AND source_type IN (?,?,?) LIMIT ?",
+    4: f"{_BASE_SELECT} AND source_type IN (?,?,?,?) LIMIT ?",
+    5: f"{_BASE_SELECT} AND source_type IN (?,?,?,?,?) LIMIT ?",
+    6: f"{_BASE_SELECT} AND source_type IN (?,?,?,?,?,?) LIMIT ?",
+}
+_UNFILTERED_SEARCH_SQL = f"{_BASE_SELECT} LIMIT ?"
+_ALLOWED_SOURCE_TYPES = {source_type.value for source_type in SourceType}
+
+
 class FrozenSearchIndex:
     COLUMNS = ["document_id", "source_type", "published_at", "title", "body"]
 
@@ -48,22 +61,17 @@ class FrozenSearchIndex:
             return []
         safe_query = " ".join('"' + part.replace('"', "") + '"' for part in query.split())
         bounded_limit = max(1, min(limit, 100))
-        filters = [
-            source_type.value if isinstance(source_type, SourceType) else str(source_type)
-            for source_type in (source_types or [])
-        ]
+
+        filters: list[str] = []
+        for source_type in source_types or []:
+            value = source_type.value if isinstance(source_type, SourceType) else str(source_type)
+            if value in _ALLOWED_SOURCE_TYPES and value not in filters:
+                filters.append(value)
+
         if filters:
-            placeholders = ",".join("?" for _ in filters)
-            sql = (
-                "SELECT document_id, source_type, published_at, title, body "
-                "FROM documents WHERE documents MATCH ? "
-                f"AND source_type IN ({placeholders}) LIMIT ?"
-            )
+            sql = _FILTERED_SEARCH_SQL[len(filters)]
             params = [safe_query, *filters, bounded_limit]
         else:
-            sql = (
-                "SELECT document_id, source_type, published_at, title, body "
-                "FROM documents WHERE documents MATCH ? LIMIT ?"
-            )
+            sql = _UNFILTERED_SEARCH_SQL
             params = [safe_query, bounded_limit]
         return [dict(row) for row in self.db.execute(sql, params)]
