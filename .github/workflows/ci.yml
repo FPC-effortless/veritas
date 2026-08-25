@@ -116,9 +116,17 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: veritas:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Boot container and verify API health
+        run: |
+          docker run -d --rm --name veritas-ci -p 8000:8000 veritas:ci
+          trap 'docker rm -f veritas-ci >/dev/null 2>&1 || true' EXIT
+          curl --fail --silent --show-error \
+            --retry 20 --retry-delay 1 --retry-connrefused \
+            http://127.0.0.1:8000/healthz
 
   required:
     name: Required
