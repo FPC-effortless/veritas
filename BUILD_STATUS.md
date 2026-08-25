@@ -1,25 +1,53 @@
 # Build status
 
-## Completed implementation
-- Deterministic synthetic canonical world generation with typed IDs, temporal relationships, events, validation, and reproducibility.
-- Pydantic schemas for entities, claims, sources, documents, budgets, findings, investigation state, actions, and verification results.
-- Six typed evidence source families, deterministic claim projection, omission/staleness noise, citation links, and provenance DAG.
-- SQLite FTS5 frozen search index with bounded query results.
-- FastAPI agent-facing load/search/document/submit routes and configurable budget enforcement.
-- Six procedural task families, answerability, difficulty vectors, split manifest generation.
-- Baseline factorized verifier with false-merge penalties, support, abstention, calibration, and efficiency fields.
-- Adversarial tests for false merges and unsupported claims.
-- Trajectory recorder, JSONL/Parquet exporters, failure labels, CLI world/evidence/task/index commands.
-- Docker/Makefile and reproducibility documentation.
+## Version
 
-## Validation
-- Python compilation passes.
-- Test suite passes: 10 tests.
-- End-to-end world → evidence → FTS search → structured submission → verifier → JSONL/Parquet trajectory export passes; reference smoke world contains 382 relationships, 210 events, and 920 documents.
+Current benchmark/runtime version: **0.4.0**.
 
-## Remaining limitations
-- The implementation is a compact V0 foundation, not the complete commercial benchmark requested in the original specification.
-- Default reference generation now produces 382 relationships and 210 events, meeting the requested minimum scale.
-- Full independent verifier modules, robust temporal/evidence entailment scoring, leakage tests, all adversarial transformations, and complete end-to-end API tests remain.
-- Renderer output is deterministic text rather than realistic HTML/XML source documents.
-- Private benchmark storage, privileged trajectory exports, Harbor adapter, and production deployment hardening remain deferred.
+## Implemented
+
+- Deterministic hidden canonical world generation with typed entities and event-sourced temporal relationship intervals.
+- Temporal ownership transfers, residence changes, organization renames, dissolutions, and historical state queries.
+- Leakage-safe evidence projection using public names/aliases rather than canonical entity IDs.
+- Six source families with source-conditioned omission, staleness, partial truth, false claims, and citation dependence.
+- Citation provenance DAG and independent-root reasoning.
+- Source-aware SQLite FTS5 search surfaces for web, registry, filing, archive, and general document search.
+- Isolated FastAPI episode sessions with per-episode hidden world/oracle, search index, budget, and public task.
+- Concrete public `TaskSpec` objects plus separate privileged `TaskOracle` objects.
+- Six task families: entity resolution, ownership reconstruction, temporal reconstruction, provenance, conflict resolution, and due diligence.
+- Task-scoped verifier with precision/recall/F1, hidden identity resolution, temporal scoring, private claim-backed evidence support, provenance scoring, calibration, abstention, efficiency, and explicit false-merge/unsupported-claim penalties.
+- Reward integrity guards: empty and conclusion-only submissions cannot earn answerable-task reward; answer stuffing reduces score.
+- Trajectory recorder plus JSONL/Parquet export and failure labels.
+- Docker/Makefile packaging and reproducibility tooling.
+- GitHub Actions CI, security scanning, dependency maintenance, release validation, GitHub Releases, and GHCR publishing.
+
+## Regression coverage
+
+The suite now covers:
+
+- deterministic world/evidence generation
+- temporal ownership state transitions
+- public/canonical leakage boundaries
+- public-task/private-oracle separation
+- train/public/private split disjointness
+- empty-answer reward hacking
+- false-positive answer stuffing
+- false entity merges
+- source-aware tool surfaces
+- per-episode budget isolation
+- provenance cycle/laundering behavior
+- tool cost exhaustion
+
+## Known external CI condition
+
+GitHub Actions workflows are accepted and triggered, but the observed private-repository runs have failed before any workflow step receives a runner (`runner_id: 0`, empty step lists across unrelated jobs). This is consistent with an account/repository GitHub-hosted runner, Actions policy, minutes, or billing condition rather than an application-test failure. The PR should remain unmerged until a runner executes the gates successfully.
+
+## Remaining product work
+
+- richer realistic HTML/XML/PDF-style synthetic renderers
+- larger adversarial transformation library and difficulty calibration
+- stronger semantic evidence-entailment scoring beyond structured hidden claim links
+- benchmark manifest/version registry and private-evaluation artifact storage
+- external RL harness adapters and production orchestration persistence
+- multi-process/distributed episode storage instead of in-process session state
+- frontend benchmark/operator console
