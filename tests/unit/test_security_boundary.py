@@ -1,3 +1,4 @@
+from investigation_world.core.models import SourceType
 from investigation_world.evidence.projector import project
 from investigation_world.world.generator import WorldFactory, WorldGenerationConfig
 
@@ -36,6 +37,29 @@ def test_public_document_text_never_contains_canonical_entity_ids():
             [document.title, document.body, document.url or "", *document.cites_document_ids]
         )
         assert not any(canonical_id in public_text for canonical_id in canonical_ids)
+
+
+def test_authoritative_documents_do_not_leak_future_renames():
+    world = _projected_world()
+    source_types = {source.source_id: source.source_type for source in world.sources}
+    renamed = next(
+        organization
+        for organization in world.organizations.values()
+        if len(organization.name_history) > 1
+    )
+    rename_date = renamed.name_history[-1].valid_from
+    future_name = renamed.legal_name
+    authoritative_before = [
+        document
+        for document in world.documents
+        if renamed.canonical_id in document.entity_ids
+        and document.published_at < rename_date
+        and source_types[document.source_id] in {SourceType.REGISTRY, SourceType.FILING}
+    ]
+    assert authoritative_before
+    for document in authoritative_before:
+        assert future_name not in document.title
+        assert future_name not in document.body
 
 
 def test_deterministic_world_and_evidence_serialization():
