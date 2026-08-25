@@ -15,7 +15,13 @@ from investigation_world.core.models import (
 from investigation_world.core.provenance import ProvenanceDAG
 
 
-def _surface_label(world: CanonicalWorld, entity_id: str, source_type: SourceType, rng: Random, published_at):
+def _surface_label(
+    world: CanonicalWorld,
+    entity_id: str,
+    source_type: SourceType,
+    rng: Random,
+    published_at,
+):
     if entity_id in world.people:
         person = world.people[entity_id]
         labels = [person.canonical_name, *person.aliases]
@@ -24,12 +30,16 @@ def _surface_label(world: CanonicalWorld, entity_id: str, source_type: SourceTyp
         return person.canonical_name
     if entity_id in world.organizations:
         organization = world.organizations[entity_id]
-        if source_type == SourceType.ARCHIVE:
-            return world.entity_display_name(entity_id, published_at)
-        labels = [organization.legal_name, *organization.aliases]
+        historical_name = world.entity_display_name(entity_id, published_at)
+        # Authoritative sources use the name valid when the record was published. Noisy sources may
+        # use an alias, but must not import a future legal name into an earlier document.
+        if source_type in {SourceType.REGISTRY, SourceType.FILING, SourceType.ARCHIVE}:
+            return historical_name
+        labels = [historical_name, *organization.aliases]
+        labels = list(dict.fromkeys(labels))
         if source_type in {SourceType.NEWS, SourceType.DIRECTORY, SourceType.COMPANY_SITE} and len(labels) > 1:
             return labels[rng.randrange(len(labels))]
-        return organization.legal_name
+        return historical_name
     return world.entity_display_name(entity_id, published_at)
 
 
@@ -111,13 +121,18 @@ def project(
     for relationship in world.relationships:
         prior_document: str | None = None
         for source in world.sources:
-            source_omission = min(0.85, omission_probability + (1.0 - source.reliability_baseline) * 0.12)
+            source_omission = min(
+                0.85,
+                omission_probability + (1.0 - source.reliability_baseline) * 0.12,
+            )
             if rng.random() < source_omission:
                 continue
 
             publication_lag = rng.randrange(0, 180)
             published_at = relationship.valid_from + timedelta(days=publication_lag)
-            is_temporally_stale = relationship.valid_to is not None and published_at > relationship.valid_to
+            is_temporally_stale = (
+                relationship.valid_to is not None and published_at > relationship.valid_to
+            )
             random_stale = rng.random() < stale_probability * (1.15 - source.reliability_baseline)
             false_probability = max(0.01, (1.0 - source.reliability_baseline) * 0.20)
             partial_probability = max(0.01, (1.0 - source.reliability_baseline) * 0.10)
@@ -156,7 +171,13 @@ def project(
                 rng,
                 published_at,
             )
-            object_label = _surface_label(world, object_id, source.source_type, rng, published_at)
+            object_label = _surface_label(
+                world,
+                object_id,
+                source.source_type,
+                rng,
+                published_at,
+            )
             body = _render_statement(
                 source.source_type,
                 subject_label,
@@ -187,7 +208,9 @@ def project(
             prior_document = document_id
             document_number += 1
 
-    world.metadata["provenance_parents"] = {key: sorted(value) for key, value in dag.parents.items()}
+    world.metadata["provenance_parents"] = {
+        key: sorted(value) for key, value in dag.parents.items()
+    }
     world.metadata["evidence_projection_version"] = "0.4.0"
     world.metadata["evidence_seed"] = seed
     world.validate()
