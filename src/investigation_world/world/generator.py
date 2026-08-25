@@ -26,8 +26,22 @@ class WorldFactory:
   for i in range(1,c.num_people+1):
    if i%3==0: add(iid('PER',i),Predicate.EMPLOYED_BY,iid('ORG',1+(i%c.num_organizations)),c.timeline_start+timedelta(days=200+i))
   for i in range(1,min(10,c.num_organizations)+1):
-   dt=c.timeline_start+timedelta(days=500+i*23); w.events.append(Event(event_id=iid('EVENT',ev),event_type='OrganizationRenamed',timestamp=dt,payload={'organization_id':iid('ORG',i)})); ev+=1
-  w.metadata={'generator_version':'0.2.0','config':c.model_dump(mode='json')}; w.validate(); return w
+   dt=c.timeline_start+timedelta(days=500+i*23); w.events.append(Event(event_id=iid('EVENT',ev),event_type='OrganizationRenamed',timestamp=dt,payload={'organization_id':iid('ORG',i),'new_name':f'Legacy {w.organizations[iid("ORG",i)].legal_name}'})); ev+=1
+  for i in range(1,c.num_people+1):
+   if i % 4 == 0:
+    dt=c.timeline_start+timedelta(days=700+i*11); w.events.append(Event(event_id=iid('EVENT',ev),event_type='AddressChanged',timestamp=dt,payload={'person_id':iid('PER',i),'address_id':iid('ADDR',1+(i*3%c.num_addresses))})); ev+=1
+  for i in range(1,c.num_organizations+1):
+   if i % 2 == 0:
+    dt=c.timeline_start+timedelta(days=900+i*7); w.events.append(Event(event_id=iid('EVENT',ev),event_type='OrganizationDissolved',timestamp=dt,payload={'organization_id':iid('ORG',i)})); ev+=1
+  # Add a deterministic dense relationship layer so reference worlds exercise graph traversal.
+  for i in range(1,c.num_organizations+1):
+   for hop in range(1,5):
+    j=((i+hop*7-1)%c.num_people)+1
+    add(iid('PER',j),Predicate.AFFILIATED_WITH,iid('ORG',i),c.timeline_start+timedelta(days=300+hop*17+i))
+  for i in range(1,c.num_organizations+1):
+   for phase in range(2):
+    dt=c.timeline_start+timedelta(days=1200+phase*600+i*5); w.events.append(Event(event_id=iid('EVENT',ev),event_type='OwnershipTransferred',timestamp=dt,payload={'organization_id':iid('ORG',i),'from_person_id':iid('PER',1+(i%c.num_people)),'to_person_id':iid('PER',1+((i+phase+11)%c.num_people)),'percentage':25.0})); ev+=1
+  w.metadata={'generator_version':'0.3.0','config':c.model_dump(mode='json')}; w.validate(); return w
 def validate_world(w):
  try: w.validate(); return []
  except AssertionError as e: return [str(e) or 'world validation failed']

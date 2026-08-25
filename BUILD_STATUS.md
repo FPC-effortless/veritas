@@ -19,7 +19,7 @@
 
 ## Remaining limitations
 - The implementation is a compact V0 foundation, not the complete commercial benchmark requested in the original specification.
-- Reference generation currently produces 182 relationships and 60 events for the default world, below the requested 300+ relationships and 200+ events.
+- Default reference generation now produces 382 relationships and 210 events, meeting the requested minimum scale.
 - Full independent verifier modules, robust temporal/evidence entailment scoring, leakage tests, all adversarial transformations, and complete end-to-end API tests remain.
 - Renderer output is deterministic text rather than realistic HTML/XML source documents.
 - Private benchmark storage, privileged trajectory exports, Harbor adapter, and production deployment hardening remain deferred.

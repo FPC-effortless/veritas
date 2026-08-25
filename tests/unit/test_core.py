@@ -8,7 +8,7 @@ def test_seed_reproducibility():
  assert WorldFactory.generate(42,c).model_dump()!=WorldFactory.generate(43,c).model_dump()
 def test_scale_and_temporal_query():
  w=WorldFactory.generate(7,WorldGenerationConfig(num_people=100,num_organizations=50,num_addresses=50))
- assert len(w.people)==100 and len(w.organizations)==50 and len(w.relationships)>=150
+ assert len(w.people)==100 and len(w.organizations)==50 and len(w.relationships)>=300 and len(w.events)>=200
  assert w.relationships_at(date(2020,1,1))
  assert not validate_world(w)
 def test_provenance_laundering():
