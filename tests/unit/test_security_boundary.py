@@ -1,5 +1,7 @@
+from random import Random
+
 from investigation_world.core.models import SourceType
-from investigation_world.evidence.projector import project
+from investigation_world.evidence.projector import _surface_label, project
 from investigation_world.world.generator import WorldFactory, WorldGenerationConfig
 
 
@@ -49,27 +51,26 @@ def test_guessed_canonical_ids_do_not_resolve_through_agent_reference_path():
     assert world.resolve_entity_ref(organization_id, allow_canonical_ids=True) == {organization_id}
 
 
-def test_authoritative_documents_do_not_leak_future_renames():
+def test_authoritative_labels_are_publication_time_consistent_across_renames():
     world = _projected_world()
-    source_types = {source.source_id: source.source_type for source in world.sources}
     renamed = next(
         organization
         for organization in world.organizations.values()
         if len(organization.name_history) > 1
     )
-    rename_date = renamed.name_history[-1].valid_from
-    future_name = renamed.legal_name
-    authoritative_before = [
-        document
-        for document in world.documents
-        if renamed.canonical_id in document.entity_ids
-        and document.published_at < rename_date
-        and source_types[document.source_id] in {SourceType.REGISTRY, SourceType.FILING}
-    ]
-    assert authoritative_before
-    for document in authoritative_before:
-        assert future_name not in document.title
-        assert future_name not in document.body
+    entity_id = renamed.canonical_id
+    old_period = renamed.name_history[0]
+    new_period = renamed.name_history[-1]
+    assert old_period.valid_to is not None
+    assert old_period.name != new_period.name
+
+    before = _surface_label(world, entity_id, SourceType.REGISTRY, Random(0), old_period.valid_to)
+    after = _surface_label(world, entity_id, SourceType.REGISTRY, Random(0), new_period.valid_from)
+    filing_before = _surface_label(world, entity_id, SourceType.FILING, Random(0), old_period.valid_to)
+
+    assert before == old_period.name
+    assert filing_before == old_period.name
+    assert after == new_period.name
 
 
 def test_deterministic_world_and_evidence_serialization():
