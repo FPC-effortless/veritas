@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CompanySystem(StrEnum):
@@ -85,6 +85,36 @@ class CompanyWorldEpisode(BaseModel):
     records: list[CompanyWorldRecord]
     oracle: CompanyWorldOracle
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def refine_direct_evidence(self) -> "CompanyWorldEpisode":
+        """Narrow broad context links to records that directly support each fact."""
+        for fact in self.oracle.facts:
+            direct: list[str] = []
+            for record in self.records:
+                same_object = (
+                    record.object_id == fact.object_id
+                    or fact.object_id in record.related_object_ids
+                )
+                if not same_object or record.record_type == "system_projection":
+                    continue
+                if fact.object_type == "SHIPMENT" and fact.field_name == "delivered_quantity":
+                    if record.record_type == "carrier_manifest":
+                        direct.append(record.record_id)
+                elif (
+                    fact.object_type == "SUPPLIER_INVOICE"
+                    and fact.field_name == "duplicate_status"
+                ):
+                    if record.record_type == "supplier_submission":
+                        direct.append(record.record_id)
+                elif fact.object_type == "AUTHORITY" and fact.field_name == "approval_limit_usd":
+                    if record.record_type == "policy_rule":
+                        direct.append(record.record_id)
+                elif fact.field_name in record.fields:
+                    direct.append(record.record_id)
+            if direct:
+                fact.supporting_record_ids = sorted(set(direct))
+        return self
 
     def public_payload(self) -> dict[str, Any]:
         return {
