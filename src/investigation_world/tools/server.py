@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from secrets import compare_digest
-from typing import Annotated
+from threading import Lock
+from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -29,7 +30,7 @@ class EpisodeCreateRequest(BaseModel):
     task: TaskSpec | None = None
     oracle: TaskOracle | None = None
     task_seed: int = 0
-    task_index: int = 0
+    task_index: int = Field(default=0, ge=0)
     total_cost: int = Field(default=40, ge=1)
     max_tool_calls: int = Field(default=30, ge=1)
 
@@ -44,9 +45,16 @@ class EpisodeSession:
     oracle: TaskOracle
     recorder: TrajectoryRecorder
     trajectory: Trajectory | None = None
+    closed: bool = False
+    lock: Any = field(default_factory=Lock, repr=False)
 
 
 _EPISODES: dict[str, EpisodeSession] = {}
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok", "version": app.version}
 
 
 def _require_admin(
@@ -66,15 +74,24 @@ def _episode(episode_id: str) -> EpisodeSession:
     return session
 
 
+def _ensure_open(session: EpisodeSession) -> None:
+    if session.closed:
+        raise HTTPException(409, "episode already submitted")
+
+
 def _charge(session: EpisodeSession, tool: str) -> None:
-    try:
-        session.budget.charge(tool)
-    except ValueError as error:
-        raise HTTPException(429, str(error)) from error
+    with session.lock:
+        _ensure_open(session)
+        try:
+            session.budget.charge(tool)
+        except ValueError as error:
+            raise HTTPException(429, str(error)) from error
 
 
 def _record_tool(session: EpisodeSession, tool: str, **observation) -> None:
-    session.recorder.tool_call(tool, observation)
+    with session.lock:
+        _ensure_open(session)
+        session.recorder.tool_call(tool, observation)
 
 
 def _public_document(session: EpisodeSession, document_id: str) -> PublicDocument:
@@ -108,7 +125,7 @@ def create_episode(
     if request.task is None or request.oracle is None:
         bundle = generate_task_bundle(
             request.world,
-            count=max(1, request.task_index + 1),
+            count=request.task_index + 1,
             seed=request.task_seed,
         )
         instance = bundle[request.task_index]
@@ -156,7 +173,9 @@ def delete_episode(
     session = _EPISODES.pop(episode_id, None)
     if session is None:
         raise HTTPException(404, "episode not found")
-    session.search_index.db.close()
+    with session.lock:
+        session.closed = True
+        session.search_index.db.close()
     return {"deleted": True}
 
 
@@ -166,8 +185,9 @@ def get_trajectory(
     _admin: None = Depends(_require_admin),
 ):
     session = _episode(episode_id)
-    trajectory = session.trajectory or session.recorder.t
-    return trajectory.model_dump(mode="json")
+    with session.lock:
+        trajectory = session.trajectory or session.recorder.t
+        return trajectory.model_dump(mode="json")
 
 
 @app.get("/episodes/{episode_id}/task")
@@ -235,29 +255,34 @@ def get_document(episode_id: str, document_id: str):
 
 @app.get("/episodes/{episode_id}/budget")
 def get_budget(episode_id: str):
-    return _episode(episode_id).budget.snapshot()
+    session = _episode(episode_id)
+    with session.lock:
+        return session.budget.snapshot()
 
 
 @app.post("/episodes/{episode_id}/submit")
 def submit(episode_id: str, result: InvestigationResult):
     session = _episode(episode_id)
-    verification = verify(
-        result,
-        session.world,
-        task=session.task,
-        oracle=session.oracle,
-        budget_spent=session.budget.budget.spent,
-        budget_total=session.budget.budget.total_cost,
-    )
-    session.recorder.action(
-        {
-            "action_type": "submit",
-            "payload": result.model_dump(mode="json"),
-        }
-    )
-    session.trajectory = session.recorder.finish(
-        findings=result.model_dump(mode="json"),
-        verifier_result=verification,
-        budget=session.budget.snapshot(),
-    )
-    return verification
+    with session.lock:
+        _ensure_open(session)
+        verification = verify(
+            result,
+            session.world,
+            task=session.task,
+            oracle=session.oracle,
+            budget_spent=session.budget.budget.spent,
+            budget_total=session.budget.budget.total_cost,
+        )
+        session.recorder.action(
+            {
+                "action_type": "submit",
+                "payload": result.model_dump(mode="json"),
+            }
+        )
+        session.trajectory = session.recorder.finish(
+            findings=result.model_dump(mode="json"),
+            verifier_result=verification,
+            budget=session.budget.snapshot(),
+        )
+        session.closed = True
+        return verification
