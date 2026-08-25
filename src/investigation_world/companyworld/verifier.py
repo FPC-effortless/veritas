@@ -5,6 +5,7 @@ from typing import Any
 
 from investigation_world.companyworld.models import (
     CompanyWorldEpisode,
+    CompanyWorldRecord,
     CompanyWorldVerificationResult,
     OperationalFactTarget,
 )
@@ -56,6 +57,50 @@ def _fact_map(facts: list[OperationalFactTarget]) -> dict[tuple[str, str, str], 
     return {fact.key(): fact for fact in facts}
 
 
+def _record_supports_fact(record: CompanyWorldRecord, target: OperationalFactTarget) -> bool:
+    """Require observable evidence to entail or strongly indicate the verified fact."""
+    if record.record_type == "system_projection":
+        return False
+
+    same_object = record.object_id == target.object_id or target.object_id in record.related_object_ids
+    if not same_object:
+        return False
+
+    if target.field_name in record.fields and _equal(
+        record.fields[target.field_name], target.expected_value
+    ):
+        return True
+
+    if (
+        target.object_type == "SUPPLIER_INVOICE"
+        and target.field_name == "duplicate_status"
+        and _normalize(target.expected_value) == "duplicate"
+    ):
+        return (
+            record.record_type == "supplier_submission"
+            and _normalize(record.fields.get("submission_kind")) == "resubmission"
+            and str(record.fields.get("submitted_reference", "")) == target.object_id
+        )
+
+    return False
+
+
+def _evidence_supports_fact(
+    cited_record_ids: set[str],
+    episode: CompanyWorldEpisode,
+    target: OperationalFactTarget,
+) -> bool:
+    allowed = set(target.supporting_record_ids)
+    records = {record.record_id: record for record in episode.records}
+    for record_id in cited_record_ids:
+        if allowed and record_id not in allowed:
+            continue
+        record = records.get(record_id)
+        if record is not None and _record_supports_fact(record, target):
+            return True
+    return False
+
+
 def verify_companyworld(
     result: InvestigationResult,
     episode: CompanyWorldEpisode,
@@ -95,11 +140,9 @@ def verify_companyworld(
     fact_score = 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
 
     cited = _cited_record_ids(result)
-    supported = 0
-    for key in correct:
-        required = set(truth[key].supporting_record_ids)
-        if required and cited.intersection(required):
-            supported += 1
+    supported = sum(
+        1 for key in correct if _evidence_supports_fact(cited, episode, truth[key])
+    )
     evidence_support = supported / max(1, len(correct)) if correct else 0.0
 
     substantive = bool(predicted)
