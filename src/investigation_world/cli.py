@@ -118,5 +118,39 @@ def compile_companyworld_cmd(
     raise typer.Exit(1)
 
 
+@app.command("benchmark-companyworld")
+def benchmark_companyworld_cmd(
+    dataset: Path,
+    output: Path = Path("companyworld_benchmark_report.json"),
+    limit: int | None = None,
+    skip_determinism: bool = False,
+):
+    """Attack and validate a compiled CompanyWorld benchmark at scale."""
+    from investigation_world.benchmark import write_companyworld_benchmark_report
+
+    report = write_companyworld_benchmark_report(
+        dataset,
+        output,
+        limit=limit,
+        verify_determinism=not skip_determinism,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "passed": report.passed,
+                "world_id": report.world_id,
+                "episodes": report.episodes,
+                "task_families": report.task_families,
+                "failed_invariants": [
+                    item.name for item in report.invariants if not item.passed
+                ],
+                "report": str(output),
+            },
+            indent=2,
+        )
+    )
+    raise typer.Exit(0 if report.passed else 1)
+
+
 if __name__ == "__main__":
     app()
