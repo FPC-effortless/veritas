@@ -29,8 +29,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install . pip-audit
+          python -m pip check
       - name: Audit Python dependencies
         run: python -m pip_audit
+
+  python-source-security:
+    name: Python source security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Run Bandit on application code
+        run: |
+          python -m pip install --upgrade pip bandit
+          bandit -r src -q -ll -s B101,B311
 
   node-dependency-audit:
     name: Node dependency audit
