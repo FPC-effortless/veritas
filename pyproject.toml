@@ -1,0 +1,27 @@
+[project]
+name = "investigation-world"
+version = "0.1.0"
+description = "Deterministic synthetic corporate investigation environments"
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.7,<3", "fastapi>=0.115", "uvicorn>=0.30", "typer>=0.12", "sqlalchemy>=2.0", "duckdb>=1.0"]
+[project.optional-dependencies]
+test = ["pytest>=8", "hypothesis>=6"]
+[project.scripts]
+iworld = "investigation_world.cli:app"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+[tool.hatch.build.targets.wheel]
+packages = ["src/investigation_world"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I"]
+
+# Deterministic synthetic data only; no real-world network access is used.
+DUMMY = "" 
+
