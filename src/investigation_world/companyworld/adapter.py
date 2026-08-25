@@ -38,6 +38,8 @@ _PRIVATE_FIELD_NAMES = {
     "truth_status",
     "observability",
     "hidden_error_id",
+    "answer_class",
+    "expected_resolution",
 }
 
 
@@ -58,11 +60,13 @@ def _coerce(value: str | None) -> Any:
 
 
 def _clean_fields(row: dict[str, str]) -> dict[str, Any]:
-    return {
-        key: _coerce(value)
-        for key, value in row.items()
-        if key not in _PRIVATE_FIELD_NAMES and value not in (None, "")
-    }
+    cleaned: dict[str, Any] = {}
+    for key, value in row.items():
+        if key in _PRIVATE_FIELD_NAMES or value in (None, ""):
+            continue
+        public_key = "status" if key == "true_status" else key
+        cleaned[public_key] = _coerce(value)
+    return cleaned
 
 
 def _stable_record_id(system: CompanySystem, source_file: str, object_id: str, suffix: str = "") -> str:
@@ -70,12 +74,33 @@ def _stable_record_id(system: CompanySystem, source_file: str, object_id: str, s
     return f"CWR-{hashlib.sha256(raw).hexdigest()[:20].upper()}"
 
 
+def _public_objective(task_type: str, object_type: str, object_id: str) -> str:
+    if task_type == "INVESTIGATE_MISSING_SHIPMENT":
+        return (
+            f"Investigate the reported shipment discrepancy for {object_id}. Reconcile ERP, "
+            "warehouse/carrier, and communication records; determine the delivered quantity "
+            "supported by evidence and identify any unresolved uncertainty."
+        )
+    if task_type == "INVESTIGATE_DUPLICATE_INVOICE":
+        return (
+            f"Investigate supplier invoice {object_id} for duplication or matching anomalies. "
+            "Reconcile supplier submission, purchase-order, receiving, and accounting records "
+            "and determine the invoice's correct operational status."
+        )
+    if task_type == "INVESTIGATE_AUTHORITY_BREACH":
+        return (
+            f"Investigate the effective approval authority for position {object_id}. Reconcile "
+            "policy, system configuration, and approval history and determine the correct limit."
+        )
+    return f"Investigate the operational state of {object_type} {object_id} using available systems."
+
+
 class CompanyWorldAdapter:
     """Load CompanyWorld v0.x and compile hidden anomalies into operational episodes.
 
     The adapter keeps evaluator-only files private. Ground-truth rows may influence the
-    generation of observable records, but their private field names and annotations are
-    never copied into public episode payloads.
+    generation of observable records, but private annotations are never copied into public
+    episode payloads.
     """
 
     def __init__(self, root: str | Path):
@@ -165,10 +190,14 @@ class CompanyWorldAdapter:
                 errors.append(f"invalid source validation report: {error}")
 
         hidden_objects = {
-            row.get("object_id") for row in self._rows("ground_truth/hidden_errors.csv.gz") if row.get("object_id")
+            row.get("object_id")
+            for row in self._rows("ground_truth/hidden_errors.csv.gz")
+            if row.get("object_id")
         }
         task_objects = {
-            row.get("object_id") for row in self._rows("ground_truth/task_answers.csv.gz") if row.get("object_id")
+            row.get("object_id")
+            for row in self._rows("ground_truth/task_answers.csv.gz")
+            if row.get("object_id")
         }
         task_oracle_ids_match = hidden_objects == task_objects and bool(hidden_objects)
         if not task_oracle_ids_match and not missing:
@@ -214,7 +243,7 @@ class CompanyWorldAdapter:
             object_id=object_id,
             fields=sanitized,
             source_file=source_file,
-            related_object_ids=related_object_ids or [],
+            related_object_ids=[item for item in (related_object_ids or []) if item],
         )
 
     def _projection_record(self, divergence: dict[str, str]) -> CompanyWorldRecord:
@@ -249,11 +278,13 @@ class CompanyWorldAdapter:
                     object_id=shipment_id,
                     fields=fields,
                     source_file="canonical/shipments.csv.gz",
-                    related_object_ids=[sales_order_id] if sales_order_id else [],
+                    related_object_ids=[sales_order_id],
                 )
             )
             if sales_order_id and self._exists("canonical/sales_order_lines.csv.gz"):
-                lines = self._group("canonical/sales_order_lines.csv.gz", "sales_order_id").get(sales_order_id, [])
+                lines = self._group("canonical/sales_order_lines.csv.gz", "sales_order_id").get(
+                    sales_order_id, []
+                )
                 ordered_quantity = sum(int(float(row.get("quantity") or 0)) for row in lines)
                 records.append(
                     self._record(
@@ -278,7 +309,9 @@ class CompanyWorldAdapter:
                 suffix="delivered_quantity",
             )
         )
-        for index, message in enumerate(self._group("canonical/messages.csv.gz", "related_object_id").get(shipment_id, [])):
+        for index, message in enumerate(
+            self._group("canonical/messages.csv.gz", "related_object_id").get(shipment_id, [])
+        ):
             records.append(
                 self._record(
                     system=CompanySystem.EMAIL,
@@ -296,8 +329,9 @@ class CompanyWorldAdapter:
     def _invoice_records(self, hidden: dict[str, str]) -> list[CompanyWorldRecord]:
         invoice_id = hidden["object_id"]
         records: list[CompanyWorldRecord] = []
-        invoices = self._index("canonical/supplier_invoices.csv.gz", "supplier_invoice_id")
-        invoice = invoices.get(invoice_id)
+        invoice = self._index("canonical/supplier_invoices.csv.gz", "supplier_invoice_id").get(
+            invoice_id
+        )
         if not invoice:
             return records
         records.append(
@@ -313,7 +347,9 @@ class CompanyWorldAdapter:
         )
         purchase_order_id = invoice.get("purchase_order_id", "")
         if purchase_order_id and self._exists("canonical/purchase_orders.csv.gz"):
-            purchase_order = self._index("canonical/purchase_orders.csv.gz", "purchase_order_id").get(purchase_order_id)
+            purchase_order = self._index(
+                "canonical/purchase_orders.csv.gz", "purchase_order_id"
+            ).get(purchase_order_id)
             if purchase_order:
                 records.append(
                     self._record(
@@ -327,7 +363,10 @@ class CompanyWorldAdapter:
                     )
                 )
         if purchase_order_id and self._exists("canonical/goods_receipts.csv.gz"):
-            for index, receipt in enumerate(self._group("canonical/goods_receipts.csv.gz", "purchase_order_id").get(purchase_order_id, [])):
+            receipts = self._group("canonical/goods_receipts.csv.gz", "purchase_order_id").get(
+                purchase_order_id, []
+            )
+            for index, receipt in enumerate(receipts):
                 records.append(
                     self._record(
                         system=CompanySystem.WMS,
@@ -358,7 +397,8 @@ class CompanyWorldAdapter:
             )
         )
         if self._exists("canonical/ledger_entries.csv.gz"):
-            for index, entry in enumerate(self._group("canonical/ledger_entries.csv.gz", "object_id").get(invoice_id, [])):
+            entries = self._group("canonical/ledger_entries.csv.gz", "object_id").get(invoice_id, [])
+            for index, entry in enumerate(entries):
                 records.append(
                     self._record(
                         system=CompanySystem.LEDGER,
@@ -411,9 +451,9 @@ class CompanyWorldAdapter:
                 else {}
             )
             for index, approval in enumerate(approvals[:50]):
-                object_id = approval.get("object_id", "")
+                approved_object_id = approval.get("object_id", "")
                 fields = _clean_fields(approval)
-                expense = expense_index.get(object_id)
+                expense = expense_index.get(approved_object_id)
                 if expense:
                     fields["approved_amount_usd"] = _coerce(expense.get("amount_usd"))
                 records.append(
@@ -425,12 +465,16 @@ class CompanyWorldAdapter:
                         fields=fields,
                         source_file="canonical/approvals.csv.gz",
                         suffix=str(index),
-                        related_object_ids=[position_id, person_id, object_id],
+                        related_object_ids=[position_id, person_id, approved_object_id],
                     )
                 )
         return records
 
-    def _records_for_hidden(self, hidden: dict[str, str], divergence: dict[str, str] | None) -> list[CompanyWorldRecord]:
+    def _records_for_hidden(
+        self,
+        hidden: dict[str, str],
+        divergence: dict[str, str] | None,
+    ) -> list[CompanyWorldRecord]:
         object_type = hidden.get("object_type", "")
         if object_type == "SHIPMENT":
             records = self._shipment_records(hidden)
@@ -442,7 +486,7 @@ class CompanyWorldAdapter:
             records = []
         if divergence:
             records.append(self._projection_record(divergence))
-        deduped: dict[str, CompanyWorldRecord] = {record.record_id: record for record in records}
+        deduped = {record.record_id: record for record in records}
         return sorted(deduped.values(), key=lambda record: record.record_id)
 
     def compile_episodes(self, limit: int | None = None) -> list[CompanyWorldEpisode]:
@@ -475,13 +519,17 @@ class CompanyWorldAdapter:
                 object_id=object_id,
                 field_name=hidden["field_name"],
                 expected_value=_coerce(hidden.get("true_value")),
-                supporting_record_ids=[record.record_id for record in records if record.system != CompanySystem.ERP or record.record_type != "system_projection"],
+                supporting_record_ids=[
+                    record.record_id for record in records if record.record_type != "system_projection"
+                ],
             )
             public_task = CompanyWorldTask(
                 task_id=task_row["task_id"],
                 world_id=self.world_id,
                 task_type=task_row["task_type"],
-                objective=task_row["expected_resolution"],
+                objective=_public_objective(
+                    task_row["task_type"], hidden["object_type"], object_id
+                ),
                 target_object_type=hidden["object_type"],
                 target_object_id=object_id,
                 permitted_systems=systems,
@@ -491,7 +539,6 @@ class CompanyWorldAdapter:
                     "return_structured_facts": True,
                 },
                 metadata={
-                    "answer_class": task_row["answer_class"],
                     "adapter_version": "0.1.0",
                     "record_count": len(records),
                     "system_count": len(systems),
