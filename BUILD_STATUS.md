@@ -14,8 +14,8 @@
 
 ## Validation
 - Python compilation passes.
-- Test suite passes: 7 tests.
-- Deterministic world/evidence/search/verifier smoke path passes in the available runtime.
+- Test suite passes: 10 tests.
+- End-to-end world → evidence → FTS search → structured submission → verifier → JSONL/Parquet trajectory export passes; reference smoke world contains 382 relationships, 210 events, and 920 documents.
 
 ## Remaining limitations
 - The implementation is a compact V0 foundation, not the complete commercial benchmark requested in the original specification.
