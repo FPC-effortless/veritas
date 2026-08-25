@@ -124,9 +124,20 @@ jobs:
         run: |
           docker run -d --rm --name veritas-ci -p 8000:8000 veritas:ci
           trap 'docker rm -f veritas-ci >/dev/null 2>&1 || true' EXIT
-          curl --fail --silent --show-error \
-            --retry 20 --retry-delay 1 --retry-connrefused \
-            http://127.0.0.1:8000/healthz
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/healthz; then
+              exit 0
+            fi
+            if ! docker inspect -f '{{.State.Running}}' veritas-ci 2>/dev/null | grep -q true; then
+              echo "Container exited before becoming healthy"
+              docker logs veritas-ci || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "API did not become healthy within 30 seconds"
+          docker logs veritas-ci || true
+          exit 1
 
   required:
     name: Required
