@@ -263,12 +263,12 @@ def verify_provenance(
 
 
 def _substantive_output(result: InvestigationResult) -> bool:
+    # Free-form prose alone is not scoreable. Reward requires structured assertions.
     return bool(
         result.identity_assertions
         or result.relationships
         or result.claims
         or result.entities
-        or result.conclusion.strip()
     )
 
 
