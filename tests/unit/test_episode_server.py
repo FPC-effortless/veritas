@@ -1,9 +1,14 @@
+import pytest
+from fastapi import HTTPException
+
 from investigation_world.evidence.projector import project
 from investigation_world.tools.server import (
     EpisodeCreateRequest,
+    _require_admin,
     create_episode,
     delete_episode,
     get_budget,
+    get_trajectory,
     registry_search,
     web_search,
 )
@@ -18,7 +23,7 @@ def _world():
     return project(world, seed=17)[0]
 
 
-def test_episode_budgets_are_isolated():
+def test_episode_budgets_are_isolated_and_tool_calls_are_recorded():
     world = _world()
     first = create_episode(EpisodeCreateRequest(world=world, task_seed=1))["episode_id"]
     second = create_episode(EpisodeCreateRequest(world=world, task_seed=2))["episode_id"]
@@ -28,6 +33,9 @@ def test_episode_budgets_are_isolated():
         assert get_budget(first)["calls"] == 1
         assert get_budget(second)["spent"] == 0
         assert get_budget(second)["calls"] == 0
+        trajectory = get_trajectory(first)
+        assert trajectory["tool_calls"]
+        assert trajectory["tool_calls"][0]["tool"] == "web_search"
     finally:
         delete_episode(first)
         delete_episode(second)
@@ -47,3 +55,16 @@ def test_registry_and_web_tools_have_distinct_source_surfaces():
         )
     finally:
         delete_episode(episode_id)
+
+
+def test_admin_api_requires_configured_secret(monkeypatch):
+    monkeypatch.delenv("VERITAS_ADMIN_TOKEN", raising=False)
+    with pytest.raises(HTTPException) as disabled:
+        _require_admin("anything")
+    assert disabled.value.status_code == 503
+
+    monkeypatch.setenv("VERITAS_ADMIN_TOKEN", "correct-secret")
+    with pytest.raises(HTTPException) as rejected:
+        _require_admin("wrong-secret")
+    assert rejected.value.status_code == 401
+    assert _require_admin("correct-secret") is None
