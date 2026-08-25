@@ -76,11 +76,12 @@ jobs:
         run: |
           python -m investigation_world.cli generate-world --seed 42 --output /tmp/world.json
           python -m investigation_world.cli render-evidence /tmp/world.json --output /tmp/evidence.json --seed 42
-          python -m investigation_world.cli generate-tasks WORLD-000042 --output /tmp/tasks.json --count 48 --seed 42
+          python -m investigation_world.cli generate-tasks /tmp/evidence.json --output /tmp/tasks.json --oracle-output /tmp/oracles.json --count 48 --seed 42
           python -m investigation_world.cli build-index /tmp/evidence.json --database /tmp/search.sqlite
           test -s /tmp/world.json
           test -s /tmp/evidence.json
           test -s /tmp/tasks.json
+          test -s /tmp/oracles.json
           test -s /tmp/search.sqlite
 
   frontend:
