@@ -385,17 +385,18 @@ def verify(
     provenance = verify_provenance(result, world, oracle)
 
     substantive = _substantive_output(result, family)
-    if answerable:
-        abstention = 0.0 if result.unknowns and not substantive else (1.0 if substantive else 0.0)
-    else:
-        abstention = 1.0 if result.unknowns and not substantive else 0.0
-
     if family == TaskFamily.ENTITY_RESOLUTION:
         task_accuracy = identity
     elif family == TaskFamily.PROVENANCE:
         task_accuracy = provenance
     else:
         task_accuracy = relationships
+
+    if answerable:
+        abstention = 1.0 if substantive and task_accuracy > 0 else 0.0
+    else:
+        abstention = 1.0 if result.unknowns and not substantive else 0.0
+
     calibration = max(0.0, 1.0 - abs(result.overall_confidence - task_accuracy))
     efficiency = (
         max(0.0, 1.0 - budget_spent / max(1, budget_total)) if task_accuracy > 0 else 0.0
@@ -405,7 +406,7 @@ def verify(
         reward = 0.75 * abstention + 0.15 * calibration + 0.10 * (
             max(0.0, 1.0 - budget_spent / max(1, budget_total)) if abstention > 0 else 0.0
         )
-    elif not substantive:
+    elif not substantive or task_accuracy <= 0:
         reward = 0.0
     elif family == TaskFamily.ENTITY_RESOLUTION:
         reward = (
