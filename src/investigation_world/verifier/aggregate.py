@@ -1,30 +1,377 @@
-from investigation_world.core.models import CanonicalWorld, InvestigationResult, VerificationResult
+from __future__ import annotations
 
-def verify_identity(result: InvestigationResult, world: CanonicalWorld) -> tuple[float, int]:
-    false_merges = sum(1 for x in result.identity_assertions if x.get('same_entity') is True and x.get('left') != x.get('right'))
-    false_splits = sum(1 for x in result.identity_assertions if x.get('same_entity') is False and x.get('left') == x.get('right'))
-    return max(0.0, 1.0 - min(1.0, .85 * false_merges + .15 * false_splits)), false_merges
+from datetime import date
+from typing import Any
 
-def verify_relationships(result: InvestigationResult, world: CanonicalWorld) -> tuple[float, set[tuple[str, str, str]]]:
-    truth = {(r.subject_id, r.predicate.value, r.object_id) for r in world.relationships}
-    predicted = {(x.get('subject'), x.get('predicate'), x.get('object')) for x in result.relationships}
-    return len(predicted & truth) / max(1, len(truth)), predicted - truth
+from investigation_world.core.models import (
+    CanonicalWorld,
+    InvestigationResult,
+    Predicate,
+    TruthStatus,
+    VerificationResult,
+)
+from investigation_world.tasks.spec import TaskFamily, TaskOracle, TaskSpec
 
-def verify_evidence(result: InvestigationResult, world: CanonicalWorld, correct: set[tuple[str, str, str]]) -> float:
-    cited = {x.get('document_id') for x in result.evidence}
-    docs = {d.document_id: d for d in world.documents}
-    supported = {claim for claim in correct if any(claim[0] in docs.get(doc, type('D', (), {'body': ''})()).body and claim[2] in docs.get(doc, type('D', (), {'body': ''})()).body for doc in cited)}
+
+def _f1(precision: float, recall: float) -> float:
+    if precision + recall == 0:
+        return 0.0
+    return 2 * precision * recall / (precision + recall)
+
+
+def _parse_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _resolve_relationship(
+    relationship: dict[str, Any], world: CanonicalWorld
+) -> tuple[tuple[str, str, str] | None, int]:
+    subject_ref = str(relationship.get("subject", ""))
+    object_ref = str(relationship.get("object", ""))
+    predicate_value = str(relationship.get("predicate", ""))
+    try:
+        predicate = Predicate(predicate_value)
+    except ValueError:
+        return None, 1
+    subjects = world.resolve_entity_ref(subject_ref)
+    objects = world.resolve_entity_ref(object_ref)
+    if len(subjects) != 1 or len(objects) != 1:
+        return None, 1
+    return (next(iter(subjects)), predicate.value, next(iter(objects))), 0
+
+
+def verify_identity(
+    result: InvestigationResult,
+    world: CanonicalWorld,
+    oracle: TaskOracle | None = None,
+) -> tuple[float, int, int]:
+    if not result.identity_assertions:
+        return 0.0, 0, 0
+
+    correct = 0
+    false_merges = 0
+    unresolved = 0
+    evaluated = 0
+    expected_pairs = {
+        frozenset((target.left_ref.casefold(), target.right_ref.casefold())): target.same_entity
+        for target in (oracle.identity_truth if oracle else [])
+    }
+
+    for assertion in result.identity_assertions:
+        left_ref = str(assertion.get("left", ""))
+        right_ref = str(assertion.get("right", ""))
+        predicted_same = assertion.get("same_entity")
+        if not isinstance(predicted_same, bool):
+            unresolved += 1
+            continue
+
+        left = world.resolve_entity_ref(left_ref)
+        right = world.resolve_entity_ref(right_ref)
+        if len(left) != 1 or len(right) != 1:
+            unresolved += 1
+            continue
+        actual_same = next(iter(left)) == next(iter(right))
+        expected = expected_pairs.get(
+            frozenset((left_ref.casefold(), right_ref.casefold())), actual_same
+        )
+        evaluated += 1
+        if predicted_same == expected:
+            correct += 1
+        if predicted_same and not expected:
+            false_merges += 1
+
+    if oracle and oracle.identity_truth:
+        coverage = min(1.0, evaluated / len(oracle.identity_truth))
+    else:
+        coverage = 1.0
+    accuracy = correct / max(1, evaluated)
+    score = accuracy * coverage
+    return score, false_merges, unresolved
+
+
+def verify_relationships(
+    result: InvestigationResult,
+    world: CanonicalWorld,
+    oracle: TaskOracle | None = None,
+) -> tuple[float, float, float, set[tuple[str, str, str]], set[tuple[str, str, str]], int]:
+    if oracle is not None:
+        truth = {target.key() for target in oracle.relationship_truth}
+    else:
+        truth = {(r.subject_id, r.predicate.value, r.object_id) for r in world.relationships}
+
+    predicted: set[tuple[str, str, str]] = set()
+    unresolved = 0
+    for relationship in result.relationships:
+        resolved, count = _resolve_relationship(relationship, world)
+        unresolved += count
+        if resolved is not None:
+            predicted.add(resolved)
+
+    true_positive = predicted & truth
+    false_positive = predicted - truth
+    precision = len(true_positive) / max(1, len(predicted))
+    recall = len(true_positive) / max(1, len(truth))
+    score = _f1(precision, recall)
+    return score, precision, recall, true_positive, false_positive, unresolved
+
+
+def verify_temporal(
+    result: InvestigationResult,
+    world: CanonicalWorld,
+    task: TaskSpec | None,
+    correct: set[tuple[str, str, str]],
+) -> float:
+    if task is None or task.query_date is None:
+        return 0.0
+    if not correct:
+        return 0.0
+
+    temporal_correct = 0
+    temporal_evaluated = 0
+    for relationship in result.relationships:
+        resolved, _ = _resolve_relationship(relationship, world)
+        if resolved not in correct:
+            continue
+        temporal_evaluated += 1
+        asserted_at = _parse_date(
+            relationship.get("valid_at")
+            or relationship.get("as_of")
+            or relationship.get("query_date")
+        )
+        valid_from = _parse_date(relationship.get("valid_from"))
+        valid_to = _parse_date(relationship.get("valid_to"))
+
+        explicit_temporal_match = False
+        if asserted_at is not None:
+            explicit_temporal_match = asserted_at == task.query_date
+        elif valid_from is not None:
+            explicit_temporal_match = valid_from <= task.query_date and (
+                valid_to is None or task.query_date <= valid_to
+            )
+
+        canonical_match = any(
+            r.subject_id == resolved[0]
+            and r.predicate.value == resolved[1]
+            and r.object_id == resolved[2]
+            and r.valid_from <= task.query_date
+            and (r.valid_to is None or task.query_date <= r.valid_to)
+            for r in world.relationships
+        )
+        if explicit_temporal_match and canonical_match:
+            temporal_correct += 1
+
+    return temporal_correct / max(1, temporal_evaluated)
+
+
+def _claim_key(claim) -> tuple[str, str, str] | None:
+    if claim.object_id is None:
+        return None
+    return (claim.subject_id, claim.predicate.value, claim.object_id)
+
+
+def verify_evidence(
+    result: InvestigationResult,
+    world: CanonicalWorld,
+    correct: set[tuple[str, str, str]],
+    query_date: date | None = None,
+) -> float:
+    if not correct:
+        return 0.0
+    cited = {str(item.get("document_id")) for item in result.evidence if item.get("document_id")}
+    if not cited:
+        return 0.0
+    documents = {document.document_id: document for document in world.documents}
+    claims = {claim.claim_id: claim for claim in world.claims}
+    supported: set[tuple[str, str, str]] = set()
+
+    for document_id in cited:
+        document = documents.get(document_id)
+        if document is None:
+            continue
+        for claim_id in document.claim_ids:
+            claim = claims.get(claim_id)
+            if claim is None or claim.truth_status not in {TruthStatus.TRUE, TruthStatus.PARTIALLY_TRUE}:
+                continue
+            key = _claim_key(claim)
+            if key not in correct:
+                continue
+            if query_date is not None:
+                if claim.valid_from is not None and claim.valid_from > query_date:
+                    continue
+                if claim.valid_to is not None and query_date > claim.valid_to:
+                    continue
+            supported.add(key)
     return len(supported) / max(1, len(correct))
 
-def verify(result: InvestigationResult, world: CanonicalWorld, task_answerable: bool=True, budget_spent: int=0, budget_total: int=40):
-    identity, false_merges = verify_identity(result, world)
-    relationships, unsupported = verify_relationships(result, world)
-    predicted = {(x.get('subject'), x.get('predicate'), x.get('object')) for x in result.relationships}
-    correct = predicted - unsupported
-    evidence_support = verify_evidence(result, world, correct)
-    abstention = 1.0 if (not task_answerable and result.unknowns) else (0.0 if not task_answerable else 1.0)
-    calibration = max(0.0, 1 - abs(result.overall_confidence - relationships))
-    efficiency = max(0.0, 1 - budget_spent / max(1, budget_total))
-    provenance = evidence_support
-    reward = max(0.0, .25*identity + .25*relationships + .15*evidence_support + .1*provenance + .1*abstention + .1*calibration + .05*efficiency)
-    return VerificationResult(identity=identity, relationships=relationships, temporal=relationships, evidence_support=evidence_support, provenance=provenance, calibration=calibration, abstention=abstention, efficiency=efficiency, false_merge_count=false_merges, unsupported_claim_count=len(unsupported), overall_reward=reward).model_dump()
+
+def _provenance_roots(world: CanonicalWorld, document_ids: set[str]) -> set[str]:
+    parents = {
+        key: set(value)
+        for key, value in (world.metadata.get("provenance_parents", {}) or {}).items()
+    }
+
+    def ancestors(document_id: str) -> set[str]:
+        output: set[str] = set()
+        stack = list(parents.get(document_id, ()))
+        while stack:
+            current = stack.pop()
+            if current in output:
+                continue
+            output.add(current)
+            stack.extend(parents.get(current, ()))
+        return output
+
+    roots: set[str] = set()
+    for document_id in document_ids:
+        lineage = ancestors(document_id) | {document_id}
+        roots.update(item for item in lineage if not parents.get(item))
+    return roots
+
+
+def verify_provenance(
+    result: InvestigationResult,
+    world: CanonicalWorld,
+    oracle: TaskOracle | None = None,
+) -> float:
+    cited = {str(item.get("document_id")) for item in result.evidence if item.get("document_id")}
+    if oracle and oracle.provenance_root_count is not None:
+        asserted_count = None
+        for claim in result.claims:
+            if "independent_source_count" in claim:
+                try:
+                    asserted_count = int(claim["independent_source_count"])
+                except (TypeError, ValueError):
+                    asserted_count = None
+                break
+        if asserted_count is None:
+            return 0.0
+        error = abs(asserted_count - oracle.provenance_root_count)
+        return max(0.0, 1.0 - error / max(1, oracle.provenance_root_count))
+
+    if not cited:
+        return 0.0
+    roots = _provenance_roots(world, cited)
+    # Independent roots are valuable; repeated derivative citations do not increase score.
+    return min(1.0, len(roots) / max(1, min(2, len(cited))))
+
+
+def _substantive_output(result: InvestigationResult) -> bool:
+    return bool(
+        result.identity_assertions
+        or result.relationships
+        or result.claims
+        or result.entities
+        or result.conclusion.strip()
+    )
+
+
+def verify(
+    result: InvestigationResult,
+    world: CanonicalWorld,
+    task: TaskSpec | None = None,
+    oracle: TaskOracle | None = None,
+    *,
+    task_answerable: bool | None = None,
+    budget_spent: int = 0,
+    budget_total: int = 40,
+):
+    """Task-scoped verifier designed to make empty answers and answer stuffing unprofitable."""
+    if oracle is not None and task is not None and oracle.task_id != task.task_id:
+        raise ValueError("task/oracle mismatch")
+
+    answerable = oracle.answerable if oracle is not None else (
+        True if task_answerable is None else task_answerable
+    )
+    identity, false_merges, identity_unresolved = verify_identity(result, world, oracle)
+    (
+        relationships,
+        relationship_precision,
+        relationship_recall,
+        correct,
+        unsupported,
+        relationship_unresolved,
+    ) = verify_relationships(result, world, oracle)
+    temporal = verify_temporal(result, world, task, correct)
+    evidence_support = verify_evidence(
+        result,
+        world,
+        correct,
+        query_date=task.query_date if task else None,
+    )
+    provenance = verify_provenance(result, world, oracle)
+
+    substantive = _substantive_output(result)
+    if answerable:
+        abstention = 0.0 if result.unknowns and not substantive else (1.0 if substantive else 0.0)
+    else:
+        abstention = 1.0 if result.unknowns and not substantive else 0.0
+
+    family = task.family if task else None
+    if family == TaskFamily.ENTITY_RESOLUTION:
+        task_accuracy = identity
+    elif family == TaskFamily.PROVENANCE:
+        task_accuracy = provenance
+    else:
+        task_accuracy = relationships
+    calibration = max(0.0, 1.0 - abs(result.overall_confidence - task_accuracy))
+    efficiency = (
+        max(0.0, 1.0 - budget_spent / max(1, budget_total)) if task_accuracy > 0 else 0.0
+    )
+
+    if not answerable:
+        reward = 0.75 * abstention + 0.15 * calibration + 0.10 * (
+            max(0.0, 1.0 - budget_spent / max(1, budget_total)) if abstention > 0 else 0.0
+        )
+    elif not substantive:
+        reward = 0.0
+    elif family == TaskFamily.ENTITY_RESOLUTION:
+        reward = (
+            0.55 * identity
+            + 0.10 * provenance
+            + 0.15 * calibration
+            + 0.10 * abstention
+            + 0.10 * efficiency
+        )
+    elif family == TaskFamily.PROVENANCE:
+        reward = 0.65 * provenance + 0.15 * calibration + 0.10 * abstention + 0.10 * efficiency
+    else:
+        temporal_weight = 0.15 if task and task.query_date is not None else 0.0
+        relationship_weight = 0.45 - temporal_weight
+        reward = (
+            relationship_weight * relationships
+            + temporal_weight * temporal
+            + 0.20 * evidence_support
+            + 0.10 * provenance
+            + 0.10 * calibration
+            + 0.05 * abstention
+            + 0.05 * efficiency
+        )
+
+    unsupported_ratio = len(unsupported) / max(1, len(result.relationships))
+    penalty = min(0.60, 0.25 * false_merges + 0.25 * unsupported_ratio)
+    reward = max(0.0, min(1.0, reward - penalty))
+
+    verification = VerificationResult(
+        identity=identity,
+        relationships=relationships,
+        relationship_precision=relationship_precision,
+        relationship_recall=relationship_recall,
+        temporal=temporal,
+        evidence_support=evidence_support,
+        provenance=provenance,
+        calibration=calibration,
+        abstention=abstention,
+        efficiency=efficiency,
+        false_merge_count=false_merges,
+        unsupported_claim_count=len(unsupported),
+        unresolved_reference_count=identity_unresolved + relationship_unresolved,
+        overall_reward=reward,
+    )
+    return verification.model_dump()
