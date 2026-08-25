@@ -30,6 +30,14 @@ def _parse_date(value: Any) -> date | None:
     return None
 
 
+def _cited_document_ids(result: InvestigationResult) -> set[str]:
+    return {
+        str(item.get("document_id"))
+        for item in result.evidence
+        if item.get("document_id")
+    }
+
+
 def _resolve_relationship(
     relationship: dict[str, Any], world: CanonicalWorld
 ) -> tuple[tuple[str, str, str] | None, int]:
@@ -55,14 +63,17 @@ def verify_identity(
     if not result.identity_assertions:
         return 0.0, 0, 0
 
-    correct = 0
-    false_merges = 0
-    unresolved = 0
-    evaluated = 0
     expected_pairs = {
         frozenset((target.left_ref.casefold(), target.right_ref.casefold())): target.same_entity
         for target in (oracle.identity_truth if oracle else [])
     }
+    correct_target_keys: set[frozenset[str]] = set()
+    attempted_target_keys: set[frozenset[str]] = set()
+    generic_correct = 0
+    generic_evaluated = 0
+    incorrect_or_off_target = 0
+    false_merges = 0
+    unresolved = 0
 
     for assertion in result.identity_assertions:
         left_ref = str(assertion.get("left", ""))
@@ -70,30 +81,80 @@ def verify_identity(
         predicted_same = assertion.get("same_entity")
         if not isinstance(predicted_same, bool):
             unresolved += 1
+            incorrect_or_off_target += 1
             continue
 
         left = world.resolve_entity_ref(left_ref)
         right = world.resolve_entity_ref(right_ref)
         if len(left) != 1 or len(right) != 1:
             unresolved += 1
+            incorrect_or_off_target += 1
             continue
-        actual_same = next(iter(left)) == next(iter(right))
-        expected = expected_pairs.get(
-            frozenset((left_ref.casefold(), right_ref.casefold())), actual_same
-        )
-        evaluated += 1
-        if predicted_same == expected:
-            correct += 1
-        if predicted_same and not expected:
-            false_merges += 1
 
-    if oracle and oracle.identity_truth:
-        coverage = min(1.0, evaluated / len(oracle.identity_truth))
+        actual_same = next(iter(left)) == next(iter(right))
+        key = frozenset((left_ref.casefold(), right_ref.casefold()))
+
+        if expected_pairs:
+            if key not in expected_pairs:
+                incorrect_or_off_target += 1
+                if predicted_same and not actual_same:
+                    false_merges += 1
+                continue
+            attempted_target_keys.add(key)
+            expected = expected_pairs[key]
+            if predicted_same == expected:
+                correct_target_keys.add(key)
+            else:
+                incorrect_or_off_target += 1
+                if predicted_same and not expected:
+                    false_merges += 1
+        else:
+            generic_evaluated += 1
+            if predicted_same == actual_same:
+                generic_correct += 1
+            elif predicted_same and not actual_same:
+                false_merges += 1
+
+    if expected_pairs:
+        denominator = max(
+            len(expected_pairs),
+            len(attempted_target_keys) + incorrect_or_off_target,
+        )
+        score = len(correct_target_keys) / max(1, denominator)
     else:
-        coverage = 1.0
-    accuracy = correct / max(1, evaluated)
-    score = accuracy * coverage
+        score = generic_correct / max(1, generic_evaluated)
     return score, false_merges, unresolved
+
+
+def verify_identity_evidence(
+    result: InvestigationResult,
+    world: CanonicalWorld,
+    oracle: TaskOracle | None,
+) -> float:
+    if oracle is None or not oracle.identity_truth:
+        return 0.0
+    cited = _cited_document_ids(result)
+    if not cited:
+        return 0.0
+    documents = {document.document_id: document for document in world.documents}
+    covered_entities: set[str] = set()
+    required_entities: set[str] = set()
+
+    for target in oracle.identity_truth:
+        left = world.resolve_entity_ref(target.left_ref)
+        right = world.resolve_entity_ref(target.right_ref)
+        if len(left) == 1:
+            required_entities.update(left)
+        if len(right) == 1:
+            required_entities.update(right)
+
+    for document_id in cited:
+        document = documents.get(document_id)
+        if document is None:
+            continue
+        covered_entities.update(required_entities.intersection(document.entity_ids))
+
+    return len(covered_entities) / max(1, len(required_entities))
 
 
 def verify_relationships(
@@ -184,7 +245,7 @@ def verify_evidence(
 ) -> float:
     if not correct:
         return 0.0
-    cited = {str(item.get("document_id")) for item in result.evidence if item.get("document_id")}
+    cited = _cited_document_ids(result)
     if not cited:
         return 0.0
     documents = {document.document_id: document for document in world.documents}
@@ -240,8 +301,11 @@ def verify_provenance(
     world: CanonicalWorld,
     oracle: TaskOracle | None = None,
 ) -> float:
-    cited = {str(item.get("document_id")) for item in result.evidence if item.get("document_id")}
+    cited = _cited_document_ids(result)
     if oracle and oracle.provenance_root_count is not None:
+        required_documents = set(oracle.provenance_document_ids)
+        if required_documents and not required_documents.issubset(cited):
+            return 0.0
         asserted_count = None
         for claim in result.claims:
             if "independent_source_count" in claim:
@@ -295,6 +359,7 @@ def verify(
     answerable = oracle.answerable if oracle is not None else (
         True if task_answerable is None else task_answerable
     )
+    family = task.family if task else None
     identity, false_merges, identity_unresolved = verify_identity(result, world, oracle)
     (
         relationships,
@@ -305,15 +370,20 @@ def verify(
         relationship_unresolved,
     ) = verify_relationships(result, world, oracle)
     temporal = verify_temporal(result, world, task, correct)
-    evidence_support = verify_evidence(
+    relationship_evidence_support = verify_evidence(
         result,
         world,
         correct,
         query_date=task.query_date if task else None,
     )
+    identity_evidence_support = verify_identity_evidence(result, world, oracle)
+    evidence_support = (
+        identity_evidence_support
+        if family == TaskFamily.ENTITY_RESOLUTION
+        else relationship_evidence_support
+    )
     provenance = verify_provenance(result, world, oracle)
 
-    family = task.family if task else None
     substantive = _substantive_output(result, family)
     if answerable:
         abstention = 0.0 if result.unknowns and not substantive else (1.0 if substantive else 0.0)
@@ -339,10 +409,11 @@ def verify(
         reward = 0.0
     elif family == TaskFamily.ENTITY_RESOLUTION:
         reward = (
-            0.55 * identity
+            0.45 * identity
+            + 0.20 * evidence_support
             + 0.10 * provenance
-            + 0.15 * calibration
-            + 0.10 * abstention
+            + 0.10 * calibration
+            + 0.05 * abstention
             + 0.10 * efficiency
         )
     elif family == TaskFamily.PROVENANCE:
