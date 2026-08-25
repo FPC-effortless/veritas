@@ -49,12 +49,29 @@ class WorldFactory:
                 postal_code=f"SYN-{index:04d}",
             )
 
-        first_names = ["Avery", "Daniel", "Mira", "Jonah", "Leila", "Chuka", "Nadia", "Rowan", "Sana", "Theo"]
+        first_names = [
+            "Avery",
+            "Daniel",
+            "Mira",
+            "Jonah",
+            "Leila",
+            "Chuka",
+            "Nadia",
+            "Rowan",
+            "Sana",
+            "Theo",
+        ]
         last_names = ["Okafor", "Ibarra", "Voss", "Marlowe", "Chen", "Bennett", "Kline", "Sato"]
+        name_cycle = len(first_names) * len(last_names)
         for index in range(1, config.num_people + 1):
             person_id = typed("PER", index)
-            name = f"{first_names[index % len(first_names)]} {last_names[index % len(last_names)]}"
-            aliases = [name.replace(" ", " C. ", 1)] if rng.random() < config.alias_rate else []
+            offset = index - 1
+            first = first_names[offset % len(first_names)]
+            last = last_names[(offset // len(first_names)) % len(last_names)]
+            middle = chr(ord("A") + ((offset // name_cycle) % 26))
+            name = f"{first} {middle}. {last}"
+            # Canonical names stay unique; aliases are allowed to collide and create intended ambiguity.
+            aliases = [f"{first} {last}"] if rng.random() < config.alias_rate else []
             world.people[person_id] = Person(
                 canonical_id=person_id,
                 canonical_name=name,
@@ -67,7 +84,12 @@ class WorldFactory:
         company_suffixes = ("Industrial Systems", "Strategic Holdings", "Civic Works", "Analytics Group")
         for index in range(1, config.num_organizations + 1):
             organization_id = typed("ORG", index)
-            name = f"{company_prefixes[index % 6]} {company_suffixes[index % 4]} Ltd"
+            # The series number is a public-facing legal-name component, not a hidden canonical ID.
+            name = (
+                f"{company_prefixes[(index - 1) % len(company_prefixes)]} "
+                f"{company_suffixes[((index - 1) // len(company_prefixes)) % len(company_suffixes)]} "
+                f"{index:03d} Ltd"
+            )
             incorporation = config.timeline_start + timedelta(days=rng.randrange(900))
             world.organizations[organization_id] = Organization(
                 canonical_id=organization_id,
@@ -119,6 +141,10 @@ class WorldFactory:
                 relationship.valid_to = timestamp - timedelta(days=1)
                 relationship.ended_by_event_id = event_id
 
+        def after_incorporation(organization_id: str, proposed: date, *, days: int = 0) -> date:
+            earliest = world.organizations[organization_id].incorporation_date + timedelta(days=days)
+            return max(proposed, earliest)
+
         # Initial residence state is represented as temporal relationships, not only metadata.
         for index in range(1, config.num_people + 1):
             person_id = typed("PER", index)
@@ -138,22 +164,27 @@ class WorldFactory:
 
         for index in range(1, config.num_organizations + 1):
             organization_id = typed("ORG", index)
+            incorporation = world.organizations[organization_id].incorporation_date
             address_id = typed("ADDR", 1 + (index % config.num_addresses))
             registration_event = emit(
                 "OrganizationRegistered",
-                world.organizations[organization_id].incorporation_date,
+                incorporation,
                 {"organization_id": organization_id, "address_id": address_id},
             )
             add_relationship(
                 organization_id,
                 Predicate.REGISTERED_AT,
                 address_id,
-                world.organizations[organization_id].incorporation_date,
+                incorporation,
                 created_by_event_id=registration_event,
             )
 
             person_id = typed("PER", 1 + (index * 7 % config.num_people))
-            director_date = config.timeline_start + timedelta(days=(index * 37) % 1200)
+            director_date = after_incorporation(
+                organization_id,
+                config.timeline_start + timedelta(days=(index * 37) % 1200),
+                days=1,
+            )
             director_event = emit(
                 "DirectorAppointed",
                 director_date,
@@ -168,32 +199,42 @@ class WorldFactory:
             )
 
             owner_id = typed("PER", 1 + (index % config.num_people))
+            owner_date = after_incorporation(
+                organization_id,
+                config.timeline_start + timedelta(days=80 + index),
+                days=1,
+            )
             owner_event = emit(
                 "OwnershipEstablished",
-                config.timeline_start + timedelta(days=80 + index),
+                owner_date,
                 {"person_id": owner_id, "organization_id": organization_id, "percentage": 25.0},
             )
             add_relationship(
                 owner_id,
                 Predicate.OWNS,
                 organization_id,
-                config.timeline_start + timedelta(days=80 + index),
+                owner_date,
                 created_by_event_id=owner_event,
                 attributes={"percentage": 25.0, "ownership_class": "direct"},
             )
 
             if index > 1:
                 parent_id = typed("ORG", max(1, index // 2))
+                corporate_owner_date = max(
+                    config.timeline_start + timedelta(days=100 + index),
+                    world.organizations[organization_id].incorporation_date + timedelta(days=1),
+                    world.organizations[parent_id].incorporation_date + timedelta(days=1),
+                )
                 parent_event = emit(
                     "CorporateOwnershipEstablished",
-                    config.timeline_start + timedelta(days=100 + index),
+                    corporate_owner_date,
                     {"owner_id": parent_id, "organization_id": organization_id, "percentage": 75.0},
                 )
                 add_relationship(
                     parent_id,
                     Predicate.OWNS,
                     organization_id,
-                    config.timeline_start + timedelta(days=100 + index),
+                    corporate_owner_date,
                     created_by_event_id=parent_event,
                     attributes={"percentage": 75.0, "ownership_class": "corporate"},
                 )
@@ -202,7 +243,11 @@ class WorldFactory:
             if index % 3 == 0:
                 person_id = typed("PER", index)
                 organization_id = typed("ORG", 1 + (index % config.num_organizations))
-                employment_date = config.timeline_start + timedelta(days=200 + index)
+                employment_date = after_incorporation(
+                    organization_id,
+                    config.timeline_start + timedelta(days=200 + index),
+                    days=1,
+                )
                 event_id = emit(
                     "EmploymentStarted",
                     employment_date,
@@ -222,7 +267,12 @@ class WorldFactory:
             for hop in range(1, 5):
                 person_index = ((organization_index + hop * 7 - 1) % config.num_people) + 1
                 person_id = typed("PER", person_index)
-                affiliation_date = config.timeline_start + timedelta(days=300 + hop * 17 + organization_index)
+                affiliation_date = after_incorporation(
+                    organization_id,
+                    config.timeline_start
+                    + timedelta(days=300 + hop * 17 + organization_index),
+                    days=1,
+                )
                 event_id = emit(
                     "AffiliationObserved",
                     affiliation_date,
@@ -236,11 +286,15 @@ class WorldFactory:
                     created_by_event_id=event_id,
                 )
 
-        # Renames update the canonical temporal name state.
+        # Renames update the canonical temporal name state and cannot predate incorporation.
         for index in range(1, min(10, config.num_organizations) + 1):
             organization_id = typed("ORG", index)
             organization = world.organizations[organization_id]
-            rename_date = config.timeline_start + timedelta(days=500 + index * 23)
+            rename_date = after_incorporation(
+                organization_id,
+                config.timeline_start + timedelta(days=500 + index * 23),
+                days=30,
+            )
             old_name = organization.legal_name
             new_name = f"Legacy {old_name}"
             event_id = emit(
@@ -286,7 +340,12 @@ class WorldFactory:
         for organization_index in range(1, config.num_organizations + 1):
             organization_id = typed("ORG", organization_index)
             for phase in range(2):
-                transfer_date = config.timeline_start + timedelta(days=1200 + phase * 600 + organization_index * 5)
+                transfer_date = after_incorporation(
+                    organization_id,
+                    config.timeline_start
+                    + timedelta(days=1200 + phase * 600 + organization_index * 5),
+                    days=60,
+                )
                 active_direct = [
                     relationship
                     for relationship in world.relationships_at(transfer_date)
@@ -326,7 +385,10 @@ class WorldFactory:
         for index in range(1, config.num_organizations + 1):
             if index % 2 == 0:
                 organization_id = typed("ORG", index)
-                dissolution_date = config.timeline_start + timedelta(days=2400 + index * 5)
+                dissolution_date = max(
+                    config.timeline_start + timedelta(days=2400 + index * 5),
+                    world.organizations[organization_id].incorporation_date + timedelta(days=365),
+                )
                 if dissolution_date >= config.timeline_end:
                     dissolution_date = config.timeline_end - timedelta(days=1)
                 event_id = emit(
