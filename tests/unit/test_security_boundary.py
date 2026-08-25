@@ -39,6 +39,16 @@ def test_public_document_text_never_contains_canonical_entity_ids():
         assert not any(canonical_id in public_text for canonical_id in canonical_ids)
 
 
+def test_guessed_canonical_ids_do_not_resolve_through_agent_reference_path():
+    world = _projected_world()
+    person_id = next(iter(world.people))
+    organization_id = next(iter(world.organizations))
+    assert world.resolve_entity_ref(person_id) == set()
+    assert world.resolve_entity_ref(organization_id) == set()
+    assert world.resolve_entity_ref(person_id, allow_canonical_ids=True) == {person_id}
+    assert world.resolve_entity_ref(organization_id, allow_canonical_ids=True) == {organization_id}
+
+
 def test_authoritative_documents_do_not_leak_future_renames():
     world = _projected_world()
     source_types = {source.source_id: source.source_type for source in world.sources}
