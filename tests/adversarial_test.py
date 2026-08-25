@@ -46,6 +46,18 @@ def test_empty_answer_gets_zero_reward_on_answerable_task():
     assert score["overall_reward"] == 0.0
 
 
+def test_irrelevant_structured_output_cannot_unlock_reward():
+    world = _benchmark_world(4)
+    instance = _relationship_instance(world)
+    irrelevant = InvestigationResult(
+        entities=[{"name": "some entity"}],
+        conclusion="I found something.",
+        overall_confidence=0.0,
+    )
+    score = verify(irrelevant, world, task=instance.public, oracle=instance.oracle)
+    assert score["overall_reward"] == 0.0
+
+
 def test_answer_stuffing_reduces_reward():
     world = _benchmark_world(5)
     instance = _relationship_instance(world)
