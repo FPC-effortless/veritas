@@ -30,6 +30,40 @@ The pool is independent of the existing train/IID/OOD/adversarial split so Verit
 
 This makes longitudinal experiments explicit and reproducible rather than relying on handwritten loops or implicit benchmark configuration.
 
+## Execution adapters
+
+The execution layer deliberately separates three independently versioned concerns:
+
+```text
+RuntimeFactory → executable world instance
+ModelProviderAdapter → model inference
+HarnessAdapter → agent loop / tool-use semantics
+```
+
+`ExecutionRegistry` resolves those components from a cell's `WorldRef`, `ModelSpec`, and `HarnessSpec`. Exact world and harness versions are required: silently falling back across versions would make longitudinal comparisons scientifically ambiguous.
+
+`CallableModelProvider`, `CallableHarnessAdapter`, and `CallableRuntimeFactory` are SDK-neutral integration points. They can wrap hosted provider SDKs, local inference, CLIs, custom agent harnesses, deterministic controls, or existing Veritas runtimes without adding provider-specific dependencies to the Observatory core.
+
+Every cell gets a `ProviderSession`. It assigns deterministic request IDs and records provider-call count, token usage, reported cost, and latency. The session records usage metadata rather than provider credentials or raw secrets.
+
+`ObservatoryExecutionEngine.execute_cell()` resolves the registered components, executes the harness, converts the resulting `RolloutTrace` into a `CapabilityRun`, attaches provider/harness execution metadata, and optionally persists the run.
+
+## Local scheduler
+
+`LocalObservatoryScheduler` turns an `ExperimentSpec` and its cells into deterministic execution jobs. It provides:
+
+- bounded parallelism;
+- per-cell retry limits;
+- failure isolation so one failed cell does not abort the matrix;
+- anchor/rotation/sequestered pool selection;
+- completed-cell detection from `ObservatoryStore`;
+- idempotent re-run skipping by default;
+- serialized persistence when worker threads finish concurrently.
+
+The scheduler does not pretend to enforce process-level hard timeouts. Time, token, tool-call, and cost limits remain part of `ExecutionSpec` and must be enforced by the harness/runtime/provider integration that owns those resources.
+
+This is the local execution substrate. A later distributed scheduler can preserve the same `ExecutionJob`, adapter, and result contracts while moving work to remote workers.
+
 ## Capability run
 
 Existing `RolloutTrace` objects are converted into `CapabilityRun` objects. A run contains:
@@ -83,9 +117,9 @@ A model snapshot can therefore improve final reward while simultaneously becomin
 
 ## Persistence
 
-`ObservatoryStore` provides the first append-only run store using JSONL. It is deliberately small and local so the schema can stabilize before adding DuckDB/SQL/object-storage backends. The API exposes lineage queries and latest-run lookup.
+`ObservatoryStore` provides the first append-only run store using JSONL. It is deliberately small and local so the schema can stabilize before adding DuckDB/SQL/object-storage backends. The API exposes run, cell, lineage, and latest-run lookup.
 
-The persistence boundary is designed so the storage backend can change without changing the cell, run, or drift models.
+The persistence boundary is designed so the storage backend can change without changing the cell, run, scheduler, or drift models.
 
 ## Relationship to the capability foundry
 
@@ -96,7 +130,9 @@ World / Task Distribution
         ↓
 Materialized Runtime
         ↓
-Agent + Harness
+Execution Registry
+        ↓
+Model Provider + Harness
         ↓
 RolloutTrace
         ↓
@@ -111,7 +147,7 @@ Failure Mining / Challenge Generation / Training Products
 
 The same verified trajectories can continue into challenge generation, expert/verified trajectory curation, preference data, SFT/RL training products, counterfactual replay, and future VOPSD workflows.
 
-## First implementation boundary
+## Current implementation boundary
 
 Implemented now:
 
@@ -119,13 +155,17 @@ Implemented now:
 - deterministic `LongitudinalCell` and longitudinal lineage identity;
 - anchor/rotation/sequestered scenario pools;
 - `CellMatrixSpec`, deterministic matrix materialization, and `ExperimentSpec` construction;
+- provider, harness, and runtime adapter protocols plus callable adapters and registries;
+- per-cell provider sessions with deterministic request IDs and usage instrumentation;
+- `ObservatoryExecutionEngine` for cell execution and trace-to-run conversion;
+- deterministic execution jobs and a bounded local scheduler with retries, pool filtering, failure isolation, persistence, and completed-cell skipping;
 - `CapabilityRun` and provenance;
 - verifier-derived capability profiles;
 - trajectory-derived behavioral fingerprints;
 - single-run longitudinal drift reports;
 - repeated-seed aggregation with mean, variance, standard error, and approximate 95% confidence intervals;
 - aggregate longitudinal drift with frozen runtime/taskset comparability;
-- append-only run persistence;
-- unit coverage for identity, alignment, matrix generation, aggregation, drift, behavior, and storage.
+- append-only run persistence with run/cell/lineage lookup;
+- unit coverage for identity, alignment, matrix generation, execution, scheduling, aggregation, drift, behavior, and storage.
 
-Next implementation layers should add scheduler/provider adapters, richer investigation-specific capability dimensions, capability-graph attribution, counterfactual/intervention experiment records, and a query/report surface over accumulated runs.
+Next implementation layers should add concrete hosted/local provider integrations, durable/distributed scheduling and cadence management, richer investigation-specific capability dimensions, capability-graph attribution, counterfactual/intervention experiment records, and a query/report surface over accumulated runs.
