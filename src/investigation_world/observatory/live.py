@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from investigation_world.foundry.models import MutationKind, stable_hash
+from investigation_world.observatory.cadence import (
+    CadencePolicy,
+    CadenceRunResult,
+    CadenceStore,
+    CadencedObservationRunner,
+)
+from investigation_world.observatory.capability_graph import (
+    companyworld_investigation_capability_graph,
+)
 from investigation_world.observatory.companyworld import (
     CompanyWorldBundleRepository,
     CompanyWorldObservatoryRuntimeFactory,
@@ -16,6 +27,13 @@ from investigation_world.observatory.harnesses import (
     CompanyWorldAgentHarnessConfig,
     CompanyWorldJSONAgentHarness,
 )
+from investigation_world.observatory.interventions import (
+    InterventionEffectReport,
+    InterventionMaterialization,
+    InterventionSpec,
+    compare_intervention_runs,
+    materialize_companyworld_intervention,
+)
 from investigation_world.observatory.matrix import experiment_from_matrix
 from investigation_world.observatory.models import (
     CellMatrixSpec,
@@ -23,6 +41,7 @@ from investigation_world.observatory.models import (
     HarnessSpec,
     ModelSpec,
     ScenarioPool,
+    ScenarioRef,
     VerifierSpec,
     WorldKind,
     WorldRef,
@@ -72,6 +91,17 @@ class CompanyWorldLiveRunConfig(BaseModel):
     provider_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+class CompanyWorldInterventionRunReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    report_id: str
+    intervention: InterventionSpec
+    materialization: InterventionMaterialization
+    baseline_cycle_id: str
+    intervention_cycle_id: str
+    effect: InterventionEffectReport
+    created_at: datetime
+
+
 def _provider(config: CompanyWorldLiveRunConfig):
     provider = config.provider.casefold()
     if provider == "openai":
@@ -103,25 +133,29 @@ def _provider(config: CompanyWorldLiveRunConfig):
     raise ValueError(f"unsupported live Observatory provider {config.provider!r}")
 
 
-def run_companyworld_observation(
+def _run_repository_observation(
     config: CompanyWorldLiveRunConfig,
+    repository: CompanyWorldBundleRepository,
+    *,
+    scenarios: list[ScenarioRef] | None = None,
+    experiment_label: str = "CompanyWorld Observatory",
+    hypothesis: str = "Measure longitudinal investigation capability on frozen CompanyWorld cells.",
+    experiment_metadata: dict[str, Any] | None = None,
 ) -> ObservationCycleReport:
-    repository = CompanyWorldBundleRepository.from_files(
-        config.public_bundle,
-        config.oracle_bundle,
-    )
     provider = _provider(config)
     harness = CompanyWorldJSONAgentHarness(
         CompanyWorldAgentHarnessConfig(max_steps=config.max_agent_steps)
     )
     runtime_factory = CompanyWorldObservatoryRuntimeFactory(repository)
 
-    scenarios = repository.scenario_refs(
-        pool=config.pool,
-        split_name=config.split_name,
-        limit=config.scenario_limit,
-    )
-    if not scenarios:
+    selected = scenarios
+    if selected is None:
+        selected = repository.scenario_refs(
+            pool=config.pool,
+            split_name=config.split_name,
+            limit=config.scenario_limit,
+        )
+    if not selected:
         raise ValueError("live Observatory selection produced zero scenarios")
 
     model_config: dict[str, Any] = {
@@ -154,23 +188,26 @@ def run_companyworld_observation(
                 kind=WorldKind.OPERATIONAL,
             )
         ],
-        scenarios=scenarios,
+        scenarios=selected,
         models=[model],
         harnesses=[HarnessSpec(harness_id=harness.harness_id, version=harness.version)],
         verifiers=[VerifierSpec(verifier_id="companyworld", version="1")],
         executions=[execution],
         time_snapshots=[config.time_snapshot],
     )
+    metadata = {
+        "world_version": repository.bundle_version,
+        "provider": provider.provider_id,
+        "model_id": config.model_id,
+        "model_snapshot": config.model_snapshot,
+    }
+    if experiment_metadata:
+        metadata.update(experiment_metadata)
     experiment, cells = experiment_from_matrix(
-        f"CompanyWorld Observatory {config.model_id} {config.time_snapshot}",
+        f"{experiment_label} {config.model_id} {config.time_snapshot}",
         matrix,
-        hypothesis="Measure longitudinal investigation capability on frozen CompanyWorld cells.",
-        metadata={
-            "world_version": repository.bundle_version,
-            "provider": provider.provider_id,
-            "model_id": config.model_id,
-            "model_snapshot": config.model_snapshot,
-        },
+        hypothesis=hypothesis,
+        metadata=metadata,
     )
 
     registry = ExecutionRegistry()
@@ -180,10 +217,139 @@ def run_companyworld_observation(
     store = ObservatoryStore(config.store_root)
     engine = ObservatoryExecutionEngine(registry, store=store)
     scheduler = LocalObservatoryScheduler(engine, store=store)
-    cycle_runner = ObservationCycleRunner(scheduler, store)
+    cycle_runner = ObservationCycleRunner(
+        scheduler,
+        store,
+        capability_graph=companyworld_investigation_capability_graph(),
+    )
     policy = SchedulerPolicy(
         max_workers=config.max_workers,
         max_attempts=config.max_attempts,
-        pools={config.pool},
+        pools={item.pool for item in selected},
     )
     return cycle_runner.run(experiment, cells, policy=policy)
+
+
+def run_companyworld_observation(
+    config: CompanyWorldLiveRunConfig,
+) -> ObservationCycleReport:
+    repository = CompanyWorldBundleRepository.from_files(
+        config.public_bundle,
+        config.oracle_bundle,
+    )
+    return _run_repository_observation(config, repository)
+
+
+def _cadence_experiment_identity(
+    config: CompanyWorldLiveRunConfig,
+    repository: CompanyWorldBundleRepository,
+) -> str:
+    payload = config.model_dump(mode="json")
+    for key in (
+        "time_snapshot",
+        "model_snapshot",
+        "public_bundle",
+        "oracle_bundle",
+        "store_root",
+    ):
+        payload.pop(key, None)
+    payload["bundle_version"] = repository.bundle_version
+    return f"companyworld:{stable_hash(payload)[:24]}"
+
+
+def run_companyworld_cadence(
+    config: CompanyWorldLiveRunConfig,
+    *,
+    interval_hours: int = 168,
+    cadence_root: str | Path | None = None,
+    now: datetime | None = None,
+    force: bool = False,
+) -> CadenceRunResult:
+    """Run a CompanyWorld anchor cycle only when its persisted cadence is due."""
+    if interval_hours < 1:
+        raise ValueError("interval_hours must be at least 1")
+    repository = CompanyWorldBundleRepository.from_files(
+        config.public_bundle,
+        config.oracle_bundle,
+    )
+    root = Path(cadence_root) if cadence_root is not None else config.store_root / "cadence"
+    policy = CadencePolicy(
+        name=_cadence_experiment_identity(config, repository),
+        interval_seconds=interval_hours * 3600,
+    )
+    cadence_store = CadenceStore(root)
+
+    def execute(snapshot: str) -> ObservationCycleReport:
+        return _run_repository_observation(
+            config.model_copy(update={"time_snapshot": snapshot}),
+            repository,
+        )
+
+    return CadencedObservationRunner(policy, cadence_store, execute).run_if_due(
+        now=now,
+        force=force,
+    )
+
+
+def run_companyworld_intervention(
+    config: CompanyWorldLiveRunConfig,
+    spec: InterventionSpec,
+    *,
+    persist_report: bool = True,
+) -> CompanyWorldInterventionRunReport:
+    """Execute a controlled baseline/intervention A/B comparison with frozen agent components."""
+    if config.world_cost_budget is not None and any(
+        mutation.kind == MutationKind.TIGHTEN_BUDGET for mutation in spec.mutations
+    ):
+        raise ValueError(
+            "explicit world_cost_budget would mask a TIGHTEN_BUDGET intervention; "
+            "remove the override for this experiment"
+        )
+    source = CompanyWorldBundleRepository.from_files(config.public_bundle, config.oracle_bundle)
+    variant, materialization = materialize_companyworld_intervention(source, spec)
+    scenario = spec.scenario.model_copy(update={"pool": ScenarioPool.ANCHOR})
+
+    baseline_cycle = _run_repository_observation(
+        config,
+        source,
+        scenarios=[scenario],
+        experiment_label="CompanyWorld intervention baseline",
+        hypothesis="Establish the baseline response for a controlled intervention experiment.",
+        experiment_metadata={"intervention_id": spec.intervention_id, "arm": "baseline"},
+    )
+    intervention_cycle = _run_repository_observation(
+        config,
+        variant,
+        scenarios=[scenario],
+        experiment_label="CompanyWorld intervention treatment",
+        hypothesis="Measure sensitivity to a controlled truth-preserving world intervention.",
+        experiment_metadata={"intervention_id": spec.intervention_id, "arm": "intervention"},
+    )
+    if not baseline_cycle.run_ids or not intervention_cycle.run_ids:
+        raise RuntimeError("intervention experiment did not produce both baseline and intervention runs")
+
+    store = ObservatoryStore(config.store_root)
+    runs = {run.run_id: run for run in store.load()}
+    baseline = runs[baseline_cycle.run_ids[0]]
+    intervention = runs[intervention_cycle.run_ids[0]]
+    effect = compare_intervention_runs(spec, baseline, intervention)
+    created_at = datetime.now(timezone.utc)
+    report_id = f"IREPORT-{stable_hash([spec.intervention_id, baseline.run_id, intervention.run_id])[:20].upper()}"
+    report = CompanyWorldInterventionRunReport(
+        report_id=report_id,
+        intervention=spec,
+        materialization=materialization,
+        baseline_cycle_id=baseline_cycle.cycle_id,
+        intervention_cycle_id=intervention_cycle.cycle_id,
+        effect=effect,
+        created_at=created_at,
+    )
+    if persist_report:
+        root = config.store_root / "interventions"
+        root.mkdir(parents=True, exist_ok=True)
+        target = root / f"{report_id}.json"
+        target.write_text(
+            json.dumps(report.model_dump(mode="json"), indent=2, default=str),
+            encoding="utf-8",
+        )
+    return report
