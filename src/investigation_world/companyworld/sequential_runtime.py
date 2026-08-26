@@ -203,7 +203,7 @@ class SequentialCompanyWorldRuntime:
                 effects.append(prior.model_copy(deep=True))
 
         for field_name, value in (
-            ("remediation_status", "NOT_STARTED"),
+            ("control_remediation_status", "NOT_STARTED"),
             ("reconciliation_status", "NOT_STARTED"),
             ("verification_status", "NOT_STARTED"),
         ):
