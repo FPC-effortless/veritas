@@ -41,7 +41,7 @@ Verified trajectory corpus
 3. **Verification precedes promotion.** A trajectory becomes an expert demonstration only after independent verification and invariant checks.
 4. **Held-out worlds stay held out.** IID test, OOD and adversarial worlds are never silently folded into training data.
 5. **World realism is calibrated, not claimed.** Synthetic worlds can be parameterized from public datasets, filings, operational documents, research, telemetry or expert knowledge using explicit calibration targets and provenance.
-6. **Capability families remain distinct.** CompanyWorld enterprise control and External Investigation share foundry infrastructure but retain separate capability contracts, source surfaces and transfer targets.
+6. **Capability families remain distinct.** CompanyWorld enterprise control, External Investigation, and Selective Agency share foundry infrastructure but retain separate capability contracts, source surfaces, task distributions, metrics, and transfer targets.
 7. **Learner algorithms remain modular.** SFT, preference learning, RL and VOPSD consume verified training bundles through adapters; environment semantics and verifier logic do not depend on a specific learner.
 8. **Failure creates new tests, not new truth.** Failure mining may propose challenges and mutations, but hidden truth, production verifiers and benchmark distributions change only through explicit promotion gates.
 
@@ -86,6 +86,26 @@ Concrete trainer adapters remain separate runtime integrations. The intended ada
 
 A successful training run is not itself evidence of capability gain. The result must be re-evaluated on held-out and OOD worlds with the independent verifier.
 
+## Selective Agency capability family
+
+Selective Agency is a distinct capability family for task judgment: whether an agent should execute, answer, clarify, correct, reframe, decline, or do nothing given the user's objective and current world state.
+
+Its task distribution deliberately breaks the assumption that every presented instruction should be completed. It includes false premises, impossible or contradictory constraints, underspecification, redundancy, goal-defeating requests, unanswerable tasks, premature actions, excessive solutions, no-op states, and unusual-but-valid questions that should not trigger blanket refusal.
+
+Selective Agency adds first-class operational measurements that ordinary task-completion benchmarks miss:
+
+- judgment accuracy;
+- unnecessary action rate;
+- forbidden-action rate;
+- clarification quality;
+- epistemic calibration;
+- resource proportionality;
+- outcome correctness under independent verification.
+
+The strongest cases are paired worlds where nearly identical instructions require different decisions because hidden or observable state differs. Public canaries exist for smoke testing, but commercial benchmark variants, world-state flips, adversarial pairs, consequences, and evaluator targets remain sequestered.
+
+See [`selective-agency.md`](selective-agency.md) for the benchmark methodology.
+
 ## Commercial interpretation
 
 The first wedge is **Veritas CompanyWorld Pilot v1** because private enterprise-agent evaluation is sellable before the complete training foundry is operational.
@@ -102,6 +122,11 @@ Veritas Capability Foundry
 │   ├── OSINT-style investigation
 │   ├── provenance / identity / temporal tasks
 │   └── domain-specific investigative variants
+├── Selective Agency
+│   ├── task-judgment evaluation
+│   ├── action-boundary and no-op environments
+│   ├── resource-proportionality benchmarks
+│   └── domain-specific selective-action variants
 └── Training Products
     ├── verified demonstration sets
     ├── preference / counterfactual sets
