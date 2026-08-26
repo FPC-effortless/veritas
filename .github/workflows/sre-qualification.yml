@@ -27,13 +27,13 @@ jobs:
           cache: pip
       - name: Install Veritas
         run: python -m pip install -e ".[test]"
-      - name: Acquire fresh provider family and qualify SRE v2 candidate
+      - name: Acquire independent provider family and qualify SRE v3 candidate
         run: |
           python tools/build_sre_qualification_candidate.py \
-            --snapshot-dir results/sre-v2/sources \
-            --output results/sre-v2/qualification.json \
-            --version sre-v2 \
-            --providers openai twilio vercel \
+            --snapshot-dir results/sre-v3/sources \
+            --output results/sre-v3/qualification.json \
+            --version sre-v3 \
+            --providers circleci discord dropbox mongodb npm \
             --early-updates 2 \
             --random-seed 7
       - name: Print qualification summary
@@ -41,7 +41,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("results/sre-v2/qualification.json").read_text())
+          report = json.loads(Path("results/sre-v3/qualification.json").read_text())
           q = report["qualification"]
           print(json.dumps({
               "status": report["status"],
@@ -55,7 +55,7 @@ jobs:
       - name: Upload immutable candidate evidence
         uses: actions/upload-artifact@v4
         with:
-          name: sre-v2-qualification
-          path: results/sre-v2
+          name: sre-v3-qualification
+          path: results/sre-v3
           if-no-files-found: error
           retention-days: 90
