@@ -14,9 +14,11 @@ from investigation_world.foundry import (
     TrainerKind,
     TrainingRecipe,
     TrainingUse,
+    TrajectoryRole,
     WorldCalibrationSpec,
     calibration_fingerprint,
     compile_training_bundle,
+    curate_verified_trace,
     external_investigation_family,
     external_investigation_task_metadata,
     make_preference_pair,
@@ -43,7 +45,7 @@ def _trace(trace_id: str, *, split: DistributionSplit, reward: float = 1.0) -> R
         verifier_components={"outcome": reward},
         total_reward=reward,
         final_state_hash="end",
-        termination_reason="success",
+        termination_reason="success" if reward >= 0.8 else "failure",
     )
 
 
@@ -100,14 +102,27 @@ def test_low_outcome_score_cannot_be_promoted_as_expert() -> None:
         )
 
 
-def test_preference_product_uses_verified_pair_provenance() -> None:
+def test_failed_trace_can_be_curated_without_weakening_expert_gate() -> None:
+    failure = curate_verified_trace(
+        _trace("failure", split=DistributionSplit.TRAIN, reward=0.2),
+        role=TrajectoryRole.FAILURE,
+        training_uses=[TrainingUse.PREFERENCE],
+    )
+
+    assert failure.assessment.verifier_score == 0.2
+    assert failure.assessment.terminal_success is False
+    assert failure.role == TrajectoryRole.FAILURE
+
+
+def test_preference_product_uses_verified_positive_and_failure_provenance() -> None:
     family = external_investigation_family()
     chosen = qualify_expert_trace(
         _trace("chosen", split=DistributionSplit.TRAIN, reward=1.0),
         training_uses=[TrainingUse.PREFERENCE],
     )
-    rejected = qualify_expert_trace(
-        _trace("rejected", split=DistributionSplit.TRAIN, reward=0.85),
+    rejected = curate_verified_trace(
+        _trace("rejected", split=DistributionSplit.TRAIN, reward=0.2),
+        role=TrajectoryRole.PREFERENCE_REJECTED,
         training_uses=[TrainingUse.PREFERENCE],
     )
     pair = make_preference_pair(chosen, rejected, reason="higher verified outcome")
@@ -128,6 +143,7 @@ def test_preference_product_uses_verified_pair_provenance() -> None:
     assert len(bundle.preference_examples) == 1
     assert bundle.preference_examples[0].chosen_trace_ref == "chosen"
     assert bundle.preference_examples[0].rejected_trace_ref == "rejected"
+    assert bundle.preference_examples[0].score_margin == 0.8
 
 
 def test_world_calibration_has_stable_provenance_fingerprint_and_quality_gate() -> None:
