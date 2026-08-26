@@ -5,7 +5,7 @@ from pathlib import Path
 
 import typer
 
-from investigation_world.operational.distribution import OperationalDistributionConfig
+from investigation_world.operational.deep_distribution import OperationalDistributionConfig
 from investigation_world.operational.models import WorldDomain
 from investigation_world.veritas import Veritas
 
@@ -166,7 +166,7 @@ def validate_production_scale_cmd(
     ood_per_domain: int = 128,
     adversarial_per_domain: int = 128,
 ) -> None:
-    """Compile and validate a production-scale distribution without writing artifacts."""
+    """Compile and validate a production-scale deep-realism distribution without writing artifacts."""
     config = OperationalDistributionConfig(
         seed=seed,
         train_per_domain=train_per_domain,

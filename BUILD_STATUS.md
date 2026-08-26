@@ -2,124 +2,160 @@
 
 ## Version
 
-Current benchmark/runtime version: **0.7.0**.
+Current benchmark/runtime candidate: **0.8.0**.
 
 ## Implemented
 
-### Existing Veritas capability-foundry stack
+### Veritas capability-foundry stack
 
 - Deterministic hidden canonical world generation with typed entities and event-sourced temporal relationship intervals.
-- Temporal ownership transfers, residence changes, organization renames, dissolutions, and historical state queries.
-- Leakage-safe evidence projection using public names/aliases rather than canonical entity IDs.
-- Six source families with source-conditioned omission, staleness, partial truth, false claims, and citation dependence.
-- Citation provenance DAG and independent-root reasoning.
-- Source-aware SQLite FTS5 search surfaces for web, registry, filing, archive, and general document search.
-- Isolated FastAPI episode sessions with per-episode hidden world/oracle, search index, budget, and public task.
-- External Investigation capability family: entity resolution, ownership reconstruction, temporal reconstruction, provenance, conflict resolution, and due diligence.
-- CompanyWorld enterprise-control capability family with investigation, action, sequential control and dynamic work.
-- Selective Agency capability family with execute/clarify/reframe/decline/no-op judgment and procedural train/IID/OOD/adversarial cases.
-- Trace-first foundry runtime, trace storage, replay descriptors, counterfactual branches, failure-to-challenge mapping, task-distribution control and moving learnability frontier.
-- Continuous Capability Observatory infrastructure for longitudinal world/model/harness/seed/snapshot evaluation.
-- Expert-trajectory primitives for verifier-qualified demonstrations, recovery/counterfactual roles and preference pairs.
-- Reality-calibration primitives for provenance-backed calibration sources, distribution targets, dependency targets, procedure priors and calibration reports.
-- Trainer-product boundary for SFT, preference learning, RL and VOPSD with verifier thresholds, invariant gates, split isolation and trace provenance.
-- Trajectory recorder plus JSONL/Parquet export and failure labels.
+- Leakage-safe evidence projection and strict public/private task/oracle separation.
+- Source-aware search surfaces, isolated executable episode runtimes, budgets, trace storage, replay, counterfactuals and failure mining.
+- CompanyWorld, External Investigation, Selective Agency, Continuous Capability Observatory, Reality Calibration and Verified Training Product primitives remain first-class capabilities under one Veritas product facade.
+- Persistent operational substrate with organization-scoped state, append-only event history, deterministic reconstruction, snapshots, counterfactual forks and persistent entity/relation graph.
 
-### Unified Operational Worlds Production v1
+### Unified Operational Worlds Production v2
 
-- One canonical `Veritas` product facade and capability catalog spanning Unified Operational Worlds, CompanyWorld, External Investigation, Selective Agency, Capability Foundry, Continuous Capability Observatory, Reality Calibration, and Verified Training Products.
-- Five first-class operational domains under one runtime/verifier contract:
-  - Financial / Spreadsheet
-  - Enterprise Operations
-  - DevOps / Incident Response
-  - Investigation / OSINT
-  - GIS Operations
-- `PersistentOperationalSubstrate` with organization-scoped state, append-only cross-domain event history, deterministic state reconstruction, snapshots, and counterfactual forks.
-- Persistent `OperationalEntity` / `OperationalRelation` graph generated from domain records and shared organization scope.
-- Episode-owned record isolation so domains do not mix records merely because they use the same underlying system family.
-- `VeritasCompany` for mounting all five domains into one persistent synthetic organization.
-- Shared public `TaskContract`, agent-visible `OperationalRecord`, public actions, private `HiddenOracle`, hidden action effects, target-state assertions, invariants, evidence requirements, and budgets.
-- Construction-time world integrity checks for action uniqueness, permitted systems, oracle action references, required/forbidden contradictions, evidence existence, parameter declarations, record IDs, and invariant IDs.
-- Oracle-safe action boundary: public action results do not expose forbidden-action status, hidden state changes, hidden side effects, or consequence severity; those remain in harness/verifier traces.
-- Shared seven-dimensional operational verifier: outcome, state, constraints, side effects, process, efficiency, and evidence.
+Five operational domains share one runtime and the same seven-dimensional verification contract:
 
-### Production-scale distribution
+1. Financial / Spreadsheet
+2. Enterprise Operations
+3. DevOps / Incident Response
+4. Investigation / OSINT
+5. GIS Operations
 
-The default `OperationalDistributionConfig` compiles **4,480 executable episodes**:
+The shared verifier dimensions remain **outcome, state, constraints, side effects, process, efficiency and evidence**. v0.8 deepens how those dimensions are earned; it does not introduce incompatible domain-specific reward surfaces.
+
+### Stateful operational semantics
+
+v0.8 adds:
+
+- hidden state preconditions on action effects;
+- hidden required-prior-action conditions;
+- realistic blocked system responses when prerequisites are not met;
+- blocked actions do not mutate truth and do not satisfy required process steps;
+- ordered required procedures inside the existing process score;
+- repeated required action counts;
+- richer assertion comparisons, including threshold checks;
+- final-state and trajectory-wide (`always`) invariants;
+- transient invariant violations remain detectable even when later repaired;
+- temporal/provenance-rich public records with validity interval, observation time, freshness, source authority, confidence and provenance roots.
+
+### Deep financial / spreadsheet cases
+
+Production cases now include workbook manifests, formula-lineage/dependency graphs, calculation chains, authoritative ledger reconciliation, model-governance policy and review context.
+
+Representative workflow:
+
+`inspect lineage -> reconcile source -> repair formula -> recalculate -> validate controls`
+
+Artifact contract: `xlsx_formula_dependency_graph_v2`.
+
+### Deep enterprise-operations cases
+
+Production cases now span CRM, CPQ, ERP, IAM and finance-control evidence. They include role/authority assignments, credit profiles, quote versions, order state, customer/account context and immutable audit events.
+
+Representative workflow:
+
+`verify authority -> validate credit -> request approval -> hold order -> update stage -> reconcile systems`
+
+Artifact contract: `crm_cpq_erp_control_graph_v2`.
+
+### Deep DevOps / incident-response cases
+
+Production cases now include change-management evidence, deployment state, distributed dependency graphs, log signatures, SLI windows, SLO policy and Kubernetes deployment specifications.
+
+Representative workflow:
+
+`correlate change -> inspect dependencies -> recover service -> verify health -> validate SLO`
+
+Artifact contract: `incident_telemetry_dependency_graph_v2`.
+
+### Deep investigation / OSINT cases
+
+Production cases now include explicit hypothesis state, repeated evidence linking, source provenance, independence metadata, identifier crosswalks, negative evidence, archived reporting and chain-of-custody invariants.
+
+Representative workflow:
+
+`record hypothesis -> resolve identity -> link independent evidence -> corroborate -> close case`
+
+Artifact contract: `multi_source_provenance_casefile_v2`.
+
+### Deep GIS cases
+
+Production cases now include catalog metadata, CRS definitions, datum/axis-order context, spatial extent, topology rules, schema profiles, lineage and output contracts.
+
+Representative workflow:
+
+`inspect metadata -> reproject -> repair geometry -> validate topology -> execute overlay`
+
+Artifact contract: `vector_crs_topology_lineage_v2`.
+
+## Production-scale distribution
+
+The default `OperationalDistributionConfig` remains **4,480 executable episodes**:
 
 - train: 512 per domain / 2,560 total;
 - IID test: 128 per domain / 640 total;
 - OOD: 128 per domain / 640 total;
 - adversarial: 128 per domain / 640 total;
-- 896 cases per domain across five domains.
+- 896 cases per domain across all five domains.
 
-Production-distribution features implemented:
+The v2 compiler preserves the v0.7 scale/integrity guarantees and adds deep-realism validation:
 
-- deterministic case generation from a versioned seed;
-- domain-specific state/data parameterization rather than prompt-only duplication;
-- multiple evaluator scenario-family labels per domain;
-- split-specific distractor, OOD and adversarial pressure;
-- tighter adversarial budgets and conflicting-context records;
-- `DifficultyVector` metadata in the evaluator package;
-- opaque public world/task/record identifiers rather than split/seed-bearing IDs;
-- deterministic hash-mixed public ordering rather than split-grouped output;
-- strict public/private packaging: split, generator seed, scenario-family label, surface profile, difficulty vector and oracle remain evaluator-only;
-- public and private distribution fingerprints;
-- exact count, uniqueness, split isolation, leakage and adversarial-integrity validation;
-- `veritas build-distribution` and `veritas validate-production-scale` CLI commands;
-- scale can be raised parametrically without changing the runtime contract.
+- deterministic generation and fingerprints;
+- opaque public world/task/record identifiers;
+- hash-mixed public ordering;
+- split, seed, scenario-family, surface-profile, difficulty and oracle remain evaluator-only;
+- generator-only scenario fields are stripped before public packaging;
+- literal private scenario labels are rejected if leaked publicly;
+- difficulty vectors are recomputed after domain-depth expansion;
+- every deep case must satisfy minimum system heterogeneity, action-surface depth, ordered procedure depth, temporal/provenance evidence, stateful preconditions and trajectory invariants;
+- OOD/adversarial pressure and train/held-out isolation remain intact.
 
-See `docs/operational-production-scale.md` for the exact production-scale contract.
+See `docs/operational-production-scale.md` and `docs/domain-realism-v08.md`.
 
 ## Regression coverage
 
-The test suite covers, among other existing behaviors:
+The test suite covers the existing Veritas contract plus:
 
-- deterministic world/evidence generation;
-- public/canonical leakage boundaries;
-- public-task/private-oracle separation;
-- train/public/private split disjointness;
-- reward-hacking regressions;
-- source-aware tool surfaces and per-episode budget isolation;
-- held-out trajectory exclusion from training bundles;
-- all five operational-domain registrations;
-- unified operational public/private oracle isolation;
-- oracle-safe action response behavior;
-- deterministic operational target-state verification;
-- forbidden-action and invariant-violation penalties;
-- persistent company organization scoping;
-- episode-owned domain record isolation;
-- shared entity/relation graph construction;
-- cross-domain substrate mounting and event sequencing;
-- point-in-time state reconstruction and counterfactual fork behavior;
-- unified capability catalog membership;
-- production-distribution domain/split coverage;
-- deterministic production hashes and IDs;
-- procedural parameter diversity;
-- public split/seed/family/oracle leakage prevention;
-- adversarial conflict and pressure requirements;
-- unified CLI smoke paths.
+- state-gated actions and blocked transitions;
+- blocked required actions not satisfying process credit;
+- ordered process verification;
+- repeated required actions;
+- transient trajectory-invariant detection;
+- threshold/tolerance assertions;
+- deep-domain record/action/system minimums;
+- opaque realism-layer record IDs;
+- deep public/private leakage checks;
+- preservation of all five domains and all four distribution partitions.
 
-## CI status
+## CI release gate
 
-The original concern that GitHub Actions was not running was a timing/observation issue rather than a disabled Actions configuration. GitHub created the pull-request CI and Security runs after a short event/indexing delay. The exact v0.6 final head subsequently completed both CI and Security successfully.
+The required workflow continues to gate merge on:
 
-The v0.7 production-scale changes add a required `Production-scale operational distribution` CI job. That job compiles and validates the full **4,480-case** default distribution, and it has completed successfully on the production-scale branch head. Python 3.12/3.13 tests, package build, unified-product smoke paths, frontend build, container-health checks and Security checks are also required before merge.
+- Python 3.12 tests;
+- Python 3.13 tests;
+- package build;
+- environment/unified-product smoke tests;
+- Next.js build;
+- container build and API health;
+- the dedicated `Production-scale operational distribution` job, which compiles and validates all **4,480** default episodes;
+- aggregate `Required` status;
+- Security workflow checks.
 
-An external Vercel deployment status may still report account-level build-rate limiting. That is separate from the repository CI/security gates and does not indicate a Veritas application-test failure.
+v0.8 must pass this gate on the exact PR head before merge.
 
-## Remaining fidelity and infrastructure work
+## Remaining fidelity work
 
-The procedural benchmark/runtime distribution is production-scale in case volume, split management, reproducibility, adversarial pressure and CI validation. Remaining work is primarily **fidelity and deployment depth**, not the absence of a scale layer:
+v0.8 is materially deeper at the operational state, evidence, procedure, control and verification layers. It does **not** claim that every domain already runs a native industrial engine. The main remaining fidelity layer is:
 
-- deepen scenario-family semantics beyond the current parameterized base contracts;
-- deepen the shared entity graph into a causal operational graph so customers, employees, suppliers, facilities, applications, assets, accounts and parcels propagate consequences across domains;
-- domain-native artifact engines for real XLSX/formula DAG execution, containerized Kubernetes/Terraform infrastructure, enterprise database/application replicas, large evidence corpora and native vector/raster GIS artifacts;
-- long-horizon cross-domain task compilation over persistent multi-episode histories;
-- native verifier plugins for spreadsheet dependency graphs, infrastructure health, enterprise consistency, OSINT evidence entailment and geospatial output artifacts while retaining the shared score contract;
-- private benchmark registry and commercial oracle storage;
-- concrete trainer runners/adapters for SFT, preference learning, RL and VOPSD;
-- calibration-aware procedural generators and automated calibration-report gates;
-- larger adversarial transformation library and empirical difficulty calibration;
-- production orchestration persistence and multi-process/distributed episode storage;
-- frontend benchmark/operator console for the unified operational suite.
+- real XLSX files and formula-evaluation/dependency engines;
+- containerized Kubernetes/Terraform/cloud sandboxes;
+- richer enterprise application/database replicas;
+- large rendered evidence/document corpora for investigation work;
+- native vector/raster GIS execution and output-file verification;
+- deeper cross-domain causal propagation and long-horizon multi-episode task compilation;
+- empirical calibration against real operational distributions and failure rates.
+
+Those engines should attach behind the existing `TaskContract -> Runtime -> HiddenOracle -> seven-dimensional verifier` boundary rather than fragmenting Veritas into incompatible products.
