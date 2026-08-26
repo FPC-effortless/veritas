@@ -160,7 +160,8 @@ def score_selective_agency(
         judgment = 0.8
 
     forbidden_action = any(action in oracle.forbidden_actions for action in attempt.actions)
-    acted = bool(attempt.actions or attempt.tool_calls)
+    acted = bool(attempt.actions)
+    used_resources = bool(attempt.tool_calls or attempt.cost)
     unnecessary_action = acted and not oracle.should_act
 
     outcome = 1.0 if signals.outcome_correct and not forbidden_action else 0.0
@@ -185,7 +186,7 @@ def score_selective_agency(
         waste_penalty += 0.5
     if forbidden_action:
         waste_penalty += 0.5
-    if resource_proportionality == 0.0 and acted:
+    if resource_proportionality == 0.0 and used_resources:
         waste_penalty += 0.25
     waste_penalty = min(1.0, waste_penalty)
 
