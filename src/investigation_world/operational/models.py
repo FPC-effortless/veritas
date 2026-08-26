@@ -137,10 +137,63 @@ class OperationalEpisode(BaseModel):
             raise ValueError("task/oracle IDs must match")
         if self.task.world_id != self.world_id:
             raise ValueError("task/world IDs must match")
-        public_action_names = {action.name for action in self.task.available_actions}
-        hidden_action_names = {effect.action_name for effect in self.oracle.action_effects}
-        if not hidden_action_names.issubset(public_action_names):
-            raise ValueError("oracle action effects must reference public actions")
+
+        action_names = [action.name for action in self.task.available_actions]
+        if len(action_names) != len(set(action_names)):
+            raise ValueError("public action names must be unique")
+        public_actions = {action.name: action for action in self.task.available_actions}
+        public_action_names = set(public_actions)
+        permitted_systems = set(self.task.permitted_systems)
+        invalid_action_systems = sorted(
+            {
+                action.system
+                for action in self.task.available_actions
+                if action.system not in permitted_systems
+            }
+        )
+        if invalid_action_systems:
+            raise ValueError(
+                f"public actions reference non-permitted systems: {invalid_action_systems}"
+            )
+
+        required_actions = set(self.oracle.required_actions)
+        forbidden_actions = set(self.oracle.forbidden_actions)
+        unknown_oracle_actions = (required_actions | forbidden_actions) - public_action_names
+        if unknown_oracle_actions:
+            raise ValueError(
+                f"oracle action constraints reference unknown actions: {sorted(unknown_oracle_actions)}"
+            )
+        contradictory_actions = required_actions & forbidden_actions
+        if contradictory_actions:
+            raise ValueError(
+                f"actions cannot be both required and forbidden: {sorted(contradictory_actions)}"
+            )
+
+        for effect in self.oracle.action_effects:
+            action = public_actions.get(effect.action_name)
+            if action is None:
+                raise ValueError(
+                    f"oracle action effect references unknown action: {effect.action_name}"
+                )
+            unknown_parameters = set(effect.required_parameters) - set(action.parameter_names)
+            if unknown_parameters:
+                raise ValueError(
+                    "oracle action effect references undeclared parameters for "
+                    f"{effect.action_name}: {sorted(unknown_parameters)}"
+                )
+
+        record_ids = [record.record_id for record in self.records]
+        if len(record_ids) != len(set(record_ids)):
+            raise ValueError("operational record IDs must be unique within an episode")
+        unknown_evidence = set(self.oracle.required_evidence_ids) - set(record_ids)
+        if unknown_evidence:
+            raise ValueError(
+                f"oracle requires evidence not present in episode records: {sorted(unknown_evidence)}"
+            )
+
+        invariant_ids = [invariant.invariant_id for invariant in self.oracle.invariants]
+        if len(invariant_ids) != len(set(invariant_ids)):
+            raise ValueError("invariant IDs must be unique within an episode")
         return self
 
     def public_payload(self) -> dict[str, Any]:
