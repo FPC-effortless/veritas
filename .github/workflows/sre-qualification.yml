@@ -21,29 +21,27 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Install Veritas
         run: python -m pip install -e ".[test]"
-
-      - name: Acquire real structured incidents and qualify candidate
+      - name: Acquire fresh provider family and qualify SRE v2 candidate
         run: |
           python tools/build_sre_qualification_candidate.py \
-            --snapshot-dir results/sre-v1/sources \
-            --output results/sre-v1/qualification.json \
+            --snapshot-dir results/sre-v2/sources \
+            --output results/sre-v2/qualification.json \
+            --version sre-v2 \
+            --providers openai twilio vercel \
             --early-updates 2 \
             --random-seed 7
-
       - name: Print qualification summary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("results/sre-v1/qualification.json").read_text())
+          report = json.loads(Path("results/sre-v2/qualification.json").read_text())
           q = report["qualification"]
           print(json.dumps({
               "status": report["status"],
@@ -54,11 +52,10 @@ jobs:
               "failed_gates": [g["name"] for g in q["gates"] if not g["passed"]],
           }, indent=2, sort_keys=True))
           PY
-
       - name: Upload immutable candidate evidence
         uses: actions/upload-artifact@v4
         with:
-          name: sre-v1-qualification
-          path: results/sre-v1
+          name: sre-v2-qualification
+          path: results/sre-v2
           if-no-files-found: error
           retention-days: 90
