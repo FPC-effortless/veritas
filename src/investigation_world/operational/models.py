@@ -33,6 +33,17 @@ class VerificationDimension(StrEnum):
     EVIDENCE = "evidence"
 
 
+class AssertionComparison(StrEnum):
+    EQUAL = "equal"
+    NOT_EQUAL = "not_equal"
+    LESS_THAN = "less_than"
+    LESS_THAN_OR_EQUAL = "less_than_or_equal"
+    GREATER_THAN = "greater_than"
+    GREATER_THAN_OR_EQUAL = "greater_than_or_equal"
+    CONTAINS = "contains"
+    IN = "in"
+
+
 class OperationalEntity(BaseModel):
     """Persistent entity shared across one or more operational domains."""
 
@@ -57,7 +68,11 @@ class OperationalRelation(BaseModel):
 
 
 class OperationalRecord(BaseModel):
-    """One agent-visible record projected from a domain system."""
+    """One agent-visible record projected from a domain system.
+
+    Temporal/provenance fields make stale, conflicting and authority-weighted
+    evidence first-class without exposing evaluator truth.
+    """
 
     model_config = ConfigDict(extra="forbid")
     record_id: str
@@ -67,6 +82,13 @@ class OperationalRecord(BaseModel):
     fields: dict[str, Any] = Field(default_factory=dict)
     related_object_ids: list[str] = Field(default_factory=list)
     searchable_text: str = ""
+    observed_at: str | None = None
+    valid_from: str | None = None
+    valid_to: str | None = None
+    source_authority: Literal["low", "medium", "high", "authoritative"] = "medium"
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    freshness: Literal["current", "recent", "stale", "historical", "unknown"] = "unknown"
+    provenance_ids: list[str] = Field(default_factory=list)
 
 
 class StateAssertion(BaseModel):
@@ -75,6 +97,7 @@ class StateAssertion(BaseModel):
     field_name: str
     expected_value: Any
     tolerance: float | None = Field(default=None, ge=0.0)
+    comparison: AssertionComparison = AssertionComparison.EQUAL
 
     def key(self) -> str:
         return f"{self.object_id}.{self.field_name}"
@@ -86,6 +109,7 @@ class OperationalInvariant(BaseModel):
     description: str
     assertion: StateAssertion
     severity: Literal["low", "medium", "high", "critical"] = "high"
+    scope: Literal["final", "always"] = "final"
 
 
 class PublicActionSpec(BaseModel):
@@ -117,13 +141,20 @@ class TaskContract(BaseModel):
 
 
 class HiddenActionEffect(BaseModel):
-    """Verifier-only transition plus the system-observable response to that transition."""
+    """Verifier-only transition plus the system-observable response to that transition.
+
+    Effects can now depend on prior state and prior actions. Failed preconditions
+    produce an observable system response without mutating hidden ground truth.
+    """
 
     model_config = ConfigDict(extra="forbid")
     action_name: str
     required_parameters: dict[str, Any] = Field(default_factory=dict)
+    required_state: list[StateAssertion] = Field(default_factory=list)
+    required_prior_actions: list[str] = Field(default_factory=list)
     set_state: dict[str, Any] = Field(default_factory=dict)
     observable_result: dict[str, Any] = Field(default_factory=dict)
+    blocked_observable_result: dict[str, Any] = Field(default_factory=dict)
     emitted_side_effects: list[str] = Field(default_factory=list)
     forbidden: bool = False
     consequence_severity: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -138,6 +169,8 @@ class HiddenOracle(BaseModel):
     target_state: list[StateAssertion] = Field(default_factory=list)
     invariants: list[OperationalInvariant] = Field(default_factory=list)
     required_actions: list[str] = Field(default_factory=list)
+    required_action_order: list[str] = Field(default_factory=list)
+    required_action_counts: dict[str, int] = Field(default_factory=dict)
     forbidden_actions: list[str] = Field(default_factory=list)
     required_evidence_ids: list[str] = Field(default_factory=list)
     action_effects: list[HiddenActionEffect] = Field(default_factory=list)
@@ -181,17 +214,23 @@ class OperationalEpisode(BaseModel):
             )
 
         required_actions = set(self.oracle.required_actions)
+        ordered_actions = set(self.oracle.required_action_order)
+        counted_actions = set(self.oracle.required_action_counts)
         forbidden_actions = set(self.oracle.forbidden_actions)
-        unknown_oracle_actions = (required_actions | forbidden_actions) - public_action_names
+        unknown_oracle_actions = (
+            required_actions | ordered_actions | counted_actions | forbidden_actions
+        ) - public_action_names
         if unknown_oracle_actions:
             raise ValueError(
                 f"oracle action constraints reference unknown actions: {sorted(unknown_oracle_actions)}"
             )
-        contradictory_actions = required_actions & forbidden_actions
+        contradictory_actions = (required_actions | counted_actions) & forbidden_actions
         if contradictory_actions:
             raise ValueError(
                 f"actions cannot be both required and forbidden: {sorted(contradictory_actions)}"
             )
+        if any(count < 1 for count in self.oracle.required_action_counts.values()):
+            raise ValueError("required action counts must be >= 1")
 
         for effect in self.oracle.action_effects:
             action = public_actions.get(effect.action_name)
@@ -204,6 +243,12 @@ class OperationalEpisode(BaseModel):
                 raise ValueError(
                     "oracle action effect references undeclared parameters for "
                     f"{effect.action_name}: {sorted(unknown_parameters)}"
+                )
+            unknown_prerequisites = set(effect.required_prior_actions) - public_action_names
+            if unknown_prerequisites:
+                raise ValueError(
+                    "oracle action effect references unknown prior actions for "
+                    f"{effect.action_name}: {sorted(unknown_prerequisites)}"
                 )
 
         record_ids = [record.record_id for record in self.records]
@@ -242,6 +287,9 @@ class ActionEvent(BaseModel):
     side_effects: list[str] = Field(default_factory=list)
     forbidden: bool = False
     consequence_severity: float = 0.0
+    effect_applied: bool = True
+    blocked: bool = False
+    blocked_reason: str | None = None
 
 
 class EpisodeSubmission(BaseModel):
@@ -270,6 +318,7 @@ class VerificationBreakdown(BaseModel):
     missing_evidence_ids: list[str] = Field(default_factory=list)
     tool_calls: int = 0
     cost_spent: int = 0
+    process_violations: list[str] = Field(default_factory=list)
 
 
 class OperationalSuiteManifest(BaseModel):
