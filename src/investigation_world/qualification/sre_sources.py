@@ -12,6 +12,12 @@ STATUSPAGE_INCIDENT_ENDPOINTS: dict[str, str] = {
     "cloudflare": "https://www.cloudflarestatus.com/api/v2/incidents.json",
     "datadog": "https://status.datadoghq.com/api/v2/incidents.json",
     "digitalocean": "https://status.digitalocean.com/api/v2/incidents.json",
+    # Fresh provider family for SRE v2 qualification. These providers were not used by the
+    # original SRE v1 private panel, so an evaluation restricted to this family does not reuse
+    # previously inspected incident labels.
+    "openai": "https://status.openai.com/api/v2/incidents.json",
+    "twilio": "https://status.twilio.com/api/v2/incidents.json",
+    "vercel": "https://www.vercel-status.com/api/v2/incidents.json",
 }
 
 
