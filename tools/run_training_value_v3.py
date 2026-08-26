@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -9,6 +10,11 @@ import time
 from pathlib import Path
 from statistics import mean, median, stdev
 from typing import Any
+
+
+def _panel_hash(episode_ids: list[str]) -> str:
+    payload = json.dumps(sorted(episode_ids), separators=(",", ":")).encode("utf-8")
+    return "PANEL-" + hashlib.sha256(payload).hexdigest()[:24].upper()
 
 
 def _paired_summary(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
@@ -23,22 +29,26 @@ def _paired_summary(before: dict[str, Any], after: dict[str, Any]) -> dict[str, 
     deviation = stdev(deltas) if n > 1 else 0.0
     error = deviation / math.sqrt(n) if n > 1 else 0.0
 
-    # Same small-sample convention as the Observatory. Import lazily so the training script remains
-    # self-contained until the Veritas package is installed.
     from investigation_world.observatory.aggregation import critical_95
 
     margin = critical_95(n) * error
+    improved = sum(delta > 0 for delta in deltas)
+    unchanged = sum(delta == 0 for delta in deltas)
+    regressed = sum(delta < 0 for delta in deltas)
     return {
         "n": n,
+        "panel_id": _panel_hash(episode_ids),
         "mean_delta": round(center, 6),
         "median_delta": round(median(deltas), 6) if deltas else 0.0,
         "stddev_delta": round(deviation, 6),
         "standard_error": round(error, 6),
         "ci95_low": round(center - margin, 6),
         "ci95_high": round(center + margin, 6),
-        "improved": sum(delta > 0 for delta in deltas),
-        "unchanged": sum(delta == 0 for delta in deltas),
-        "regressed": sum(delta < 0 for delta in deltas),
+        "improved": improved,
+        "unchanged": unchanged,
+        "regressed": regressed,
+        "proportion_improved": round(improved / n, 6) if n else 0.0,
+        "proportion_regressed": round(regressed / n, 6) if n else 0.0,
         "episode_deltas": [
             {
                 "episode_id": episode_id,
@@ -133,8 +143,12 @@ def main() -> None:
     train_rows = build_diagnostic_examples(count=args.train_examples)
     train_episodes = [row["episode"] for row in train_rows]
     heldout = build_heldout_diagnostic_episodes(count=args.heldout_examples)
-    if set(item.episode_id for item in train_episodes) & set(item.episode_id for item in heldout):
+    train_ids = [item.episode_id for item in train_episodes]
+    heldout_ids = [item.episode_id for item in heldout]
+    if set(train_ids) & set(heldout_ids):
         raise ValueError("train and held-out episode identities overlap")
+    train_panel_id = _panel_hash(train_ids)
+    heldout_panel_id = _panel_hash(heldout_ids)
 
     target_by_prompt = {str(row["prompt"]): str(row["target"]) for row in train_rows}
 
@@ -199,6 +213,8 @@ def main() -> None:
     train_gain = round(train_after["mean"] - train_before["mean"], 6)
     heldout_gain = round(heldout_after["mean"] - heldout_before["mean"], 6)
     paired_heldout = _paired_summary(heldout_before, heldout_after)
+    if paired_heldout["panel_id"] != heldout_panel_id:
+        raise RuntimeError("paired held-out panel identity changed during scoring")
 
     if train_gain <= 0:
         diagnosis = "no_detected_training_fit"
@@ -208,7 +224,7 @@ def main() -> None:
         diagnosis = "training_fit_with_heldout_transfer"
 
     report: dict[str, Any] = {
-        "schema_version": "0.3.0",
+        "schema_version": "0.3.1",
         "experiment": "diagnostic_lora_sft_hardened_paired_transfer",
         "verifier_contract": "grounded-companyworld-v0.9.1",
         "model": args.model,
@@ -216,8 +232,10 @@ def main() -> None:
         "generation_mode": "deterministic_greedy",
         "train_world_id": "CW-TRAINING",
         "heldout_world_id": "CW-HELDOUT",
-        "train_episode_ids": [item.episode_id for item in train_episodes],
-        "heldout_episode_ids": [item.episode_id for item in heldout],
+        "train_panel_id": train_panel_id,
+        "heldout_panel_id": heldout_panel_id,
+        "train_episode_ids": train_ids,
+        "heldout_episode_ids": heldout_ids,
         "train_examples": len(train_rows),
         "heldout_examples": len(heldout),
         "epochs": args.epochs,
