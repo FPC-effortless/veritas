@@ -85,20 +85,24 @@ def _record_supports_fact(record: CompanyWorldRecord, target: OperationalFactTar
     return False
 
 
-def _evidence_supports_fact(
+def _evidence_support_fraction(
     cited_record_ids: set[str],
     episode: CompanyWorldEpisode,
     target: OperationalFactTarget,
-) -> bool:
+) -> float:
     allowed = set(target.supporting_record_ids)
+    if target.support_mode == "listed_count":
+        matched = len(cited_record_ids.intersection(allowed))
+        return min(1.0, matched / max(1, target.minimum_support_records))
+
     records = {record.record_id: record for record in episode.records}
     for record_id in cited_record_ids:
         if allowed and record_id not in allowed:
             continue
         record = records.get(record_id)
         if record is not None and _record_supports_fact(record, target):
-            return True
-    return False
+            return 1.0
+    return 0.0
 
 
 def verify_companyworld(
@@ -141,7 +145,7 @@ def verify_companyworld(
 
     cited = _cited_record_ids(result)
     supported = sum(
-        1 for key in correct if _evidence_supports_fact(cited, episode, truth[key])
+        _evidence_support_fraction(cited, episode, truth[key]) for key in correct
     )
     evidence_support = supported / max(1, len(correct)) if correct else 0.0
 

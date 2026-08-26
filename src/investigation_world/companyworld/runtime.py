@@ -21,6 +21,11 @@ SYSTEM_TOOL_COSTS = {
     CompanySystem.EMAIL: 2,
     CompanySystem.LEDGER: 3,
     CompanySystem.PROCESS: 2,
+    CompanySystem.AR_WORKFLOW: 2,
+    CompanySystem.TREASURY: 3,
+    CompanySystem.ITSM: 2,
+    CompanySystem.SAFETY: 2,
+    CompanySystem.COMPLIANCE: 3,
 }
 
 
@@ -105,9 +110,22 @@ class CompanyWorldRuntime:
             for record in self.index.search(query, system=system, limit=limit)
         ]
 
+    def search(
+        self,
+        query: str,
+        *,
+        system: CompanySystem,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Keyword-friendly alias for the stable `search_system` API."""
+        return self.search_system(system, query, limit=limit)
+
     def search_all(self, query: str, limit: int = 10) -> list[dict]:
         self._charge(3)
-        return [record.model_dump(mode="json") for record in self.index.search(query, limit=limit)]
+        return [
+            record.model_dump(mode="json")
+            for record in self.index.search(query, limit=limit)
+        ]
 
     def open_record(self, record_id: str) -> dict:
         self._charge(1)
