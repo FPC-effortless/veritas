@@ -1,0 +1,71 @@
+name: Training Value Foundry Transfer
+
+on:
+  push:
+    branches:
+      - feature/foundry-transfer-training
+    paths:
+      - ".github/workflows/training-value-foundry-transfer.yml"
+      - "src/investigation_world/training_value/**"
+      - "tools/run_foundry_transfer_training.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: training-value-foundry-transfer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qwen-foundry-transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v1
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Install CPU training runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
+          python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" "peft>=0.13,<1" sentencepiece
+
+      - name: Run foundry transfer-training experiment
+        run: |
+          python tools/run_foundry_transfer_training.py \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --output training-value-results/qwen0.5b-foundry-transfer.json \
+            --train-candidates 16 \
+            --train-examples 48 \
+            --eval-per-split 8 \
+            --epochs 1 \
+            --learning-rate 0.0001 \
+            --max-length 2048 \
+            --max-new-tokens 192
+
+      - name: Upload foundry transfer report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: training-value-qwen0.5b-foundry-transfer
+          path: training-value-results/qwen0.5b-foundry-transfer.json
+          if-no-files-found: error
+          retention-days: 30
