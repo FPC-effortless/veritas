@@ -36,26 +36,46 @@ jobs:
             --providers circleci discord dropbox mongodb npm \
             --early-updates 2 \
             --random-seed 7
-      - name: Print qualification summary
+      - name: Build buyer-safe qualification summary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           report = json.loads(Path("results/sre-v3/qualification.json").read_text())
           q = report["qualification"]
-          print(json.dumps({
+          candidate = report["candidate"]
+          summary = {
+              "schema_version": "0.10.0-public",
               "status": report["status"],
               "candidate_id": q["candidate_id"],
+              "version": candidate["version"],
               "report_id": q["report_id"],
               "panel_id": q["panel_id"],
+              "evidence_manifest_id": candidate["evidence_manifest"]["manifest_id"],
+              "scenario_count": len(candidate["scenarios"]),
+              "private_test_count": sum(s["split"] == "private_test" for s in candidate["scenarios"]),
+              "near_duplicate_components": candidate.get("metadata", {}).get("near_duplicate_components"),
+              "providers": sorted(report["source_summary"]),
               "policy_means": q["policy_means"],
-              "failed_gates": [g["name"] for g in q["gates"] if not g["passed"]],
-          }, indent=2, sort_keys=True))
+              "gates": q["gates"],
+              "private_release_manifest_id": (
+                  report.get("private_release_manifest") or {}
+              ).get("release_id"),
+              "public_artifact_contract": {
+                  "raw_source_snapshots_included": False,
+                  "per_scenario_policy_outcomes_included": False,
+                  "private_causal_labels_included": False,
+              },
+          }
+          Path("results/sre-v3/public-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8"
+          )
+          print(json.dumps(summary, indent=2, sort_keys=True))
           PY
-      - name: Upload immutable candidate evidence
+      - name: Upload buyer-safe qualification evidence only
         uses: actions/upload-artifact@v4
         with:
-          name: sre-v3-qualification
-          path: results/sre-v3
+          name: sre-v3-public-qualification
+          path: results/sre-v3/public-summary.json
           if-no-files-found: error
           retention-days: 90
