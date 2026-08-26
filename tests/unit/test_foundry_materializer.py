@@ -1,9 +1,12 @@
+import pytest
+
 from investigation_world.calibration.fixtures import build_o2c_episode
 from investigation_world.companyworld.models import CompanySystem
 from investigation_world.foundry import (
     DifficultyVector,
     DistributionSplit,
     FoundryCompanyWorldRuntime,
+    FoundryToolFailure,
     SampledTaskParameters,
     materialize_companyworld_task,
 )
@@ -42,17 +45,21 @@ def test_materializer_changes_public_world_without_changing_oracle_truth():
         ),
     )
     assert [fact.expected_value for fact in task.episode.oracle.facts] == expected
-    assert task.materialization["distractors_added"] >= 3
-    assert len(task.materialization["conflict_records"]) == len(base.oracle.facts)
+    assert len(task.materialization["distractor_record_ids"]) >= 3
+    assert len(task.materialization["competing_record_ids"]) == len(base.oracle.facts)
     assert task.runtime.total_cost == 20
     assert len(task.episode.task.permitted_systems) >= 2
-    assert task.episode.task.constraints["foundry_dependency_depth"] == 3
     public_text = str(task.episode.public_payload())
     assert "expected_value" not in public_text
     assert "supporting_record_ids" not in public_text
+    assert "foundry_seed" not in public_text
+    assert "adversarial_pressure" not in public_text
+    assert "conflict_probability" not in public_text
+    assert "foundry_split" not in public_text
+    assert "foundry_conflicting" not in public_text
 
 
-def test_materialized_runtime_is_seed_reproducible_and_budgeted():
+def test_materialized_runtime_failure_is_observable_reproducible_and_budgeted():
     base = build_o2c_episode(92, delay_days=2)
     sample = _sample(
         entities=1,
@@ -68,10 +75,24 @@ def test_materialized_runtime_is_seed_reproducible_and_budgeted():
 
     runtime = FoundryCompanyWorldRuntime(first)
     before = runtime.budget_snapshot()["spent"]
-    results = runtime.search_system(CompanySystem.ERP, "SO-CAL")
+    with pytest.raises(FoundryToolFailure) as exc:
+        runtime.search_system(CompanySystem.ERP, "SO-CAL")
     after = runtime.budget_snapshot()["spent"]
-    assert results == []
+    assert exc.value.retryable is True
     assert after > before
+
+
+def test_latent_randomness_is_privileged_but_reproducible():
+    base = build_o2c_episode(94, delay_days=4)
+    task = materialize_companyworld_task(
+        base,
+        _sample(conflict_probability=1.0, adversarial_pressure=1.0, stochasticity=0.5),
+    )
+    public = task.episode.public_payload()
+    assert "seed" not in str(public).casefold()
+    assert task.sample.seed == 123
+    assert task.runtime.failure_seed == 123
+    assert task.materialization["latent_difficulty"]["adversarial_pressure"] == 1.0
 
 
 def test_materializer_preserves_systems_required_by_supporting_evidence():
