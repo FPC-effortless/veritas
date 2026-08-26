@@ -77,7 +77,10 @@ def _default_roles() -> list[V2RoleSpec]:
         V2RoleSpec(
             role_id="authority",
             label="Authority Having Jurisdiction",
-            allowed_actions=[V2ActionKind.APPROVE, V2ActionKind.ADVANCE_TIME],
+            # Authority-owned survey/certification/occupancy packages are executable work, not
+            # merely approval events. Without START_WORK those archetypes were structurally
+            # impossible even for a perfect-information policy.
+            allowed_actions=[V2ActionKind.START_WORK, V2ActionKind.APPROVE, V2ActionKind.ADVANCE_TIME],
             visible_role_ids=["designer", "commissioning"],
             approval_limit=100_000_000,
         ),
