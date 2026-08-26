@@ -1,0 +1,47 @@
+name: Commercial Pack Validation
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/commercial/**"
+      - "tools/run_sre_*"
+      - "tools/aggregate_sre_model_evaluations.py"
+      - "tools/build_sre_customer_evaluation_report.py"
+      - "tests/unit/test_commercial_sre_evaluation.py"
+      - "docs/commercial/**"
+      - ".github/workflows/commercial-validation.yml"
+  push:
+    branches: [feat/commercial-evaluation-pack-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commercial-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package and test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Compile commercial and qualification sources
+        run: python -m compileall -q src/investigation_world/commercial src/investigation_world/qualification tools
+      - name: Run commercial SRE tests
+        run: python -m pytest -q tests/unit/test_commercial_sre_evaluation.py
+      - name: Import buyer-facing APIs
+        run: |
+          python - <<'PY'
+          from investigation_world.commercial import build_sre_prompt, evaluate_sre_generator, parse_sre_prediction
+          assert build_sre_prompt("evidence")
+          assert parse_sre_prediction('{"causal_class":"capacity"}').value == "capacity"
+          assert callable(evaluate_sre_generator)
+          print("commercial API import gate passed")
+          PY
