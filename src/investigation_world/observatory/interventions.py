@@ -20,6 +20,10 @@ TRUTH_PRESERVING_COMPANYWORLD_MUTATIONS: frozenset[MutationKind] = frozenset(
     }
 )
 
+UNSUPPORTED_COMPANYWORLD_RUNTIME_MUTATIONS: frozenset[MutationKind] = frozenset(
+    {MutationKind.TOOL_FAILURE, MutationKind.PERMISSION_CHANGE}
+)
+
 
 class InterventionMutation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -38,6 +42,16 @@ class InterventionSpec(BaseModel):
 
     @model_validator(mode="after")
     def validate_id(self) -> "InterventionSpec":
+        runtime_unsupported = [
+            mutation.kind
+            for mutation in self.mutations
+            if mutation.kind in UNSUPPORTED_COMPANYWORLD_RUNTIME_MUTATIONS
+        ]
+        if runtime_unsupported:
+            raise ValueError(
+                "CompanyWorld runtime does not yet execute intervention semantics for: "
+                + ", ".join(item.value for item in runtime_unsupported)
+            )
         if self.truth_preserving:
             unsupported = [
                 mutation.kind
@@ -46,7 +60,7 @@ class InterventionSpec(BaseModel):
             ]
             if unsupported:
                 raise ValueError(
-                    "truth-preserving CompanyWorld interventions do not yet support: "
+                    "truth-preserving CompanyWorld interventions do not support: "
                     + ", ".join(item.value for item in unsupported)
                 )
         payload = {
