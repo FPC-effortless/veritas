@@ -6,10 +6,10 @@ from typing import Any
 
 from investigation_world.operational.artifacts import (
     NativeArtifactVerification,
-    NativeArtifactWorkspace,
     attach_native_artifact_descriptor,
 )
 from investigation_world.operational.models import EpisodeSubmission, StateAssertion, VerificationBreakdown
+from investigation_world.operational.parameterized_artifacts import ParameterizedNativeArtifactWorkspace
 from investigation_world.operational.runtime import OperationalRuntime
 from investigation_world.operational.substrate import PersistentOperationalSubstrate
 
@@ -21,6 +21,10 @@ class NativeOperationalRuntime(OperationalRuntime):
     transitions are mirrored into XLSX, SQLite, declarative Kubernetes, rendered
     evidence-corpus, or GeoJSON artifacts. Native verifier checks are injected as
     additional state assertions before the ordinary Veritas verifier runs.
+
+    The workspace derives artifact state from each episode's actual target/oracle
+    values, so procedurally parameterized cases remain executable rather than
+    falling back to constants from the reference examples.
     """
 
     def __init__(
@@ -34,7 +38,7 @@ class NativeOperationalRuntime(OperationalRuntime):
         super().__init__(episode, substrate=substrate)
         if artifact_root is None:
             artifact_root = tempfile.mkdtemp(prefix="veritas-native-")
-        self.artifact_workspace = NativeArtifactWorkspace(episode, artifact_root)
+        self.artifact_workspace = ParameterizedNativeArtifactWorkspace(episode, artifact_root)
         self.last_artifact_verification: NativeArtifactVerification | None = None
 
     def artifact_descriptor(self) -> dict[str, Any]:
