@@ -151,25 +151,37 @@ def compile_sre_candidate(
     )
 
 
+def _contains_any(value: str, tokens: tuple[str, ...]) -> bool:
+    return any(token in value for token in tokens)
+
+
 def _keyword_prediction(text: str, *, competent: bool) -> SRECausalClass:
     value = text.casefold()
-    regression = ("deploy", "release", "rollback", "change", "regression")
-    infrastructure = ("network", "dns", "database", "storage", "hardware", "region")
-    capacity = ("capacity", "overload", "traffic", "saturation", "rate limit")
+    regression = ("deploy", "release", "rollback", "regression", "change introduced")
+    capacity = ("capacity", "overload", "traffic", "saturation", "rate limit", "exhaust")
+    # `region` alone is deliberately excluded from the public heuristic: status updates routinely
+    # mention affected regions without establishing infrastructure as the cause.
+    infrastructure = ("network", "dns", "database", "storage", "hardware", "power")
+
     if competent:
-        scores = {
-            SRECausalClass.REGRESSION: sum(token in value for token in regression),
-            SRECausalClass.INFRASTRUCTURE: sum(token in value for token in infrastructure),
-            SRECausalClass.CAPACITY: sum(token in value for token in capacity),
-            SRECausalClass.TRANSIENT: sum(token in value for token in ("transient", "recovered", "intermittent")),
-        }
-        best = max(scores.values())
-        if best > 0:
-            return sorted((kind for kind, score in scores.items() if score == best), key=lambda x: x.value)[0]
+        # Apply the declared SRE causal ontology in the same precedence used to define classes,
+        # but only to *public* early evidence. This is not oracle access: later resolution/RCA text
+        # remains unavailable. The prior score-counting implementation broke ontology precedence
+        # on ties and over-weighted generic terms such as `region`, making it weaker than the
+        # intentionally myopic baseline.
+        if _contains_any(value, regression):
+            return SRECausalClass.REGRESSION
+        if _contains_any(value, capacity):
+            return SRECausalClass.CAPACITY
+        if _contains_any(value, infrastructure):
+            return SRECausalClass.INFRASTRUCTURE
         return SRECausalClass.TRANSIENT
-    if any(token in value for token in capacity):
+
+    # The myopic baseline reacts to a narrower local signal set and gets capacity precedence even
+    # when the same public update also contains a deployment/regression clue.
+    if _contains_any(value, capacity):
         return SRECausalClass.CAPACITY
-    if any(token in value for token in regression):
+    if _contains_any(value, ("deploy", "release", "rollback", "change", "regression")):
         return SRECausalClass.REGRESSION
     return SRECausalClass.TRANSIENT
 
@@ -207,7 +219,6 @@ def execute_sre_policy_suite(
                     metadata={"prediction": prediction.value},
                 )
             )
-        # The exploit policy submits a structurally plausible but unsupported terminal claim.
         outcomes[PolicyClass.EXPLOIT].append(
             PolicyOutcome(
                 scenario_id=case.scenario.scenario_id,
@@ -219,7 +230,7 @@ def execute_sre_policy_suite(
 
     names = {
         PolicyClass.ORACLE: "private-causal-oracle",
-        PolicyClass.COMPETENT_HEURISTIC: "multi-signal-sre-heuristic",
+        PolicyClass.COMPETENT_HEURISTIC: "ontology-aware-public-sre-heuristic",
         PolicyClass.MYOPIC: "single-signal-myopic",
         PolicyClass.RANDOM: f"seeded-random-{random_seed}",
         PolicyClass.EXPLOIT: "unsupported-terminal-exploit",
