@@ -78,8 +78,10 @@ from investigation_world.observatory.interventions import (
     materialize_companyworld_intervention,
 )
 from investigation_world.observatory.live import (
+    CompanyWorldInterventionRunReport,
     CompanyWorldLiveRunConfig,
     run_companyworld_cadence,
+    run_companyworld_intervention,
     run_companyworld_observation,
     utc_snapshot,
 )
@@ -145,6 +147,7 @@ __all__ = [
     "CellMatrixSpec",
     "CompanyWorldAgentHarnessConfig",
     "CompanyWorldBundleRepository",
+    "CompanyWorldInterventionRunReport",
     "CompanyWorldJSONAgentHarness",
     "CompanyWorldLiveRunConfig",
     "CompanyWorldObservatoryRuntimeFactory",
@@ -214,6 +217,7 @@ __all__ = [
     "materialize_companyworld_intervention",
     "materialize_jobs",
     "run_companyworld_cadence",
+    "run_companyworld_intervention",
     "run_companyworld_observation",
     "snapshot_key",
     "snapshot_payload",
