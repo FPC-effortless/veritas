@@ -20,10 +20,7 @@ from investigation_world.qualification.cluster_split import repartition_candidat
 
 
 def _fetch_json(url: str, timeout_s: float) -> dict[str, Any]:
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Veritas-SRE-Qualification/0.10"},
-    )
+    request = urllib.request.Request(url, headers={"User-Agent": "Veritas-SRE-Qualification/0.10"})
     with urllib.request.urlopen(request, timeout=timeout_s) as response:  # nosec B310
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
@@ -32,29 +29,30 @@ def _fetch_json(url: str, timeout_s: float) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Acquire structured incident feeds and build a source-disjoint SRE benchmark candidate"
-    )
+    parser = argparse.ArgumentParser(description="Acquire structured incident feeds and build a source-disjoint SRE benchmark candidate")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--snapshot-dir", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--early-updates", type=int, default=2)
     parser.add_argument("--random-seed", type=int, default=7)
+    parser.add_argument("--version", default="sre-v1")
+    parser.add_argument("--providers", nargs="*", default=None)
     args = parser.parse_args()
+
+    providers = args.providers or list(STATUSPAGE_INCIDENT_ENDPOINTS)
+    unknown = sorted(set(providers) - set(STATUSPAGE_INCIDENT_ENDPOINTS))
+    if unknown:
+        raise ValueError(f"unknown SRE providers: {unknown}")
 
     args.snapshot_dir.mkdir(parents=True, exist_ok=True)
     incidents = []
     source_summary: dict[str, Any] = {}
-    for provider, endpoint in STATUSPAGE_INCIDENT_ENDPOINTS.items():
+    for provider in providers:
+        endpoint = STATUSPAGE_INCIDENT_ENDPOINTS[provider]
         payload = _fetch_json(endpoint, args.timeout)
         snapshot = args.snapshot_dir / f"{provider}-incidents.json"
         snapshot.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-        parsed = parse_statuspage_incidents(
-            provider,
-            payload,
-            endpoint=endpoint,
-            early_update_count=args.early_updates,
-        )
+        parsed = parse_statuspage_incidents(provider, payload, endpoint=endpoint, early_update_count=args.early_updates)
         incidents.extend(parsed)
         source_summary[provider] = {
             "endpoint": endpoint,
@@ -63,18 +61,9 @@ def main() -> None:
             "snapshot": str(snapshot),
         }
 
-    candidate, cases = compile_sre_candidate(incidents, version="sre-v1")
+    candidate, cases = compile_sre_candidate(incidents, version=args.version)
     candidate, split_map = repartition_candidate_by_near_duplicates(candidate)
-    cases = [
-        case.model_copy(
-            update={
-                "scenario": case.scenario.model_copy(
-                    update={"split": split_map[case.scenario.scenario_id]}
-                )
-            }
-        )
-        for case in cases
-    ]
+    cases = [case.model_copy(update={"scenario": case.scenario.model_copy(update={"split": split_map[case.scenario.scenario_id]})}) for case in cases]
     evaluations = execute_sre_policy_suite(cases, random_seed=args.random_seed)
     report = qualify_candidate(candidate, evaluations, thresholds=QualificationThresholds())
     release = private_release_manifest(candidate, report) if report.releaseable else None
@@ -95,6 +84,8 @@ def main() -> None:
         "status": output["status"],
         "candidate_id": candidate.candidate_id,
         "report_id": report.report_id,
+        "version": args.version,
+        "providers": providers,
         "scenarios": len(candidate.scenarios),
         "private_test": sum(item.split.value == "private_test" for item in candidate.scenarios),
         "near_duplicate_components": candidate.metadata.get("near_duplicate_components"),
