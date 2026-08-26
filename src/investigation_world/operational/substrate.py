@@ -5,7 +5,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from investigation_world.operational.models import OperationalEpisode, OperationalRecord, WorldDomain
+from investigation_world.operational.models import (
+    OperationalEntity,
+    OperationalEpisode,
+    OperationalRecord,
+    OperationalRelation,
+    WorldDomain,
+)
 
 
 class OperationalStateEvent(BaseModel):
@@ -30,14 +36,17 @@ class OperationalSnapshot(BaseModel):
     state: dict[str, Any]
     mounted_world_ids: list[str]
     domains: list[WorldDomain]
+    entity_count: int = 0
+    relation_count: int = 0
 
 
 class PersistentOperationalSubstrate:
-    """Shared event-sourced state for multiple Veritas operational worlds.
+    """Shared event-sourced state and entity graph for Veritas operational worlds.
 
     The substrate is intentionally learner-agnostic. It owns operational state,
-    records, and transition history; runtimes and verifiers consume it without
-    allowing a model or training algorithm to redefine truth.
+    records, persistent entities, relationships, and transition history; runtimes
+    and verifiers consume it without allowing a model or training algorithm to
+    redefine truth.
     """
 
     def __init__(self, organization_id: str = "ORG-VERITAS-001", *, seed: int = 42):
@@ -50,6 +59,8 @@ class PersistentOperationalSubstrate:
         self._events: list[OperationalStateEvent] = []
         self._episodes: dict[str, OperationalEpisode] = {}
         self._records: dict[str, OperationalRecord] = {}
+        self._entities: dict[str, OperationalEntity] = {}
+        self._relations: dict[str, OperationalRelation] = {}
 
     @property
     def sequence(self) -> int:
@@ -131,6 +142,57 @@ class PersistentOperationalSubstrate:
             [self._records[record_id] for record_id in record_ids],
             key=lambda record: record.record_id,
         )
+
+    def register_entity(self, entity: OperationalEntity) -> None:
+        existing = self._entities.get(entity.entity_id)
+        if existing is not None and existing != entity:
+            raise ValueError(f"entity ID collision: {entity.entity_id}")
+        self._entities[entity.entity_id] = entity.model_copy(deep=True)
+
+    def register_relation(self, relation: OperationalRelation) -> None:
+        if relation.source_entity_id not in self._entities:
+            raise ValueError(f"unknown source entity: {relation.source_entity_id}")
+        if relation.target_entity_id not in self._entities:
+            raise ValueError(f"unknown target entity: {relation.target_entity_id}")
+        existing = self._relations.get(relation.relation_id)
+        if existing is not None and existing != relation:
+            raise ValueError(f"relation ID collision: {relation.relation_id}")
+        self._relations[relation.relation_id] = relation.model_copy(deep=True)
+
+    def entity(self, entity_id: str) -> OperationalEntity:
+        try:
+            return self._entities[entity_id].model_copy(deep=True)
+        except KeyError as exc:
+            raise KeyError(entity_id) from exc
+
+    def entities(self, *, domain: WorldDomain | None = None) -> list[OperationalEntity]:
+        entities = list(self._entities.values())
+        if domain is not None:
+            entities = [entity for entity in entities if domain in entity.domains]
+        return [
+            entity.model_copy(deep=True)
+            for entity in sorted(entities, key=lambda item: item.entity_id)
+        ]
+
+    def relations(
+        self,
+        *,
+        entity_id: str | None = None,
+        domain: WorldDomain | None = None,
+    ) -> list[OperationalRelation]:
+        relations = list(self._relations.values())
+        if entity_id is not None:
+            relations = [
+                relation
+                for relation in relations
+                if entity_id in {relation.source_entity_id, relation.target_entity_id}
+            ]
+        if domain is not None:
+            relations = [relation for relation in relations if domain in relation.domains]
+        return [
+            relation.model_copy(deep=True)
+            for relation in sorted(relations, key=lambda item: item.relation_id)
+        ]
 
     def _append_event(
         self,
@@ -221,6 +283,8 @@ class PersistentOperationalSubstrate:
             state=self.state_at(resolved_sequence),
             mounted_world_ids=self.mounted_world_ids,
             domains=self.domains,
+            entity_count=len(self._entities),
+            relation_count=len(self._relations),
         )
 
     def fork_at(self, sequence: int | None = None) -> "PersistentOperationalSubstrate":
@@ -231,6 +295,12 @@ class PersistentOperationalSubstrate:
         fork = PersistentOperationalSubstrate(self.organization_id, seed=self.seed)
         fork._episodes = dict(self._episodes)
         fork._records = dict(self._records)
+        fork._entities = {
+            key: value.model_copy(deep=True) for key, value in self._entities.items()
+        }
+        fork._relations = {
+            key: value.model_copy(deep=True) for key, value in self._relations.items()
+        }
         fork._events = [event.model_copy(deep=True) for event in self._events[:resolved_sequence]]
         fork._state = deepcopy(self.state_at(resolved_sequence))
         return fork
@@ -239,4 +309,7 @@ class PersistentOperationalSubstrate:
         assert [event.sequence for event in self._events] == list(range(1, self.sequence + 1))
         assert self.state_at(self.sequence) == self._state
         assert set(self._episodes) == set(self.mounted_world_ids)
+        for relation in self._relations.values():
+            assert relation.source_entity_id in self._entities
+            assert relation.target_entity_id in self._entities
         return True
