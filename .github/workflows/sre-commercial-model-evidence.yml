@@ -1,0 +1,141 @@
+name: SRE Commercial Model Evidence
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/sre-commercial-model-evidence.yml"
+      - "src/investigation_world/commercial/**"
+      - "tools/run_sre_open_model_evaluation.py"
+      - "tools/aggregate_sre_model_evaluations.py"
+      - "tests/unit/test_commercial_sre_evaluation.py"
+      - "docs/commercial/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: sre-commercial-model-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frozen-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Retrieve exact qualified SRE v3 private candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v3-qualification
+          path: results/sre-v3
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: FPC-effortless/veritas
+          run-id: 33017410436
+      - name: Verify immutable candidate identity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("results/sre-v3/qualification.json").read_text())
+          assert report["status"] == "benchmark_candidate", report["status"]
+          assert report["candidate"]["candidate_id"] == "SRE-CAND-24057DDECB32893163ED"
+          assert report["qualification"]["report_id"] == "QREPORT-B6933216BEC640C258AF10D5"
+          assert sum(s["split"] == "private_test" for s in report["candidate"]["scenarios"]) == 34
+          print("qualified candidate identity verified")
+          PY
+      - name: Re-export candidate for this workflow only
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v3-private-candidate-internal
+          path: results/sre-v3
+          retention-days: 1
+          if-no-files-found: error
+
+  model-evaluation:
+    needs: frozen-candidate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model: Qwen/Qwen2.5-0.5B-Instruct
+            slug: qwen2.5-0.5b
+          - model: Qwen/Qwen2.5-1.5B-Instruct
+            slug: qwen2.5-1.5b
+          - model: HuggingFaceTB/SmolLM2-1.7B-Instruct
+            slug: smollm2-1.7b
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Veritas
+        run: python -m pip install -e .
+      - name: Install CPU model runtime
+        run: python -m pip install "torch>=2.4" "transformers>=4.45,<5" accelerate sentencepiece
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: sre-commercial-${{ runner.os }}-${{ matrix.slug }}
+      - name: Download exact private candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v3-private-candidate-internal
+          path: results/sre-v3
+      - name: Evaluate model on hidden causal panel
+        run: |
+          python tools/run_sre_open_model_evaluation.py \
+            --snapshot-dir results/sre-v3/sources \
+            --model "${{ matrix.model }}" \
+            --output "results/model-evidence/${{ matrix.slug }}.json" \
+            --version sre-v3 \
+            --providers circleci discord dropbox mongodb npm \
+            --expected-candidate-id SRE-CAND-24057DDECB32893163ED
+      - name: Upload sanitized model report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-model-${{ matrix.slug }}
+          path: results/model-evidence/${{ matrix.slug }}.json
+          retention-days: 90
+          if-no-files-found: error
+
+  aggregate-evidence:
+    needs: model-evaluation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download qualification evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v3-private-candidate-internal
+          path: results/sre-v3
+      - name: Download model reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sre-model-*
+          path: results/model-evidence
+          merge-multiple: true
+      - name: Aggregate fixed-panel evidence
+        run: |
+          python tools/aggregate_sre_model_evaluations.py \
+            --input results/model-evidence/*.json \
+            --qualification results/sre-v3/qualification.json \
+            --output results/sre-commercial-model-evidence.json
+      - name: Upload buyer-safe aggregate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-commercial-model-evidence
+          path: results/sre-commercial-model-evidence.json
+          retention-days: 90
+          if-no-files-found: error
