@@ -2,6 +2,10 @@ from investigation_world.benchmark.companyworld import (
     validate_companyworld_benchmark,
     write_companyworld_benchmark_report,
 )
+from investigation_world.benchmark.interactive_companyworld import (
+    validate_interactive_companyworld,
+    write_interactive_companyworld_report,
+)
 from investigation_world.benchmark.models import (
     BenchmarkInvariant,
     CompanyWorldBenchmarkReport,
@@ -31,5 +35,7 @@ __all__ = [
     "PublicEvidenceReferencePolicy",
     "StuffingPolicy",
     "validate_companyworld_benchmark",
+    "validate_interactive_companyworld",
     "write_companyworld_benchmark_report",
+    "write_interactive_companyworld_report",
 ]
