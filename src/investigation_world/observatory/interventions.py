@@ -4,11 +4,15 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from investigation_world.companyworld.models import CompanyWorldEpisode
+from investigation_world.companyworld.models import CompanySystem, CompanyWorldEpisode
 from investigation_world.foundry.models import MutationKind, MutationLineage, stable_hash
 from investigation_world.foundry.mutations import apply_mutation
 from investigation_world.observatory.companyworld import CompanyWorldBundleRepository
 from investigation_world.observatory.models import CapabilityRun, DimensionDelta, ScenarioRef
+from investigation_world.observatory.runtime_interventions import (
+    ScheduledPermissionChange,
+    ScheduledToolFailure,
+)
 
 
 TRUTH_PRESERVING_COMPANYWORLD_MUTATIONS: frozenset[MutationKind] = frozenset(
@@ -17,11 +21,9 @@ TRUTH_PRESERVING_COMPANYWORLD_MUTATIONS: frozenset[MutationKind] = frozenset(
         MutationKind.INJECT_DISTRACTOR,
         MutationKind.REDACT_OPTIONAL_FIELD,
         MutationKind.TIGHTEN_BUDGET,
+        MutationKind.TOOL_FAILURE,
+        MutationKind.PERMISSION_CHANGE,
     }
-)
-
-UNSUPPORTED_COMPANYWORLD_RUNTIME_MUTATIONS: frozenset[MutationKind] = frozenset(
-    {MutationKind.TOOL_FAILURE, MutationKind.PERMISSION_CHANGE}
 )
 
 
@@ -42,16 +44,6 @@ class InterventionSpec(BaseModel):
 
     @model_validator(mode="after")
     def validate_id(self) -> "InterventionSpec":
-        runtime_unsupported = [
-            mutation.kind
-            for mutation in self.mutations
-            if mutation.kind in UNSUPPORTED_COMPANYWORLD_RUNTIME_MUTATIONS
-        ]
-        if runtime_unsupported:
-            raise ValueError(
-                "CompanyWorld runtime does not yet execute intervention semantics for: "
-                + ", ".join(item.value for item in runtime_unsupported)
-            )
         if self.truth_preserving:
             unsupported = [
                 mutation.kind
@@ -114,15 +106,61 @@ def _supporting_record_ids(episode: CompanyWorldEpisode) -> list[str]:
     )
 
 
+def _permitted_system(
+    episode: CompanyWorldEpisode,
+    value: Any | None,
+    *,
+    label: str,
+) -> CompanySystem:
+    if value is None:
+        if not episode.task.permitted_systems:
+            raise ValueError(f"{label} requires a permitted CompanyWorld system")
+        return episode.task.permitted_systems[0]
+    system = CompanySystem(str(value))
+    if system not in episode.task.permitted_systems:
+        raise ValueError(
+            f"{label} system {system.value!r} is not permitted by source task"
+        )
+    return system
+
+
 def _companyworld_parameters(
     episode: CompanyWorldEpisode,
     mutation: InterventionMutation,
 ) -> dict[str, Any]:
     parameters = dict(mutation.parameters)
-    if mutation.kind == MutationKind.INJECT_DISTRACTOR and "system" not in parameters:
-        if not episode.task.permitted_systems:
-            raise ValueError("CompanyWorld distractor intervention requires a permitted system")
-        parameters["system"] = episode.task.permitted_systems[0].value
+    if mutation.kind == MutationKind.INJECT_DISTRACTOR:
+        parameters["system"] = _permitted_system(
+            episode,
+            parameters.get("system"),
+            label="distractor intervention",
+        ).value
+    elif mutation.kind == MutationKind.TOOL_FAILURE:
+        schedule = ScheduledToolFailure.model_validate(
+            {
+                "system": _permitted_system(
+                    episode,
+                    parameters.get("system"),
+                    label="tool-failure intervention",
+                ).value,
+                "at_step": parameters.get("at_step", 0),
+                "persistent": parameters.get("persistent", False),
+            }
+        )
+        parameters.update(schedule.model_dump(mode="json"))
+    elif mutation.kind == MutationKind.PERMISSION_CHANGE:
+        schedule = ScheduledPermissionChange.model_validate(
+            {
+                "system": _permitted_system(
+                    episode,
+                    parameters.get("system"),
+                    label="permission intervention",
+                ).value,
+                "at_step": parameters.get("at_step", 0),
+                "action": parameters.get("action", "revoke"),
+            }
+        )
+        parameters.update(schedule.model_dump(mode="json"))
     return parameters
 
 
