@@ -30,6 +30,19 @@ class ObservatoryStore:
                     result.append(CapabilityRun.model_validate_json(line))
         return result
 
+    def has_run(self, run_id: str) -> bool:
+        return any(run.run_id == run_id for run in self.load())
+
+    def for_cell(self, cell_id: str) -> list[CapabilityRun]:
+        return sorted(
+            (run for run in self.load() if run.cell.cell_id == cell_id),
+            key=lambda run: (run.finished_at, run.run_id),
+        )
+
+    def latest_for_cell(self, cell_id: str) -> CapabilityRun | None:
+        runs = self.for_cell(cell_id)
+        return runs[-1] if runs else None
+
     def for_lineage(self, longitudinal_key: str) -> list[CapabilityRun]:
         return sorted(
             (run for run in self.load() if run.cell.longitudinal_key == longitudinal_key),
