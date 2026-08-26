@@ -1,7 +1,10 @@
+import pytest
+
 from investigation_world.projectworld import (
     OperationalProjectWorld,
     OperationalProjectWorldSpec,
     ProjectAction,
+    ProjectActionError,
     ProjectActionKind,
     ProjectDomain,
     ProjectOracle,
@@ -11,6 +14,7 @@ from investigation_world.projectworld import (
     ProjectRoleSpec,
     ProjectScenario,
     ProjectWorkPackageSpec,
+    ProjectWorldSession,
     ResourceKind,
     WorkPackageStatus,
     build_construction_project_world,
@@ -95,6 +99,30 @@ def test_public_payload_hides_private_oracle():
     assert "latent_defects" not in text
     assert "resource_delay_days" not in text
     assert payload["seed"] is None
+
+
+def test_identity_bound_session_rejects_role_impersonation():
+    world = OperationalProjectWorld(_minimal_world())
+    session = ProjectWorldSession(world, "builder")
+
+    with pytest.raises(ProjectActionError, match="cannot submit action as inspector"):
+        session.step(
+            ProjectAction(
+                actor_role_id="inspector",
+                kind=ProjectActionKind.ADVANCE_TIME,
+                parameters={"days": 1},
+            )
+        )
+
+    transition = session.act(ProjectActionKind.START_WORK, target_id="a")
+    assert transition.accepted is True
+    assert transition.observation.role_id == "builder"
+    assert world.journal[-1].actor_role_id == "builder"
+
+
+def test_identity_bound_session_validates_role_at_binding_time():
+    with pytest.raises(ProjectActionError, match="unknown role"):
+        ProjectWorldSession(OperationalProjectWorld(_minimal_world()), "owner")
 
 
 def test_dependency_and_role_preconditions_are_enforced_without_crashing_episode():
