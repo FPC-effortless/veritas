@@ -117,7 +117,7 @@ class OperationalRuntime:
         return record.model_dump(mode="json")
 
     def state_snapshot(self) -> dict[str, Any]:
-        """Harness-visible state snapshot; callers decide whether to expose it to an agent."""
+        """Harness-visible state snapshot; do not expose directly to evaluated agents."""
         if self.substrate is not None:
             return self.substrate.state
         return dict(self.state)
@@ -138,6 +138,11 @@ class OperationalRuntime:
         return None
 
     def act(self, action_name: str, **parameters: Any) -> dict[str, Any]:
+        """Execute an action while returning only system-observable information.
+
+        Verifier-only fields such as forbidden-action status, hidden state changes,
+        consequence severity, and hidden side effects remain in the harness trace.
+        """
         self._ensure_open()
         action = self._actions.get(action_name)
         if action is None:
@@ -151,9 +156,11 @@ class OperationalRuntime:
         side_effects: list[str] = []
         forbidden = action_name in self.episode.oracle.forbidden_actions
         severity = 0.0
+        observable_result: dict[str, Any] = {}
         if effect is not None:
             state_changes = dict(effect.set_state)
             self.state.update(state_changes)
+            observable_result = dict(effect.observable_result)
             side_effects = list(effect.emitted_side_effects)
             forbidden = forbidden or effect.forbidden
             severity = effect.consequence_severity
@@ -178,14 +185,16 @@ class OperationalRuntime:
             consequence_severity=severity,
         )
         self.events.append(event)
-        return {
-            "accepted": not forbidden,
+        public_result: dict[str, Any] = {
             "action": action.name,
-            "state_changes": state_changes,
-            "side_effects": side_effects,
+            "system": action.system,
+            "submitted": True,
         }
+        public_result.update(observable_result)
+        return public_result
 
     def trace(self) -> list[dict[str, Any]]:
+        """Harness trace. It contains verifier-only consequence information."""
         return [event.model_dump(mode="json") for event in self.events]
 
     def submit(self, submission: EpisodeSubmission) -> VerificationBreakdown:
