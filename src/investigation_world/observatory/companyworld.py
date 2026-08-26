@@ -164,15 +164,15 @@ class CompanyWorldObservatoryRuntimeFactory:
             raise ValueError("CompanyWorld runtime factory received an incompatible world cell")
         episode = self.repository.episode(cell.scenario)
         constraints = episode.task.constraints
-        total_cost = cell.execution.cost_budget
-        if total_cost is None:
-            total_cost = float(constraints.get("budget", 40))
+        world_cost_budget = cell.execution.parameters.get("world_cost_budget")
+        if world_cost_budget is None:
+            world_cost_budget = constraints.get("budget", 40)
         max_tool_calls = cell.execution.tool_call_budget
         if max_tool_calls is None:
             max_tool_calls = int(constraints.get("max_tool_calls", 30))
         runtime = CompanyWorldRuntime(
             episode,
-            total_cost=max(1, int(total_cost)),
+            total_cost=max(1, int(world_cost_budget)),
             max_tool_calls=max(1, int(max_tool_calls)),
         )
         raw_tags = episode.task.metadata.get("capability_tags", [])
