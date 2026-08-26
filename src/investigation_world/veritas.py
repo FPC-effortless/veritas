@@ -22,6 +22,18 @@ from investigation_world.operational import (
     validate_operational_distribution,
     write_operational_distribution_bundle,
 )
+from investigation_world.projectworld import (
+    ProjectDistributionCase,
+    ProjectDistributionConfig,
+    ProjectDistributionManifest,
+    ProjectDomain,
+    ProjectScenario,
+    build_project_world as build_project_scenario,
+    compile_project_distribution,
+    project_distribution_manifest as build_project_distribution_manifest,
+    validate_project_distribution,
+    write_project_distribution_bundle,
+)
 
 
 @dataclass(frozen=True)
@@ -40,6 +52,13 @@ _CAPABILITIES: tuple[VeritasCapability, ...] = (
         maturity="production_scale_distribution",
         module="investigation_world.operational",
         description="Five operational domains on one persistent runtime/verifier contract with deterministic train/IID/OOD/adversarial distributions.",
+    ),
+    VeritasCapability(
+        capability_id="operational_project_world",
+        category="environment",
+        maturity="procedural_distribution_v1",
+        module="investigation_world.projectworld",
+        description="Long-horizon project-delivery environments with persistent project state, causal decisions, procurement, role authority, hidden disruptions, inspection/rework, and deterministic outcome verification.",
     ),
     VeritasCapability(
         capability_id="companyworld",
@@ -100,8 +119,10 @@ class VeritasProductInfo:
     substrate: str = "persistent unified operational world"
     verifier: str = "independent multi-layer verifier"
     domains: tuple[str, ...] = tuple(domain.value for domain in WorldDomain)
+    project_domains: tuple[str, ...] = tuple(domain.value for domain in ProjectDomain)
     capability_ids: tuple[str, ...] = tuple(item.capability_id for item in _CAPABILITIES)
     default_operational_distribution_cases: int = OperationalDistributionConfig().total_cases
+    default_project_distribution_cases: int = ProjectDistributionConfig().total_cases
 
 
 @dataclass
@@ -136,10 +157,11 @@ class VeritasCompany:
 class Veritas:
     """Canonical entry point for the complete Veritas capability foundry.
 
-    Operational worlds share one substrate/runtime/verifier contract. Existing
-    CompanyWorld, External Investigation, Selective Agency, observatory,
-    calibration, foundry, and training-product modules remain first-class
-    capabilities surfaced through the product catalog rather than separate brands.
+    Short/medium operational worlds share the OperationalEpisode contract.
+    ProjectWorld is surfaced by the same product facade while retaining its
+    long-horizon ProjectScenario/runtime/verifier contract. Versioned adapters
+    can unify those distribution families without pretending they are already
+    the same environment type.
     """
 
     def __init__(self, *, seed: int = 42):
@@ -152,6 +174,9 @@ class Veritas:
     def domains(self) -> list[WorldDomain]:
         return list(WorldDomain)
 
+    def project_domains(self) -> list[ProjectDomain]:
+        return list(ProjectDomain)
+
     def build_world(
         self,
         domain: WorldDomain | str,
@@ -162,6 +187,17 @@ class Veritas:
 
     def build_suite(self, *, seed: int | None = None) -> list[OperationalEpisode]:
         return build_operational_suite(self.seed if seed is None else seed)
+
+    def build_project_world(
+        self,
+        domain: ProjectDomain | str = ProjectDomain.CONSTRUCTION,
+        *,
+        seed: int | None = None,
+    ) -> ProjectScenario:
+        return build_project_scenario(
+            domain,
+            seed=self.seed if seed is None else seed,
+        )
 
     def distribution_config(self, **overrides: int | str) -> OperationalDistributionConfig:
         payload: dict[str, int | str] = {"seed": self.seed}
@@ -205,6 +241,50 @@ class Veritas:
             output=output,
             oracle_output=oracle_output,
             config=config or OperationalDistributionConfig(seed=self.seed),
+        )
+
+    def project_distribution_config(self, **overrides: int | str) -> ProjectDistributionConfig:
+        payload: dict[str, int | str] = {"seed": self.seed}
+        payload.update(overrides)
+        return ProjectDistributionConfig.model_validate(payload)
+
+    def build_project_distribution(
+        self,
+        config: ProjectDistributionConfig | None = None,
+    ) -> list[ProjectDistributionCase]:
+        return compile_project_distribution(config or ProjectDistributionConfig(seed=self.seed))
+
+    def project_distribution_manifest(
+        self,
+        cases: list[ProjectDistributionCase] | None = None,
+        *,
+        config: ProjectDistributionConfig | None = None,
+    ) -> ProjectDistributionManifest:
+        resolved_config = config or ProjectDistributionConfig(seed=self.seed)
+        resolved_cases = cases if cases is not None else self.build_project_distribution(resolved_config)
+        return build_project_distribution_manifest(resolved_cases, config=resolved_config)
+
+    def validate_project_distribution(
+        self,
+        cases: list[ProjectDistributionCase] | None = None,
+        *,
+        config: ProjectDistributionConfig | None = None,
+    ) -> dict[str, object]:
+        resolved_config = config or ProjectDistributionConfig(seed=self.seed)
+        resolved_cases = cases if cases is not None else self.build_project_distribution(resolved_config)
+        return validate_project_distribution(resolved_cases, config=resolved_config)
+
+    def write_project_distribution(
+        self,
+        *,
+        output: str | Path,
+        oracle_output: str | Path,
+        config: ProjectDistributionConfig | None = None,
+    ) -> dict[str, object]:
+        return write_project_distribution_bundle(
+            output=output,
+            oracle_output=oracle_output,
+            config=config or ProjectDistributionConfig(seed=self.seed),
         )
 
     @staticmethod
