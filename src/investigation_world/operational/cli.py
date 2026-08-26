@@ -14,6 +14,30 @@ app = typer.Typer(
 )
 
 
+@app.command("capabilities")
+def capabilities_cmd() -> None:
+    """List the first-class capabilities that make up the Veritas product."""
+    veritas = Veritas()
+    typer.echo(
+        json.dumps(
+            {
+                "product": veritas.info.name,
+                "capabilities": [
+                    {
+                        "capability_id": capability.capability_id,
+                        "category": capability.category,
+                        "maturity": capability.maturity,
+                        "module": capability.module,
+                        "description": capability.description,
+                    }
+                    for capability in veritas.capabilities()
+                ],
+            },
+            indent=2,
+        )
+    )
+
+
 @app.command("domains")
 def domains_cmd() -> None:
     """List first-class operational world domains."""
@@ -104,6 +128,12 @@ def build_company_cmd(
     payload = {
         "organization_id": organization_id,
         "snapshot": company.snapshot().model_dump(mode="json"),
+        "entities": [
+            entity.model_dump(mode="json") for entity in company.substrate.entities()
+        ],
+        "relations": [
+            relation.model_dump(mode="json") for relation in company.substrate.relations()
+        ],
         "worlds": [episode.public_payload() for episode in company.episodes],
         "event_history": [
             event.model_dump(mode="json") for event in company.substrate.history()
@@ -111,12 +141,15 @@ def build_company_cmd(
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    snapshot = company.snapshot()
     typer.echo(
         json.dumps(
             {
                 "organization_id": organization_id,
                 "worlds": len(company.episodes),
                 "events": company.substrate.sequence,
+                "entities": snapshot.entity_count,
+                "relations": snapshot.relation_count,
                 "output": str(output),
             },
             indent=2,
