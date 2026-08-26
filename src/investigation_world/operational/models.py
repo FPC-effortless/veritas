@@ -94,12 +94,13 @@ class TaskContract(BaseModel):
 
 
 class HiddenActionEffect(BaseModel):
-    """Verifier-only deterministic effect for an executable action."""
+    """Verifier-only transition plus the system-observable response to that transition."""
 
     model_config = ConfigDict(extra="forbid")
     action_name: str
     required_parameters: dict[str, Any] = Field(default_factory=dict)
     set_state: dict[str, Any] = Field(default_factory=dict)
+    observable_result: dict[str, Any] = Field(default_factory=dict)
     emitted_side_effects: list[str] = Field(default_factory=list)
     forbidden: bool = False
     consequence_severity: float = Field(default=0.0, ge=0.0, le=1.0)
