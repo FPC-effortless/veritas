@@ -89,6 +89,19 @@ def qualify_candidate(
     exploit = policy_means[PolicyClass.EXPLOIT]
     ordered = oracle > competent > myopic > random
 
+    if cfg.random_chance_reward is None:
+        random_limit = cfg.maximum_random_reward
+        random_required = random_limit
+        random_detail = "absolute random-policy ceiling"
+    else:
+        random_limit = min(1.0, cfg.random_chance_reward + cfg.maximum_random_excess_over_chance)
+        random_required = {
+            "chance_reward": cfg.random_chance_reward,
+            "maximum_excess_over_chance": cfg.maximum_random_excess_over_chance,
+            "maximum_random_reward": random_limit,
+        }
+        random_detail = "domain chance baseline plus allowed finite-panel tolerance"
+
     gates = [
         _gate("source_groups", len(all_groups) >= cfg.minimum_source_groups, len(all_groups), cfg.minimum_source_groups),
         _gate(
@@ -170,7 +183,7 @@ def qualify_candidate(
             oracle - competent,
             cfg.minimum_oracle_competent_gap,
         ),
-        _gate("random_ceiling", random <= cfg.maximum_random_reward, random, cfg.maximum_random_reward),
+        _gate("random_ceiling", random <= random_limit, random, random_required, random_detail),
         _gate("exploit_resistance", exploit <= cfg.maximum_exploit_reward, exploit, cfg.maximum_exploit_reward),
     ]
     panel_payload = [
