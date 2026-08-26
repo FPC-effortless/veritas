@@ -4,15 +4,11 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from investigation_world.companyworld.models import CompanySystem, CompanyWorldEpisode
+from investigation_world.companyworld.models import CompanyWorldEpisode
 from investigation_world.foundry.models import MutationKind, MutationLineage, stable_hash
 from investigation_world.foundry.mutations import apply_mutation
 from investigation_world.observatory.companyworld import CompanyWorldBundleRepository
 from investigation_world.observatory.models import CapabilityRun, DimensionDelta, ScenarioRef
-from investigation_world.observatory.runtime_interventions import (
-    ScheduledPermissionChange,
-    ScheduledToolFailure,
-)
 
 
 TRUTH_PRESERVING_COMPANYWORLD_MUTATIONS: frozenset[MutationKind] = frozenset(
@@ -106,22 +102,27 @@ def _supporting_record_ids(episode: CompanyWorldEpisode) -> list[str]:
     )
 
 
-def _permitted_system(
+def _normalize_system_parameter(
     episode: CompanyWorldEpisode,
-    value: Any | None,
+    parameters: dict[str, Any],
     *,
-    label: str,
-) -> CompanySystem:
-    if value is None:
-        if not episode.task.permitted_systems:
-            raise ValueError(f"{label} requires a permitted CompanyWorld system")
-        return episode.task.permitted_systems[0]
-    system = CompanySystem(str(value))
-    if system not in episode.task.permitted_systems:
+    required: bool,
+) -> dict[str, Any]:
+    normalized = dict(parameters)
+    system = normalized.get("system")
+    if system is None:
+        if required:
+            if not episode.task.permitted_systems:
+                raise ValueError("CompanyWorld intervention requires a permitted system")
+            normalized["system"] = episode.task.permitted_systems[0].value
+        return normalized
+    allowed = {item.value for item in episode.task.permitted_systems}
+    if str(system) not in allowed:
         raise ValueError(
-            f"{label} system {system.value!r} is not permitted by source task"
+            f"CompanyWorld intervention system {system!r} is not permitted by the source task"
         )
-    return system
+    normalized["system"] = str(system)
+    return normalized
 
 
 def _companyworld_parameters(
@@ -129,38 +130,21 @@ def _companyworld_parameters(
     mutation: InterventionMutation,
 ) -> dict[str, Any]:
     parameters = dict(mutation.parameters)
-    if mutation.kind == MutationKind.INJECT_DISTRACTOR:
-        parameters["system"] = _permitted_system(
-            episode,
-            parameters.get("system"),
-            label="distractor intervention",
-        ).value
-    elif mutation.kind == MutationKind.TOOL_FAILURE:
-        schedule = ScheduledToolFailure.model_validate(
-            {
-                "system": _permitted_system(
-                    episode,
-                    parameters.get("system"),
-                    label="tool-failure intervention",
-                ).value,
-                "at_step": parameters.get("at_step", 0),
-                "persistent": parameters.get("persistent", False),
-            }
-        )
-        parameters.update(schedule.model_dump(mode="json"))
-    elif mutation.kind == MutationKind.PERMISSION_CHANGE:
-        schedule = ScheduledPermissionChange.model_validate(
-            {
-                "system": _permitted_system(
-                    episode,
-                    parameters.get("system"),
-                    label="permission intervention",
-                ).value,
-                "at_step": parameters.get("at_step", 0),
-                "action": parameters.get("action", "revoke"),
-            }
-        )
-        parameters.update(schedule.model_dump(mode="json"))
+    if mutation.kind in {
+        MutationKind.INJECT_DISTRACTOR,
+        MutationKind.TOOL_FAILURE,
+        MutationKind.PERMISSION_CHANGE,
+    }:
+        parameters = _normalize_system_parameter(episode, parameters, required=True)
+    if mutation.kind == MutationKind.TOOL_FAILURE:
+        parameters["at_step"] = max(0, int(parameters.get("at_step", 0)))
+        parameters["persistent"] = bool(parameters.get("persistent", False))
+    if mutation.kind == MutationKind.PERMISSION_CHANGE:
+        parameters["at_step"] = max(0, int(parameters.get("at_step", 0)))
+        action = str(parameters.get("action", "revoke")).casefold()
+        if action not in {"revoke", "restore"}:
+            raise ValueError("permission-change action must be 'revoke' or 'restore'")
+        parameters["action"] = action
     return parameters
 
 
