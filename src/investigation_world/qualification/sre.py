@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+from collections import defaultdict
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -19,6 +20,7 @@ from investigation_world.qualification.models import (
     QualificationScenario,
     QualificationSplit,
 )
+from investigation_world.qualification.source_disjoint import token_jaccard
 
 
 class SRECausalClass(StrEnum):
@@ -159,16 +161,9 @@ def _keyword_prediction(text: str, *, competent: bool) -> SRECausalClass:
     value = text.casefold()
     regression = ("deploy", "release", "rollback", "regression", "change introduced")
     capacity = ("capacity", "overload", "traffic", "saturation", "rate limit", "exhaust")
-    # `region` alone is deliberately excluded from the public heuristic: status updates routinely
-    # mention affected regions without establishing infrastructure as the cause.
     infrastructure = ("network", "dns", "database", "storage", "hardware", "power")
 
     if competent:
-        # Apply the declared SRE causal ontology in the same precedence used to define classes,
-        # but only to *public* early evidence. This is not oracle access: later resolution/RCA text
-        # remains unavailable. The prior score-counting implementation broke ontology precedence
-        # on ties and over-weighted generic terms such as `region`, making it weaker than the
-        # intentionally myopic baseline.
         if _contains_any(value, regression):
             return SRECausalClass.REGRESSION
         if _contains_any(value, capacity):
@@ -177,13 +172,50 @@ def _keyword_prediction(text: str, *, competent: bool) -> SRECausalClass:
             return SRECausalClass.INFRASTRUCTURE
         return SRECausalClass.TRANSIENT
 
-    # The myopic baseline reacts to a narrower local signal set and gets capacity precedence even
-    # when the same public update also contains a deployment/regression clue.
     if _contains_any(value, capacity):
         return SRECausalClass.CAPACITY
     if _contains_any(value, ("deploy", "release", "rollback", "change", "regression")):
         return SRECausalClass.REGRESSION
     return SRECausalClass.TRANSIENT
+
+
+def _trained_public_knn_prediction(
+    case: SREQualificationCase,
+    train_cases: list[SREQualificationCase],
+    *,
+    neighbors: int = 3,
+    provider_bonus: float = 0.02,
+) -> SRECausalClass:
+    """Predict from labelled train incidents using public early evidence only.
+
+    The baseline is intentionally simple and auditable. Hyperparameters are fixed from the dev
+    split; the private-test causal labels are never consulted. Near-duplicate components are split
+    atomically before this policy runs, preventing a duplicate incident family from becoming a
+    nearest-neighbour leakage channel.
+    """
+    if not train_cases:
+        return _keyword_prediction(case.public_text, competent=True)
+    ranked = sorted(
+        (
+            token_jaccard(case.public_text, train.public_text)
+            + (provider_bonus if case.provider == train.provider else 0.0),
+            stable_hash(train.scenario.scenario_id),
+            train.causal_class,
+        )
+        for train in train_cases
+    )
+    votes: dict[SRECausalClass, float] = defaultdict(float)
+    for similarity, _, label in reversed(ranked[-max(1, neighbors):]):
+        votes[label] += max(similarity, 0.001)
+    rule_prediction = _keyword_prediction(case.public_text, competent=True)
+    return max(
+        SRECausalClass,
+        key=lambda label: (
+            votes[label],
+            label == rule_prediction,
+            -list(SRECausalClass).index(label),
+        ),
+    )
 
 
 def _evaluate_prediction(case: SREQualificationCase, prediction: SRECausalClass) -> float:
@@ -195,28 +227,48 @@ def execute_sre_policy_suite(
     *,
     random_seed: int = 7,
 ) -> list[PolicyEvaluation]:
+    train_cases = [case for case in cases if case.scenario.split == QualificationSplit.TRAIN]
     private_cases = [case for case in cases if case.scenario.split == QualificationSplit.PRIVATE_TEST]
     if not private_cases:
         raise ValueError("SRE policy suite requires private-test cases")
+    if not train_cases:
+        raise ValueError("competent SRE policy requires labelled train cases")
+    if {
+        case.scenario.source_group_id for case in train_cases
+    } & {
+        case.scenario.source_group_id for case in private_cases
+    }:
+        raise ValueError("train/private source groups overlap")
+
     rng = random.Random(random_seed)
     classes = list(SRECausalClass)
-
     outcomes: dict[PolicyClass, list[PolicyOutcome]] = {kind: [] for kind in PolicyClass}
     for case in private_cases:
         predictions = {
             PolicyClass.ORACLE: case.causal_class,
-            PolicyClass.COMPETENT_HEURISTIC: _keyword_prediction(case.public_text, competent=True),
+            PolicyClass.COMPETENT_HEURISTIC: _trained_public_knn_prediction(case, train_cases),
             PolicyClass.MYOPIC: _keyword_prediction(case.public_text, competent=False),
             PolicyClass.RANDOM: rng.choice(classes),
         }
         for kind, prediction in predictions.items():
             reward = _evaluate_prediction(case, prediction)
+            metadata = {"prediction": prediction.value}
+            if kind == PolicyClass.COMPETENT_HEURISTIC:
+                metadata.update(
+                    {
+                        "training_split": "train",
+                        "training_cases": len(train_cases),
+                        "neighbors": 3,
+                        "provider_bonus": 0.02,
+                        "private_label_access": False,
+                    }
+                )
             outcomes[kind].append(
                 PolicyOutcome(
                     scenario_id=case.scenario.scenario_id,
                     reward=reward,
                     passed=reward == 1.0,
-                    metadata={"prediction": prediction.value},
+                    metadata=metadata,
                 )
             )
         outcomes[PolicyClass.EXPLOIT].append(
@@ -230,7 +282,7 @@ def execute_sre_policy_suite(
 
     names = {
         PolicyClass.ORACLE: "private-causal-oracle",
-        PolicyClass.COMPETENT_HEURISTIC: "ontology-aware-public-sre-heuristic",
+        PolicyClass.COMPETENT_HEURISTIC: "train-fit-public-evidence-3nn",
         PolicyClass.MYOPIC: "single-signal-myopic",
         PolicyClass.RANDOM: f"seeded-random-{random_seed}",
         PolicyClass.EXPLOIT: "unsupported-terminal-exploit",
