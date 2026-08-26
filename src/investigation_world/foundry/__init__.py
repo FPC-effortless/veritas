@@ -8,6 +8,12 @@ from investigation_world.foundry.companyworld import (
 from investigation_world.foundry.curriculum import TaskPerformance, frontier_priority, select_frontier_tasks
 from investigation_world.foundry.cycle import FoundryCycleConfig, FoundryCycleResult, aggregate_task_performance, run_foundry_cycle
 from investigation_world.foundry.distributions import DistributionPartition, FoundryDistributionManifest, manifest_from_tasks
+from investigation_world.foundry.materializer import (
+    FoundryCompanyWorldRuntime,
+    FoundryRuntimeConfig,
+    MaterializedCompanyWorldTask,
+    materialize_companyworld_task,
+)
 from investigation_world.foundry.metrics import EfficiencyPoint, FoundryMetrics, foundry_objective, pareto_frontier
 from investigation_world.foundry.models import (
     CapabilityContract,
@@ -51,16 +57,17 @@ __all__ = [
     "CapabilityBundle", "CapabilityContract", "ChallengeSpec", "ChallengeValidation", "CompanyWorldBuildPlan",
     "CompanyWorldBuildSpec", "CounterfactualBranch", "DifficultyDistribution", "DifficultyVector",
     "DistributionPartition", "DistributionSplit", "EfficiencyPoint", "FailureClass", "FloatRange",
-    "FoundryCycleConfig", "FoundryCycleResult", "FoundryDistributionManifest", "FoundryMetrics",
-    "FoundryTaskMetadata", "GatedRewardContract", "IntRange", "MutationKind", "MutationLineage",
-    "PromotionPolicy", "RewardWeights", "RolloutTrace", "SampledTaskParameters", "StateSnapshot",
-    "TaskDistributionSpec", "TaskPerformance", "TraceEvent", "TracingRuntimeProxy", "adapt_companyworld_tasks",
-    "aggregate_task_performance", "append_trace", "apply_mutation", "branch_from_snapshot",
-    "challenge_from_trace", "classify_failure", "companyworld_capability_contract", "companyworld_task_metadata",
-    "default_companyworld_build_plan", "execute_counterfactual", "foundry_objective", "frontier_priority",
-    "gated_reward", "infer_companyworld_difficulty", "load_traces", "make_snapshot", "manifest_from_tasks",
-    "materialize_companyworld_build_plan", "pareto_frontier", "patched_generator_source", "promotable",
-    "promotion_failures", "replay_trace_prefix", "run_foundry_cycle", "sample_task_batch",
-    "sample_task_parameters", "select_frontier_tasks", "stable_hash", "trace_cost",
-    "write_companyworld_world_manifest",
+    "FoundryCompanyWorldRuntime", "FoundryCycleConfig", "FoundryCycleResult", "FoundryDistributionManifest",
+    "FoundryMetrics", "FoundryRuntimeConfig", "FoundryTaskMetadata", "GatedRewardContract", "IntRange",
+    "MaterializedCompanyWorldTask", "MutationKind", "MutationLineage", "PromotionPolicy", "RewardWeights",
+    "RolloutTrace", "SampledTaskParameters", "StateSnapshot", "TaskDistributionSpec", "TaskPerformance",
+    "TraceEvent", "TracingRuntimeProxy", "adapt_companyworld_tasks", "aggregate_task_performance",
+    "append_trace", "apply_mutation", "branch_from_snapshot", "challenge_from_trace", "classify_failure",
+    "companyworld_capability_contract", "companyworld_task_metadata", "default_companyworld_build_plan",
+    "execute_counterfactual", "foundry_objective", "frontier_priority", "gated_reward",
+    "infer_companyworld_difficulty", "load_traces", "make_snapshot", "manifest_from_tasks",
+    "materialize_companyworld_build_plan", "materialize_companyworld_task", "pareto_frontier",
+    "patched_generator_source", "promotable", "promotion_failures", "replay_trace_prefix",
+    "run_foundry_cycle", "sample_task_batch", "sample_task_parameters", "select_frontier_tasks",
+    "stable_hash", "trace_cost", "write_companyworld_world_manifest",
 ]
