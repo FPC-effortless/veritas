@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +16,12 @@ from investigation_world.observatory.aggregation import (
     compare_aggregates,
     snapshot_key,
 )
-from investigation_world.observatory.models import CapabilityRun, ExperimentSpec, LongitudinalCell
+from investigation_world.observatory.models import (
+    CapabilityRun,
+    ExperimentSpec,
+    LongitudinalCell,
+    ScenarioPool,
+)
 from investigation_world.observatory.scheduler import (
     JobStatus,
     LocalObservatoryScheduler,
@@ -25,7 +29,6 @@ from investigation_world.observatory.scheduler import (
     SchedulerReport,
 )
 from investigation_world.observatory.store import ObservatoryStore
-from investigation_world.observatory.models import ScenarioPool
 
 
 def utc_now() -> datetime:
