@@ -4,9 +4,11 @@
 
 Veritas builds persistent operational substrates, capability contracts, calibrated world distributions, executable environments, rollout traces, independent verifiers, adversarial challenge sets, verified demonstrations, and trainer-ready bundles for SFT, preference learning, RL, and VOPSD.
 
-The product is broader than any one benchmark family. CompanyWorld remains the first commercial evaluation wedge, while the unified operational-world substrate now provides one execution and verification architecture across finance/spreadsheets, enterprise operations, DevOps/incident response, investigation/OSINT, and GIS.
+The product is broader than any one benchmark family. CompanyWorld remains the first commercial evaluation wedge, while the unified operational-world substrate provides one execution and verification architecture across finance/spreadsheets, enterprise operations, DevOps/incident response, investigation/OSINT, and GIS.
 
-See [`docs/veritas-north-star.md`](docs/veritas-north-star.md) for the permanent architecture and product invariants and [`docs/unified-operational-worlds.md`](docs/unified-operational-worlds.md) for the shared operational-world substrate.
+Veritas 0.7 adds a production-scale procedural distribution across those five domains. The default compiler produces **4,480 executable episodes** with explicit train, IID test, OOD, and adversarial partitions and separate public/private evaluator packaging.
+
+See [`docs/veritas-north-star.md`](docs/veritas-north-star.md) for the permanent architecture, [`docs/unified-operational-worlds.md`](docs/unified-operational-worlds.md) for the shared substrate, and [`docs/operational-production-scale.md`](docs/operational-production-scale.md) for the scale/integrity contract.
 
 ## What a buyer gets today
 
@@ -21,7 +23,7 @@ A design-partner Veritas engagement can answer concrete deployment questions suc
 
 A standard pilot produces a versioned evaluation manifest, private benchmark run, capability scorecard, representative trajectories, failure analysis, cost/tool statistics where available, and prioritized recommendations.
 
-CompanyWorld remains the most mature commercial package. The unified operational suite adds executable reference worlds and a common substrate for expansion into additional economically valuable domains.
+CompanyWorld remains the most mature commercial package. Unified Operational Worlds now adds a production-scale synthetic distribution across five economically relevant domains on the same verified runtime architecture.
 
 See [`docs/commercial/`](docs/commercial/) for the benchmark card, pilot scope, security boundary, onboarding, acceptance criteria, and procurement material.
 
@@ -77,12 +79,50 @@ Every operational episode uses the same public/private contract:
 
 All five domains emit the same seven verification dimensions: **outcome, state, constraints, side effects, process, efficiency, and evidence**. Domain-native verifiers can add richer checks without changing the common product contract.
 
+## Production-scale operational distribution
+
+The default `OperationalDistributionConfig` compiles **4,480 executable episodes**:
+
+| Split | Per domain | Total |
+|---|---:|---:|
+| Train | 512 | 2,560 |
+| IID test | 128 | 640 |
+| OOD | 128 | 640 |
+| Adversarial | 128 | 640 |
+| **Total** | **896** | **4,480** |
+
+Generation is deterministic and parameterized by domain. Financial cases vary workbook/formula state; enterprise cases vary deals, accounts and approval parameters; DevOps cases vary services, deployments and health metrics; OSINT cases vary companies, identities and evidence; GIS cases vary layers, CRS pairs and geometry defects.
+
+OOD cases introduce unfamiliar surface/role conditions. Adversarial cases add conflicting context, tighter resource bounds and stronger pressure. The evaluator bundle retains split, seed, scenario family, difficulty and oracle; the public bundle hides those values and uses opaque task IDs plus hash-mixed ordering so split membership cannot be inferred from identifiers or emission order.
+
+The required CI workflow compiles and validates the full default distribution with:
+
+```bash
+veritas validate-production-scale --seed 42
+```
+
+Build a distributable public/private pair with:
+
+```bash
+veritas build-distribution \
+  --seed 42 \
+  --output operational_public.json \
+  --oracle-output operational_private.json
+```
+
+See [`docs/operational-production-scale.md`](docs/operational-production-scale.md) for exact integrity guarantees and scale semantics.
+
+## Product interfaces
+
 The canonical Python surface is `investigation_world.veritas.Veritas`. The package also installs a dedicated CLI:
 
 ```bash
+veritas capabilities
 veritas domains
 veritas build-world financial_spreadsheet --seed 42 --output finance.json
 veritas build-suite --seed 42 --output suite.json --oracle-output private_oracles.json
+veritas build-distribution --seed 42 --output public.json --oracle-output private.json
+veritas validate-production-scale --seed 42
 veritas build-company --organization-id ORG-DEMO-001 --seed 42 --output company.json
 ```
 
@@ -90,7 +130,7 @@ Public task bundles and private evaluator oracles are emitted separately.
 
 ## Why the environments are difficult to game
 
-The agent sees only public task state and permitted tool observations. Hidden truth, evaluator targets, benchmark-generation randomness, adversarial pressure, private failure schedules, private calibration targets, action consequences, and verifier oracles remain privileged.
+The agent sees only public task state and permitted tool observations. Hidden truth, evaluator targets, benchmark-generation randomness, split assignment, adversarial pressure metadata, private failure schedules, private calibration targets, action consequences, and verifier oracles remain privileged.
 
 Core integrity properties include:
 
@@ -99,8 +139,9 @@ Core integrity properties include:
 - no reward for empty answers, citation laundering, unsupported stuffing, or blindly trusting a conflicting system;
 - deterministic generation and replay for fixed versions/seeds;
 - persistent state with append-only event history and counterfactual forks;
-- disjoint train/IID/OOD/adversarial world plans where distributions support them;
-- authority, budget, tool-failure, missingness, conflict, and recovery pressure;
+- disjoint train/IID/OOD/adversarial task IDs;
+- opaque public IDs and mixed public case ordering;
+- authority, budget, conflict and adversarial pressure;
 - explicit penalties for forbidden actions, invariant violations, harmful side effects, and disproportionate work;
 - trace-first execution with verifier-backed outcomes;
 - held-out/OOD trajectories excluded from training bundle compilation;
@@ -110,7 +151,7 @@ Core integrity properties include:
 
 ### Unified Operational Worlds
 
-The current operational suite contains five first-class domains under one runtime and verifier contract:
+The operational suite contains five first-class domains under one runtime and verifier contract:
 
 - **Financial / Spreadsheet** — formula repair, dependency reasoning, recalculation, model integrity and valuation-state verification.
 - **Enterprise Operations** — cross-system CRM/ERP workflows, approval authority, state consistency and operational controls.
@@ -118,7 +159,7 @@ The current operational suite contains five first-class domains under one runtim
 - **Investigation / OSINT** — evidence-backed entity resolution, provenance and false-merge prevention, bridging the richer External Investigation capability family.
 - **GIS Operations** — CRS alignment, topology/geometry repair, artifact preservation and tolerance-aware geospatial state.
 
-The current code provides one executable reference scenario per domain. The next scale layer is procedural task generation plus domain-native artifact engines and deeper shared causal/entity links across the same synthetic company.
+The five domains now support a production-scale procedural synthetic distribution in addition to their reference episodes. Higher-fidelity native artifact execution remains a separate fidelity track: real XLSX/formula DAG engines, container/Kubernetes/Terraform sandboxes, richer enterprise application replicas, large evidence corpora and vector/raster GIS artifacts should plug into this same contract rather than form separate products.
 
 ### CompanyWorld
 
@@ -195,14 +236,14 @@ python -m venv .venv
 .venv/bin/python -m pytest tests/
 ```
 
-The repository CI validates Python 3.12/3.13, packaging, the legacy investigation pipeline, the unified Veritas operational product surface, the Next.js site, Docker startup, dependency/security scanning, and release builds.
+The repository CI validates Python 3.12/3.13, packaging, the legacy investigation pipeline, the unified Veritas product surface, the full 4,480-case operational distribution, the Next.js site, Docker startup and dependency/security scanning.
 
 ## Commercial boundary
 
-The public repository contains the framework, schemas, validation machinery, foundry interfaces, reference operational worlds and buyer-facing methodology. Commercial private-evaluation assets—including frozen private world seeds, hidden ground truth, evaluator oracles, and unreleased adversarial suites—must remain outside the public repository.
+The public repository contains the framework, schemas, validation machinery, foundry interfaces, procedural operational generators and buyer-facing methodology. Commercial private-evaluation assets—including frozen private world seeds, hidden ground truth, evaluator oracles, and unreleased adversarial suites—must remain outside the public repository.
 
-Veritas does **not** claim SOC 2 certification, third-party penetration testing, or external benchmark validation at this stage. Those controls should be added in response to actual customer procurement requirements rather than used to delay early design-partner pilots.
+Veritas does **not** claim SOC 2 certification, third-party penetration testing, external benchmark validation, or industrial-fidelity native artifact simulation for every domain at this stage. Those are distinct procurement/fidelity milestones rather than prerequisites for using the current synthetic executable distribution.
 
-> Software version: 0.6.0  
+> Software version: 0.7.0  
 > Commercial benchmark line: Veritas CompanyWorld Pilot v1  
-> Operational substrate line: Veritas Unified Operational Worlds v1
+> Operational distribution line: Veritas Unified Operational Worlds Production v1
