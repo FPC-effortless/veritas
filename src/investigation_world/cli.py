@@ -152,5 +152,67 @@ def benchmark_companyworld_cmd(
     raise typer.Exit(0 if report.passed else 1)
 
 
+@app.command("compile-companyworld-distribution")
+def compile_companyworld_distribution_cmd(
+    dataset: Path,
+    output: Path = Path("companyworld_distribution.json"),
+    oracle_output: Path | None = None,
+    per_family: int = 200,
+    include_legacy: bool = True,
+):
+    """Compile the expanded CompanyWorld task distribution with stratified splits."""
+    from investigation_world.companyworld import write_companyworld_distribution_bundle
+
+    result = write_companyworld_distribution_bundle(
+        dataset,
+        output,
+        oracle_output=oracle_output,
+        per_family=per_family,
+        include_legacy=include_legacy,
+    )
+    typer.echo(json.dumps(result, indent=2, default=str))
+    if not result["validation"]["errors"]:
+        return
+    raise typer.Exit(1)
+
+
+@app.command("benchmark-companyworld-distribution")
+def benchmark_companyworld_distribution_cmd(
+    dataset: Path,
+    output: Path = Path("companyworld_distribution_benchmark.json"),
+    per_family: int = 200,
+    include_legacy: bool = True,
+    skip_determinism: bool = False,
+):
+    """Validate the expanded task distribution against exploit and reference policies."""
+    from investigation_world.benchmark import write_companyworld_benchmark_report
+
+    report = write_companyworld_benchmark_report(
+        dataset,
+        output,
+        verify_determinism=not skip_determinism,
+        expanded=True,
+        per_family=per_family,
+        include_legacy=include_legacy,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "passed": report.passed,
+                "world_id": report.world_id,
+                "episodes": report.episodes,
+                "task_families": report.task_families,
+                "splits": report.splits,
+                "failed_invariants": [
+                    item.name for item in report.invariants if not item.passed
+                ],
+                "report": str(output),
+            },
+            indent=2,
+        )
+    )
+    raise typer.Exit(0 if report.passed else 1)
+
+
 if __name__ == "__main__":
     app()
