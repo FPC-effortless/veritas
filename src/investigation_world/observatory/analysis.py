@@ -20,7 +20,8 @@ def _contains_failure_signal(value: Any) -> bool:
     if isinstance(value, dict):
         if value.get("success") is False or value.get("passed") is False:
             return True
-        if value.get("error") not in {None, "", False}:
+        error = value.get("error")
+        if error is not None and error != "" and error is not False:
             return True
         return any(_contains_failure_signal(child) for child in value.values())
     if isinstance(value, list):
@@ -135,6 +136,11 @@ def compare_runs(
 ) -> CapabilityDriftReport:
     if baseline.cell.longitudinal_key != current.cell.longitudinal_key:
         raise ValueError("runs are not longitudinally comparable")
+    if baseline.provenance.runtime_version != current.provenance.runtime_version:
+        raise ValueError("runtime version changed between longitudinal runs")
+    if baseline.provenance.taskset_version != current.provenance.taskset_version:
+        raise ValueError("taskset version changed between longitudinal runs")
+
     dimensions: dict[str, DimensionDelta] = {}
     regressions: list[str] = []
     improvements: list[str] = []
