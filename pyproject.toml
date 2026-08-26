@@ -1,7 +1,7 @@
 [project]
 name = "investigation-world"
 version = "0.6.0"
-description = "Independent synthetic enterprise-agent evaluation and capability-development environments"
+description = "Veritas verified capability foundry for persistent operational-world agent training and evaluation"
 requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.7,<3",
