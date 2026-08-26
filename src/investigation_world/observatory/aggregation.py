@@ -70,6 +70,8 @@ def cohort_payload(run: CapabilityRun) -> dict[str, Any]:
     """Identity for a repeated-seed cohort across time/model snapshots.
 
     Scenario identity and seed are intentionally excluded; pool and distribution split remain.
+    Runtime and taskset versions remain frozen so infrastructure drift is not misclassified as
+    model capability drift.
     """
     return {
         "world": run.cell.world.model_dump(mode="json"),
@@ -78,6 +80,8 @@ def cohort_payload(run: CapabilityRun) -> dict[str, Any]:
         "harness": run.cell.harness.model_dump(mode="json"),
         "verifier": run.cell.verifier.model_dump(mode="json"),
         "execution": run.cell.execution.model_dump(mode="json"),
+        "runtime_version": run.provenance.runtime_version,
+        "taskset_version": run.provenance.taskset_version,
     }
 
 
