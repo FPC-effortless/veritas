@@ -21,6 +21,8 @@ def main() -> None:
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
     import torch
+    import transformers
+    from packaging.version import Version
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     from investigation_world.calibration.bounded import run_bounded_calibration
@@ -28,12 +30,17 @@ def main() -> None:
     dtype = torch.bfloat16 if args.dtype == "bfloat16" else torch.float32
     started = time.time()
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=args.trust_remote_code)
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model,
-        dtype=dtype,
-        low_cpu_mem_usage=True,
-        trust_remote_code=args.trust_remote_code,
-    )
+
+    # Transformers introduced the generic `dtype=` loading keyword after the
+    # Phi-compatible 4.43 release. Preserve compatibility with both API eras
+    # without changing benchmark prompts or scoring semantics.
+    dtype_kwarg = "torch_dtype" if Version(transformers.__version__) < Version("4.45.0") else "dtype"
+    model_kwargs = {
+        dtype_kwarg: dtype,
+        "low_cpu_mem_usage": True,
+        "trust_remote_code": args.trust_remote_code,
+    }
+    model = AutoModelForCausalLM.from_pretrained(args.model, **model_kwargs)
     model.eval()
 
     generation_seconds = 0.0
@@ -74,6 +81,7 @@ def main() -> None:
         "model_calls": calls,
         "device": "cpu",
         "dtype": args.dtype,
+        "transformers_version": transformers.__version__,
         "max_new_tokens": args.max_new_tokens,
         "max_input_tokens": args.max_input_tokens,
     }
