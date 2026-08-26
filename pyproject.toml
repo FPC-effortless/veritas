@@ -20,6 +20,7 @@ test = [
 
 [project.scripts]
 iworld = "investigation_world.cli:app"
+veritas = "investigation_world.operational.cli:app"
 
 [build-system]
 requires = ["hatchling"]
