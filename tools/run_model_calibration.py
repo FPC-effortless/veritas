@@ -13,6 +13,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-new-tokens", type=int, default=320)
     parser.add_argument("--max-input-tokens", type=int, default=7168)
+    parser.add_argument("--dtype", choices=("float32", "bfloat16", "float16"), default="float32")
+    parser.add_argument("--trust-remote-code", action="store_true")
     args = parser.parse_args()
 
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -22,12 +24,22 @@ def main() -> None:
 
     from investigation_world.calibration import run_full_context_calibration
 
+    dtype = {
+        "float32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+    }[args.dtype]
+
     started = time.time()
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model,
+        trust_remote_code=args.trust_remote_code,
+    )
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        dtype=torch.float32,
+        dtype=dtype,
         low_cpu_mem_usage=True,
+        trust_remote_code=args.trust_remote_code,
     )
     model.eval()
 
@@ -77,6 +89,7 @@ def main() -> None:
         "model_calls": calls,
         "device": "cpu",
         "torch_threads": torch.get_num_threads(),
+        "dtype": args.dtype,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True))
