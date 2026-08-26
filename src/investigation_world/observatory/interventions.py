@@ -100,6 +100,18 @@ def _supporting_record_ids(episode: CompanyWorldEpisode) -> list[str]:
     )
 
 
+def _companyworld_parameters(
+    episode: CompanyWorldEpisode,
+    mutation: InterventionMutation,
+) -> dict[str, Any]:
+    parameters = dict(mutation.parameters)
+    if mutation.kind == MutationKind.INJECT_DISTRACTOR and "system" not in parameters:
+        if not episode.task.permitted_systems:
+            raise ValueError("CompanyWorld distractor intervention requires a permitted system")
+        parameters["system"] = episode.task.permitted_systems[0].value
+    return parameters
+
+
 def materialize_companyworld_intervention(
     repository: CompanyWorldBundleRepository,
     spec: InterventionSpec,
@@ -115,7 +127,7 @@ def materialize_companyworld_intervention(
             task_id=episode.task.task_id,
             kind=mutation.kind,
             seed=mutation.seed,
-            parameters=mutation.parameters,
+            parameters=_companyworld_parameters(episode, mutation),
             protected_record_ids=protected,
         )
         lineages.append(lineage)
