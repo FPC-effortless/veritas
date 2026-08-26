@@ -66,11 +66,16 @@ def main() -> None:
     cases = [case.model_copy(update={"scenario": case.scenario.model_copy(update={"split": split_map[case.scenario.scenario_id]})}) for case in cases]
     evaluations = execute_sre_policy_suite(cases, random_seed=args.random_seed)
     # Four mutually exclusive SRE causal classes imply 0.25 expected uniform-random accuracy.
-    # Qualification permits finite-panel variation above chance rather than using the generic
-    # absolute 0.20 ceiling, which would incorrectly require a random policy to beat chance.
+    # Qualification also requires all four causal strata to be represented with material support;
+    # this prevents majority-class panels from appearing discriminative merely because a dominant
+    # label is easy to guess.
     thresholds = QualificationThresholds(
         random_chance_reward=0.25,
         maximum_random_excess_over_chance=0.10,
+        private_stratum_metadata_key="causal_class",
+        minimum_private_strata=4,
+        minimum_private_scenarios_per_stratum=5,
+        maximum_private_stratum_fraction=0.50,
     )
     report = qualify_candidate(candidate, evaluations, thresholds=thresholds)
     release = private_release_manifest(candidate, report) if report.releaseable else None
