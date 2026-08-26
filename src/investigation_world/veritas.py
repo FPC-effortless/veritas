@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from investigation_world.operational import (
+    OperationalDistributionCase,
+    OperationalDistributionConfig,
+    OperationalDistributionManifest,
     OperationalEntity,
     OperationalEpisode,
     OperationalRelation,
@@ -12,7 +16,11 @@ from investigation_world.operational import (
     WorldDomain,
     build_operational_suite,
     build_operational_world,
+    compile_operational_distribution,
+    distribution_manifest as build_distribution_manifest,
     operational_suite_manifest,
+    validate_operational_distribution,
+    write_operational_distribution_bundle,
 )
 
 
@@ -29,9 +37,9 @@ _CAPABILITIES: tuple[VeritasCapability, ...] = (
     VeritasCapability(
         capability_id="unified_operational_worlds",
         category="environment",
-        maturity="executable_reference",
+        maturity="production_scale_distribution",
         module="investigation_world.operational",
-        description="Five operational domains on one persistent runtime and verifier contract.",
+        description="Five operational domains on one persistent runtime/verifier contract with deterministic train/IID/OOD/adversarial distributions.",
     ),
     VeritasCapability(
         capability_id="companyworld",
@@ -93,6 +101,7 @@ class VeritasProductInfo:
     verifier: str = "independent multi-layer verifier"
     domains: tuple[str, ...] = tuple(domain.value for domain in WorldDomain)
     capability_ids: tuple[str, ...] = tuple(item.capability_id for item in _CAPABILITIES)
+    default_operational_distribution_cases: int = OperationalDistributionConfig().total_cases
 
 
 @dataclass
@@ -153,6 +162,50 @@ class Veritas:
 
     def build_suite(self, *, seed: int | None = None) -> list[OperationalEpisode]:
         return build_operational_suite(self.seed if seed is None else seed)
+
+    def distribution_config(self, **overrides: int | str) -> OperationalDistributionConfig:
+        payload: dict[str, int | str] = {"seed": self.seed}
+        payload.update(overrides)
+        return OperationalDistributionConfig.model_validate(payload)
+
+    def build_distribution(
+        self,
+        config: OperationalDistributionConfig | None = None,
+    ) -> list[OperationalDistributionCase]:
+        return compile_operational_distribution(config or OperationalDistributionConfig(seed=self.seed))
+
+    def distribution_manifest(
+        self,
+        cases: list[OperationalDistributionCase] | None = None,
+        *,
+        config: OperationalDistributionConfig | None = None,
+    ) -> OperationalDistributionManifest:
+        resolved_config = config or OperationalDistributionConfig(seed=self.seed)
+        resolved_cases = cases if cases is not None else self.build_distribution(resolved_config)
+        return build_distribution_manifest(resolved_cases, config=resolved_config)
+
+    def validate_distribution(
+        self,
+        cases: list[OperationalDistributionCase] | None = None,
+        *,
+        config: OperationalDistributionConfig | None = None,
+    ) -> dict[str, object]:
+        resolved_config = config or OperationalDistributionConfig(seed=self.seed)
+        resolved_cases = cases if cases is not None else self.build_distribution(resolved_config)
+        return validate_operational_distribution(resolved_cases, config=resolved_config)
+
+    def write_distribution(
+        self,
+        *,
+        output: str | Path,
+        oracle_output: str | Path,
+        config: OperationalDistributionConfig | None = None,
+    ) -> dict[str, object]:
+        return write_operational_distribution_bundle(
+            output=output,
+            oracle_output=oracle_output,
+            config=config or OperationalDistributionConfig(seed=self.seed),
+        )
 
     @staticmethod
     def _populate_entity_graph(
