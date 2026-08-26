@@ -117,7 +117,9 @@ def interactive_fixture():
 def sequential_fixture():
     # Generate enough IDs to include both direct-authority and delegated-authority cases.
     episodes = [
-        compile_sequential_episode(build_o2c_episode(index, delay_days=index % 4))
+        compile_sequential_episode(
+            compile_interactive_episode(build_o2c_episode(index, delay_days=index % 4))
+        )
         for index in range(10, 30)
     ]
     direct = [item for item in episodes if not item.oracle.approval_required]
