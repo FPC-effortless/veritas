@@ -246,3 +246,75 @@ def test_repeated_seed_aggregation_tracks_uncertainty_and_drift():
     assert report.reward.delta == pytest.approx(-0.1)
     assert "verification" in report.regressions
     assert "evidence_precision" in report.improvements
+    assert report.panel_match is True
+    assert report.matched_n == 2
+    assert report.baseline_coverage == pytest.approx(1.0)
+    assert report.current_coverage == pytest.approx(1.0)
+
+
+def test_longitudinal_drift_uses_only_matched_scenarios_when_panel_changes():
+    baseline = aggregate_runs([
+        make_seed_run(
+            7,
+            snapshot="2026-08-19",
+            model_snapshot="jul",
+            reward=0.0,
+            precision=0.2,
+        ),
+        make_seed_run(
+            8,
+            snapshot="2026-08-19",
+            model_snapshot="jul",
+            reward=0.6,
+            precision=0.8,
+        ),
+    ])
+    current = aggregate_runs([
+        make_seed_run(
+            8,
+            snapshot="2026-08-26",
+            model_snapshot="aug",
+            reward=0.5,
+            precision=0.7,
+        ),
+        make_seed_run(
+            9,
+            snapshot="2026-08-26",
+            model_snapshot="aug",
+            reward=1.0,
+            precision=1.0,
+        ),
+    ])
+
+    # A difference of aggregate means would report +0.45 here. The matched panel contains only
+    # seed 8, whose actual longitudinal change is -0.10.
+    report = compare_aggregates(baseline, current)
+    assert report.reward.delta == pytest.approx(-0.1)
+    assert report.matched_n == 1
+    assert report.panel_match is False
+    assert report.baseline_coverage == pytest.approx(0.5)
+    assert report.current_coverage == pytest.approx(0.5)
+
+
+def test_longitudinal_drift_rejects_disjoint_panels():
+    baseline = aggregate_runs([
+        make_seed_run(
+            7,
+            snapshot="2026-08-19",
+            model_snapshot="jul",
+            reward=0.5,
+            precision=0.5,
+        )
+    ])
+    current = aggregate_runs([
+        make_seed_run(
+            8,
+            snapshot="2026-08-26",
+            model_snapshot="aug",
+            reward=0.5,
+            precision=0.5,
+        )
+    ])
+
+    with pytest.raises(ValueError, match="no matched scenario"):
+        compare_aggregates(baseline, current)
