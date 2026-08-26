@@ -110,6 +110,10 @@ class QualificationThresholds(BaseModel):
     minimum_oracle_competent_gap: float = Field(default=0.05, ge=0.0, le=1.0)
     maximum_cross_split_near_duplicates: int = Field(default=0, ge=0)
     maximum_private_leakage_count: int = Field(default=0, ge=0)
+    private_stratum_metadata_key: str | None = None
+    minimum_private_strata: int = Field(default=0, ge=0)
+    minimum_private_scenarios_per_stratum: int = Field(default=0, ge=0)
+    maximum_private_stratum_fraction: float = Field(default=1.0, gt=0.0, le=1.0)
 
 
 class QualificationCandidate(BaseModel):
