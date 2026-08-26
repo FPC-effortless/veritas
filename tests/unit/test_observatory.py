@@ -1,3 +1,5 @@
+import pytest
+
 from investigation_world.foundry.models import DistributionSplit, RolloutTrace, TraceEvent
 from investigation_world.observatory import (
     CellMatrixSpec,
@@ -170,8 +172,6 @@ def test_store_round_trip(tmp_path):
 
 
 def test_alignment_rejects_wrong_seed():
-    import pytest
-
     with pytest.raises(ValueError, match="scenario seed"):
         capability_run_from_trace(make_cell(seed=99), make_trace())
 
@@ -237,12 +237,12 @@ def test_repeated_seed_aggregation_tracks_uncertainty_and_drift():
     ])
 
     assert baseline.reward.n == 2
-    assert baseline.reward.mean == 0.7
+    assert baseline.reward.mean == pytest.approx(0.7)
     assert baseline.reward.stddev > 0.0
     assert baseline.cohort_key == current.cohort_key
     assert baseline.snapshot_key != current.snapshot_key
 
     report = compare_aggregates(baseline, current)
-    assert report.reward.delta == -0.1
+    assert report.reward.delta == pytest.approx(-0.1)
     assert "verification" in report.regressions
     assert "evidence_precision" in report.improvements
