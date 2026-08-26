@@ -20,6 +20,11 @@ from investigation_world.operational.models import (
     WorldDomain,
 )
 from investigation_world.operational.runtime import OperationalRuntime
+from investigation_world.operational.substrate import (
+    OperationalSnapshot,
+    OperationalStateEvent,
+    PersistentOperationalSubstrate,
+)
 from investigation_world.operational.verifier import verify_operational_episode
 
 __all__ = [
@@ -28,7 +33,10 @@ __all__ = [
     "OperationalEpisode",
     "OperationalRecord",
     "OperationalRuntime",
+    "OperationalSnapshot",
+    "OperationalStateEvent",
     "OperationalSuiteManifest",
+    "PersistentOperationalSubstrate",
     "TaskContract",
     "VerificationBreakdown",
     "VerificationDimension",
