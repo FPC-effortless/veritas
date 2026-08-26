@@ -104,6 +104,8 @@ class QualificationThresholds(BaseModel):
     minimum_oracle_reward: float = Field(default=0.95, ge=0.0, le=1.0)
     maximum_competent_reward: float = Field(default=0.90, ge=0.0, le=1.0)
     maximum_random_reward: float = Field(default=0.20, ge=0.0, le=1.0)
+    random_chance_reward: float | None = Field(default=None, ge=0.0, le=1.0)
+    maximum_random_excess_over_chance: float = Field(default=0.10, ge=0.0, le=1.0)
     maximum_exploit_reward: float = Field(default=0.20, ge=0.0, le=1.0)
     minimum_oracle_competent_gap: float = Field(default=0.05, ge=0.0, le=1.0)
     maximum_cross_split_near_duplicates: int = Field(default=0, ge=0)
