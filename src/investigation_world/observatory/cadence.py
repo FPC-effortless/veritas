@@ -25,6 +25,8 @@ class CadencePolicy(BaseModel):
 
     @model_validator(mode="after")
     def validate_id(self) -> "CadencePolicy":
+        if self.start_at is not None and self.start_at.tzinfo is None:
+            raise ValueError("cadence start_at must be timezone-aware")
         payload = {
             "name": self.name,
             "interval_seconds": self.interval_seconds,
@@ -154,9 +156,7 @@ class CadencedObservationRunner:
             return CadenceRunResult(decision=decision)
 
         started = current
-        self.store.save(
-            checkpoint.model_copy(update={"last_started_at": started})
-        )
+        self.store.save(checkpoint.model_copy(update={"last_started_at": started}))
         snapshot = started.replace(microsecond=0).isoformat()
         try:
             cycle = self.run_cycle(snapshot)
