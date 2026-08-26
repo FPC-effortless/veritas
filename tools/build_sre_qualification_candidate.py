@@ -65,7 +65,14 @@ def main() -> None:
     candidate, split_map = repartition_candidate_by_near_duplicates(candidate)
     cases = [case.model_copy(update={"scenario": case.scenario.model_copy(update={"split": split_map[case.scenario.scenario_id]})}) for case in cases]
     evaluations = execute_sre_policy_suite(cases, random_seed=args.random_seed)
-    report = qualify_candidate(candidate, evaluations, thresholds=QualificationThresholds())
+    # Four mutually exclusive SRE causal classes imply 0.25 expected uniform-random accuracy.
+    # Qualification permits finite-panel variation above chance rather than using the generic
+    # absolute 0.20 ceiling, which would incorrectly require a random policy to beat chance.
+    thresholds = QualificationThresholds(
+        random_chance_reward=0.25,
+        maximum_random_excess_over_chance=0.10,
+    )
+    report = qualify_candidate(candidate, evaluations, thresholds=thresholds)
     release = private_release_manifest(candidate, report) if report.releaseable else None
 
     output = {
@@ -76,6 +83,7 @@ def main() -> None:
         "candidate": candidate.model_dump(mode="json"),
         "policy_evaluations": [item.model_dump(mode="json") for item in evaluations],
         "qualification": report.model_dump(mode="json"),
+        "qualification_thresholds": thresholds.model_dump(mode="json"),
         "private_release_manifest": release.model_dump(mode="json") if release else None,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +97,7 @@ def main() -> None:
         "scenarios": len(candidate.scenarios),
         "private_test": sum(item.split.value == "private_test" for item in candidate.scenarios),
         "near_duplicate_components": candidate.metadata.get("near_duplicate_components"),
+        "random_chance_reward": thresholds.random_chance_reward,
         "failed_gates": [item.name for item in report.gates if not item.passed],
     }, indent=2, sort_keys=True))
 
