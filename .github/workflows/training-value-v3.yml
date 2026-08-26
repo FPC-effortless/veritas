@@ -83,7 +83,7 @@ jobs:
           retention-days: 30
 
   replicated-transfer:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
@@ -144,7 +144,7 @@ jobs:
           retention-days: 30
 
   aggregate-replicates:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request'
     needs: replicated-transfer
     runs-on: ubuntu-latest
     strategy:
