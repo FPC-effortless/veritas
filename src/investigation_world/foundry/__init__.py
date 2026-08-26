@@ -3,6 +3,8 @@ from investigation_world.foundry.capability_families import (
     CapabilityFamilyId,
     external_investigation_capability_contract,
     external_investigation_family,
+    selective_agency_capability_contract,
+    selective_agency_family,
 )
 from investigation_world.foundry.challenges import ChallengeSpec, FailureClass, challenge_from_trace, classify_failure
 from investigation_world.foundry.companyworld import (
@@ -57,6 +59,11 @@ from investigation_world.foundry.mutations import apply_mutation
 from investigation_world.foundry.promotion import ChallengeValidation, PromotionPolicy, promotable, promotion_failures
 from investigation_world.foundry.replay import branch_from_snapshot, make_snapshot
 from investigation_world.foundry.reward import GatedRewardContract, RewardWeights, gated_reward
+from investigation_world.foundry.selective_agency import (
+    adapt_selective_agency_tasks,
+    infer_selective_agency_difficulty,
+    selective_agency_task_metadata,
+)
 from investigation_world.foundry.task_distribution import (
     CapabilityBundle,
     DifficultyDistribution,
@@ -114,15 +121,16 @@ __all__ = [
     "TraceEvent", "TracingRuntimeProxy", "TrainerAdapter", "TrainerKind", "TrainingBundle", "TrainingExample",
     "TrainingRecipe", "TrainingRunManifest", "TrainingRunResult", "TrainingUse", "TrajectoryRole", "VerifiedTrajectory",
     "WorldCalibrationSpec", "adapt_companyworld_tasks", "adapt_external_investigation_tasks",
-    "aggregate_task_performance", "append_trace", "apply_mutation", "assess_trace", "branch_from_snapshot",
-    "calibration_fingerprint", "challenge_from_trace", "classify_failure", "companyworld_capability_contract",
-    "companyworld_task_metadata", "compile_training_bundle", "curate_verified_trace", "default_companyworld_build_plan",
-    "execute_counterfactual", "external_investigation_capability_contract", "external_investigation_family",
-    "external_investigation_task_metadata", "foundry_objective", "frontier_priority", "gated_reward",
-    "infer_companyworld_difficulty", "infer_external_investigation_difficulty", "load_traces", "make_preference_pair",
-    "make_snapshot", "manifest_from_tasks", "materialize_companyworld_build_plan", "materialize_companyworld_task",
-    "pareto_frontier", "patched_generator_source", "promotable", "promotion_failures", "qualify_expert_trace",
-    "replay_trace_prefix", "run_foundry_cycle", "sample_task_batch", "sample_task_parameters",
-    "select_frontier_tasks", "stable_hash", "trace_cost", "validate_calibration_report", "world_manifest_id",
-    "write_companyworld_world_manifest",
+    "adapt_selective_agency_tasks", "aggregate_task_performance", "append_trace", "apply_mutation", "assess_trace",
+    "branch_from_snapshot", "calibration_fingerprint", "challenge_from_trace", "classify_failure",
+    "companyworld_capability_contract", "companyworld_task_metadata", "compile_training_bundle", "curate_verified_trace",
+    "default_companyworld_build_plan", "execute_counterfactual", "external_investigation_capability_contract",
+    "external_investigation_family", "external_investigation_task_metadata", "foundry_objective", "frontier_priority",
+    "gated_reward", "infer_companyworld_difficulty", "infer_external_investigation_difficulty",
+    "infer_selective_agency_difficulty", "load_traces", "make_preference_pair", "make_snapshot", "manifest_from_tasks",
+    "materialize_companyworld_build_plan", "materialize_companyworld_task", "pareto_frontier", "patched_generator_source",
+    "promotable", "promotion_failures", "qualify_expert_trace", "replay_trace_prefix", "run_foundry_cycle",
+    "sample_task_batch", "sample_task_parameters", "select_frontier_tasks", "selective_agency_capability_contract",
+    "selective_agency_family", "selective_agency_task_metadata", "stable_hash", "trace_cost",
+    "validate_calibration_report", "world_manifest_id", "write_companyworld_world_manifest",
 ]
