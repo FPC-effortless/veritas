@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from investigation_world.foundry.models import stable_hash
+from investigation_world.foundry.models import MutationKind, stable_hash
 from investigation_world.observatory.cadence import (
     CadencePolicy,
     CadenceRunResult,
@@ -225,7 +225,7 @@ def _run_repository_observation(
     policy = SchedulerPolicy(
         max_workers=config.max_workers,
         max_attempts=config.max_attempts,
-        pools={selected[0].pool} if len({item.pool for item in selected}) == 1 else {item.pool for item in selected},
+        pools={item.pool for item in selected},
     )
     return cycle_runner.run(experiment, cells, policy=policy)
 
@@ -240,6 +240,23 @@ def run_companyworld_observation(
     return _run_repository_observation(config, repository)
 
 
+def _cadence_experiment_identity(
+    config: CompanyWorldLiveRunConfig,
+    repository: CompanyWorldBundleRepository,
+) -> str:
+    payload = config.model_dump(mode="json")
+    for key in (
+        "time_snapshot",
+        "model_snapshot",
+        "public_bundle",
+        "oracle_bundle",
+        "store_root",
+    ):
+        payload.pop(key, None)
+    payload["bundle_version"] = repository.bundle_version
+    return f"companyworld:{stable_hash(payload)[:24]}"
+
+
 def run_companyworld_cadence(
     config: CompanyWorldLiveRunConfig,
     *,
@@ -251,15 +268,22 @@ def run_companyworld_cadence(
     """Run a CompanyWorld anchor cycle only when its persisted cadence is due."""
     if interval_hours < 1:
         raise ValueError("interval_hours must be at least 1")
+    repository = CompanyWorldBundleRepository.from_files(
+        config.public_bundle,
+        config.oracle_bundle,
+    )
     root = Path(cadence_root) if cadence_root is not None else config.store_root / "cadence"
     policy = CadencePolicy(
-        name=f"companyworld:{config.provider}:{config.model_id}:{config.split_name}:{config.pool.value}",
+        name=_cadence_experiment_identity(config, repository),
         interval_seconds=interval_hours * 3600,
     )
     cadence_store = CadenceStore(root)
 
     def execute(snapshot: str) -> ObservationCycleReport:
-        return run_companyworld_observation(config.model_copy(update={"time_snapshot": snapshot}))
+        return _run_repository_observation(
+            config.model_copy(update={"time_snapshot": snapshot}),
+            repository,
+        )
 
     return CadencedObservationRunner(policy, cadence_store, execute).run_if_due(
         now=now,
@@ -274,6 +298,13 @@ def run_companyworld_intervention(
     persist_report: bool = True,
 ) -> CompanyWorldInterventionRunReport:
     """Execute a controlled baseline/intervention A/B comparison with frozen agent components."""
+    if config.world_cost_budget is not None and any(
+        mutation.kind == MutationKind.TIGHTEN_BUDGET for mutation in spec.mutations
+    ):
+        raise ValueError(
+            "explicit world_cost_budget would mask a TIGHTEN_BUDGET intervention; "
+            "remove the override for this experiment"
+        )
     source = CompanyWorldBundleRepository.from_files(config.public_bundle, config.oracle_bundle)
     variant, materialization = materialize_companyworld_intervention(source, spec)
     scenario = spec.scenario.model_copy(update={"pool": ScenarioPool.ANCHOR})
@@ -317,5 +348,8 @@ def run_companyworld_intervention(
         root = config.store_root / "interventions"
         root.mkdir(parents=True, exist_ok=True)
         target = root / f"{report_id}.json"
-        target.write_text(json.dumps(report.model_dump(mode="json"), indent=2, default=str), encoding="utf-8")
+        target.write_text(
+            json.dumps(report.model_dump(mode="json"), indent=2, default=str),
+            encoding="utf-8",
+        )
     return report
