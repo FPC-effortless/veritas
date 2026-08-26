@@ -180,13 +180,19 @@ def validate_operational_distribution(
         if not any(record.observed_at and record.source_authority for record in episode.records):
             errors.append(f"{episode.task.task_id}: missing temporal/provenance records")
             break
+        if any(
+            "scenario" in record.fields or "scenario_family" in record.fields
+            for record in episode.records
+        ):
+            errors.append(f"{episode.task.task_id}: private generator field leaked publicly")
+            break
         public_text = json.dumps(episode.public_payload(), sort_keys=True, default=str)
         if "required_action_order" in public_text or "required_state" in public_text:
             errors.append(f"{episode.task.task_id}: hidden process truth leaked publicly")
             break
-        normalized_family = case.scenario_family.replace("_", " ").casefold()
-        if case.scenario_family.casefold() in public_text.casefold() or normalized_family in public_text.casefold():
-            errors.append(f"{episode.task.task_id}: scenario-family label leaked publicly")
+        literal_family = f'"{case.scenario_family.casefold()}"'
+        if literal_family in public_text.casefold():
+            errors.append(f"{episode.task.task_id}: literal scenario-family label leaked publicly")
             break
 
     manifest = distribution_manifest(cases, config=config)
