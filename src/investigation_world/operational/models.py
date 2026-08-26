@@ -33,6 +33,29 @@ class VerificationDimension(StrEnum):
     EVIDENCE = "evidence"
 
 
+class OperationalEntity(BaseModel):
+    """Persistent entity shared across one or more operational domains."""
+
+    model_config = ConfigDict(extra="forbid")
+    entity_id: str
+    entity_type: str
+    label: str = ""
+    domains: list[WorldDomain] = Field(default_factory=list)
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class OperationalRelation(BaseModel):
+    """Typed relationship connecting persistent operational entities."""
+
+    model_config = ConfigDict(extra="forbid")
+    relation_id: str
+    source_entity_id: str
+    relation_type: str
+    target_entity_id: str
+    domains: list[WorldDomain] = Field(default_factory=list)
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
 class OperationalRecord(BaseModel):
     """One agent-visible record projected from a domain system."""
 
