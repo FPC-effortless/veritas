@@ -22,6 +22,7 @@ from investigation_world.companyworld.sequential_models import (
     SequentialActionPolicy,
 )
 from investigation_world.companyworld.sequential_runtime import SequentialCompanyWorldRuntime
+from investigation_world.companyworld.sequential_verifier import verify_sequential_companyworld
 from investigation_world.companyworld.dynamic_verifier import verify_dynamic_companyworld
 from investigation_world.core.models import InvestigationBudget, InvestigationResult
 
@@ -377,6 +378,18 @@ class DynamicCompanyWorldRuntime:
                     self._release_resource(case_id, reason="downstream reconciliation completed")
             self._apply_deadline_consequences()
 
+    def _verification_episode(self, case_id: str, runtime: _DynamicCaseRuntime):
+        oracle = self._case_oracles[case_id]
+        if oracle.approval_outcome != "DENIED":
+            return runtime.episode
+        if not any(item.case_id == case_id and item.applied for item in self.handoffs):
+            return runtime.episode
+        episode = runtime.episode.model_copy(deep=True)
+        for condition in episode.oracle.control_outcome_conditions:
+            if condition.field_name == "approval_status":
+                condition.expected_value = "DENIED"
+        return episode
+
     def submit(
         self,
         results: dict[str, InvestigationResult],
@@ -385,7 +398,17 @@ class DynamicCompanyWorldRuntime:
         sequential_results = {}
         for case_id, runtime in self._runtimes.items():
             result = results.get(case_id, InvestigationResult())
-            sequential_results[case_id] = runtime.submit(result)
+            verification_episode = self._verification_episode(case_id, runtime)
+            sequential_results[case_id] = verify_sequential_companyworld(
+                result,
+                verification_episode,
+                state=runtime.state_snapshot(),
+                journal=list(runtime.journal),
+                ticks_used=runtime.tick,
+                budget_spent=runtime.budget.spent,
+                budget_total=runtime.budget.total_cost,
+            )
+            runtime.closed = True
         verification = verify_dynamic_companyworld(
             self.scenario,
             sequential_results=sequential_results,
