@@ -5,6 +5,7 @@ from collections import defaultdict
 
 from investigation_world.projectworld.v2_models import (
     CompiledProjectSpec,
+    DisturbanceKind,
     POStatus,
     V2Action,
     V2ActionKind,
@@ -60,11 +61,51 @@ def _lookahead_work_ids(world: OperationalProjectWorldV2) -> set[str]:
     return lookahead
 
 
+def _oracle_future_rework_demand(world: OperationalProjectWorldV2) -> dict[str, float]:
+    """Return consumables a perfect-information policy knows will be needed for latent defects.
+
+    ProjectWorld disturbances are verifier-private. An oracle is therefore allowed to condition on
+    them. The previous nominal oracle did not: it learned of a defect only after the work completed,
+    then waited an entire supplier lead time for rework material. With deadlines calibrated to the
+    deterministic critical path plus modest contingency, that made otherwise-solvable worlds fail
+    the feasibility gate. This function anticipates exactly the same 25% rework demand constructed
+    by the runtime, without exposing it to competent/myopic policies.
+    """
+    demand: dict[str, float] = defaultdict(float)
+    issues_by_work = {
+        issue.work_package_id: issue
+        for issue in world.state.issues.values()
+    }
+    for disturbance in world.spec.disturbances:
+        if disturbance.kind != DisturbanceKind.DEFECT:
+            continue
+        work_id = disturbance.target_id
+        work = world._work.get(work_id)
+        if work is None:
+            continue
+        issue = issues_by_work.get(work_id)
+        if issue is not None:
+            # Once material has been reserved for active rework, or rework has resolved, the future
+            # hidden demand is no longer outstanding. Open, not-yet-started issues are accounted for
+            # by `_required_consumables` below using the runtime's explicit issue demand.
+            if issue.rework_started_day is not None or not issue.open:
+                continue
+            continue
+        status = world.state.work_status[work_id]
+        if status == V2WorkStatus.COMPLETE and disturbance.day <= world.state.day:
+            continue
+        for resource_id, quantity in work.resource_demand.items():
+            if world._resources[resource_id].consumable:
+                demand[resource_id] += max(1.0, quantity * 0.25)
+    return dict(demand)
+
+
 def _required_consumables(
     world: OperationalProjectWorldV2,
     work_ids: set[str],
     *,
     buffer: float,
+    include_oracle_future_rework: bool = False,
 ) -> dict[str, float]:
     demand: dict[str, float] = defaultdict(float)
     for work_id in work_ids:
@@ -77,7 +118,10 @@ def _required_consumables(
             continue
         for resource_id, quantity in issue.rework_resource_demand.items():
             if world._resources[resource_id].consumable:
-                demand[resource_id] += quantity * max(1.0, buffer)
+                demand[resource_id] += quantity
+    if include_oracle_future_rework:
+        for resource_id, quantity in _oracle_future_rework_demand(world).items():
+            demand[resource_id] += quantity
     return dict(demand)
 
 
@@ -86,20 +130,21 @@ def _procure(
     work_ids: set[str],
     *,
     buffer: float,
+    include_oracle_future_rework: bool = False,
 ) -> int:
-    """Order only remaining demand, replenishing as storage is consumed.
-
-    The earlier oracle ordered a single storage-capacity batch at day zero and then stopped. That
-    made the nominal perfect-information policy infeasible on projects whose total material demand
-    exceeded storage capacity. This controller continually replenishes remaining demand without
-    paying repeatedly for work that has already started.
-    """
+    """Order remaining demand while respecting supplier and storage constraints."""
     actions = 0
     suppliers_by_resource: dict[str, list] = defaultdict(list)
     for supplier in world.spec.suppliers:
         suppliers_by_resource[supplier.resource_id].append(supplier)
 
-    for resource_id, gross_need in _required_consumables(world, work_ids, buffer=buffer).items():
+    required = _required_consumables(
+        world,
+        work_ids,
+        buffer=buffer,
+        include_oracle_future_rework=include_oracle_future_rework,
+    )
+    for resource_id, gross_need in required.items():
         outstanding = sum(
             order.quantity
             for order in world.state.procurement_orders.values()
@@ -229,6 +274,41 @@ def _start_ready_work(world: OperationalProjectWorldV2) -> tuple[int, int]:
     return actions, rejected
 
 
+def _diagnostics(world: OperationalProjectWorldV2) -> dict:
+    return {
+        "unfinished_work": {
+            work_id: status.value
+            for work_id, status in world.state.work_status.items()
+            if status != V2WorkStatus.COMPLETE
+        },
+        "open_issues": {
+            issue_id: {
+                "work_package_id": issue.work_package_id,
+                "rework_started_day": issue.rework_started_day,
+                "rework_resource_demand": dict(issue.rework_resource_demand),
+            }
+            for issue_id, issue in world.state.issues.items()
+            if issue.open
+        },
+        "resources": dict(world.state.resource_available),
+        "open_purchase_orders": {
+            order_id: {
+                "resource_id": order.resource_id,
+                "status": order.status.value,
+                "expected_day": order.expected_day,
+                "quantity": order.quantity,
+            }
+            for order_id, order in world.state.procurement_orders.items()
+            if order.status not in {POStatus.ARRIVED, POStatus.CANCELLED}
+        },
+        "last_rejections": [
+            {"day": item["day"], "role_id": item["role_id"], "action": item["action"], "target_id": item["target_id"], "message": item["message"]}
+            for item in world.journal
+            if not item["accepted"]
+        ][-10:],
+    }
+
+
 def _progress_controlled(
     spec: CompiledProjectSpec,
     *,
@@ -245,7 +325,12 @@ def _progress_controlled(
         changed = False
 
         if mode == PolicyClass.ORACLE:
-            actions += _procure(world, _remaining_work_ids(world), buffer=1.10)
+            actions += _procure(
+                world,
+                _remaining_work_ids(world),
+                buffer=1.05,
+                include_oracle_future_rework=True,
+            )
             actions += _recover_delayed_orders(world, oracle=True)
             gate_actions, gate_rejected = _service_gates_and_rework(world, competent=True)
             actions += gate_actions
@@ -256,8 +341,6 @@ def _progress_controlled(
             changed = gate_actions > 0 or start_actions > 0
 
         elif mode == PolicyClass.COMPETENT_HEURISTIC:
-            # A competent public-state controller procures one dependency layer ahead, reacts to
-            # delays and rework, but does not have the oracle's full-project remaining-demand view.
             actions += _procure(world, _lookahead_work_ids(world), buffer=1.0)
             actions += _recover_delayed_orders(world, oracle=False)
             gate_actions, gate_rejected = _service_gates_and_rework(world, competent=True)
@@ -365,8 +448,9 @@ def _progress_controlled(
     report = world.verify()
     rejection_penalty = min(0.10, rejected / max(1, actions) * 0.10)
     reward = max(0.0, report.overall_reward - rejection_penalty)
-    return reward, report.passed, {
+    metadata = {
         "day": world.state.day,
+        "deadline_days": spec.grammar.deadline_days,
         "actions": actions,
         "rejected": rejected,
         "completion": report.completion,
@@ -377,6 +461,9 @@ def _progress_controlled(
         "schedule": report.schedule,
         "cost": report.cost,
     }
+    if not report.passed and mode == PolicyClass.ORACLE:
+        metadata.update(_diagnostics(world))
+    return reward, report.passed, metadata
 
 
 def execute_calibrated_projectworld_v2_policy_suite(
@@ -397,7 +484,7 @@ def execute_calibrated_projectworld_v2_policy_suite(
         raise ValueError(f"missing compiled ProjectWorld specs: {sorted(missing)}")
 
     names = {
-        PolicyClass.ORACLE: "perfect-information-replenishing-oracle",
+        PolicyClass.ORACLE: "perfect-information-disturbance-aware-oracle",
         PolicyClass.COMPETENT_HEURISTIC: "one-layer-lookahead-project-controller",
         PolicyClass.MYOPIC: "next-ready-work-controller",
         PolicyClass.RANDOM: f"seeded-random-{random_seed}",
