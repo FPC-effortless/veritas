@@ -9,6 +9,7 @@ from investigation_world.projectworld import (
     public_project_distribution_payload,
     validate_project_distribution,
 )
+from investigation_world.veritas import Veritas
 
 
 def _small_config() -> ProjectDistributionConfig:
@@ -139,3 +140,24 @@ def test_every_generated_scenario_revalidates_project_graph():
         assert len(scenario.spec.work_packages) == 12
         assert len(scenario.spec.roles) >= 8
         assert scenario.public_payload()["seed"] is None
+
+
+def test_veritas_facade_surfaces_projectworld_without_mutating_legacy_domain_enum():
+    veritas = Veritas(seed=2718)
+    capability_ids = {item.capability_id for item in veritas.capabilities()}
+    assert "operational_project_world" in capability_ids
+    assert veritas.info.default_operational_distribution_cases == 4480
+    assert veritas.info.default_project_distribution_cases == 896
+    scenario = veritas.build_project_world()
+    assert scenario.spec.domain.value == "construction"
+
+    config = veritas.project_distribution_config(
+        train=2,
+        iid_test=1,
+        ood=1,
+        adversarial=1,
+    )
+    cases = veritas.build_project_distribution(config)
+    validation = veritas.validate_project_distribution(cases, config=config)
+    assert len(cases) == 5
+    assert validation["valid"] is True
