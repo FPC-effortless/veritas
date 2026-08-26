@@ -1,3 +1,14 @@
+from investigation_world.observatory.aggregation import (
+    AggregateDriftReport,
+    AggregatedCapabilityProfile,
+    MetricEstimate,
+    aggregate_runs,
+    cohort_key,
+    cohort_payload,
+    compare_aggregates,
+    snapshot_key,
+    snapshot_payload,
+)
 from investigation_world.observatory.analysis import (
     behavior_from_trace,
     capability_from_trace,
@@ -28,6 +39,8 @@ from investigation_world.observatory.models import (
 from investigation_world.observatory.store import ObservatoryStore
 
 __all__ = [
+    "AggregateDriftReport",
+    "AggregatedCapabilityProfile",
     "BehavioralFingerprint",
     "CapabilityDriftReport",
     "CapabilityProfile",
@@ -38,6 +51,7 @@ __all__ = [
     "ExperimentSpec",
     "HarnessSpec",
     "LongitudinalCell",
+    "MetricEstimate",
     "ModelSpec",
     "ObservatoryStore",
     "RunProvenance",
@@ -46,11 +60,17 @@ __all__ = [
     "VerifierSpec",
     "WorldKind",
     "WorldRef",
+    "aggregate_runs",
     "behavior_from_trace",
     "capability_from_trace",
     "capability_run_from_trace",
+    "cohort_key",
+    "cohort_payload",
+    "compare_aggregates",
     "compare_runs",
     "experiment_from_matrix",
     "materialize_cells",
+    "snapshot_key",
+    "snapshot_payload",
     "validate_cell_trace_alignment",
 ]
