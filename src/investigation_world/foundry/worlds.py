@@ -12,6 +12,10 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from investigation_world.foundry.models import DistributionSplit, stable_hash
+from investigation_world.foundry.world_calibration import (
+    WorldCalibrationSpec,
+    calibration_fingerprint,
+)
 
 
 class CompanyWorldBuildSpec(BaseModel):
@@ -26,6 +30,7 @@ class CompanyWorldBuildSpec(BaseModel):
 class CompanyWorldBuildPlan(BaseModel):
     generator_path: Path
     builds: list[CompanyWorldBuildSpec]
+    calibration_spec: WorldCalibrationSpec | None = None
 
     @model_validator(mode="after")
     def validate_unique(self):
@@ -42,8 +47,14 @@ class CompanyWorldBuildPlan(BaseModel):
 
 
 _DEFAULT_ASSIGNMENTS = {
-    "SEED", "COMPANY_ID", "N_EMP", "N_CUSTOMERS", "N_SUPPLIERS",
-    "N_PRODUCTS", "N_SALES_ORDERS", "TARGET_REVENUE",
+    "SEED",
+    "COMPANY_ID",
+    "N_EMP",
+    "N_CUSTOMERS",
+    "N_SUPPLIERS",
+    "N_PRODUCTS",
+    "N_SALES_ORDERS",
+    "TARGET_REVENUE",
 }
 
 
@@ -59,25 +70,42 @@ class _AssignmentRewriter(ast.NodeTransformer):
         name = node.targets[0].id
         if name in self.replacements:
             self.seen.add(name)
-            return ast.copy_location(ast.Assign(targets=node.targets, value=ast.Constant(value=self.replacements[name])), node)
+            return ast.copy_location(
+                ast.Assign(targets=node.targets, value=ast.Constant(value=self.replacements[name])),
+                node,
+            )
         if name == "root":
             self.seen.add("root")
             return ast.copy_location(
                 ast.Assign(
                     targets=node.targets,
-                    value=ast.Call(func=ast.Name(id="Path", ctx=ast.Load()), args=[ast.Constant(value=str(self.output_root))], keywords=[]),
+                    value=ast.Call(
+                        func=ast.Name(id="Path", ctx=ast.Load()),
+                        args=[ast.Constant(value=str(self.output_root))],
+                        keywords=[],
+                    ),
                 ),
                 node,
             )
         if name == "zip_path":
             self.seen.add("zip_path")
-            return ast.copy_location(ast.Assign(targets=node.targets, value=ast.Constant(value=str(self.output_root.with_suffix(".zip")))), node)
+            return ast.copy_location(
+                ast.Assign(
+                    targets=node.targets,
+                    value=ast.Constant(value=str(self.output_root.with_suffix(".zip"))),
+                ),
+                node,
+            )
         return self.generic_visit(node)
 
 
 def patched_generator_source(source: str, spec: CompanyWorldBuildSpec) -> str:
     tree = ast.parse(source)
-    replacements: dict[str, Any] = {"SEED": spec.seed, "COMPANY_ID": spec.company_id, **spec.overrides}
+    replacements: dict[str, Any] = {
+        "SEED": spec.seed,
+        "COMPANY_ID": spec.company_id,
+        **spec.overrides,
+    }
     unknown = set(spec.overrides) - _DEFAULT_ASSIGNMENTS
     if unknown:
         raise ValueError(f"unsupported CompanyWorld generator overrides: {sorted(unknown)}")
@@ -91,34 +119,81 @@ def patched_generator_source(source: str, spec: CompanyWorldBuildSpec) -> str:
     return ast.unparse(tree) + "\n"
 
 
-def default_companyworld_build_plan(generator_path: str | Path, output_dir: str | Path) -> CompanyWorldBuildPlan:
+def default_companyworld_build_plan(
+    generator_path: str | Path,
+    output_dir: str | Path,
+    *,
+    calibration_spec: WorldCalibrationSpec | None = None,
+) -> CompanyWorldBuildPlan:
     output = Path(output_dir)
     return CompanyWorldBuildPlan(
         generator_path=Path(generator_path),
+        calibration_spec=calibration_spec,
         builds=[
-            CompanyWorldBuildSpec(split=DistributionSplit.TRAIN, seed=42, output_root=output / "train", profile="base"),
-            CompanyWorldBuildSpec(split=DistributionSplit.IID_TEST, seed=43, output_root=output / "iid_test", profile="base"),
             CompanyWorldBuildSpec(
-                split=DistributionSplit.OOD, seed=142, output_root=output / "ood",
-                company_id="ORG-OOD-000001", profile="scale_shift",
+                split=DistributionSplit.TRAIN,
+                seed=42,
+                output_root=output / "train",
+                profile="base",
+            ),
+            CompanyWorldBuildSpec(
+                split=DistributionSplit.IID_TEST,
+                seed=43,
+                output_root=output / "iid_test",
+                profile="base",
+            ),
+            CompanyWorldBuildSpec(
+                split=DistributionSplit.OOD,
+                seed=142,
+                output_root=output / "ood",
+                company_id="ORG-OOD-000001",
+                profile="scale_shift",
                 overrides={
-                    "N_EMP": 3200, "N_CUSTOMERS": 26000, "N_SUPPLIERS": 1500,
-                    "N_PRODUCTS": 90000, "N_SALES_ORDERS": 65000,
+                    "N_EMP": 3200,
+                    "N_CUSTOMERS": 26000,
+                    "N_SUPPLIERS": 1500,
+                    "N_PRODUCTS": 90000,
+                    "N_SALES_ORDERS": 65000,
                     "TARGET_REVENUE": 6_000_000_000.0,
                 },
             ),
             CompanyWorldBuildSpec(
-                split=DistributionSplit.ADVERSARIAL, seed=242,
-                output_root=output / "adversarial", company_id="ORG-ADV-000001",
+                split=DistributionSplit.ADVERSARIAL,
+                seed=242,
+                output_root=output / "adversarial",
+                company_id="ORG-ADV-000001",
                 profile="adversarial_base",
             ),
         ],
     )
 
 
-def materialize_companyworld_build_plan(plan: CompanyWorldBuildPlan, *, execute: bool = False) -> dict[str, Any]:
+def materialize_companyworld_build_plan(
+    plan: CompanyWorldBuildPlan,
+    *,
+    execute: bool = False,
+) -> dict[str, Any]:
     source = plan.generator_path.read_text(encoding="utf-8")
     generator_hash = hashlib.sha256(source.encode()).hexdigest()
+    calibration_payload: dict[str, Any] | None = None
+    if plan.calibration_spec is not None:
+        calibration_payload = {
+            "calibration_id": plan.calibration_spec.calibration_id,
+            "version": plan.calibration_spec.version,
+            "domain": plan.calibration_spec.domain,
+            "fingerprint": calibration_fingerprint(plan.calibration_spec),
+            "source_ids": [source.source_id for source in plan.calibration_spec.sources],
+            "distribution_target_ids": [
+                target.target_id for target in plan.calibration_spec.distribution_targets
+            ],
+            "dependency_target_ids": [
+                target.target_id for target in plan.calibration_spec.dependency_targets
+            ],
+            "procedure_ids": [
+                procedure.procedure_id for procedure in plan.calibration_spec.procedure_priors
+            ],
+        }
+
     builds: list[dict[str, Any]] = []
     for spec in plan.builds:
         patched = patched_generator_source(source, spec)
@@ -133,9 +208,16 @@ def materialize_companyworld_build_plan(plan: CompanyWorldBuildPlan, *, execute:
             "patched_generator_sha256": patched_hash,
             "executed": False,
         }
+        if calibration_payload is not None:
+            item["calibration_fingerprint"] = calibration_payload["fingerprint"]
         if execute:
             spec.output_root.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as handle:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                suffix=".py",
+                delete=False,
+                encoding="utf-8",
+            ) as handle:
                 handle.write(patched)
                 temp_path = Path(handle.name)
             try:
@@ -151,13 +233,19 @@ def materialize_companyworld_build_plan(plan: CompanyWorldBuildPlan, *, execute:
         "format": "veritas-companyworld-foundry-worlds-v1",
         "generator_path": str(plan.generator_path),
         "generator_sha256": generator_hash,
+        "calibration": calibration_payload,
         "builds": builds,
     }
     manifest["manifest_hash"] = stable_hash(manifest)
     return manifest
 
 
-def write_companyworld_world_manifest(plan: CompanyWorldBuildPlan, output: str | Path, *, execute: bool = False) -> dict[str, Any]:
+def write_companyworld_world_manifest(
+    plan: CompanyWorldBuildPlan,
+    output: str | Path,
+    *,
+    execute: bool = False,
+) -> dict[str, Any]:
     manifest = materialize_companyworld_build_plan(plan, execute=execute)
     target = Path(output)
     target.parent.mkdir(parents=True, exist_ok=True)
