@@ -2,7 +2,7 @@
 
 ## Version
 
-Current benchmark/runtime version: **0.6.0**.
+Current benchmark/runtime version: **0.7.0**.
 
 ## Implemented
 
@@ -25,10 +25,10 @@ Current benchmark/runtime version: **0.6.0**.
 - Trainer-product boundary for SFT, preference learning, RL and VOPSD with verifier thresholds, invariant gates, split isolation and trace provenance.
 - Trajectory recorder plus JSONL/Parquet export and failure labels.
 
-### Unified Operational Worlds v1
+### Unified Operational Worlds Production v1
 
 - One canonical `Veritas` product facade and capability catalog spanning Unified Operational Worlds, CompanyWorld, External Investigation, Selective Agency, Capability Foundry, Continuous Capability Observatory, Reality Calibration, and Verified Training Products.
-- Five first-class operational domains under one contract:
+- Five first-class operational domains under one runtime/verifier contract:
   - Financial / Spreadsheet
   - Enterprise Operations
   - DevOps / Incident Response
@@ -42,20 +42,38 @@ Current benchmark/runtime version: **0.6.0**.
 - Construction-time world integrity checks for action uniqueness, permitted systems, oracle action references, required/forbidden contradictions, evidence existence, parameter declarations, record IDs, and invariant IDs.
 - Oracle-safe action boundary: public action results do not expose forbidden-action status, hidden state changes, hidden side effects, or consequence severity; those remain in harness/verifier traces.
 - Shared seven-dimensional operational verifier: outcome, state, constraints, side effects, process, efficiency, and evidence.
-- Executable reference environments for:
-  - DCF spreadsheet formula repair and recalculation;
-  - CRM/ERP discount approval and authority control;
-  - Kubernetes/API incident recovery and blast-radius control;
-  - OSINT identity resolution and false-merge prevention;
-  - GIS projection/topology repair and source preservation.
-- Separate public-bundle/private-oracle packaging for the unified operational suite.
-- Dedicated `veritas` CLI for capability discovery, domain discovery, single-world builds, five-world suite builds, and persistent company builds while retaining the legacy `iworld` CLI.
-- CI configuration includes direct smoke paths for the unified CLI and company build.
-- README and unified-operational-world architecture documentation updated to the v0.6 product model.
+
+### Production-scale distribution
+
+The default `OperationalDistributionConfig` compiles **4,480 executable episodes**:
+
+- train: 512 per domain / 2,560 total;
+- IID test: 128 per domain / 640 total;
+- OOD: 128 per domain / 640 total;
+- adversarial: 128 per domain / 640 total;
+- 896 cases per domain across five domains.
+
+Production-distribution features implemented:
+
+- deterministic case generation from a versioned seed;
+- domain-specific state/data parameterization rather than prompt-only duplication;
+- multiple evaluator scenario-family labels per domain;
+- split-specific distractor, OOD and adversarial pressure;
+- tighter adversarial budgets and conflicting-context records;
+- `DifficultyVector` metadata in the evaluator package;
+- opaque public world/task/record identifiers rather than split/seed-bearing IDs;
+- deterministic hash-mixed public ordering rather than split-grouped output;
+- strict public/private packaging: split, generator seed, scenario-family label, surface profile, difficulty vector and oracle remain evaluator-only;
+- public and private distribution fingerprints;
+- exact count, uniqueness, split isolation, leakage and adversarial-integrity validation;
+- `veritas build-distribution` and `veritas validate-production-scale` CLI commands;
+- scale can be raised parametrically without changing the runtime contract.
+
+See `docs/operational-production-scale.md` for the exact production-scale contract.
 
 ## Regression coverage
 
-The test suite now covers, among other existing behaviors:
+The test suite covers, among other existing behaviors:
 
 - deterministic world/evidence generation;
 - public/canonical leakage boundaries;
@@ -75,29 +93,33 @@ The test suite now covers, among other existing behaviors:
 - cross-domain substrate mounting and event sequencing;
 - point-in-time state reconstruction and counterfactual fork behavior;
 - unified capability catalog membership;
-- unified CLI smoke paths in CI configuration.
+- production-distribution domain/split coverage;
+- deterministic production hashes and IDs;
+- procedural parameter diversity;
+- public split/seed/family/oracle leakage prevention;
+- adversarial conflict and pressure requirements;
+- unified CLI smoke paths.
 
-## CI status note
+## CI status
 
-The pull request's initial unified-world head passed the repository CI and Security workflows. Subsequent connector-authored commits do not automatically instantiate GitHub Actions runs in this integration, so the final persistent-substrate/entity-graph/CLI head does **not** have a fresh GitHub Actions result yet.
+The original concern that GitHub Actions was not running was a timing/observation issue rather than a disabled Actions configuration. GitHub created the pull-request CI and Security runs after a short event/indexing delay. The exact v0.6 final head subsequently completed both CI and Security successfully.
 
-The current final PR is mergeable at the Git level. Its reported commit failure is Vercel's external deployment rate limit (`Deployment rate limited — retry in 24 hours`), not a repository test result.
+The v0.7 production-scale changes add a required `Production-scale operational distribution` CI job. That job compiles and validates the full **4,480-case** default distribution, and it has completed successfully on the production-scale branch head. Python 3.12/3.13 tests, package build, unified-product smoke paths, frontend build, container-health checks and Security checks are also required before merge.
 
-A fresh human/GitHub-triggered `workflow_dispatch`, push, or eligible PR event should run the configured Python 3.12/3.13 tests, package build, legacy environment smoke, unified Veritas smoke, Next.js build, and container-health gates before merge.
+An external Vercel deployment status may still report account-level build-rate limiting. That is separate from the repository CI/security gates and does not indicate a Veritas application-test failure.
 
-## Remaining scale work
+## Remaining fidelity and infrastructure work
 
-The five domains are implemented as executable reference environments on the common substrate; they are **not yet production-scale task distributions**. The main remaining scale work is:
+The procedural benchmark/runtime distribution is production-scale in case volume, split management, reproducibility, adversarial pressure and CI validation. Remaining work is primarily **fidelity and deployment depth**, not the absence of a scale layer:
 
-- procedural train/IID/OOD/adversarial generators producing hundreds to thousands of tasks per operational domain;
-- deepen the current shared entity graph into a causal operational graph so the same customers, employees, suppliers, facilities, applications, assets, accounts, and parcels propagate consequences across domains;
-- domain-native artifact engines for real workbook files/formula DAGs, containerized infrastructure, enterprise database/application state, evidence corpora, and GIS artifacts;
-- long-horizon cross-domain task compiler over persistent histories rather than one reference episode per domain;
-- native domain verifier plugins for spreadsheet calculation graphs, infrastructure health, enterprise consistency, OSINT evidence entailment, and geospatial geometry/output files while retaining the shared score contract;
-- private benchmark split/oracle registry and commercial artifact storage;
+- deepen scenario-family semantics beyond the current parameterized base contracts;
+- deepen the shared entity graph into a causal operational graph so customers, employees, suppliers, facilities, applications, assets, accounts and parcels propagate consequences across domains;
+- domain-native artifact engines for real XLSX/formula DAG execution, containerized Kubernetes/Terraform infrastructure, enterprise database/application replicas, large evidence corpora and native vector/raster GIS artifacts;
+- long-horizon cross-domain task compilation over persistent multi-episode histories;
+- native verifier plugins for spreadsheet dependency graphs, infrastructure health, enterprise consistency, OSINT evidence entailment and geospatial output artifacts while retaining the shared score contract;
+- private benchmark registry and commercial oracle storage;
 - concrete trainer runners/adapters for SFT, preference learning, RL and VOPSD;
-- expert-trajectory generation policies, counterfactual execution and demonstration-set curation pipelines;
-- calibration-aware procedural generators and automated calibration report scoring against generated worlds;
-- larger adversarial transformation library and difficulty calibration;
+- calibration-aware procedural generators and automated calibration-report gates;
+- larger adversarial transformation library and empirical difficulty calibration;
 - production orchestration persistence and multi-process/distributed episode storage;
 - frontend benchmark/operator console for the unified operational suite.
