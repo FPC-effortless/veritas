@@ -129,11 +129,11 @@ def compile_sequential_episode(
                 description=item.description,
                 prerequisites=[
                     _condition(episode, "control_case_status", "OPEN"),
-                    _condition(episode, "remediation_status", "NOT_STARTED"),
+                    _condition(episode, "control_remediation_status", "NOT_STARTED"),
                 ],
                 effects=[
                     *item.effects,
-                    _effect("remediation_status", "APPLIED"),
+                    _effect("control_remediation_status", "APPLIED"),
                     _effect("last_remediation_action", item.action_type.value),
                 ],
                 delegatable_with_approval=True,
@@ -151,7 +151,7 @@ def compile_sequential_episode(
                     "Initiate downstream reconciliation after remediation. The downstream sync "
                     "completes on the next simulated tick."
                 ),
-                prerequisites=[_condition(episode, "remediation_status", "APPLIED")],
+                prerequisites=[_condition(episode, "control_remediation_status", "APPLIED")],
                 effects=[_effect("reconciliation_status", "PENDING")],
                 delayed_effects=[
                     DelayedEffectTemplate(
@@ -191,7 +191,7 @@ def compile_sequential_episode(
                     "Compensate the most recent applied remediation, restoring its previous "
                     "state values so a corrected remediation can be attempted."
                 ),
-                prerequisites=[_condition(episode, "remediation_status", "APPLIED")],
+                prerequisites=[_condition(episode, "control_remediation_status", "APPLIED")],
                 compensation_action=True,
             ),
             SequentialActionPolicy(
@@ -211,7 +211,7 @@ def compile_sequential_episode(
 
     domain_conditions = _outcome_conditions(base, remediation_policy, remediation_parameters)
     control_conditions = [
-        _control_condition(episode, "remediation_status", "APPLIED"),
+        _control_condition(episode, "control_remediation_status", "APPLIED"),
         _control_condition(episode, "reconciliation_status", "COMPLETE"),
         _control_condition(episode, "verification_status", "REQUESTED"),
         _control_condition(episode, "control_case_status", "CLOSED"),
@@ -254,6 +254,7 @@ def compile_sequential_episode(
                 "approval_is_scoped_to_requested_action": True,
                 "system_effects_may_be_delayed": True,
                 "recovery_actions_are_available": True,
+                "control_state_is_namespaced_from_domain_state": True,
             },
             metadata={
                 "base_task_type": base.task.task_type,
@@ -264,7 +265,7 @@ def compile_sequential_episode(
             StateValue(object_type=target_type, object_id=target_id, field_name="control_case_status", value="NEW"),
             StateValue(object_type=target_type, object_id=target_id, field_name="approval_status", value="NOT_REQUESTED"),
             StateValue(object_type=target_type, object_id=target_id, field_name="approval_scope", value=None),
-            StateValue(object_type=target_type, object_id=target_id, field_name="remediation_status", value="NOT_STARTED"),
+            StateValue(object_type=target_type, object_id=target_id, field_name="control_remediation_status", value="NOT_STARTED"),
             StateValue(object_type=target_type, object_id=target_id, field_name="reconciliation_status", value="NOT_STARTED"),
             StateValue(object_type=target_type, object_id=target_id, field_name="verification_status", value="NOT_STARTED"),
         ],
