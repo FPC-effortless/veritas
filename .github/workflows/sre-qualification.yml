@@ -1,0 +1,64 @@
+name: SRE Benchmark Qualification
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/qualification/**"
+      - "tools/build_sre_qualification_candidate.py"
+      - ".github/workflows/sre-qualification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sre-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  empirical-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Acquire real structured incidents and qualify candidate
+        run: |
+          python tools/build_sre_qualification_candidate.py \
+            --snapshot-dir results/sre-v1/sources \
+            --output results/sre-v1/qualification.json \
+            --early-updates 2 \
+            --random-seed 7
+
+      - name: Print qualification summary
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("results/sre-v1/qualification.json").read_text())
+          q = report["qualification"]
+          print(json.dumps({
+              "status": report["status"],
+              "candidate_id": q["candidate_id"],
+              "report_id": q["report_id"],
+              "panel_id": q["panel_id"],
+              "policy_means": q["policy_means"],
+              "failed_gates": [g["name"] for g in q["gates"] if not g["passed"]],
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload immutable candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v1-qualification
+          path: results/sre-v1
+          if-no-files-found: error
+          retention-days: 90
