@@ -60,22 +60,42 @@ def test_distribution_validation_checks_split_and_ood_invariants():
     assert report.decision_counts["answer"] > 0
 
 
-def test_agent_payload_excludes_split_seed_pairing_and_oracle_fields():
+def test_agent_payload_excludes_evaluator_labels_split_seed_pairing_and_oracle_fields():
     bundle = _bundle()
     payload = selective_agency_agent_payload(bundle)
     encoded = json.dumps(payload, sort_keys=True)
 
-    assert "preferred_decision" not in encoded
-    assert "acceptable_decisions" not in encoded
-    assert "action_consequences" not in encoded
-    assert "required_actions" not in encoded
-    assert "contrast_group" not in encoded
-    assert "generator_seed" not in encoded
-    assert all("split" not in task for task in payload["tasks"])
-    assert all("seed" not in task for task in payload["tasks"])
+    for private_field in (
+        "task_class",
+        "metadata",
+        "surface_profile",
+        "preferred_decision",
+        "acceptable_decisions",
+        "action_consequences",
+        "required_actions",
+        "contrast_group",
+        "scenario_family",
+        "variant",
+        "generator_seed",
+        "split",
+        "seed",
+    ):
+        assert private_field not in encoded
+
+    assert all(
+        set(task) == {
+            "task_id",
+            "prompt",
+            "objective",
+            "visible_state",
+            "available_actions",
+        }
+        for task in payload["tasks"]
+    )
 
     private = selective_agency_oracle_payload(bundle)
     assert private["generator_seed"] == bundle.generator_seed
+    assert private["items"][0]["task_class"]
     assert private["items"][0]["oracle"]["preferred_decision"]
 
 
@@ -196,7 +216,10 @@ def test_distribution_writer_keeps_public_and_private_files_separate(tmp_path):
 
     public_text = public_path.read_text(encoding="utf-8")
     oracle_text = oracle_path.read_text(encoding="utf-8")
+    assert "task_class" not in public_text
+    assert "surface_profile" not in public_text
     assert "preferred_decision" not in public_text
     assert "contrast_group" not in public_text
+    assert "task_class" in oracle_text
     assert "preferred_decision" in oracle_text
     assert "contrast_group" in oracle_text
