@@ -5,8 +5,14 @@ from pathlib import Path
 
 import typer
 
-from investigation_world.operational.deep_distribution import OperationalDistributionConfig
+from investigation_world.foundry.models import DistributionSplit
+from investigation_world.operational.deep_distribution import (
+    OperationalDistributionConfig,
+    compile_operational_distribution,
+)
 from investigation_world.operational.models import WorldDomain
+from investigation_world.operational.native_runtime import NativeOperationalRuntime
+from investigation_world.operational.native_validation import validate_native_artifact_distribution
 from investigation_world.veritas import Veritas
 
 app = typer.Typer(
@@ -166,7 +172,7 @@ def validate_production_scale_cmd(
     ood_per_domain: int = 128,
     adversarial_per_domain: int = 128,
 ) -> None:
-    """Compile and validate a production-scale deep-realism distribution without writing artifacts."""
+    """Compile and validate the production-scale native-ready operational distribution."""
     config = OperationalDistributionConfig(
         seed=seed,
         train_per_domain=train_per_domain,
@@ -179,6 +185,77 @@ def validate_production_scale_cmd(
     validation = veritas.validate_distribution(cases, config=config)
     typer.echo(json.dumps(validation, indent=2, default=str))
     if not validation["valid"]:
+        raise typer.Exit(1)
+
+
+@app.command("materialize-native")
+def materialize_native_cmd(
+    domain: WorldDomain,
+    seed: int = 42,
+    split: DistributionSplit = DistributionSplit.TRAIN,
+    case_index: int = 0,
+    output_dir: Path = Path("veritas_native_artifact"),
+) -> None:
+    """Materialize one generated case as a real native domain artifact.
+
+    This emits only the agent-visible artifact and descriptor. Evaluator oracle
+    state remains outside the materialized artifact boundary.
+    """
+    if case_index < 0:
+        raise typer.BadParameter("case-index must be non-negative")
+    count = case_index + 1
+    config = OperationalDistributionConfig(
+        seed=seed,
+        train_per_domain=count if split == DistributionSplit.TRAIN else 1,
+        iid_per_domain=count if split == DistributionSplit.IID_TEST else 1,
+        ood_per_domain=count if split == DistributionSplit.OOD else 1,
+        adversarial_per_domain=count if split == DistributionSplit.ADVERSARIAL else 1,
+    )
+    cases = compile_operational_distribution(config)
+    candidates = [
+        case
+        for case in cases
+        if case.episode.task.domain == domain and case.split == split
+    ]
+    if case_index >= len(candidates):
+        raise typer.BadParameter("case-index exceeds generated split size")
+    episode = candidates[case_index].episode
+    runtime = NativeOperationalRuntime(episode, artifact_root=output_dir)
+    artifact_path = runtime.materialize_artifact()
+    typer.echo(
+        json.dumps(
+            {
+                "domain": domain.value,
+                "split": split.value,
+                "task_id": episode.task.task_id,
+                "artifact": runtime.artifact_descriptor(),
+                "artifact_path": str(artifact_path),
+            },
+            indent=2,
+            default=str,
+        )
+    )
+
+
+@app.command("validate-native-fidelity")
+def validate_native_fidelity_cmd(
+    seed: int = 42,
+    cases_per_split: int = 8,
+) -> None:
+    """Evaluator-only native artifact release gate across all domain × split cells."""
+    if cases_per_split < 1:
+        raise typer.BadParameter("cases-per-split must be at least one")
+    config = OperationalDistributionConfig(
+        seed=seed,
+        train_per_domain=cases_per_split,
+        iid_per_domain=cases_per_split,
+        ood_per_domain=cases_per_split,
+        adversarial_per_domain=cases_per_split,
+    )
+    cases = compile_operational_distribution(config)
+    report = validate_native_artifact_distribution(cases, seed=seed)
+    typer.echo(report.model_dump_json(indent=2))
+    if not report.valid:
         raise typer.Exit(1)
 
 
