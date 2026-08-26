@@ -29,12 +29,19 @@ from investigation_world.qualification.sre import (
     compile_sre_candidate,
     execute_sre_policy_suite,
 )
+from investigation_world.qualification.sre_commercial import (
+    COMMERCIAL_SRE_SOURCE_REFERENCES,
+    build_commercial_sre_candidate,
+    execute_commercial_sre_policy_suite,
+    generate_commercial_sre_incidents,
+)
 from investigation_world.qualification.sre_sources import (
     STATUSPAGE_INCIDENT_ENDPOINTS,
     parse_statuspage_incidents,
 )
 
 __all__ = [
+    "COMMERCIAL_SRE_SOURCE_REFERENCES",
     "EvidenceItem",
     "EvidenceManifest",
     "PolicyClass",
@@ -51,9 +58,12 @@ __all__ = [
     "SREIncidentSource",
     "SREQualificationCase",
     "STATUSPAGE_INCIDENT_ENDPOINTS",
+    "build_commercial_sre_candidate",
     "compile_sre_candidate",
     "cross_split_near_duplicates",
+    "execute_commercial_sre_policy_suite",
     "execute_sre_policy_suite",
+    "generate_commercial_sre_incidents",
     "hamming64",
     "normalized_text",
     "normalized_tokens",
