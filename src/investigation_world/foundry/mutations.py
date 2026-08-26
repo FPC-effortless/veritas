@@ -78,11 +78,24 @@ def apply_mutation(
         task = payload.setdefault("task", {})
         constraints = task.setdefault("constraints", {})
         failures = constraints.setdefault("foundry_tool_failures", [])
-        failures.append({"system": params.get("system", "UNKNOWN"), "at_step": int(params.get("at_step", 0))})
+        failures.append(
+            {
+                "system": params.get("system", "UNKNOWN"),
+                "at_step": int(params.get("at_step", 0)),
+                "persistent": bool(params.get("persistent", False)),
+            }
+        )
     elif kind == MutationKind.PERMISSION_CHANGE:
         task = payload.setdefault("task", {})
         constraints = task.setdefault("constraints", {})
-        constraints["foundry_permission_change"] = params
+        change = dict(params)
+        existing = constraints.get("foundry_permission_change")
+        if existing is None:
+            constraints["foundry_permission_change"] = change
+        elif isinstance(existing, list):
+            existing.append(change)
+        else:
+            constraints["foundry_permission_change"] = [existing, change]
     else:
         raise ValueError(kind)
 
