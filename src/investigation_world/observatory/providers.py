@@ -5,6 +5,7 @@ import os
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,17 @@ def _join_endpoint(base_url: str, path: str) -> str:
     return f"{base}/{path.lstrip('/')}"
 
 
+def _validated_http_url(url: str) -> str:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("provider endpoint must use http or https")
+    if not parsed.netloc or parsed.hostname is None:
+        raise ValueError("provider endpoint must include a network host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("provider endpoint must not embed credentials in the URL")
+    return url
+
+
 def _json_post(
     url: str,
     payload: dict[str, Any],
@@ -38,14 +50,16 @@ def _json_post(
     headers: dict[str, str],
     timeout_s: float,
 ) -> tuple[dict[str, Any], float]:
+    endpoint = _validated_http_url(url)
     body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
-    request = urllib.request.Request(url, data=body, method="POST")
+    request = urllib.request.Request(endpoint, data=body, method="POST")
     request.add_header("Content-Type", "application/json")
     for key, value in headers.items():
         request.add_header(key, value)
     started = time.perf_counter()
     try:
-        with urllib.request.urlopen(request, timeout=timeout_s) as response:
+        # B310 is suppressed only after the URL is constrained above to http(s) with a host.
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:  # nosec B310
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         raw = exc.read().decode("utf-8", errors="replace")
