@@ -12,12 +12,17 @@ STATUSPAGE_INCIDENT_ENDPOINTS: dict[str, str] = {
     "cloudflare": "https://www.cloudflarestatus.com/api/v2/incidents.json",
     "datadog": "https://status.datadoghq.com/api/v2/incidents.json",
     "digitalocean": "https://status.digitalocean.com/api/v2/incidents.json",
-    # Fresh provider family for SRE v2 qualification. These providers were not used by the
-    # original SRE v1 private panel, so an evaluation restricted to this family does not reuse
-    # previously inspected incident labels.
+    # SRE v2 provider family.
     "openai": "https://status.openai.com/api/v2/incidents.json",
     "twilio": "https://status.twilio.com/api/v2/incidents.json",
     "vercel": "https://www.vercel-status.com/api/v2/incidents.json",
+    # Independent SRE v3 provider family. None of these providers appear in the v1 or v2
+    # qualification panels. Keep this family frozen before inspecting its private labels.
+    "circleci": "https://status.circleci.com/api/v2/incidents.json",
+    "discord": "https://discordstatus.com/api/v2/incidents.json",
+    "dropbox": "https://status.dropbox.com/api/v2/incidents.json",
+    "mongodb": "https://status.mongodb.com/api/v2/incidents.json",
+    "npm": "https://status.npmjs.org/api/v2/incidents.json",
 }
 
 
