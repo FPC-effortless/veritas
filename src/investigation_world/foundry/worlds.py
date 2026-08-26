@@ -233,9 +233,10 @@ def materialize_companyworld_build_plan(
         "format": "veritas-companyworld-foundry-worlds-v1",
         "generator_path": str(plan.generator_path),
         "generator_sha256": generator_hash,
-        "calibration": calibration_payload,
         "builds": builds,
     }
+    if calibration_payload is not None:
+        manifest["calibration"] = calibration_payload
     manifest["manifest_hash"] = stable_hash(manifest)
     return manifest
 
