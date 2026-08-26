@@ -83,6 +83,17 @@ jobs:
           test -s /tmp/tasks.json
           test -s /tmp/oracles.json
           test -s /tmp/search.sqlite
+      - name: Exercise unified Veritas operational product
+        run: |
+          veritas domains
+          veritas build-world financial_spreadsheet --seed 42 --output /tmp/finance_world.json --oracle-output /tmp/finance_oracle.json
+          veritas build-suite --seed 42 --output /tmp/operational_suite.json --oracle-output /tmp/operational_oracles.json
+          veritas build-company --organization-id ORG-CI-001 --seed 42 --output /tmp/veritas_company.json
+          test -s /tmp/finance_world.json
+          test -s /tmp/finance_oracle.json
+          test -s /tmp/operational_suite.json
+          test -s /tmp/operational_oracles.json
+          test -s /tmp/veritas_company.json
 
   frontend:
     name: Next.js build
