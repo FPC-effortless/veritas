@@ -58,16 +58,22 @@ def _effect(spec: InterventionSpec, suffix: str, value: float) -> InterventionEf
     )
 
 
-def _samples(model_id: str, values: list[float]) -> list[InterventionEffectSample]:
+def _samples(
+    model_id: str,
+    values: list[float],
+    *,
+    scenario_offset: int = 0,
+) -> list[InterventionEffectSample]:
     model = ModelSpec(provider="test", model_id=model_id, snapshot="v1")
     result: list[InterventionEffectSample] = []
     for index, value in enumerate(values):
-        spec = _spec(f"EP-{index}", 100 + index, 900 + index)
+        scenario_index = index + scenario_offset
+        spec = _spec(f"EP-{scenario_index}", 100 + scenario_index, 900 + scenario_index)
         result.append(
             InterventionEffectSample(
                 model=model,
                 intervention=spec,
-                effect=_effect(spec, f"{model_id}-{index}", value),
+                effect=_effect(spec, f"{model_id}-{scenario_index}", value),
             )
         )
     return result
@@ -88,9 +94,11 @@ def test_paired_intervention_effects_aggregate_across_scenario_seeds():
     assert aggregate.dimensions["evidence_support"].mean == pytest.approx(-0.3)
     assert aggregate.steps.mean == pytest.approx(1.0)
     assert aggregate.degraded_dimensions == ["evidence_support"]
+    assert aggregate.scenario_pairs == [("EP-0", 100), ("EP-1", 101)]
+    assert len(aggregate.sample_effects) == 2
 
 
-def test_model_interaction_is_difference_of_mean_paired_effects():
+def test_model_interaction_is_paired_difference_in_differences():
     first = aggregate_intervention_effects(_samples("model-a", [-0.2, -0.4]))
     second = aggregate_intervention_effects(_samples("model-b", [-0.1, -0.1]))
 
@@ -99,8 +107,20 @@ def test_model_interaction_is_difference_of_mean_paired_effects():
     assert interaction.reward.first_effect == pytest.approx(-0.3)
     assert interaction.reward.second_effect == pytest.approx(-0.1)
     assert interaction.reward.difference == pytest.approx(0.2)
+    assert interaction.reward.n == 2
     assert interaction.dimensions["evidence_support"].difference == pytest.approx(0.2)
-    assert "not longitudinal model drift" in interaction.interpretation
+    assert interaction.scenario_pairs == [("EP-0", 100), ("EP-1", 101)]
+    assert "paired scenario-level difference-in-differences" in interaction.interpretation
+
+
+def test_model_interaction_rejects_different_scenario_panels():
+    first = aggregate_intervention_effects(_samples("model-a", [-0.2, -0.4]))
+    second = aggregate_intervention_effects(
+        _samples("model-b", [-0.1, -0.1], scenario_offset=10)
+    )
+
+    with pytest.raises(ValueError, match="identical scenario/seed panels"):
+        compare_model_intervention_effects(first, second)
 
 
 def test_intervention_aggregation_rejects_duplicate_scenario_seed_pair():
