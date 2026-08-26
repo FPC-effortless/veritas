@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 
 from investigation_world.qualification.models import QualificationThresholds
-from investigation_world.qualification.projectworld import (
-    build_projectworld_v2_qualification_candidate,
-    execute_projectworld_v2_policy_suite,
+from investigation_world.qualification.projectworld_calibration import (
+    build_calibrated_projectworld_v2_candidate,
+    execute_calibrated_projectworld_v2_policy_suite,
 )
 from investigation_world.qualification.protocol import private_release_manifest, qualify_candidate
 
@@ -21,10 +21,10 @@ def main() -> None:
     parser.add_argument("--random-seed", type=int, default=7)
     args = parser.parse_args()
 
-    candidate, specs = build_projectworld_v2_qualification_candidate(
+    candidate, specs = build_calibrated_projectworld_v2_candidate(
         seeds_per_type=args.seeds_per_type
     )
-    evaluations = execute_projectworld_v2_policy_suite(
+    evaluations = execute_calibrated_projectworld_v2_policy_suite(
         candidate,
         specs,
         random_seed=args.random_seed,
@@ -46,6 +46,8 @@ def main() -> None:
         "candidate_id": candidate.candidate_id,
         "report_id": report.report_id,
         "scenarios": len(candidate.scenarios),
+        "private_test": sum(item.split.value == "private_test" for item in candidate.scenarios),
+        "near_duplicate_components": candidate.metadata.get("near_duplicate_components"),
         "failed_gates": [gate.name for gate in report.gates if not gate.passed],
         "policy_means": {key.value: value for key, value in report.policy_means.items()},
     }, indent=2, sort_keys=True))
