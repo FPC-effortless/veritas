@@ -16,6 +16,16 @@ from investigation_world.observatory.analysis import (
     compare_runs,
     validate_cell_trace_alignment,
 )
+from investigation_world.observatory.companyworld import (
+    CompanyWorldBundleRepository,
+    CompanyWorldObservatoryRuntimeFactory,
+    CompanyWorldRuntimeContext,
+)
+from investigation_world.observatory.cycles import (
+    ObservationCycleReport,
+    ObservationCycleRunner,
+    load_cycle_reports,
+)
 from investigation_world.observatory.execution import (
     CallableHarnessAdapter,
     CallableModelProvider,
@@ -36,6 +46,15 @@ from investigation_world.observatory.execution import (
     RuntimeFactory,
     RuntimeRegistry,
 )
+from investigation_world.observatory.harnesses import (
+    CompanyWorldAgentHarnessConfig,
+    CompanyWorldJSONAgentHarness,
+)
+from investigation_world.observatory.live import (
+    CompanyWorldLiveRunConfig,
+    run_companyworld_observation,
+    utc_snapshot,
+)
 from investigation_world.observatory.matrix import experiment_from_matrix, materialize_cells
 from investigation_world.observatory.models import (
     BehavioralFingerprint,
@@ -55,6 +74,13 @@ from investigation_world.observatory.models import (
     VerifierSpec,
     WorldKind,
     WorldRef,
+)
+from investigation_world.observatory.providers import (
+    HuggingFaceInferenceProvider,
+    OpenAICompatibleChatProvider,
+    OpenAIResponsesProvider,
+    ProviderHTTPError,
+    SubprocessModelProvider,
 )
 from investigation_world.observatory.scheduler import (
     ExecutionJob,
@@ -78,6 +104,12 @@ __all__ = [
     "CapabilityProfile",
     "CapabilityRun",
     "CellMatrixSpec",
+    "CompanyWorldAgentHarnessConfig",
+    "CompanyWorldBundleRepository",
+    "CompanyWorldJSONAgentHarness",
+    "CompanyWorldLiveRunConfig",
+    "CompanyWorldObservatoryRuntimeFactory",
+    "CompanyWorldRuntimeContext",
     "DimensionDelta",
     "ExecutionJob",
     "ExecutionRegistry",
@@ -87,6 +119,7 @@ __all__ = [
     "HarnessRegistry",
     "HarnessRunResult",
     "HarnessSpec",
+    "HuggingFaceInferenceProvider",
     "JobOutcome",
     "JobStatus",
     "LocalObservatoryScheduler",
@@ -96,9 +129,14 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "ModelSpec",
+    "ObservationCycleReport",
+    "ObservationCycleRunner",
     "ObservatoryExecutionEngine",
     "ObservatoryStore",
+    "OpenAICompatibleChatProvider",
+    "OpenAIResponsesProvider",
     "ProviderCallRecord",
+    "ProviderHTTPError",
     "ProviderRegistry",
     "ProviderSession",
     "ProviderSessionSummary",
@@ -110,6 +148,7 @@ __all__ = [
     "ScenarioRef",
     "SchedulerPolicy",
     "SchedulerReport",
+    "SubprocessModelProvider",
     "VerifierSpec",
     "WorldKind",
     "WorldRef",
@@ -122,9 +161,12 @@ __all__ = [
     "compare_aggregates",
     "compare_runs",
     "experiment_from_matrix",
+    "load_cycle_reports",
     "materialize_cells",
     "materialize_jobs",
+    "run_companyworld_observation",
     "snapshot_key",
     "snapshot_payload",
+    "utc_snapshot",
     "validate_cell_trace_alignment",
 ]
