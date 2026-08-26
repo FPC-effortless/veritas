@@ -52,10 +52,35 @@ from investigation_world.companyworld.runtime import (
     CompanyWorldRecordIndex,
     CompanyWorldRuntime,
 )
+from investigation_world.companyworld.sequential_distribution import (
+    SEQUENTIAL_DISTRIBUTION_VERSION,
+    SequentialCompanyWorldConfig,
+    compile_sequential_distribution,
+    compile_sequential_episode,
+)
+from investigation_world.companyworld.sequential_models import (
+    DelayedEffectTemplate,
+    ScheduledStateEffect,
+    SequentialActionExecution,
+    SequentialActionPolicy,
+    SequentialCompanyWorldEpisode,
+    SequentialCompanyWorldOracle,
+    SequentialCompanyWorldTask,
+    SequentialCompanyWorldVerificationResult,
+    SequentialSystemEvent,
+    StateCondition,
+)
+from investigation_world.companyworld.sequential_reference import (
+    SequentialPlanStep,
+    solve_sequential_public,
+)
+from investigation_world.companyworld.sequential_runtime import SequentialCompanyWorldRuntime
+from investigation_world.companyworld.sequential_verifier import verify_sequential_companyworld
 from investigation_world.companyworld.verifier import verify_companyworld
 
 __all__ = [
     "INTERACTIVE_DISTRIBUTION_VERSION",
+    "SEQUENTIAL_DISTRIBUTION_VERSION",
     "SYSTEM_TOOL_COSTS",
     "ActionEffectTemplate",
     "ActionExecution",
@@ -71,6 +96,7 @@ __all__ = [
     "CompanyWorldTaskDistributionConfig",
     "CompanyWorldValidationReport",
     "CompanyWorldVerificationResult",
+    "DelayedEffectTemplate",
     "InteractiveCompanyWorldConfig",
     "InteractiveCompanyWorldEpisode",
     "InteractiveCompanyWorldOracle",
@@ -81,21 +107,37 @@ __all__ = [
     "OperationalAction",
     "OperationalActionType",
     "OperationalFactTarget",
+    "ScheduledStateEffect",
+    "SequentialActionExecution",
+    "SequentialActionPolicy",
+    "SequentialCompanyWorldConfig",
+    "SequentialCompanyWorldEpisode",
+    "SequentialCompanyWorldOracle",
+    "SequentialCompanyWorldRuntime",
+    "SequentialCompanyWorldTask",
+    "SequentialCompanyWorldVerificationResult",
+    "SequentialPlanStep",
+    "SequentialSystemEvent",
+    "StateCondition",
     "StateValue",
     "compile_companyworld",
     "compile_companyworld_distribution",
     "compile_expanded_episodes",
     "compile_interactive_distribution",
     "compile_interactive_episode",
+    "compile_sequential_distribution",
+    "compile_sequential_episode",
     "compile_task_distribution",
     "oracle_bundle_payload",
     "public_bundle_payload",
     "public_distribution_payload",
     "solve_interactive_public",
+    "solve_sequential_public",
     "split_episode_ids",
     "stratified_split_episode_ids",
     "verify_companyworld",
     "verify_interactive_companyworld",
+    "verify_sequential_companyworld",
     "write_companyworld_bundle",
     "write_companyworld_distribution_bundle",
 ]

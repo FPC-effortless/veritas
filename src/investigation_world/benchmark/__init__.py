@@ -21,6 +21,10 @@ from investigation_world.benchmark.policies import (
     PublicEvidenceReferencePolicy,
     StuffingPolicy,
 )
+from investigation_world.benchmark.sequential_companyworld import (
+    validate_sequential_companyworld,
+    write_sequential_companyworld_report,
+)
 
 __all__ = [
     "DEFAULT_PUBLIC_POLICIES",
@@ -36,6 +40,8 @@ __all__ = [
     "StuffingPolicy",
     "validate_companyworld_benchmark",
     "validate_interactive_companyworld",
+    "validate_sequential_companyworld",
     "write_companyworld_benchmark_report",
     "write_interactive_companyworld_report",
+    "write_sequential_companyworld_report",
 ]

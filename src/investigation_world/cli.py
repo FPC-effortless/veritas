@@ -290,5 +290,81 @@ def benchmark_companyworld_interactive_cmd(
     raise typer.Exit(0 if report["passed"] else 1)
 
 
+@app.command("compile-companyworld-sequential")
+def compile_companyworld_sequential_cmd(
+    dataset: Path,
+    output: Path = Path("companyworld_sequential.json"),
+    oracle_output: Path | None = None,
+    per_family: int = 200,
+):
+    """Compile long-horizon CompanyWorld control episodes with approvals and delayed effects."""
+    from investigation_world.companyworld import (
+        SequentialCompanyWorldConfig,
+        compile_sequential_distribution,
+    )
+
+    episodes = compile_sequential_distribution(
+        dataset,
+        config=SequentialCompanyWorldConfig(per_family=per_family),
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(
+            {
+                "episodes": [episode.public_payload() for episode in episodes],
+                "count": len(episodes),
+            },
+            indent=2,
+            default=str,
+        )
+    )
+    if oracle_output is not None:
+        oracle_output.parent.mkdir(parents=True, exist_ok=True)
+        oracle_output.write_text(
+            json.dumps(
+                {
+                    "oracles": [episode.oracle.model_dump(mode="json") for episode in episodes],
+                    "count": len(episodes),
+                },
+                indent=2,
+                default=str,
+            )
+        )
+    typer.echo(json.dumps({"episodes": len(episodes), "output": str(output)}, indent=2))
+
+
+@app.command("benchmark-companyworld-sequential")
+def benchmark_companyworld_sequential_cmd(
+    dataset: Path,
+    output: Path = Path("companyworld_sequential_benchmark.json"),
+    per_family: int = 200,
+    skip_determinism: bool = False,
+):
+    """Validate long-horizon control, authority handoffs, recovery, and anti-shortcut invariants."""
+    from investigation_world.benchmark import write_sequential_companyworld_report
+
+    report = write_sequential_companyworld_report(
+        dataset,
+        output,
+        per_family=per_family,
+        verify_determinism=not skip_determinism,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "passed": report["passed"],
+                "episodes": report["episodes"],
+                "task_families": report["task_families"],
+                "failed_invariants": [
+                    name for name, passed in report["invariants"].items() if not passed
+                ],
+                "report": str(output),
+            },
+            indent=2,
+        )
+    )
+    raise typer.Exit(0 if report["passed"] else 1)
+
+
 if __name__ == "__main__":
     app()

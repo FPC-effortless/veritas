@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from investigation_world.benchmark.policies import PublicEvidenceReferencePolicy
 from investigation_world.companyworld.interactive_models import (
     OperationalAction,
     OperationalActionType,
@@ -50,6 +49,10 @@ def solve_interactive_public(
     payload: dict[str, Any],
 ) -> tuple[InvestigationResult, OperationalAction]:
     """Solve an interactive episode using only its public evidence, procedures, and actor role."""
+    # Keep this import lazy. Importing benchmark.policies while companyworld.__init__ is still
+    # initializing causes benchmark.__init__ to import companyworld again from a built wheel.
+    from investigation_world.benchmark.policies import PublicEvidenceReferencePolicy
+
     investigation_payload = payload["investigation"]
     result = PublicEvidenceReferencePolicy()(investigation_payload)
     facts = _claims(result)
