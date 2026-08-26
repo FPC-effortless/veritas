@@ -76,14 +76,14 @@ def assess_trace(
     *,
     min_verifier_score: float = 0.8,
     require_success: bool = True,
+    success_score_threshold: float | None = None,
 ) -> ExpertiseAssessment:
     verifier_score = float(trace.verifier_components.get("outcome", trace.total_reward))
     explicit_terminal = trace.metadata.get("terminal_success")
     if explicit_terminal is None:
-        terminal_success = (
-            trace.termination_reason in {"success", "verified", "completed"}
-            or verifier_score >= min_verifier_score
-        )
+        terminal_success = trace.termination_reason in {"success", "verified", "completed"}
+        if success_score_threshold is not None:
+            terminal_success = terminal_success or verifier_score >= success_score_threshold
     else:
         terminal_success = bool(explicit_terminal)
     invariant_pass = bool(trace.metadata.get("invariant_pass", True))
@@ -112,7 +112,12 @@ def curate_verified_trace(
     training_uses: list[TrainingUse] | None = None,
     annotations: dict[str, Any] | None = None,
 ) -> VerifiedTrajectory:
-    assessment = assess_trace(trace, min_verifier_score=0.0, require_success=False)
+    assessment = assess_trace(
+        trace,
+        min_verifier_score=0.8,
+        require_success=False,
+        success_score_threshold=None,
+    )
     uses = training_uses or [TrainingUse.EVAL_ONLY]
     payload = {
         "trace_id": trace.trace_id,
@@ -147,6 +152,7 @@ def qualify_expert_trace(
         trace,
         min_verifier_score=min_verifier_score,
         require_success=require_success,
+        success_score_threshold=min_verifier_score,
     )
     if assessment.rationale:
         raise ValueError("trace is not expert-qualified: " + "; ".join(assessment.rationale))
