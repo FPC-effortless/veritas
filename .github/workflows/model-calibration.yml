@@ -1,9 +1,7 @@
 name: Model Calibration
 
 on:
-  push:
-    branches:
-      - feature/evidence-currency
+  pull_request:
     paths:
       - "src/investigation_world/calibration/**"
       - "tools/run_model_calibration.py"
