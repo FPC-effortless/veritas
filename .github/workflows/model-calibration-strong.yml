@@ -1,0 +1,79 @@
+name: Model Calibration Strong
+
+on:
+  push:
+    branches:
+      - feature/commercial-readiness
+    paths:
+      - "tools/run_model_calibration.py"
+      - ".github/workflows/model-calibration-strong.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-calibration-strong-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  calibrate:
+    name: ${{ matrix.slug }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - slug: qwen2.5-3b
+            model: Qwen/Qwen2.5-3B-Instruct
+            dtype: bfloat16
+            extra_args: ""
+          - slug: phi3.5-mini
+            model: microsoft/Phi-3.5-mini-instruct
+            dtype: bfloat16
+            extra_args: "--trust-remote-code"
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-${{ matrix.slug }}-v1
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Install CPU model runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
+          python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" sentencepiece
+
+      - name: Run calibration
+        run: |
+          python tools/run_model_calibration.py \
+            --model "${{ matrix.model }}" \
+            --output "calibration-results/${{ matrix.slug }}.json" \
+            --max-new-tokens 256 \
+            --max-input-tokens 7168 \
+            --dtype "${{ matrix.dtype }}" \
+            ${{ matrix.extra_args }}
+
+      - name: Upload calibration result
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-${{ matrix.slug }}
+          path: calibration-results/${{ matrix.slug }}.json
+          if-no-files-found: error
+          retention-days: 30
