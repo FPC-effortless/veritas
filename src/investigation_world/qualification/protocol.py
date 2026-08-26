@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from investigation_world.foundry.models import stable_hash
 from investigation_world.qualification.models import (
@@ -57,11 +57,15 @@ def qualify_candidate(
 ) -> QualificationReport:
     cfg = thresholds or QualificationThresholds()
     policies = _policy_map(evaluations)
-    private_ids = sorted(
-        scenario.scenario_id
-        for scenario in candidate.scenarios
-        if scenario.split == QualificationSplit.PRIVATE_TEST
+    private_scenarios = sorted(
+        (
+            scenario
+            for scenario in candidate.scenarios
+            if scenario.split == QualificationSplit.PRIVATE_TEST
+        ),
+        key=lambda scenario: scenario.scenario_id,
     )
+    private_ids = [scenario.scenario_id for scenario in private_scenarios]
     if not private_ids:
         raise ValueError("qualification requires a private-test panel")
     private_set = set(private_ids)
@@ -186,12 +190,44 @@ def qualify_candidate(
         _gate("random_ceiling", random <= random_limit, random, random_required, random_detail),
         _gate("exploit_resistance", exploit <= cfg.maximum_exploit_reward, exploit, cfg.maximum_exploit_reward),
     ]
+
+    if cfg.private_stratum_metadata_key:
+        stratum_key = cfg.private_stratum_metadata_key
+        stratum_counts = Counter(
+            str(scenario.metadata.get(stratum_key, "<missing>"))
+            for scenario in private_scenarios
+        )
+        minimum_count = min(stratum_counts.values()) if stratum_counts else 0
+        maximum_fraction = max(stratum_counts.values()) / len(private_scenarios) if stratum_counts else 1.0
+        stratum_passed = (
+            "<missing>" not in stratum_counts
+            and len(stratum_counts) >= cfg.minimum_private_strata
+            and minimum_count >= cfg.minimum_private_scenarios_per_stratum
+            and maximum_fraction <= cfg.maximum_private_stratum_fraction
+        )
+        gates.append(
+            _gate(
+                "private_stratum_coverage",
+                stratum_passed,
+                {
+                    "metadata_key": stratum_key,
+                    "counts": dict(sorted(stratum_counts.items())),
+                    "minimum_count": minimum_count,
+                    "maximum_fraction": maximum_fraction,
+                },
+                {
+                    "minimum_strata": cfg.minimum_private_strata,
+                    "minimum_scenarios_per_stratum": cfg.minimum_private_scenarios_per_stratum,
+                    "maximum_stratum_fraction": cfg.maximum_private_stratum_fraction,
+                    "missing_metadata_allowed": False,
+                },
+                "private-test label/stratum support must be broad enough to prevent majority-class qualification artifacts",
+            )
+        )
+
     panel_payload = [
         [scenario.scenario_id, scenario.source_group_id, scenario.public_digest]
-        for scenario in sorted(
-            (item for item in candidate.scenarios if item.split == QualificationSplit.PRIVATE_TEST),
-            key=lambda item: item.scenario_id,
-        )
+        for scenario in private_scenarios
     ]
     panel_id = f"QPANEL-{stable_hash(panel_payload)[:24].upper()}"
     report_payload = [
