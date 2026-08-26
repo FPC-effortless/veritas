@@ -14,6 +14,7 @@ from investigation_world.operational.models import (
     PublicActionSpec,
     VerificationBreakdown,
 )
+from investigation_world.operational.substrate import PersistentOperationalSubstrate
 from investigation_world.operational.verifier import verify_operational_episode
 
 
@@ -37,7 +38,13 @@ class OperationalRecordIndex:
     def get(self, record_id: str) -> OperationalRecord | None:
         return self._records.get(record_id)
 
-    def search(self, query: str, *, system: str | None = None, limit: int = 10) -> list[OperationalRecord]:
+    def search(
+        self,
+        query: str,
+        *,
+        system: str | None = None,
+        limit: int = 10,
+    ) -> list[OperationalRecord]:
         terms = [term.casefold() for term in query.split() if term.strip()]
         if not terms:
             return []
@@ -56,10 +63,20 @@ class OperationalRecordIndex:
 class OperationalRuntime:
     """Capability-neutral executable runtime used by every Veritas operational world."""
 
-    def __init__(self, episode: OperationalEpisode):
+    def __init__(
+        self,
+        episode: OperationalEpisode,
+        *,
+        substrate: PersistentOperationalSubstrate | None = None,
+    ):
         self.episode = episode
         self.index = OperationalRecordIndex(episode.records)
-        self.state = dict(episode.oracle.initial_state)
+        self.substrate = substrate
+        if substrate is not None:
+            substrate.mount_episode(episode)
+            self.state = substrate.state
+        else:
+            self.state = dict(episode.oracle.initial_state)
         self.events: list[ActionEvent] = []
         self.budget = InvestigationBudget(
             total_cost=episode.oracle.max_cost,
@@ -101,12 +118,18 @@ class OperationalRuntime:
 
     def state_snapshot(self) -> dict[str, Any]:
         """Harness-visible state snapshot; callers decide whether to expose it to an agent."""
+        if self.substrate is not None:
+            return self.substrate.state
         return dict(self.state)
 
     def budget_snapshot(self) -> dict[str, Any]:
         return self.budget.model_dump()
 
-    def _matching_effect(self, action: PublicActionSpec, parameters: dict[str, Any]) -> HiddenActionEffect | None:
+    def _matching_effect(
+        self,
+        action: PublicActionSpec,
+        parameters: dict[str, Any],
+    ) -> HiddenActionEffect | None:
         for effect in self.episode.oracle.action_effects:
             if effect.action_name != action.name:
                 continue
@@ -134,6 +157,14 @@ class OperationalRuntime:
             side_effects = list(effect.emitted_side_effects)
             forbidden = forbidden or effect.forbidden
             severity = effect.consequence_severity
+        if self.substrate is not None:
+            self.substrate.apply_changes(
+                world_id=self.episode.world_id,
+                domain=self.episode.task.domain,
+                action_name=action.name,
+                changes=state_changes,
+                side_effects=side_effects,
+            )
         event = ActionEvent(
             sequence=len(self.events) + 1,
             action_name=action.name,
@@ -159,9 +190,10 @@ class OperationalRuntime:
 
     def submit(self, submission: EpisodeSubmission) -> VerificationBreakdown:
         self._ensure_open()
+        current_state = self.substrate.state if self.substrate is not None else self.state
         result = verify_operational_episode(
             oracle=self.episode.oracle,
-            state=self.state,
+            state=current_state,
             events=self.events,
             submission=submission,
             tool_calls=self.budget.calls,
