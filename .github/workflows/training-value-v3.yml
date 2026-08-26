@@ -1,0 +1,126 @@
+name: Training Value v3
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/companyworld/verifier.py"
+      - "src/investigation_world/training_value/**"
+      - "tools/run_training_value_v3.py"
+      - ".github/workflows/training-value-v3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: training-value-v3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hardened-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache Qwen model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v3-v1
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Install CPU training runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
+          python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" "peft>=0.13,<1" sentencepiece
+
+      - name: Re-test prior headline configuration against hardened verifier
+        run: |
+          python tools/run_training_value_v3.py \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --training-seed 7 \
+            --output training-results/qwen2.5-0.5b-hardened-smoke.json \
+            --train-examples 12 \
+            --heldout-examples 12 \
+            --epochs 3 \
+            --learning-rate 0.0005 \
+            --max-length 1536 \
+            --max-new-tokens 192
+
+      - name: Upload hardened smoke report
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-value-v3-hardened-smoke
+          path: training-results/qwen2.5-0.5b-hardened-smoke.json
+          if-no-files-found: error
+          retention-days: 30
+
+  replicated-transfer:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        training_seed: [7, 17, 29]
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache Qwen model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v3-v1
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Install CPU training runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
+          python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" "peft>=0.13,<1" sentencepiece
+
+      - name: Run replicated hardened transfer experiment
+        run: |
+          python tools/run_training_value_v3.py \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --training-seed ${{ matrix.training_seed }} \
+            --output training-results/qwen2.5-0.5b-seed-${{ matrix.training_seed }}.json \
+            --train-examples 24 \
+            --heldout-examples 100 \
+            --epochs 3 \
+            --learning-rate 0.0005 \
+            --max-length 1536 \
+            --max-new-tokens 192
+
+      - name: Upload replicated transfer report
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-value-v3-seed-${{ matrix.training_seed }}
+          path: training-results/qwen2.5-0.5b-seed-${{ matrix.training_seed }}.json
+          if-no-files-found: error
+          retention-days: 30
