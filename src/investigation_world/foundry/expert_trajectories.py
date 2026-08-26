@@ -73,8 +73,15 @@ def assess_trace(
     min_verifier_score: float = 0.8,
     require_success: bool = True,
 ) -> ExpertiseAssessment:
-    verifier_score = max(trace.verifier_components.values(), default=trace.total_reward)
-    terminal_success = trace.termination_reason in {"success", "verified", "completed"} or trace.total_reward >= min_verifier_score
+    verifier_score = float(trace.verifier_components.get("outcome", trace.total_reward))
+    explicit_terminal = trace.metadata.get("terminal_success")
+    if explicit_terminal is None:
+        terminal_success = (
+            trace.termination_reason in {"success", "verified", "completed"}
+            or verifier_score >= min_verifier_score
+        )
+    else:
+        terminal_success = bool(explicit_terminal)
     invariant_pass = bool(trace.metadata.get("invariant_pass", True))
     rationale: list[str] = []
     if verifier_score < min_verifier_score:
@@ -103,7 +110,11 @@ def qualify_expert_trace(
     training_uses: list[TrainingUse] | None = None,
     annotations: dict[str, Any] | None = None,
 ) -> ExpertTrajectory:
-    assessment = assess_trace(trace, min_verifier_score=min_verifier_score, require_success=require_success)
+    assessment = assess_trace(
+        trace,
+        min_verifier_score=min_verifier_score,
+        require_success=require_success,
+    )
     if assessment.rationale:
         raise ValueError("trace is not expert-qualified: " + "; ".join(assessment.rationale))
     uses = training_uses or [TrainingUse.SFT, TrainingUse.RL, TrainingUse.VOPSD]
@@ -127,7 +138,12 @@ def qualify_expert_trace(
     )
 
 
-def make_preference_pair(chosen: ExpertTrajectory, rejected: ExpertTrajectory, *, reason: str) -> PreferencePair:
+def make_preference_pair(
+    chosen: ExpertTrajectory,
+    rejected: ExpertTrajectory,
+    *,
+    reason: str,
+) -> PreferencePair:
     if chosen.task_id != rejected.task_id:
         raise ValueError("preference trajectories must come from the same task")
     margin = chosen.assessment.verifier_score - rejected.assessment.verifier_score
