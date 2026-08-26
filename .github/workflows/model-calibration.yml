@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: model-calibration-${{ github.ref }}-${{ matrix.slug }}
+  group: model-calibration-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
