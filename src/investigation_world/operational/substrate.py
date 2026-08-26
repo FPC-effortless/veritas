@@ -72,7 +72,12 @@ class PersistentOperationalSubstrate:
 
     def mount_episode(self, episode: OperationalEpisode) -> None:
         """Mount one domain world without resetting already-persistent state."""
-        if episode.world_id in self._episodes:
+        existing_episode = self._episodes.get(episode.world_id)
+        if existing_episode is not None:
+            if existing_episode != episode:
+                raise ValueError(
+                    f"world ID {episode.world_id} is already mounted with different content"
+                )
             return
         collisions = {
             key: (self._state[key], value)
@@ -114,17 +119,16 @@ class PersistentOperationalSubstrate:
             raise KeyError(f"world not mounted: {world_id}") from exc
 
     def records(self, *, domain: WorldDomain | None = None) -> list[OperationalRecord]:
-        records = list(self._records.values())
         if domain is None:
-            return sorted(records, key=lambda record: record.record_id)
-        systems = {
-            system
+            return sorted(self._records.values(), key=lambda record: record.record_id)
+        record_ids = {
+            record.record_id
             for episode in self._episodes.values()
             if episode.task.domain == domain
-            for system in episode.task.permitted_systems
+            for record in episode.records
         }
         return sorted(
-            [record for record in records if record.system in systems],
+            [self._records[record_id] for record_id in record_ids],
             key=lambda record: record.record_id,
         )
 
@@ -166,8 +170,13 @@ class PersistentOperationalSubstrate:
         evidence_ids: list[str] | None = None,
         side_effects: list[str] | None = None,
     ) -> OperationalStateEvent | None:
-        if world_id not in self._episodes:
+        episode = self._episodes.get(world_id)
+        if episode is None:
             raise ValueError(f"world not mounted: {world_id}")
+        if episode.task.domain != domain:
+            raise ValueError(
+                f"domain mismatch for {world_id}: expected {episode.task.domain.value}, got {domain.value}"
+            )
         if not changes and not side_effects:
             return None
         return self._append_event(
