@@ -130,7 +130,7 @@ def test_rework_consumes_real_resources_and_cannot_start_without_them():
     assert issue.rework_started_day is None
 
 
-def test_role_scoped_observation_does_not_expose_unrelated_procurement_by_default():
+def test_role_scoped_observation_hides_procurement_unrelated_to_visible_work():
     world = _world(ProjectType.DATA_CENTER)
     supplier = next(item for item in world.spec.suppliers if item.resource_id == "generator_sets")
     world.step(
@@ -142,10 +142,12 @@ def test_role_scoped_observation_does_not_expose_unrelated_procurement_by_defaul
         ),
     )
 
-    designer = world.observe("designer")
+    # The design lead intentionally sees builder work in the stakeholder graph. The authority role
+    # does not, so generator procurement is genuinely outside its role-scoped operational view.
+    authority = world.observe("authority")
     procurement = world.observe("procurement")
 
-    assert designer.procurement_orders == []
+    assert authority.procurement_orders == []
     assert len(procurement.procurement_orders) == 1
 
 
