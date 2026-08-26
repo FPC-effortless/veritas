@@ -89,11 +89,13 @@ jobs:
           veritas domains
           veritas build-world financial_spreadsheet --seed 42 --output /tmp/finance_world.json --oracle-output /tmp/finance_oracle.json
           veritas build-suite --seed 42 --output /tmp/operational_suite.json --oracle-output /tmp/operational_oracles.json
+          veritas materialize-native financial_spreadsheet --seed 42 --output-dir /tmp/native_finance
           veritas build-company --organization-id ORG-CI-001 --seed 42 --output /tmp/veritas_company.json
           test -s /tmp/finance_world.json
           test -s /tmp/finance_oracle.json
           test -s /tmp/operational_suite.json
           test -s /tmp/operational_oracles.json
+          test -s /tmp/native_finance/financial_model.xlsx
           test -s /tmp/veritas_company.json
 
   operational-production-scale:
@@ -112,6 +114,23 @@ jobs:
           python -m pip install -e ".[test]"
       - name: Compile and validate 4,480 executable operational episodes
         run: veritas validate-production-scale --seed 42
+
+  native-artifact-fidelity:
+    name: Native artifact fidelity
+    runs-on: ubuntu-latest
+    needs: python-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Materialize and verify all domain × split native artifact cells
+        run: veritas validate-native-fidelity --seed 42 --cases-per-split 8
 
   projectworld-production-scale:
     name: Production-scale ProjectWorld distribution
@@ -212,6 +231,7 @@ jobs:
       - python-package
       - environment-smoke
       - operational-production-scale
+      - native-artifact-fidelity
       - projectworld-production-scale
       - frontend
       - container-build

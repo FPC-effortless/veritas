@@ -1,6 +1,6 @@
 [project]
 name = "investigation-world"
-version = "0.8.0"
+version = "0.9.0"
 description = "Veritas verified capability foundry for persistent operational-world agent training and evaluation"
 requires-python = ">=3.12"
 dependencies = [
@@ -10,6 +10,9 @@ dependencies = [
   "typer>=0.12",
   "sqlalchemy>=2.0",
   "duckdb>=1.0",
+  "openpyxl>=3.1",
+  "shapely>=2.0",
+  "pyproj>=3.7",
 ]
 
 [project.optional-dependencies]

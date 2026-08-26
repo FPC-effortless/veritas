@@ -1,3 +1,10 @@
+from investigation_world.operational.artifacts import (
+    NativeArtifactDescriptor,
+    NativeArtifactVerification,
+    NativeArtifactWorkspace,
+    attach_native_artifact_descriptor,
+    native_artifact_descriptor,
+)
 from investigation_world.operational.catalog import (
     build_devops_incident_world,
     build_enterprise_operations_world,
@@ -37,6 +44,15 @@ from investigation_world.operational.models import (
     VerificationDimension,
     WorldDomain,
 )
+from investigation_world.operational.native_runtime import NativeOperationalRuntime
+from investigation_world.operational.native_validation import (
+    NativeArtifactCaseResult,
+    NativeArtifactValidationReport,
+    validate_native_artifact_distribution,
+)
+from investigation_world.operational.parameterized_artifacts import (
+    ParameterizedNativeArtifactWorkspace,
+)
 from investigation_world.operational.runtime import OperationalRuntime
 from investigation_world.operational.substrate import (
     OperationalSnapshot,
@@ -49,6 +65,12 @@ __all__ = [
     "ActionKind",
     "AssertionComparison",
     "EpisodeSubmission",
+    "NativeArtifactCaseResult",
+    "NativeArtifactDescriptor",
+    "NativeArtifactValidationReport",
+    "NativeArtifactVerification",
+    "NativeArtifactWorkspace",
+    "NativeOperationalRuntime",
     "OperationalDistributionCase",
     "OperationalDistributionConfig",
     "OperationalDistributionManifest",
@@ -61,6 +83,7 @@ __all__ = [
     "OperationalSnapshot",
     "OperationalStateEvent",
     "OperationalSuiteManifest",
+    "ParameterizedNativeArtifactWorkspace",
     "PersistentOperationalSubstrate",
     "SCENARIO_FAMILIES",
     "StateAssertion",
@@ -68,6 +91,7 @@ __all__ = [
     "VerificationBreakdown",
     "VerificationDimension",
     "WorldDomain",
+    "attach_native_artifact_descriptor",
     "build_devops_incident_world",
     "build_enterprise_operations_world",
     "build_financial_spreadsheet_world",
@@ -78,9 +102,11 @@ __all__ = [
     "compile_operational_distribution",
     "distribution_manifest",
     "iter_operational_distribution",
+    "native_artifact_descriptor",
     "operational_suite_manifest",
     "private_oracle_payload",
     "public_distribution_payload",
+    "validate_native_artifact_distribution",
     "validate_operational_distribution",
     "verify_operational_episode",
     "write_operational_distribution_bundle",

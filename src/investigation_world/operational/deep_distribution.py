@@ -7,14 +7,15 @@ from typing import Any, Iterator
 
 from investigation_world.foundry.models import DifficultyVector, stable_hash
 import investigation_world.operational.distribution as base
+from investigation_world.operational.artifacts import attach_native_artifact_descriptor
 from investigation_world.operational.models import OperationalEpisode
 from investigation_world.operational.realism import apply_domain_realism
 
 
 class OperationalDistributionConfig(base.OperationalDistributionConfig):
-    """Production-scale v2 distribution with domain-native realism enabled."""
+    """Production-scale v3 distribution with native-artifact fidelity enabled."""
 
-    version: str = "operational-production-v2"
+    version: str = "operational-production-v3"
 
 
 OperationalDistributionCase = base.OperationalDistributionCase
@@ -94,7 +95,8 @@ def _deepen_case(case: OperationalDistributionCase) -> OperationalDistributionCa
         scenario_family=case.scenario_family,
     )
     _strip_private_generator_labels(episode)
-    case.episode = _opaque_new_record_ids(episode)
+    episode = _opaque_new_record_ids(episode)
+    case.episode = attach_native_artifact_descriptor(episode)
     case.difficulty = _deep_difficulty(case)
     return case
 
@@ -127,6 +129,9 @@ def distribution_manifest(
     manifest.metadata.update(
         {
             "realism_profile": "domain_native_operational_v2",
+            "native_artifact_profile": "operational_native_artifact_v1",
+            "native_artifacts_lazy": True,
+            "native_artifacts_deterministic": True,
             "stateful_action_preconditions": True,
             "ordered_process_verification": True,
             "temporal_provenance_records": True,
@@ -150,6 +155,13 @@ def validate_operational_distribution(
         "investigation_osint": "multi_source_provenance_casefile_v2",
         "gis_operations": "vector_crs_topology_lineage_v2",
     }
+    required_native_engines = {
+        "financial_spreadsheet": "openpyxl-workbook-v1",
+        "enterprise_operations": "sqlite-enterprise-replica-v1",
+        "devops_incident_response": "declarative-kubernetes-sandbox-v1",
+        "investigation_osint": "rendered-evidence-corpus-v1",
+        "gis_operations": "shapely-pyproj-vector-v1",
+    }
     for case in cases:
         episode = case.episode
         domain = episode.task.domain.value
@@ -158,6 +170,19 @@ def validate_operational_distribution(
             break
         if episode.task.metadata.get("artifact_contract") != required_artifact_contracts[domain]:
             errors.append(f"{episode.task.task_id}: missing domain artifact contract")
+            break
+        native_artifact = episode.task.metadata.get("native_artifact")
+        if not isinstance(native_artifact, dict):
+            errors.append(f"{episode.task.task_id}: missing native artifact descriptor")
+            break
+        if native_artifact.get("engine") != required_native_engines[domain]:
+            errors.append(f"{episode.task.task_id}: wrong native artifact engine")
+            break
+        if not native_artifact.get("artifact_id", "").startswith("artifact-"):
+            errors.append(f"{episode.task.task_id}: native artifact id is not opaque")
+            break
+        if native_artifact.get("source_record_ids") != [record.record_id for record in episode.records]:
+            errors.append(f"{episode.task.task_id}: native artifact source lineage mismatch")
             break
         if len(episode.records) < 8:
             errors.append(f"{episode.task.task_id}: insufficient domain records")
@@ -208,7 +233,7 @@ def public_distribution_payload(
     config: OperationalDistributionConfig,
 ) -> dict[str, Any]:
     payload = base.public_distribution_payload(cases, config=config)
-    payload["format"] = "veritas-operational-public-v2"
+    payload["format"] = "veritas-operational-public-v3"
     payload["manifest"] = distribution_manifest(
         cases, config=config, include_private_hash=False
     ).model_dump(mode="json")
@@ -221,7 +246,7 @@ def private_oracle_payload(
     config: OperationalDistributionConfig,
 ) -> dict[str, Any]:
     payload = base.private_oracle_payload(cases, config=config)
-    payload["format"] = "veritas-operational-private-oracles-v2"
+    payload["format"] = "veritas-operational-private-oracles-v3"
     payload["manifest"] = distribution_manifest(
         cases, config=config, include_private_hash=True
     ).model_dump(mode="json")
