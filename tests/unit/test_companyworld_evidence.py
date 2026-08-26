@@ -93,19 +93,20 @@ def test_oracle_narrows_context_to_direct_support():
     assert episode.oracle.facts[0].supporting_record_ids == ["CARRIER-MANIFEST"]
 
 
-def test_false_projection_cannot_earn_evidence_support():
+def test_false_projection_cannot_earn_evidence_support_or_reward():
     episode = _episode()
     scored = verify_companyworld(_result("OBSERVED-ERP"), episode)
     assert scored.fact_score == 1.0
     assert scored.evidence_support == 0.0
-    assert scored.overall_reward < 1.0
+    assert scored.overall_reward == 0.0
 
 
-def test_related_but_non_entailing_record_cannot_earn_evidence_support():
+def test_related_but_non_entailing_record_cannot_earn_evidence_support_or_reward():
     episode = _episode()
     scored = verify_companyworld(_result("UNRELATED-CONTEXT"), episode)
     assert scored.fact_score == 1.0
     assert scored.evidence_support == 0.0
+    assert scored.overall_reward == 0.0
 
 
 def test_direct_observable_record_earns_evidence_support():
