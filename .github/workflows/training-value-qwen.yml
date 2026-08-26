@@ -1,0 +1,67 @@
+name: Training Value Qwen
+
+on:
+  push:
+    branches:
+      - feature/commercial-readiness
+    paths:
+      - ".github/workflows/training-value-qwen.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: training-value-qwen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnostic-sft-qwen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v1
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Install CPU training runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
+          python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" "peft>=0.13,<1" sentencepiece
+
+      - name: Run held-out training-value experiment
+        run: |
+          python tools/run_training_value_experiment.py \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --output training-value-results/qwen0.5b-diagnostic-sft.json \
+            --train-examples 24 \
+            --heldout-examples 12 \
+            --epochs 2 \
+            --learning-rate 0.0001 \
+            --max-length 1536 \
+            --max-new-tokens 192
+
+      - name: Upload training-value report
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-value-qwen0.5b-diagnostic-sft
+          path: training-value-results/qwen0.5b-diagnostic-sft.json
+          if-no-files-found: error
+          retention-days: 30
