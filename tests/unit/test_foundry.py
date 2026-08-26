@@ -181,3 +181,38 @@ def test_closed_loop_cycle_promotes_only_validated_challenges():
         config=FoundryCycleConfig(frontier_limit=2),
     )
     assert validated.promoted_challenge_ids == [challenge_id]
+
+
+def test_companyworld_adapter_infers_capability_and_difficulty():
+    from investigation_world.foundry import companyworld_capability_contract, companyworld_task_metadata
+
+    class FakeEpisode:
+        def public_payload(self):
+            return {
+                "task": {
+                    "task_id": "O2C-1",
+                    "task_type": "O2C_FULFILLMENT_TIMING",
+                    "permitted_systems": ["ERP", "WMS"],
+                    "available_actions": ["EXPEDITE_ORDER"],
+                    "max_actions": 5,
+                    "constraints": {},
+                },
+                "records": [
+                    {"record_id":"R1","object_id":"SO-1","system":"ERP","record_type":"order","fields":{}},
+                    {"record_id":"R2","object_id":"SHP-1","system":"WMS","record_type":"shipment","fields":{}},
+                ],
+            }
+
+    metadata = companyworld_task_metadata(
+        FakeEpisode(), split=DistributionSplit.OOD, taskset_version="cw-v1",
+        harness_version="react-v1", runtime_version="companyworld-v1", seed=99,
+    )
+    assert metadata.task_id == "O2C-1"
+    assert "temporal" in metadata.capability_tags
+    assert "act" in metadata.capability_tags
+    assert metadata.difficulty.tools == 2
+    assert metadata.difficulty.entities == 2
+    assert metadata.difficulty.steps == 5
+    contract = companyworld_capability_contract()
+    assert "recover" in contract.subcapabilities
+    assert "unseen CompanyWorld seeds" in contract.transfer_targets
