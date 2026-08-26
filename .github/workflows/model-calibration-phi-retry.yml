@@ -6,6 +6,7 @@ on:
       - feature/commercial-readiness
     paths:
       - ".github/workflows/model-calibration-phi-retry.yml"
+      - "tools/run_phi_model_calibration.py"
   workflow_dispatch:
 
 permissions:
@@ -48,13 +49,11 @@ jobs:
 
       - name: Run calibration
         run: |
-          python tools/run_model_calibration.py \
+          python tools/run_phi_model_calibration.py \
             --model microsoft/Phi-3.5-mini-instruct \
             --output calibration-results/phi3.5-mini.json \
             --max-new-tokens 256 \
-            --max-input-tokens 7168 \
-            --dtype bfloat16 \
-            --trust-remote-code
+            --max-input-tokens 7168
 
       - name: Upload calibration result
         uses: actions/upload-artifact@v4
