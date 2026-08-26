@@ -1,0 +1,65 @@
+name: Model Calibration Phi Retry
+
+on:
+  push:
+    branches:
+      - feature/commercial-readiness
+    paths:
+      - ".github/workflows/model-calibration-phi-retry.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-calibration-phi-retry-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phi3-5-mini:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-phi3.5-mini-v1
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Install Microsoft documented Phi runtime
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.3.1"
+          python -m pip install "transformers==4.43.0" "accelerate==0.31.0" sentencepiece
+
+      - name: Run calibration
+        run: |
+          python tools/run_model_calibration.py \
+            --model microsoft/Phi-3.5-mini-instruct \
+            --output calibration-results/phi3.5-mini.json \
+            --max-new-tokens 256 \
+            --max-input-tokens 7168 \
+            --dtype bfloat16 \
+            --trust-remote-code
+
+      - name: Upload calibration result
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-phi3.5-mini-retry
+          path: calibration-results/phi3.5-mini.json
+          if-no-files-found: error
+          retention-days: 30
