@@ -8,6 +8,19 @@ from investigation_world.operational.catalog import (
     build_operational_world,
     operational_suite_manifest,
 )
+from investigation_world.operational.distribution import (
+    OperationalDistributionCase,
+    OperationalDistributionConfig,
+    OperationalDistributionManifest,
+    SCENARIO_FAMILIES,
+    compile_operational_distribution,
+    distribution_manifest,
+    iter_operational_distribution,
+    private_oracle_payload,
+    public_distribution_payload,
+    validate_operational_distribution,
+    write_operational_distribution_bundle,
+)
 from investigation_world.operational.models import (
     ActionKind,
     EpisodeSubmission,
@@ -32,6 +45,9 @@ from investigation_world.operational.verifier import verify_operational_episode
 __all__ = [
     "ActionKind",
     "EpisodeSubmission",
+    "OperationalDistributionCase",
+    "OperationalDistributionConfig",
+    "OperationalDistributionManifest",
     "OperationalEntity",
     "OperationalEpisode",
     "OperationalRecord",
@@ -41,6 +57,7 @@ __all__ = [
     "OperationalStateEvent",
     "OperationalSuiteManifest",
     "PersistentOperationalSubstrate",
+    "SCENARIO_FAMILIES",
     "TaskContract",
     "VerificationBreakdown",
     "VerificationDimension",
@@ -52,6 +69,13 @@ __all__ = [
     "build_investigation_osint_world",
     "build_operational_suite",
     "build_operational_world",
+    "compile_operational_distribution",
+    "distribution_manifest",
+    "iter_operational_distribution",
     "operational_suite_manifest",
+    "private_oracle_payload",
+    "public_distribution_payload",
+    "validate_operational_distribution",
     "verify_operational_episode",
+    "write_operational_distribution_bundle",
 ]
