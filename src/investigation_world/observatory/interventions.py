@@ -191,8 +191,16 @@ def compare_intervention_runs(
         raise ValueError("intervention comparison requires the same HarnessSpec")
     if baseline.cell.verifier != intervention.cell.verifier:
         raise ValueError("intervention comparison requires the same VerifierSpec")
+    if baseline.cell.execution != intervention.cell.execution:
+        raise ValueError("intervention comparison requires the same ExecutionSpec")
+    if baseline.cell.time_snapshot != intervention.cell.time_snapshot:
+        raise ValueError("intervention comparison requires the same time snapshot")
     if baseline.cell.scenario.scenario_id != intervention.cell.scenario.scenario_id:
         raise ValueError("intervention comparison requires the same source scenario")
+    if baseline.cell.scenario.task_id != intervention.cell.scenario.task_id:
+        raise ValueError("intervention comparison requires the same task identity")
+    if baseline.cell.scenario.seed != intervention.cell.scenario.seed:
+        raise ValueError("intervention comparison requires the same scenario seed")
 
     dimensions: dict[str, DimensionDelta] = {}
     degraded: list[str] = []
