@@ -4,28 +4,32 @@
 
 Veritas builds persistent operational substrates, capability contracts, calibrated world distributions, executable environments, rollout traces, independent verifiers, adversarial challenge sets, verified demonstrations, and trainer-ready bundles for SFT, preference learning, RL, and VOPSD.
 
-The product is broader than any one benchmark family. CompanyWorld remains the first commercial evaluation wedge, while the unified operational-world substrate provides one execution and verification architecture across finance/spreadsheets, enterprise operations, DevOps/incident response, investigation/OSINT, and GIS.
+The product is broader than any one benchmark family. CompanyWorld remains the first commercial evaluation wedge. Unified Operational Worlds provides one execution and verification architecture across finance/spreadsheets, enterprise operations, DevOps/incident response, investigation/OSINT, and GIS. ProjectWorld adds a separate long-horizon project-delivery environment family under the same Veritas product.
 
-Veritas 0.8 keeps the **4,480 executable episode** production distribution introduced in 0.7 and makes its five operational domains materially deeper: stateful workflow preconditions, ordered procedures, trajectory-wide invariants, temporal/provenance-rich evidence and domain-native operational control surfaces now determine whether an agent actually completed the work correctly.
+**Veritas 0.9 keeps the 4,480-case operational distribution and seven-dimensional verifier contract from 0.8, but adds real native artifacts behind the runtime.** Successful agent actions can now mutate XLSX workbooks, SQLite enterprise replicas, Kubernetes-style infrastructure bundles, heterogeneous OSINT evidence corpora, and GeoJSON/Shapely/pyproj workspaces. Native artifact checks feed back into the existing hidden target-state verifier, so correct API verbs are not sufficient when the actual artifact is wrong.
 
-See [`docs/veritas-north-star.md`](docs/veritas-north-star.md) for the permanent architecture, [`docs/unified-operational-worlds.md`](docs/unified-operational-worlds.md) for the shared substrate, [`docs/operational-production-scale.md`](docs/operational-production-scale.md) for the scale/integrity contract, and [`docs/domain-realism-v08.md`](docs/domain-realism-v08.md) for the deep-domain contract.
+See:
+
+- [`docs/veritas-north-star.md`](docs/veritas-north-star.md) — permanent architecture;
+- [`docs/unified-operational-worlds.md`](docs/unified-operational-worlds.md) — shared operational substrate;
+- [`docs/operational-production-scale.md`](docs/operational-production-scale.md) — production distribution contract;
+- [`docs/domain-realism-v08.md`](docs/domain-realism-v08.md) — stateful/deep-domain semantics;
+- [`docs/native-artifact-fidelity-v09.md`](docs/native-artifact-fidelity-v09.md) — native artifact execution contract;
+- [`docs/projectworld-procedural-distribution.md`](docs/projectworld-procedural-distribution.md) — long-horizon construction distribution.
 
 ## What a buyer gets today
 
-A design-partner Veritas engagement can answer concrete deployment questions such as:
+A design-partner Veritas engagement can answer deployment questions such as:
 
 - Which model or agent harness should we deploy?
 - Where does the agent fail as work becomes multi-step, cross-system, or persistent across time?
+- Can the agent change the actual operational artifact correctly, not merely emit the right action names?
 - Does more test-time compute improve outcomes enough to justify cost?
 - Which tool or permission changes improve success without increasing unsafe actions?
 - Can an agent preserve invariants and avoid harmful side effects while reaching the right final state?
 - Did a new prompt, model, training run, or architecture produce a credible improvement?
 
-A standard pilot produces a versioned evaluation manifest, private benchmark run, capability scorecard, representative trajectories, failure analysis, cost/tool statistics where available, and prioritized recommendations.
-
-CompanyWorld remains the most mature commercial package. Unified Operational Worlds provides a production-scale synthetic distribution across five economically relevant domains on the same verified runtime architecture.
-
-See [`docs/commercial/`](docs/commercial/) for the benchmark card, pilot scope, security boundary, onboarding, acceptance criteria, and procurement material.
+A standard pilot can produce a versioned evaluation manifest, private benchmark run, capability scorecard, representative trajectories, failure analysis, cost/tool statistics where available, and prioritized recommendations.
 
 ## Capability Foundry architecture
 
@@ -36,8 +40,10 @@ flowchart LR
   K[Capability contract] --> T[Task distribution]
   T --> W[Executable operational world]
   P --> W
+  W --> N[Native artifact workspace]
   W --> A[Agent rollout trace]
-  A --> V[Independent verifier]
+  N --> V[Independent verifier]
+  A --> V
   V --> X[Verified trajectory corpus]
   X --> E[Evaluation]
   X --> S[SFT / preference]
@@ -46,11 +52,11 @@ flowchart LR
   F --> T
 ```
 
-The rollout trace and independently maintained world state remain the sources of truth. Training examples, counterfactuals, failure labels, benchmark reports and expert demonstrations derive from versioned traces and verifier-backed state rather than separate hand-authored narratives.
+The rollout trace, independently maintained hidden world state, and native artifact state are the sources of truth. Training examples, counterfactuals, failure labels, benchmark reports and expert demonstrations derive from versioned traces and verifier-backed state rather than separate hand-authored narratives.
 
 ## Unified operational-world substrate
 
-`Veritas.build_company()` creates one persistent synthetic organization and mounts all five current operational domains into a shared `PersistentOperationalSubstrate`:
+`Veritas.build_company()` creates one persistent synthetic organization and mounts all five operational domains into a shared `PersistentOperationalSubstrate`:
 
 ```text
 Persistent company state
@@ -78,61 +84,45 @@ Every operational episode uses the same public/private contract:
 - evidence requirements;
 - cost and tool-call budgets.
 
-All five domains emit the same seven verification dimensions: **outcome, state, constraints, side effects, process, efficiency, and evidence**. v0.8 deepens how these scores are earned without introducing incompatible domain-specific reward contracts.
+All five operational domains emit the same seven verification dimensions: **outcome, state, constraints, side effects, process, efficiency, and evidence**.
 
 ## Stateful workflow semantics
 
-A correct action name is no longer enough. Hidden action effects can require prior state or prior successful actions. A syntactically valid request can therefore be rejected by the simulated system when operational prerequisites are not satisfied.
+A correct action name is not enough. Hidden action effects can require prior state or prior successful actions. A syntactically valid request can be rejected when operational prerequisites are not satisfied.
 
 Blocked actions:
 
 - return only an agent-observable system rejection;
 - do not mutate hidden truth;
+- do not mutate the native artifact;
 - remain visible to the harness trace as blocked attempts;
 - do not satisfy required process credit.
 
-The verifier additionally supports ordered process requirements, repeated required actions and trajectory-wide invariants. An agent cannot temporarily destroy an invariant, repair it before submission, and receive full constraint credit as if no damage occurred.
+The verifier also supports ordered process requirements, repeated required actions and trajectory-wide invariants. An agent cannot temporarily destroy a critical invariant, repair it before submission, and receive full constraint credit as if no damage occurred.
 
-Agent-visible `OperationalRecord` objects can also carry observation time, validity interval, freshness, source authority, confidence and provenance roots. These are evidence attributes, not evaluator truth.
+Agent-visible `OperationalRecord` objects can carry observation time, validity interval, freshness, source authority, confidence and provenance roots. Those are evidence attributes, not evaluator truth.
 
-## Production-scale operational distribution
+## Native artifact execution
 
-The default `OperationalDistributionConfig` still compiles **4,480 executable episodes**:
+`NativeOperationalRuntime` places a lazy `ParameterizedNativeArtifactWorkspace` behind an `OperationalEpisode`.
 
-| Split | Per domain | Total |
-|---|---:|---:|
-| Train | 512 | 2,560 |
-| IID test | 128 | 640 |
-| OOD | 128 | 640 |
-| Adversarial | 128 | 640 |
-| **Total** | **896** | **4,480** |
+A generated episode carries a deterministic public artifact descriptor rather than embedding binary data into the benchmark bundle. The descriptor identifies the engine, format, opaque artifact ID and source-record lineage. When a rollout executes the case, Veritas materializes the actual artifact and mirrors only successful actions into it.
 
-Generation is deterministic and parameterized by domain. OOD cases introduce unfamiliar surface/role conditions. Adversarial cases add conflicting context, tighter resource bounds and stronger pressure. The evaluator bundle retains split, seed, scenario family, difficulty and oracle; the public bundle hides those values and uses opaque IDs plus hash-mixed ordering so split membership cannot be inferred from identifiers or emission order.
+At submission:
 
-The v0.8 deep compiler adds further distribution gates: each generated case must contain domain-native system heterogeneity, temporal/provenance evidence, stateful preconditions, a multi-step ordered procedure and at least one trajectory invariant. Difficulty vectors are recomputed after the deepening pass rather than copied from the shallow template.
+1. the native artifact is independently checked;
+2. native checks are written into hidden `native_artifact.*` state;
+3. they are added to target-state assertions;
+4. the existing seven-dimensional verifier scores the episode;
+5. failed native checks are also surfaced in evaluator process violations.
 
-Generator-only scenario fields are stripped before public packaging, and validators reject actual private label/key leakage while allowing ordinary domain language such as “identity resolution.”
-
-The required CI workflow compiles and validates the full default distribution with:
-
-```bash
-veritas validate-production-scale --seed 42
-```
-
-Build a distributable public/private pair with:
-
-```bash
-veritas build-distribution \
-  --seed 42 \
-  --output operational_public.json \
-  --oracle-output operational_private.json
-```
-
-## Deep domain surfaces
+This means a policy can no longer earn full outcome/state credit by performing the correct synthetic transition while leaving the real workbook/database/infrastructure/casefile/geospatial product incorrect.
 
 ### Financial / Spreadsheet
 
-Cases include workbook manifests, formula-lineage and dependency graphs, calculation chains, source-ledger reconciliation, review context and model-governance controls.
+Engine: `openpyxl-workbook-v1`
+
+Cases materialize as real `.xlsx` workbooks with input sheets, target formula/model sheets, controls and hidden artifact metadata. Actions edit the real formula cell and supported generated dependency chain. Native checks validate the generated formula, generated target enterprise value, audit state and formula-lineage preservation.
 
 Representative procedure:
 
@@ -144,13 +134,13 @@ inspect formula lineage
 -> validate model controls
 ```
 
-Recalculation can be blocked until both the formula and authoritative source reconciliation are valid. Source balances and external links can be protected by trajectory-wide invariants.
-
 Artifact contract: `xlsx_formula_dependency_graph_v2`.
 
 ### Enterprise Operations
 
-Cases span CRM, CPQ, ERP, IAM and finance-control state. Evidence includes role assignments, quote versions, customer credit profiles, order-line state, account context and immutable audit events.
+Engine: `sqlite-enterprise-replica-v1`
+
+Cases materialize as real SQLite databases with CRM opportunities, CPQ quotes, ERP orders, IAM roles, credit profiles and audit events. Successful actions change the corresponding tables; native checks validate approval routing, order controls, bypass state and audit history.
 
 Representative procedure:
 
@@ -167,25 +157,27 @@ Artifact contract: `crm_cpq_erp_control_graph_v2`.
 
 ### DevOps / Incident Response
 
-Cases include deployment/change evidence, distributed dependency graphs, logs, SLI windows, SLO policy, observability state and Kubernetes deployment specifications.
+Engine: `declarative-kubernetes-sandbox-v1`
+
+Cases materialize deployment/service manifests plus executable cluster-state, alert and trace files. Recovery actions change ready replicas, generation, health and the case-specific recovered error-rate state. Harmful dependency intervention remains detectable.
 
 Representative procedure:
 
 ```text
 correlate recent change
 -> inspect dependency graph
--> recover the service
+-> recover service
 -> verify health
--> validate the SLO window
+-> validate SLO window
 ```
-
-The intervention is blocked until the diagnostic scope is established, and apparent recovery does not count as completed work until post-recovery service-level validation succeeds.
 
 Artifact contract: `incident_telemetry_dependency_graph_v2`.
 
 ### Investigation / OSINT
 
-Cases include explicit hypotheses, repeated evidence linking, source provenance and independence, identifier crosswalks, negative evidence, historical material and chain-of-custody constraints.
+Engine: `rendered-evidence-corpus-v1`
+
+Cases materialize heterogeneous evidence: registry JSON, archived HTML, directory CSV and a mutable casefile. Hypotheses, identity resolution, evidence linkage, corroboration and closure alter the actual casefile. The correct identity is derived from each generated case.
 
 Representative procedure:
 
@@ -197,13 +189,13 @@ record hypothesis
 -> close case
 ```
 
-Repeated claims are not treated as independent corroboration, and ambiguous identities remain separate until supported.
-
 Artifact contract: `multi_source_provenance_casefile_v2`.
 
 ### GIS Operations
 
-Cases include dataset-catalog metadata, CRS definitions, datum and axis-order information, spatial extent, topology rule sets, schema profiles, lineage and output contracts.
+Engine: `shapely-pyproj-vector-v1`
+
+Cases materialize source/working/overlay GeoJSON layers. Actions perform real coordinate transformation through `pyproj`, geometry repair through Shapely and geometric intersection for overlays. Native checks use each case's generated source/target CRS and preserve immutable source identity.
 
 Representative procedure:
 
@@ -215,13 +207,68 @@ inspect spatial metadata
 -> execute overlay
 ```
 
-The verifier supports threshold/tolerance checks such as maximum output sliver rate while source lineage remains protected.
-
 Artifact contract: `vector_crs_topology_lineage_v2`.
+
+## Parameterized native fidelity
+
+The native layer does not assume reference-case constants. Production cases vary formula ranges and values, enterprise objects, DevOps services and recovery targets, OSINT identities, and GIS CRS pairs. `ParameterizedNativeArtifactWorkspace` derives artifact values and native validation targets from the generated episode contract.
+
+Regression coverage includes non-reference generated cases from all five domains.
+
+## Production-scale operational distribution
+
+`OperationalDistributionConfig()` still compiles exactly **4,480 executable episodes**:
+
+| Split | Per domain | Total |
+|---|---:|---:|
+| Train | 512 | 2,560 |
+| IID test | 128 | 640 |
+| OOD | 128 | 640 |
+| Adversarial | 128 | 640 |
+| **Total** | **896** | **4,480** |
+
+The v3 compiler preserves deterministic generation, opaque public IDs, hash-mixed public ordering, split/oracle isolation, OOD/adversarial pressure, temporal/provenance evidence, ordered/stateful procedures, trajectory invariants and anti-leakage validation.
+
+v0.9 additionally requires every case to carry the correct native engine declaration, opaque artifact ID and public source-record lineage. The native bytes remain lazily generated rather than stored in the distribution bundle.
+
+Full distribution integrity gate:
+
+```bash
+veritas validate-production-scale --seed 42
+```
+
+Build a distributable public/private pair:
+
+```bash
+veritas build-distribution \
+  --seed 42 \
+  --output operational_public.json \
+  --oracle-output operational_private.json
+```
+
+## Native fidelity release gate
+
+CI separately materializes and executes one deterministic case from every **domain × split** cell:
+
+```text
+5 domains × 4 splits = 20 native executions
+```
+
+Run it locally with:
+
+```bash
+veritas validate-native-fidelity --seed 42 --cases-per-split 8
+```
+
+For each sampled case, the evaluator-qualified procedure must execute without blocked/missing transitions, every native artifact check must pass, and the ordinary shared verifier must return state=1.0 and outcome=1.0.
+
+This complements exhaustive descriptor/integrity checks over all 4,480 episodes.
 
 ## Product interfaces
 
-The canonical Python surface is `investigation_world.veritas.Veritas`. The package also installs a dedicated CLI:
+The canonical Python product surface is `investigation_world.veritas.Veritas`. Native operational execution is available through `investigation_world.operational.NativeOperationalRuntime`.
+
+The package installs the `veritas` CLI:
 
 ```bash
 veritas capabilities
@@ -230,31 +277,20 @@ veritas build-world financial_spreadsheet --seed 42 --output finance.json
 veritas build-suite --seed 42 --output suite.json --oracle-output private_oracles.json
 veritas build-distribution --seed 42 --output public.json --oracle-output private.json
 veritas validate-production-scale --seed 42
+veritas materialize-native financial_spreadsheet --seed 42 --split train --case-index 0 --output-dir native_case
+veritas validate-native-fidelity --seed 42 --cases-per-split 8
 veritas build-company --organization-id ORG-DEMO-001 --seed 42 --output company.json
 ```
 
-Public task bundles and private evaluator oracles are emitted separately.
+`materialize-native` writes the agent-facing artifact only; it does not export evaluator oracle state.
 
-## Why the environments are difficult to game
+## ProjectWorld
 
-The agent sees only public task state and permitted tool observations. Hidden truth, evaluator targets, benchmark-generation randomness, split assignment, adversarial pressure metadata, private action preconditions, hidden consequences, and verifier oracles remain privileged.
+ProjectWorld is the long-horizon project-delivery environment family. It remains separate from the short/medium `OperationalEpisode` benchmark contract rather than being silently folded into the five-domain distribution.
 
-Core integrity properties include:
+The current default construction distribution contains **896 projects** across train, IID, OOD and adversarial splits. Projects model design-to-handover state, resources, procurement, role authority, hidden disruptions, inspections, rework and project outcome verification.
 
-- strict public/private benchmark separation;
-- precision-sensitive task-scoped verification;
-- no reward for empty answers, citation laundering, unsupported stuffing, or blindly trusting a conflicting system;
-- deterministic generation and replay for fixed versions/seeds;
-- persistent state with append-only event history and counterfactual forks;
-- disjoint train/IID/OOD/adversarial task IDs;
-- opaque public IDs and mixed public case ordering;
-- stateful procedures instead of verb-matching tasks;
-- trajectory-wide invariants in addition to final-state checks;
-- authority, budget, conflict and adversarial pressure;
-- explicit penalties for forbidden actions, invariant violations, harmful side effects, and disproportionate work;
-- trace-first execution with verifier-backed outcomes;
-- held-out/OOD trajectories excluded from training bundle compilation;
-- expert demonstrations promoted only after verifier and invariant checks.
+See [`docs/projectworld-procedural-distribution.md`](docs/projectworld-procedural-distribution.md).
 
 ## Other capability families
 
@@ -296,20 +332,6 @@ python tools/run_endpoint_calibration.py \
   --output run.json
 ```
 
-Veritas also has runtime interfaces for tool-using agents and containerized evaluation work; broader customer-specific adapters are added when a pilot requires them.
-
-## Reproducible run metadata
-
-```bash
-python tools/create_evaluation_manifest.py \
-  --benchmark-version companyworld-pilot-v1 \
-  --benchmark-hash <private-suite-hash> \
-  --model customer-agent \
-  --harness customer-harness-v1 \
-  --attempts-per-task 3 \
-  --output manifest.json
-```
-
 Private seeds, evaluator oracles, hidden benchmark truth, and unreleased adversarial suites are never shipped to the evaluated agent.
 
 ## Local development
@@ -320,16 +342,34 @@ python -m venv .venv
 .venv/bin/python -m pytest tests/
 ```
 
-The repository CI validates Python 3.12/3.13, packaging, the legacy investigation pipeline, the unified Veritas product surface, the full 4,480-case deep operational distribution, the Next.js site, Docker startup and dependency/security scanning.
+Repository CI validates:
+
+- Python 3.12 and 3.13;
+- package build;
+- legacy investigation and unified-product smoke paths;
+- native artifact materialization/verification across all 20 operational domain × split cells;
+- the full 4,480-case operational distribution;
+- the full 896-project ProjectWorld construction distribution;
+- Next.js build;
+- Docker startup/API health;
+- dependency and source security scanning.
 
 ## Commercial and fidelity boundary
 
-The public repository contains the framework, schemas, validation machinery, foundry interfaces, procedural operational generators and buyer-facing methodology. Commercial private-evaluation assets—including frozen private world seeds, hidden ground truth, evaluator oracles, and unreleased adversarial suites—must remain outside the public repository.
+The public repository contains framework code, schemas, validation machinery, procedural generators, native artifact engines and buyer-facing methodology. Frozen private benchmark seeds, hidden ground truth, evaluator oracles and unreleased adversarial suites should remain outside the public repository for commercial evaluation use.
 
-Veritas 0.8 is materially deeper at the operational state, evidence, procedure, control and verification layers. It does **not** claim that every domain already embeds a native industrial execution engine. The next fidelity layer includes real XLSX/formula execution, Kubernetes/Terraform/cloud sandboxes, richer enterprise databases/application replicas, larger rendered investigation corpora and native vector/raster GIS execution. Those engines should attach behind the same task/runtime/verifier contract.
+Veritas 0.9 is **native artifact fidelity**, not universal industrial simulation. It does not yet claim:
 
-Veritas does **not** claim SOC 2 certification, third-party penetration testing or external benchmark validation at this stage.
+- a full Excel-compatible calculation engine with arbitrary formulas, macros, Power Query and external links;
+- live Kubernetes clusters, Terraform/cloud-provider APIs or production network simulation;
+- vendor-complete CRM/ERP/CPQ replicas;
+- browser-scale web rendering, OCR-heavy OSINT or live-internet state;
+- raster GIS, GDAL/PostGIS-scale workloads or production cartographic rendering;
+- SOC 2 certification, third-party penetration testing or external benchmark validation.
 
-> Software version: 0.8.0  
+Those are higher-cost fidelity/procurement milestones that can now attach behind the stable task/runtime/oracle/verifier contract rather than requiring another benchmark redesign.
+
+> Software version: 0.9.0  
 > Commercial benchmark line: Veritas CompanyWorld Pilot v1  
-> Operational distribution line: Veritas Unified Operational Worlds Production v2
+> Operational distribution line: Veritas Unified Operational Worlds Production v3  
+> Project distribution line: Veritas ProjectWorld Construction Distribution v1
