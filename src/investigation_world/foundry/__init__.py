@@ -19,14 +19,16 @@ from investigation_world.foundry.mutations import apply_mutation
 from investigation_world.foundry.promotion import ChallengeValidation, PromotionPolicy, promotable, promotion_failures
 from investigation_world.foundry.replay import branch_from_snapshot, make_snapshot
 from investigation_world.foundry.trace_store import append_trace, load_traces, trace_cost
+from investigation_world.foundry.tracing import TracingRuntimeProxy, execute_counterfactual, replay_trace_prefix
 
 __all__ = [
     "CapabilityContract", "ChallengeSpec", "ChallengeValidation", "CounterfactualBranch",
     "DifficultyVector", "DistributionPartition", "DistributionSplit", "EfficiencyPoint",
     "FailureClass", "FoundryDistributionManifest", "FoundryMetrics", "FoundryTaskMetadata",
     "MutationKind", "MutationLineage", "PromotionPolicy", "RolloutTrace", "StateSnapshot",
-    "TaskPerformance", "TraceEvent", "append_trace", "apply_mutation", "branch_from_snapshot",
-    "challenge_from_trace", "classify_failure", "foundry_objective", "frontier_priority",
-    "load_traces", "make_snapshot", "manifest_from_tasks", "pareto_frontier", "promotable",
-    "promotion_failures", "select_frontier_tasks", "stable_hash", "trace_cost",
+    "TaskPerformance", "TraceEvent", "TracingRuntimeProxy", "append_trace", "apply_mutation",
+    "branch_from_snapshot", "challenge_from_trace", "classify_failure", "execute_counterfactual",
+    "foundry_objective", "frontier_priority", "load_traces", "make_snapshot",
+    "manifest_from_tasks", "pareto_frontier", "promotable", "promotion_failures",
+    "replay_trace_prefix", "select_frontier_tasks", "stable_hash", "trace_cost",
 ]

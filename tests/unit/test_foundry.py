@@ -15,31 +15,23 @@ def task(task_id: str) -> FoundryTaskMetadata:
 
 def test_frontier_prefers_learnable_and_unobserved_tasks():
     tasks = [task("easy"), task("frontier"), task("unseen")]
-    perf = [
-        TaskPerformance("easy", 10, 10, 1.0),
-        TaskPerformance("frontier", 10, 4, 0.4),
-    ]
+    perf = [TaskPerformance("easy", 10, 10, 1.0), TaskPerformance("frontier", 10, 4, 0.4)]
     chosen = select_frontier_tasks(tasks, perf, limit=2, seed=7)
-    assert "frontier" in chosen
-    assert "unseen" in chosen
-    assert "easy" not in chosen
+    assert "frontier" in chosen and "unseen" in chosen and "easy" not in chosen
 
 
 def test_public_mutations_are_deterministic_and_do_not_add_private_truth():
     payload = {"task": {"task_id": "T1"}, "records": [{"record_id":"R1","fields":{"x":1}}]}
     first, lineage1 = apply_mutation(payload, task_id="T1", kind=MutationKind.INJECT_DISTRACTOR, seed=9)
     second, lineage2 = apply_mutation(payload, task_id="T1", kind=MutationKind.INJECT_DISTRACTOR, seed=9)
-    assert first == second
-    assert lineage1 == lineage2
-    assert len(first["records"]) == 2
+    assert first == second and lineage1 == lineage2 and len(first["records"]) == 2
     text = str(first).casefold()
     assert "ground_truth" not in text and "expected_value" not in text
 
 
 def test_private_fields_are_rejected_before_mutation():
-    payload = {"task": {}, "oracle": {"expected_value": 1}}
     try:
-        apply_mutation(payload, task_id="T", kind=MutationKind.REORDER_RECORDS, seed=1)
+        apply_mutation({"task": {}, "oracle": {"expected_value": 1}}, task_id="T", kind=MutationKind.REORDER_RECORDS, seed=1)
     except ValueError as exc:
         assert "private field" in str(exc)
     else:
@@ -50,8 +42,7 @@ def test_counterfactual_branch_is_stable():
     snapshot = make_snapshot("trace-1", 3, {"balance": 4}, retain_payload=True)
     a = branch_from_snapshot(snapshot, {"action":"approve"})
     b = branch_from_snapshot(snapshot, {"action":"approve"})
-    assert a.branch_id == b.branch_id
-    assert a.snapshot_hash == snapshot.state_hash
+    assert a.branch_id == b.branch_id and a.snapshot_hash == snapshot.state_hash
 
 
 def test_failure_trace_generates_targeted_challenge():
@@ -97,5 +88,54 @@ def test_challenge_promotion_requires_integrity_gates():
     from investigation_world.foundry.promotion import ChallengeValidation, promotable
     good = ChallengeValidation(challenge_id="C1", leakage_count=0, oracle_reward=1.0, exploit_max_reward=.1, deterministic=True)
     bad = ChallengeValidation(challenge_id="C2", leakage_count=1, oracle_reward=1.0, exploit_max_reward=.1, deterministic=True)
-    assert promotable(good)
-    assert not promotable(bad)
+    assert promotable(good) and not promotable(bad)
+
+
+def test_tracing_proxy_and_executable_prefix_replay():
+    from pydantic import BaseModel
+    from investigation_world.foundry.tracing import TracingRuntimeProxy, execute_counterfactual, replay_trace_prefix
+
+    class Result(BaseModel):
+        overall_reward: float = 1.0
+        outcome: float = 1.0
+
+    class FakeRuntime:
+        def __init__(self):
+            self.value = 0
+            self.spent = 0
+        def state_snapshot(self):
+            return {"value": self.value}
+        def budget_snapshot(self):
+            return {"spent": self.spent}
+        def advance(self, ticks=1):
+            self.value += ticks
+            self.spent += ticks
+            return self.value
+        def search(self, query, *, system=None, limit=10):
+            self.spent += 2
+            return [{"query":query,"system":getattr(system,"value",system),"limit":limit}]
+        def case_status(self, case_id):
+            return {"case_id":case_id,"value":self.value}
+        def submit(self, result=None):
+            return Result()
+
+    meta = FoundryTaskMetadata(
+        task_id="TRACING-TASK", split=DistributionSplit.IID_TEST,
+        capability_tags=["planning"], difficulty=DifficultyVector(steps=2), seed=4,
+        taskset_version="t1", harness_version="h1", runtime_version="r1",
+    )
+    proxy = TracingRuntimeProxy(FakeRuntime(), meta, environment_version="e1")
+    proxy.advance(1)
+    proxy.search("order", system="ERP")
+    proxy.case_status("CASE-1")
+    proxy.advance(2)
+    proxy.submit(None)
+    trace = proxy.trace()
+    assert trace.total_reward == 1.0
+    assert trace.total_cost == 5.0
+    assert [event.event_type for event in trace.events] == ["advance","search","case_status","advance","submit"]
+
+    replayed = replay_trace_prefix(FakeRuntime(), trace, through_step=3)
+    assert replayed.value == 3 and replayed.spent == 5
+    branched = execute_counterfactual(FakeRuntime, trace, branch_step=3, alternate_method="advance", alternate_args=[5])
+    assert branched.value == 6
