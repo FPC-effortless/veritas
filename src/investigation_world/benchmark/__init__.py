@@ -35,6 +35,11 @@ from investigation_world.benchmark.selective_agency import (
     public_selective_agency_canaries,
     score_selective_agency,
 )
+from investigation_world.benchmark.selective_agency_runtime import (
+    SelectiveAgencyActionResult,
+    SelectiveAgencyRuntime,
+    verify_selective_agency_runtime,
+)
 from investigation_world.benchmark.sequential_companyworld import (
     validate_sequential_companyworld,
     write_sequential_companyworld_report,
@@ -51,11 +56,13 @@ __all__ = [
     "PolicyStatistics",
     "ProjectionTrustPolicy",
     "PublicEvidenceReferencePolicy",
+    "SelectiveAgencyActionResult",
     "SelectiveAgencyAggregate",
     "SelectiveAgencyAttempt",
     "SelectiveAgencyCase",
     "SelectiveAgencyDecision",
     "SelectiveAgencyOracle",
+    "SelectiveAgencyRuntime",
     "SelectiveAgencyScore",
     "SelectiveAgencyTask",
     "SelectiveAgencyTaskClass",
@@ -67,6 +74,7 @@ __all__ = [
     "validate_companyworld_benchmark",
     "validate_interactive_companyworld",
     "validate_sequential_companyworld",
+    "verify_selective_agency_runtime",
     "write_companyworld_benchmark_report",
     "write_interactive_companyworld_report",
     "write_sequential_companyworld_report",
