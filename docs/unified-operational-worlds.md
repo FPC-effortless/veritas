@@ -5,15 +5,16 @@ Veritas is a unified operational-world capability foundry for training and evalu
 The product is not a collection of unrelated benchmarks. Every domain runs on the same substrate:
 
 ```text
-Operational World
+Persistent Operational Substrate
   -> public TaskContract
   -> system records + tools
   -> agent actions
   -> deterministic state transitions
-  -> append-only action journal
+  -> append-only state/event journal
   -> hidden evaluator oracle
   -> independent multi-layer verifier
   -> reward + diagnostics
+  -> replay / fork / counterfactual
   -> trajectory / benchmark / training product
 ```
 
@@ -26,6 +27,8 @@ Operational World
 3. `devops_incident_response`
 4. `investigation_osint`
 5. `gis_operations`
+
+`Veritas.build_company()` mounts all five domains into one `PersistentOperationalSubstrate`. The resulting `VeritasCompany` has a shared organization identity, persistent state, cross-domain event history, deterministic snapshots, and counterfactual forks.
 
 Existing CompanyWorld, External Investigation, Selective Agency, calibration, observatory, tracing, and training-product modules remain capability layers of Veritas. The unified substrate is the common execution and verification contract beneath new domain worlds.
 
@@ -46,6 +49,22 @@ Each `OperationalEpisode` contains:
 
 `OperationalEpisode.public_payload()` explicitly omits the oracle. Evaluated agents must never receive evaluator targets, hidden effects, forbidden-action labels, or private ground truth.
 
+## Persistent operational substrate
+
+`PersistentOperationalSubstrate` is the shared state authority for multi-domain Veritas worlds. It provides:
+
+- organization-scoped persistent state;
+- mounting of multiple domain episodes without resetting state;
+- append-only `OperationalStateEvent` transitions;
+- shared record inventory;
+- domain- and world-filtered history;
+- deterministic `state_at(sequence)` reconstruction;
+- point-in-time snapshots;
+- `fork_at(sequence)` for replay and counterfactual branches;
+- integrity validation over event ordering and reconstructed state.
+
+This is the basis for long-horizon tasks in which earlier finance, enterprise, infrastructure, investigation, or GIS actions change the state encountered by later tasks.
+
 ## Runtime
 
 `OperationalRuntime` provides the shared executable interface:
@@ -54,11 +73,14 @@ Each `OperationalEpisode` contains:
 - `search_all(query)`
 - `open_record(record_id)`
 - `act(action_name, **parameters)`
+- `state_snapshot()`
 - `budget_snapshot()`
 - `trace()`
 - `submit(submission)`
 
-Every action is journaled with system, kind, parameters, cost, realized state changes, side effects, forbidden-action status, and consequence severity. The harness owns this trace; the evaluated agent cannot self-report its way to a higher score.
+A runtime can operate as an isolated episode or attach to a `PersistentOperationalSubstrate`. Attached runtimes commit realized state changes and side effects into the shared event journal. Every episode-local action is also journaled with system, kind, parameters, cost, realized state changes, side effects, forbidden-action status, and consequence severity.
+
+The harness owns these traces; the evaluated agent cannot self-report its way to a higher score.
 
 ## Verification contract
 
@@ -84,7 +106,7 @@ The aggregate reward is currently:
 + 0.10 evidence
 ```
 
-Domain-specific verifiers can later add richer metrics, but they should emit into this shared contract rather than replacing it.
+Domain-specific verifiers can add richer metrics, but they should emit into this shared contract rather than replacing it.
 
 ## Financial / Spreadsheet Operational World
 
@@ -144,22 +166,21 @@ The intended expansion includes:
 
 ## Unified company substrate
 
-The strategic end state is a persistent synthetic organization rather than five isolated environments:
+The current implementation can mount all five worlds into one persistent synthetic organization:
 
 ```text
-Company identity and actors
-  + CRM / ERP / HRIS / finance
-  + workbooks and models
-  + cloud infrastructure and incidents
-  + documents / messages / approvals
-  + public records and external evidence
-  + sites, parcels, routes, and geospatial assets
-  + hidden causal ground truth
-  + event history
-  + authority and policy graph
+Company identity and shared state
+  + CRM / ERP operational state
+  + workbook and financial-model state
+  + cloud infrastructure and incident state
+  + public-record / investigation state
+  + parcel and geospatial state
+  + hidden causal ground truth per task
+  + append-only cross-domain event history
+  + deterministic reconstruction and forks
 ```
 
-A single generated organization can therefore emit finance, enterprise operations, DevOps, investigation, GIS, selective-agency, cross-application, and long-horizon tasks while preserving shared identities and causal history.
+The next level is to deepen shared entity and causal links so the same customer, supplier, employee, facility, account, application, asset, parcel, and incident can appear across several domains. That will let one generated organization emit finance, enterprise operations, DevOps, investigation, GIS, selective-agency, cross-application, and long-horizon tasks from the same causal history.
 
 ## Foundry integration
 
@@ -182,13 +203,13 @@ Training algorithms remain outside environment truth. SFT, RL, preference learni
 
 ## Immediate engineering sequence
 
-The current implementation establishes the common substrate and one executable reference scenario per domain. The next implementation layers should be built in this order:
+The current implementation establishes the persistent substrate, shared runtime/verifier contract, and one executable reference scenario per domain. The next implementation layers should be built in this order:
 
-1. persistent cross-domain entity/state/event store;
-2. procedural generators that create hundreds to thousands of tasks per domain;
-3. domain-native artifact engines (workbooks, containers, GIS files, enterprise DB state);
-4. cross-domain task compiler using one persistent company;
-5. domain-specific verifier plugins that emit the shared seven-part score;
+1. procedural generators that create hundreds to thousands of tasks per domain with train/IID/OOD/adversarial partitions;
+2. shared cross-domain entity and causal graph linking operational objects across all five worlds;
+3. domain-native artifact engines for real workbook files, containerized infrastructure, enterprise database state, evidence corpora, and GIS files;
+4. cross-domain task compiler using one persistent company and multi-episode temporal histories;
+5. domain-specific verifier plugins that add native checks while emitting the shared seven-part score;
 6. private split/oracle packaging for commercial benchmarks;
 7. rollout adapters and verified training-product exporters;
 8. observatory cells spanning world x model x harness x seed x snapshot.
