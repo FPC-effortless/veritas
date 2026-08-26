@@ -249,7 +249,8 @@ class OperationalProjectWorldV2:
         outstanding = sum(
             order.quantity
             for order in self.state.procurement_orders.values()
-            if order.resource_id == resource_id and order.status != POStatus.CANCELLED
+            if order.resource_id == resource_id
+            and order.status not in {POStatus.ARRIVED, POStatus.CANCELLED}
         )
         if resource.storage_capacity is not None and self.state.resource_available[resource_id] + outstanding + quantity > resource.storage_capacity:
             raise ProjectWorldV2Error("purchase would exceed storage capacity")
