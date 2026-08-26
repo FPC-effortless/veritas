@@ -7,9 +7,11 @@ from typing import Any
 
 import typer
 
+from investigation_world.observatory.interventions import InterventionSpec
 from investigation_world.observatory.live import (
     CompanyWorldLiveRunConfig,
     run_companyworld_cadence,
+    run_companyworld_intervention,
     run_companyworld_observation,
 )
 from investigation_world.observatory.models import ScenarioPool
@@ -24,6 +26,16 @@ def _provider_parameters(value: str) -> dict[str, Any]:
         raise typer.BadParameter("provider parameters must be valid JSON") from exc
     if not isinstance(decoded, dict):
         raise typer.BadParameter("provider parameters must decode to a JSON object")
+    return decoded
+
+
+def _read_json_object(path: Path, label: str) -> dict[str, Any]:
+    try:
+        decoded = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"{label} must contain valid JSON") from exc
+    if not isinstance(decoded, dict):
+        raise typer.BadParameter(f"{label} must contain a JSON object")
     return decoded
 
 
@@ -261,6 +273,40 @@ def run_companyworld_on_cadence(
     payload.update({"due": True, "cadence_id": result.decision.cadence_id})
     typer.echo(json.dumps(payload, indent=2))
     raise typer.Exit(1 if result.cycle.scheduler.failed else 0)
+
+
+@app.command("companyworld-intervention")
+def run_companyworld_intervention_command(
+    config_json: Path = typer.Option(..., "--config", exists=True, readable=True),
+    intervention_json: Path = typer.Option(..., "--intervention", exists=True, readable=True),
+):
+    """Run a controlled CompanyWorld baseline/intervention A/B experiment from JSON specs."""
+    config = CompanyWorldLiveRunConfig.model_validate(
+        _read_json_object(config_json, "live config")
+    )
+    spec = InterventionSpec.model_validate(
+        _read_json_object(intervention_json, "intervention spec")
+    )
+    report = run_companyworld_intervention(config, spec)
+    typer.echo(
+        json.dumps(
+            {
+                "report_id": report.report_id,
+                "intervention_id": report.intervention.intervention_id,
+                "baseline_cycle_id": report.baseline_cycle_id,
+                "intervention_cycle_id": report.intervention_cycle_id,
+                "source_world_version": report.materialization.source_world_version,
+                "intervention_world_version": report.materialization.intervention_world_version,
+                "reward_delta": report.effect.reward.delta,
+                "cost_delta": report.effect.cost.delta,
+                "step_delta": report.effect.steps.delta,
+                "degraded_dimensions": report.effect.degraded_dimensions,
+                "improved_dimensions": report.effect.improved_dimensions,
+                "report": str(config.store_root / "interventions" / f"{report.report_id}.json"),
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
