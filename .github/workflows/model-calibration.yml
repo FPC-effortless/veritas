@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - "src/investigation_world/calibration/**"
+      - "src/investigation_world/training_value/**"
       - "tools/run_model_calibration.py"
+      - "tools/run_noise_ablation.py"
+      - "tools/run_training_value_v2.py"
       - "tools/build_customer_evaluation_report.py"
       - ".github/workflows/model-calibration.yml"
   workflow_dispatch:
@@ -38,26 +41,21 @@ jobs:
       MKL_NUM_THREADS: "4"
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Cache model files
         uses: actions/cache@v4
         with:
           path: .cache/huggingface
           key: hf-${{ runner.os }}-${{ matrix.slug }}-v1
-
       - name: Install Veritas
         run: python -m pip install -e ".[test]"
-
       - name: Install CPU model runtime
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
           python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" sentencepiece
-
       - name: Run calibration
         run: |
           python tools/run_model_calibration.py \
@@ -65,12 +63,96 @@ jobs:
             --output "calibration-results/${{ matrix.slug }}.json" \
             --max-new-tokens 256 \
             --max-input-tokens 7168
-
       - name: Upload calibration result
         uses: actions/upload-artifact@v4
         with:
           name: calibration-${{ matrix.slug }}
           path: calibration-results/${{ matrix.slug }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  noise-ablation:
+    name: qwen0.5b-noise-conflict
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-qwen2.5-0.5b-v1
+      - name: Install Veritas and model runtime
+        run: |
+          python -m pip install -e ".[test]"
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
+          python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" sentencepiece
+      - name: Verify ablation invariants
+        run: python -m pytest tests/unit/test_noise_ablation.py -q
+      - name: Run noise/conflict ablation
+        run: |
+          python tools/run_noise_ablation.py \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --output ablation-results/qwen2.5-0.5b-noise-conflict.json \
+            --distractors 6 \
+            --max-new-tokens 256 \
+            --max-input-tokens 7168
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ablation-qwen0.5b-noise-conflict
+          path: ablation-results/qwen2.5-0.5b-noise-conflict.json
+          if-no-files-found: error
+          retention-days: 30
+
+  training-value-v2:
+    name: qwen0.5b-training-value-v2
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v2-v1
+      - name: Install Veritas and training runtime
+        run: |
+          python -m pip install -e ".[test]"
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4,<3"
+          python -m pip install "transformers>=4.46,<5" "accelerate>=1,<2" "peft>=0.13,<1" sentencepiece
+      - name: Verify training-value invariants
+        run: python -m pytest tests/unit/test_training_value.py -q
+      - name: Run training-value v2
+        run: |
+          python tools/run_training_value_v2.py \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --output training-results/qwen2.5-0.5b-training-v2.json \
+            --train-examples 12 \
+            --heldout-examples 12 \
+            --epochs 3 \
+            --learning-rate 0.0005 \
+            --max-length 1536 \
+            --max-new-tokens 192
+      - uses: actions/upload-artifact@v4
+        with:
+          name: training-value-v2-qwen0.5b
+          path: training-results/qwen2.5-0.5b-training-v2.json
           if-no-files-found: error
           retention-days: 30
 
@@ -82,22 +164,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Install Veritas
         run: python -m pip install -e ".[test]"
-
       - name: Download completed calibration artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: calibration-*
           path: calibration-results
           merge-multiple: true
-
       - name: Build comparative benchmark report
         shell: bash
         run: |
@@ -133,7 +211,6 @@ jobs:
           }
           (root / 'EVIDENCE_MANIFEST.json').write_text(json.dumps(manifest, indent=2, sort_keys=True))
           PY
-
       - name: Upload evidence bundle
         uses: actions/upload-artifact@v4
         with:
