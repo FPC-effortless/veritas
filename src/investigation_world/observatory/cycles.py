@@ -16,6 +16,11 @@ from investigation_world.observatory.aggregation import (
     compare_aggregates,
     snapshot_key,
 )
+from investigation_world.observatory.capability_graph import (
+    CapabilityAttributionReport,
+    CapabilityGraph,
+    attribute_drift,
+)
 from investigation_world.observatory.models import (
     CapabilityRun,
     ExperimentSpec,
@@ -45,6 +50,7 @@ class ObservationCycleReport(BaseModel):
     run_ids: list[str] = Field(default_factory=list)
     aggregates: list[AggregatedCapabilityProfile] = Field(default_factory=list)
     drift: list[AggregateDriftReport] = Field(default_factory=list)
+    attribution: list[CapabilityAttributionReport] = Field(default_factory=list)
 
     @property
     def has_regression(self) -> bool:
@@ -80,7 +86,7 @@ def _latest_baseline(
 
 
 class ObservationCycleRunner:
-    """Execute one observation cycle and emit aggregate capability drift artifacts."""
+    """Execute one observation cycle and emit drift plus optional graph diagnostics."""
 
     def __init__(
         self,
@@ -88,10 +94,12 @@ class ObservationCycleRunner:
         store: ObservatoryStore,
         *,
         report_root: str | Path | None = None,
+        capability_graph: CapabilityGraph | None = None,
     ):
         self.scheduler = scheduler
         self.store = store
         self.report_root = Path(report_root) if report_root is not None else store.root / "cycles"
+        self.capability_graph = capability_graph
 
     def run(
         self,
@@ -117,10 +125,15 @@ class ObservationCycleRunner:
         current_runs = [current_by_id[run_id] for run_id in run_ids if run_id in current_by_id]
         aggregates = _group_aggregates(current_runs)
         drift: list[AggregateDriftReport] = []
+        attribution: list[CapabilityAttributionReport] = []
         for aggregate in aggregates:
             baseline = _latest_baseline(historical, aggregate)
-            if baseline is not None:
-                drift.append(compare_aggregates(baseline, aggregate))
+            if baseline is None:
+                continue
+            drift_report = compare_aggregates(baseline, aggregate)
+            drift.append(drift_report)
+            if self.capability_graph is not None:
+                attribution.append(attribute_drift(self.capability_graph, drift_report))
         cycle_id = f"CYCLE-{stable_hash([experiment.experiment_id, run_ids])[:20].upper()}"
         report = ObservationCycleReport(
             cycle_id=cycle_id,
@@ -131,6 +144,7 @@ class ObservationCycleRunner:
             run_ids=run_ids,
             aggregates=aggregates,
             drift=drift,
+            attribution=attribution,
         )
         if persist_report:
             self.report_root.mkdir(parents=True, exist_ok=True)
