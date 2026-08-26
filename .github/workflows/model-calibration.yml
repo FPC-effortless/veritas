@@ -3,10 +3,11 @@ name: Model Calibration
 on:
   push:
     branches:
-      - feature/model-calibration
+      - feature/evidence-currency
     paths:
       - "src/investigation_world/calibration/**"
       - "tools/run_model_calibration.py"
+      - "tools/build_customer_evaluation_report.py"
       - ".github/workflows/model-calibration.yml"
   workflow_dispatch:
 
@@ -72,5 +73,73 @@ jobs:
         with:
           name: calibration-${{ matrix.slug }}
           path: calibration-results/${{ matrix.slug }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  aggregate:
+    name: aggregate-evidence
+    needs: calibrate
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Download completed calibration artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: calibration-*
+          path: calibration-results
+          merge-multiple: true
+
+      - name: Build comparative benchmark report
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(calibration-results/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No completed calibration JSON files were produced." >&2
+            exit 1
+          fi
+          python tools/build_customer_evaluation_report.py \
+            "${files[@]}" \
+            --output calibration-results/REPORT.md \
+            --title "Veritas CompanyWorld v0.1 Baseline Evidence" \
+            --benchmark-version "CompanyWorld-v0.1"
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('calibration-results')
+          entries = []
+          for path in sorted(root.glob('*.json')):
+              data = path.read_bytes()
+              entries.append({
+                  'file': path.name,
+                  'sha256': hashlib.sha256(data).hexdigest(),
+                  'bytes': len(data),
+              })
+          manifest = {
+              'schema_version': '0.1.0',
+              'benchmark_version': 'CompanyWorld-v0.1',
+              'source_commit': '${{ github.sha }}',
+              'workflow_run_id': '${{ github.run_id }}',
+              'artifacts': entries,
+          }
+          (root / 'EVIDENCE_MANIFEST.json').write_text(json.dumps(manifest, indent=2, sort_keys=True))
+          PY
+
+      - name: Upload evidence bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: companyworld-v0.1-evidence
+          path: calibration-results/
           if-no-files-found: error
           retention-days: 30
