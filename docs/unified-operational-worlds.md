@@ -1,8 +1,8 @@
 # Veritas Unified Operational Worlds
 
-Veritas is a unified operational-world capability foundry for training and evaluating agents on economically valuable, long-horizon work with independently verifiable outcomes.
+Veritas is a unified operational-world capability foundry for training and evaluating agents on economically valuable work with independently verifiable outcomes.
 
-The product is not a collection of unrelated benchmarks. Every operational domain runs on the same substrate:
+The product is not a collection of unrelated benchmarks. Every operational domain runs on the same architecture:
 
 ```text
 Persistent Operational Substrate
@@ -16,12 +16,13 @@ Persistent Operational Substrate
   -> independent multi-layer verifier
   -> reward + diagnostics
   -> replay / fork / counterfactual
+  -> train / IID / OOD / adversarial distributions
   -> trajectory / benchmark / training product
 ```
 
 ## Product surface
 
-`investigation_world.veritas.Veritas` is the canonical Python entry point. The operational suite currently contains five first-class domains:
+`investigation_world.veritas.Veritas` is the canonical Python entry point. Five first-class domains share the substrate/runtime/verifier contract:
 
 1. `financial_spreadsheet`
 2. `enterprise_operations`
@@ -29,106 +30,46 @@ Persistent Operational Substrate
 4. `investigation_osint`
 5. `gis_operations`
 
-`Veritas.build_company()` mounts all five domains into one `PersistentOperationalSubstrate`. The resulting `VeritasCompany` has a shared organization identity, persistent state, a cross-domain entity/relation graph, append-only event history, deterministic snapshots, and counterfactual forks.
-
-The same `Veritas` facade exposes a capability catalog covering the wider product rather than treating older modules as separate products:
-
-- Unified Operational Worlds
-- CompanyWorld
-- External Investigation
-- Selective Agency
-- Capability Foundry
-- Continuous Capability Observatory
-- Reality Calibration
-- Verified Training Products
-
-Existing capability-family implementations remain intact and are unified at the product layer rather than duplicated.
+The same facade inventories the wider Veritas product: CompanyWorld, External Investigation, Selective Agency, Capability Foundry, Continuous Capability Observatory, Reality Calibration and Verified Training Products.
 
 ## Shared episode contract
 
-Each `OperationalEpisode` contains:
+Each `OperationalEpisode` contains a public `TaskContract`, agent-visible records and public action specifications, while evaluator-only truth lives in `HiddenOracle`.
 
-- a public `TaskContract`;
-- agent-visible `OperationalRecord` objects;
-- public action specifications;
-- evaluator-only `HiddenOracle` state;
-- deterministic hidden action effects;
-- target state assertions;
-- invariants;
-- required and forbidden actions;
-- evidence requirements;
-- tool-call and cost budgets.
+The private oracle contains target state, invariants, hidden action effects, required/forbidden actions, evidence requirements and resource bounds. Episode construction rejects malformed contracts, including duplicate records/actions, actions on non-permitted systems, required/forbidden contradictions, missing evidence and oracle effects that reference unknown actions or undeclared parameters.
 
-Episode construction rejects malformed contracts, including duplicate public actions or records, actions on non-permitted systems, required/forbidden contradictions, oracle effects referencing unknown actions or undeclared parameters, missing required evidence records, and duplicate invariant IDs.
-
-`OperationalEpisode.public_payload()` explicitly omits the oracle. Evaluated agents must never receive evaluator targets, hidden effects, forbidden-action labels, consequence severity, or private ground truth.
+`OperationalEpisode.public_payload()` excludes oracle state. `OperationalRuntime.act()` likewise returns only system-observable action information; hidden state changes, consequence severity, forbidden-action status and hidden side effects remain harness/verifier data.
 
 ## Persistent operational substrate
 
-`PersistentOperationalSubstrate` is the shared truth authority for multi-domain Veritas worlds. It provides:
+`PersistentOperationalSubstrate` is the truth authority for multi-domain Veritas worlds. It provides:
 
 - organization-scoped persistent state;
-- mounting of multiple domain episodes without resetting state;
-- append-only `OperationalStateEvent` transitions;
-- shared record inventory with episode-based domain isolation;
+- multi-domain episode mounting without state reset;
+- append-only state events;
+- episode-owned record isolation;
 - persistent `OperationalEntity` and `OperationalRelation` graph;
-- domain- and entity-filtered graph traversal;
-- domain- and world-filtered event history;
+- domain/entity-filtered graph traversal;
 - deterministic `state_at(sequence)` reconstruction;
-- point-in-time snapshots;
+- snapshots and event history;
 - `fork_at(sequence)` for replay and counterfactual branches;
-- integrity validation over event ordering, reconstructed state, relation endpoints, world IDs, and domain ownership.
+- integrity checks over state, event ordering, relation endpoints and world/domain ownership.
 
-When a `VeritasCompany` is built, its agent-visible records are aggregated into persistent operational entities. Each entity preserves the domains, record types, systems, and source record IDs that describe it. Record relationships become typed graph edges, and the organization is linked to every operational object through the shared company scope.
-
-This is the basis for long-horizon tasks in which earlier finance, enterprise, infrastructure, investigation, or GIS actions change the state encountered by later tasks.
-
-## Public tool boundary
-
-`OperationalRuntime` provides the shared executable interface:
-
-- `search(system, query)`
-- `search_all(query)`
-- `open_record(record_id)`
-- `act(action_name, **parameters)`
-- `state_snapshot()` — harness-facing, not an evaluated-agent tool
-- `budget_snapshot()`
-- `trace()` — harness/verifier-facing
-- `submit(submission)`
-
-A runtime can operate as an isolated episode or attach to a persistent company substrate. Attached runtimes commit realized state changes and side effects into the shared event journal.
-
-The tool boundary is intentionally asymmetric. `act()` returns only system-observable response data. Verifier-only information remains in the harness trace:
-
-```text
-agent sees:
-  action name
-  public system
-  submitted/system-observable result
-
-harness/verifier sees:
-  hidden state changes
-  hidden side effects
-  forbidden-action status
-  consequence severity
-  action parameters and cost
-```
-
-This prevents reward-oracle leakage while still allowing the simulated system to return legitimate observable action results.
+`Veritas.build_company()` mounts all five domains into one `VeritasCompany` and populates its shared entity graph from domain records. That gives later work a persistent company state rather than forcing every task to begin from an unrelated toy environment.
 
 ## Verification contract
 
-All operational worlds are scored on the same seven dimensions:
+All operational worlds emit the same seven dimensions:
 
-1. **Outcome** — was the objective actually achieved?
-2. **State** — do verified target state assertions hold?
+1. **Outcome** — was the objective achieved?
+2. **State** — do independently checked target assertions hold?
 3. **Constraints** — were invariants and authority boundaries preserved?
-4. **Side effects** — did the agent cause harmful or unnecessary changes?
+4. **Side effects** — did execution create unnecessary or harmful consequences?
 5. **Process** — were required operational steps completed?
-6. **Efficiency** — was work completed within reasonable action/tool budgets?
-7. **Evidence** — are required supporting records present?
+6. **Efficiency** — was resource use proportionate?
+7. **Evidence** — is the required evidence supplied?
 
-The aggregate reward is currently:
+The aggregate reward currently uses:
 
 ```text
 0.30 outcome
@@ -140,127 +81,123 @@ The aggregate reward is currently:
 + 0.10 evidence
 ```
 
-Domain-native verifiers can add richer checks, but they should emit into this shared contract rather than replacing it.
+Domain-native verifiers may add richer checks but should emit into this common contract rather than redefining success.
 
-## Financial / Spreadsheet Operational World
+## Production-scale distribution
 
-The initial executable scenario is a DCF repair task. It models workbook formulas, dependency trees, audit checks, recalculation, formula-lineage invariants, and destructive hard-code failure modes.
+Veritas 0.7 adds `OperationalDistributionConfig` and a deterministic compiler for the five-domain operational suite.
 
-The scale expansion should add:
+Default scale:
 
-- multi-sheet three-statement models;
-- circular-reference and broken-link faults;
-- scenario tables and sensitivities;
-- pivot/table/chart operations;
-- formula provenance and dependency DAGs;
-- accounting reconciliation;
-- valuation and covenant checks;
-- train/IID/OOD/adversarial workbook generators.
+| Split | Per domain | Total |
+|---|---:|---:|
+| Train | 512 | 2,560 |
+| IID test | 128 | 640 |
+| OOD | 128 | 640 |
+| Adversarial | 128 | 640 |
+| **Total** | **896** | **4,480** |
 
-## Enterprise Operations World
+Every case remains an executable `OperationalEpisode`; the scale layer does not reduce the environment to prompt/label rows.
 
-The initial scenario spans CRM + ERP state for a high-value discount approval. It verifies cross-system consistency, authority routing, order holds, and segregation-of-duties constraints.
+Current domain parameterizers vary operational state and identifiers:
 
-The intended expansion covers CRM, ERP, HRIS, ITSM, email, documents, approvals, accounting, procurement, inventory, and analytics within one persistent synthetic company.
+- **Financial / Spreadsheet:** sheet/cell locations, formula windows, valuation outcomes and units.
+- **Enterprise Operations:** deal/order IDs, accounts, discounts and transaction amounts.
+- **DevOps / Incident Response:** services, deployments, databases, error rates, latency and pod state.
+- **Investigation / OSINT:** companies, abbreviated/true/decoy identities, addresses, registry numbers and historical dates.
+- **GIS Operations:** layer identities, target overlays, CRS pairs, feature counts and geometry defects.
 
-## DevOps / Incident-Response World
+The evaluator bundle also tracks scenario-family, surface-profile and `DifficultyVector` metadata. OOD cases increase unfamiliarity/noise. Adversarial cases introduce conflicting context, tighter resource budgets and high adversarial pressure.
 
-The initial scenario models an API outage with observability, Kubernetes, and database surfaces. The correct solution restores the failing service, verifies recovery, and leaves a healthy database untouched.
+## Split and oracle privacy
 
-The intended expansion includes:
+Per-case split assignment is private. Public IDs are opaque stable-hash identifiers rather than containing split or generator-seed text. Public cases are deterministically hash-mixed rather than emitted in split blocks.
 
-- Kubernetes clusters;
-- Terraform/IaC state;
-- deployment and rollback workflows;
-- logs, metrics, traces, alerts, and SLOs;
-- network and DNS failures;
-- security incidents;
-- dependency graphs and blast-radius constraints;
-- multi-stage incident timelines.
+The public bundle excludes:
 
-## Investigation / OSINT World
+- split;
+- generator seed;
+- scenario-family label;
+- surface-profile label;
+- difficulty vector;
+- hidden target state;
+- hidden action effects;
+- forbidden-action labels;
+- evaluator oracle.
 
-The initial operational episode bridges Veritas's existing investigation capability into the shared substrate through identity resolution, evidence linking, provenance requirements, and false-merge penalties.
+The private evaluator bundle retains those values. The compiler produces separate public and private fingerprints, and distribution validation checks count integrity, task/world uniqueness, train/held-out disjointness, leakage and adversarial conditions.
 
-The mature domain should continue to use the existing richer investigation generator and verifier while exposing compatible operational task/runtime metadata for cross-domain evaluation and training.
+See [`operational-production-scale.md`](operational-production-scale.md) for the full scale/integrity specification.
 
-## GIS Operational World
+## Domain coverage
 
-The initial scenario verifies CRS alignment, geometry repair, topology validity, and source preservation for a parcel/flood-zone workflow.
+### Financial / Spreadsheet
 
-The intended expansion includes:
+The reference execution contract covers formula repair, recalculation, dependency evidence, model invariants and destructive hard-code failure. The production generator varies workbook/formula state over thousands of possible cases. Native XLSX/formula-DAG execution is a separate fidelity extension.
 
-- vector and raster workflows;
-- spatial joins and overlays;
-- network/routing operations;
-- projection correctness;
-- topology and geometry checks;
-- geoprocessing pipelines;
-- exact/tolerance-aware output-file verification.
+### Enterprise Operations
 
-## Unified company substrate
+The reference execution contract spans CRM + ERP approval state, authority routing, order holds and segregation-of-duties controls. The production generator varies customer/deal/order/discount/value state. Broader ERP/CRM/HRIS/ITSM replicas are a fidelity extension.
 
-The implementation can mount all five worlds into one persistent synthetic organization:
+### DevOps / Incident Response
 
-```text
-Company identity
-  + typed operational entity graph
-  + CRM / ERP operational state
-  + workbook and financial-model state
-  + cloud infrastructure and incident state
-  + public-record / investigation state
-  + parcel and geospatial state
-  + hidden causal ground truth per task
-  + append-only cross-domain event history
-  + deterministic reconstruction and forks
-```
+The reference execution contract covers observability, service recovery, dependency health, blast-radius control and recovery verification. The production generator varies services, databases, deployments, latency, errors and replica health. Native Kubernetes/Terraform sandboxes are a fidelity extension.
 
-The current entity graph gives the common substrate a stable identity layer. The next depth layer is stronger semantic and causal linking so the same customer, supplier, employee, facility, account, application, asset, parcel, and incident can participate in multiple domains and propagate consequences between them.
+### Investigation / OSINT
 
-## Foundry integration
+The reference execution contract covers evidence-backed identity resolution, provenance and false-merge prevention and interoperates conceptually with Veritas External Investigation. The production generator varies entities, decoys, addresses, filings and historical evidence. Larger evidence corpora and richer semantic entailment are fidelity extensions.
 
-The shared substrate feeds the existing Veritas foundry lifecycle:
+### GIS Operations
 
-```text
-world generation
--> task distribution
--> executable runtime
--> trace capture
--> independent verification
--> failure mining
--> adversarial mutation
--> held-out benchmark
--> verified demonstrations / preferences / RL trajectories / VOPSD inputs
--> observatory re-evaluation
-```
-
-Training algorithms remain outside environment truth. SFT, RL, preference learning, and VOPSD may consume verified trajectories, but none is allowed to define success.
+The reference execution contract covers CRS alignment, geometry repair, topology validity and source preservation. The production generator varies layers, overlays, CRS combinations, feature counts and defects. Native vector/raster artifact execution is a fidelity extension.
 
 ## CLI
-
-The package retains `iworld` for backward compatibility and adds the canonical Veritas product CLI:
 
 ```bash
 veritas capabilities
 veritas domains
 veritas build-world financial_spreadsheet --seed 42 --output finance.json
-veritas build-suite --seed 42 --output suite.json --oracle-output private_oracles.json
+veritas build-suite --seed 42 --output suite.json --oracle-output reference_oracles.json
+veritas build-distribution --seed 42 --output public.json --oracle-output private.json
+veritas validate-production-scale --seed 42
 veritas build-company --organization-id ORG-DEMO-001 --seed 42 --output company.json
 ```
 
-Public episode bundles and evaluator-only oracle bundles are written separately. A company build also includes its public entity/relation graph, world payloads, snapshot, and event history.
+The legacy `iworld` CLI remains available for backwards compatibility.
 
-## Immediate engineering sequence
+## CI production gate
 
-The current implementation establishes the persistent state substrate, entity graph, shared runtime/verifier contract, capability catalog, and one executable reference scenario per domain. The next scaling layers should be built in this order:
+The required CI workflow contains a dedicated `Production-scale operational distribution` job. It installs the package and runs the default 4,480-case compiler/validator. This job is included in the `Required` aggregate gate alongside Python 3.12/3.13 tests, package build, environment smoke tests, frontend build and container health.
 
-1. procedural generators that create hundreds to thousands of tasks per domain with train/IID/OOD/adversarial partitions;
-2. deepen the shared entity graph into a cross-domain causal graph with consequence propagation;
-3. domain-native artifact engines for real workbook files, containerized infrastructure, enterprise database state, evidence corpora, and GIS files;
-4. cross-domain task compiler using one persistent company and multi-episode temporal histories;
-5. domain-specific verifier plugins that add native checks while emitting the shared seven-part score;
-6. private split/oracle packaging and registry for commercial benchmarks;
-7. rollout adapters and verified training-product exporters;
-8. observatory cells spanning world x model x harness x seed x snapshot.
+## Foundry integration
 
-This makes the five environments one Veritas product rather than five codebases.
+The production distribution remains part of the existing Veritas learning/evaluation lifecycle:
+
+```text
+reality calibration
+-> deterministic world generation
+-> train / IID / OOD / adversarial distribution
+-> executable runtime
+-> trace capture
+-> independent verification
+-> failure mining
+-> challenge mutation
+-> verified demonstration / preference / RL / VOPSD products
+-> held-out observatory re-evaluation
+```
+
+Training algorithms remain outside environment truth. SFT, preference learning, RL and VOPSD consume verifier-qualified outputs; none is allowed to define the hidden target or verifier.
+
+## Remaining depth work
+
+The procedural synthetic distribution is now production-scale in volume, split integrity, reproducibility, adversarial pressure and CI validation. Further work is primarily depth/fidelity:
+
+1. deepen scenario-family semantics instead of relying primarily on domain parameterization;
+2. link the shared entity graph into a richer causal graph with consequences propagating between domains;
+3. add native XLSX, enterprise-app/database, Kubernetes/Terraform, evidence-corpus and GIS artifact engines;
+4. compile long-horizon cross-domain tasks over persistent multi-episode histories;
+5. add native verifier plugins while preserving the common seven-dimensional score contract;
+6. empirically calibrate difficulty and realism against public data, telemetry and expert procedures;
+7. add distributed runtime persistence and private commercial benchmark/oracle registries.
+
+Those improvements strengthen fidelity without fragmenting Veritas into separate domain products.
