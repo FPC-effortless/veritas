@@ -14,7 +14,9 @@ def test_bounded_profile_measures_only_requested_levels_and_preserves_anchors():
     assert set(report["model_scores"]) == {"diagnostic", "interactive"}
     assert report["reference_anchors"]["diagnostic"]["mean"] == 1.0
     assert report["reference_anchors"]["interactive"]["mean"] == 1.0
-    assert report["parse_failures"] == {"diagnostic": 0, "interactive": 0}
+    # Empty JSON is syntactically valid but not a valid Veritas answer schema,
+    # so bounded calibration deliberately counts it as an invalid structured output.
+    assert report["parse_failures"] == {"diagnostic": 2, "interactive": 2}
 
 
 def test_bounded_profile_rejects_unsupported_or_excessive_slices():
