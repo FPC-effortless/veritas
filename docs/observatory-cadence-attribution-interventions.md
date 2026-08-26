@@ -2,13 +2,13 @@
 
 This layer extends the Continuous Agent Capability Observatory from one-off live runs into a repeatable experimental system.
 
-It adds three separate concepts that must not be conflated:
+It keeps four concepts separate:
 
 ```text
-cadence        = when a frozen observation should be repeated
-longitudinal drift = what changed across comparable time/model snapshots
-capability attribution = which declared capability dependencies are consistent with that drift
-intervention effect = how behavior changes when the environment is deliberately perturbed
+cadence                 = when a frozen observation should be repeated
+longitudinal drift      = what changed across comparable time/model snapshots
+capability attribution  = which declared capability dependencies are consistent with that drift
+intervention effect     = how behavior changes when the environment is deliberately perturbed
 ```
 
 ## Cadence management
@@ -17,153 +17,190 @@ intervention effect = how behavior changes when the environment is deliberately 
 
 The cadence layer deliberately does **not** run its own background thread. It is an idempotent scheduling boundary designed to be invoked by cron, GitHub Actions, a queue worker, Kubernetes, or another orchestration service.
 
-A cadence stores:
+A cadence stores stable policy identity, last start/completion/failure times, the last cycle ID, and consecutive failure count. The cadence identity fingerprints the frozen CompanyWorld bundle plus execution/provider configuration while excluding only time-varying snapshot fields and storage paths. A configuration or world change therefore starts a new cadence lineage instead of inheriting an unrelated checkpoint.
 
-- stable policy identity;
-- last start time;
-- last successful completion;
-- last failure;
-- last cycle ID;
-- consecutive failure count.
-
-`run_companyworld_cadence()` creates a fresh UTC time snapshot only when the cadence is due and then executes the normal CompanyWorld observation path. Calling it again before the interval expires does not create another cycle unless `force=True`.
-
-This separation matters because scheduling infrastructure should not change Observatory experiment semantics.
+`run_companyworld_cadence()` creates a fresh UTC time snapshot only when the cadence is due. Calling it again before the interval expires does not create another cycle unless `force=True`.
 
 ## Capability graph diagnostics
 
 A `CapabilityGraph` is a versioned directed acyclic graph of declared capability dependencies. Nodes may map to verifier-visible dimensions and edges declare prerequisite relationships.
 
-The initial CompanyWorld investigation graph includes:
+The initial CompanyWorld investigation graph includes evidence selection, fact precision/recall/resolution, calibration, appropriate abstention, and investigation efficiency.
 
-```text
-Evidence Selection
-   ├──> Fact Precision ──┐
-   └──> Fact Recall ─────┴──> Fact Resolution ──> Calibration
+`attribute_drift()` returns directly observed dimension deltas, regressed declared prerequisites, propagated diagnostic scores, and candidate upstream roots.
 
-Appropriate Abstention
-Investigation Efficiency
-```
+This is **diagnostic attribution**, not causal attribution. A graph result says that an observed regression is structurally consistent with particular prerequisite regressions under the declared capability model. It does not prove that one capability caused another to fail.
 
-`attribute_drift()` combines this declared graph with a run-level or aggregate drift report.
+Every CompanyWorld `ObservationCycleReport` can include these attribution artifacts automatically.
 
-It returns:
+## Counterfactual intervention materialization
 
-- directly observed dimension deltas;
-- regressed declared prerequisites;
-- a diagnostic propagation score;
-- candidate upstream roots.
-
-This is intentionally described as **diagnostic attribution**, not causal attribution. A graph result says that an observed regression is structurally consistent with particular prerequisite regressions under the declared capability model. It does not prove that one capability caused another to fail.
-
-Every `ObservationCycleReport` can now include these attribution artifacts automatically. CompanyWorld live observations use the versioned CompanyWorld investigation graph by default.
-
-## Counterfactual intervention records
-
-An `InterventionSpec` identifies one source scenario and one or more controlled mutations.
-
-The first executable CompanyWorld intervention set is deliberately restricted to perturbations whose semantics can be implemented without silently changing evaluator truth:
+An `InterventionSpec` identifies one source scenario and one or more controlled mutations. CompanyWorld currently supports truth-preserving interventions for:
 
 - record reordering;
 - distractor injection;
 - optional-field redaction with verifier-supporting records protected;
-- budget tightening.
-
-Tool-failure and permission-change mutations are not accepted as truth-preserving Observatory interventions yet because the current CompanyWorld runtime does not execute those Foundry constraint annotations as real runtime failures/permission transitions. Recording a mutation that the runtime ignores would create a false experiment.
-
-### Materialization
+- budget tightening;
+- scheduled tool failure;
+- scheduled permission revoke/restore transitions.
 
 `materialize_companyworld_intervention()`:
 
 1. loads the privileged source episode;
 2. extracts only its public payload for mutation;
-3. protects records used by private verifier facts when truth preservation is requested;
-4. applies deterministic Foundry mutations;
-5. reattaches the unchanged private oracle evaluator-side;
-6. fingerprints the resulting bundle as a new world version;
-7. records every `MutationLineage`.
+3. protects private-verifier supporting records when truth preservation is requested;
+4. validates system-specific mutations against the task's permitted systems;
+5. applies deterministic mutations and records `MutationLineage`;
+6. preserves the private oracle unchanged evaluator-side;
+7. fingerprints the resulting bundle as a distinct world version.
 
-The resulting world is therefore distinguishable from the baseline world at the cell identity level.
+Multiple permission transitions are preserved in order. Tool failures preserve one-shot versus persistent semantics.
 
-## Executable A/B experiments
+## CompanyWorld runtime-v2 intervention semantics
 
-`run_companyworld_intervention()` executes two arms with the same:
+`companyworld-runtime-v2` executes the previously declarative failure/permission schedules.
 
-- model specification;
-- model snapshot;
-- harness and harness version;
-- verifier;
-- execution configuration;
-- source scenario;
-- time snapshot.
+Intervention steps are zero-based attempted public tool-operation indices. Failed attempts advance the intervention operation index but do not consume CompanyWorld tool budget. This makes a one-shot failure recoverable by retry while still making the failure observable.
 
-Only the world differs:
+### Tool failure
 
-```text
-                   ┌─ baseline frozen world ───────> CapabilityRun
-same agent stack ──┤
-                   └─ intervention world ──────────> CapabilityRun
-                                      ↓
-                              InterventionEffectReport
+A scheduled tool failure specifies:
+
+```json
+{
+  "system": "ERP",
+  "at_step": 3,
+  "persistent": false
+}
 ```
 
-The report records deltas for:
+A one-shot failure affects the matching operation and can recover on a later retry. A persistent failure remains active from `at_step` onward.
 
-- reward;
-- cost;
-- trajectory steps;
-- every common verifier capability dimension;
-- degraded dimensions;
-- improved dimensions.
+### Permission changes
 
-Intervention reports are stored under:
+A permission transition specifies:
 
-```text
-<observatory store>/interventions/IREPORT-*.json
+```json
+{
+  "system": "ERP",
+  "at_step": 2,
+  "action": "revoke"
+}
 ```
 
-The report explicitly states that intervention effects are not longitudinal model drift.
+A later `restore` transition can reinstate access. `search_system`, `open_record`, and cross-system `search_all` respect revoked systems. Outside a declared intervention, lookup semantics and CompanyWorld budget costs remain aligned with the baseline runtime.
 
-## Why the three measurements stay separate
+### Failure-aware trajectories
 
-A model can regress across time without being particularly sensitive to an intervention. It can also remain stable across time while being highly brittle under distractors or tighter budgets.
+`TracingRuntimeProxy` records failed public operations before re-raising them. A failed call therefore becomes a trace event such as `search_system_error` with argument, state, cost and exception metadata.
 
-Veritas should therefore maintain three distinct axes:
+`behavior_from_trace()` recognizes a successful repetition of the same method after a failed event as a recovery. The Observatory can therefore distinguish:
+
+```text
+failure without recovery
+failure -> retry -> successful recovery
+persistent unavailability
+permission loss -> alternate strategy
+permission loss -> later restored access
+```
+
+The runtime version is intentionally bumped to `companyworld-runtime-v2`; old v1 runs must not be silently mixed with runs whose runtime semantics changed.
+
+## Executable A/B intervention experiments
+
+`run_companyworld_intervention()` executes baseline and treatment arms with the same model, harness, verifier, execution specification, time snapshot, scenario identity, task identity and seed. Only the world may differ.
+
+The comparator refuses a result if one of those frozen dimensions changed. It also rejects a budget-tightening experiment when an explicit `world_cost_budget` override would mask the treatment.
+
+Each `InterventionEffectReport` records treatment-minus-baseline deltas for reward, cost, trajectory steps and every common verifier capability dimension.
+
+Intervention effects are explicitly distinct from longitudinal model drift.
+
+## Repeated-seed paired intervention statistics
+
+The correct sampling unit for a robustness intervention is the **paired effect** within a scenario seed:
+
+```text
+Delta_i = treatment_i - baseline_i
+```
+
+`InterventionEffectSample` stores one such pair. `aggregate_intervention_effects()` groups samples from the same intervention family and `ModelSpec`, then estimates the mean paired effect across unique scenario/seed pairs.
+
+The aggregate includes:
+
+- sample count;
+- mean effect;
+- sample standard deviation;
+- standard error;
+- approximate 95% confidence interval;
+- min/max;
+- per-capability paired-effect estimates;
+- dimensions with positive/negative mean intervention effects.
+
+An intervention family intentionally ignores scenario identity and RNG seeds while retaining mutation kinds, ordered mutation parameters, truth-preservation semantics and the family name. This allows the same perturbation design to be evaluated across many independently generated worlds.
+
+`run_companyworld_intervention_suite()` executes and persists such a repeated-seed suite as an `ISUITE-*` artifact.
+
+## Model x intervention interaction
+
+`compare_model_intervention_effects()` compares two model-specific aggregate effects for the same intervention family.
+
+For each metric:
+
+```text
+interaction = mean_effect_model_2 - mean_effect_model_1
+```
+
+This measures **differential sensitivity**. For example, two models can have similar baseline success while one degrades much more under source failure or permission loss.
+
+The interaction report uses an independent-group normal approximation for its standard error and approximate 95% interval. It is not labeled causal model superiority and it is not longitudinal drift.
+
+`compare_companyworld_intervention_suites()` persists these comparisons as model-interaction artifacts when a storage root is supplied.
+
+## Persisted artifacts
+
+```text
+<store>/runs.jsonl                         raw CapabilityRun records
+<store>/cycles/CYCLE-*.json               longitudinal observation cycles
+<store>/cadence/cadence.json              recurring observation checkpoints
+<store>/interventions/IREPORT-*.json       single paired intervention experiments
+<store>/intervention_suites/ISUITE-*.json repeated-seed paired-effect aggregates
+<store>/intervention_interactions/*.json  model x intervention comparisons
+```
+
+## Scientific separation
+
+Veritas maintains three experimental axes:
 
 ```text
 Temporal axis:
-    same world + same harness + different model/time snapshot
+    same world + same harness/runtime + different model/time snapshot
 
 Structural diagnostic axis:
     observed drift + declared capability graph
 
 Intervention axis:
-    same model/harness/time + deliberately changed world
+    same model/harness/verifier/execution/time/seed + deliberately changed world
 ```
 
-Together these enable a more useful capability observatory than a scalar leaderboard.
+The third axis can then be aggregated across seeds and compared across models without being conflated with temporal drift.
 
-## Current boundary
+## Implemented boundary
 
-Implemented:
+Implemented in this stack:
 
 - persisted cadence checkpoints and due-state;
-- cadence-gated CompanyWorld observation execution;
-- versioned acyclic capability graphs;
-- diagnostic graph attribution on run/aggregate drift;
-- automatic CompanyWorld attribution in cycle reports;
-- truth-preserving CompanyWorld intervention materialization;
-- protected verifier-support evidence during optional redaction;
-- separate intervention world fingerprints;
-- executable baseline/intervention A/B runs;
-- persisted intervention effect reports;
-- regression tests for cadence, attribution, intervention integrity, and A/B execution.
+- cadence identity tied to frozen experiment configuration;
+- versioned acyclic capability graphs and automatic diagnostic attribution;
+- truth-preserving deterministic CompanyWorld intervention materialization;
+- verifier-support evidence protection;
+- executable runtime tool-failure semantics;
+- executable permission revoke/restore semantics;
+- failed-operation tracing and recovery detection;
+- baseline/treatment A/B integrity guards;
+- paired-effect aggregation across scenario seeds;
+- model x intervention interaction estimates;
+- persistent single-intervention, suite and interaction artifacts;
+- regression tests for cadence, graph diagnostics, intervention materialization, runtime semantics, tracing/recovery and statistics.
 
-Next layers should add:
-
-- real runtime-level tool failure and permission-transition interventions;
-- multi-intervention factorial experiments;
-- statistical intervention aggregation across seeds;
-- intervention × model interaction comparisons;
-- capability graph learning/validation from accumulated experimental evidence rather than only declared structure;
-- a durable query/report surface over cadence, drift, attribution, and intervention artifacts.
+Future extensions can add factorial multi-intervention designs, richer state snapshot/restore counterfactuals, learned/validated capability graphs, non-normal/bootstrap uncertainty estimates at larger sample sizes, and a durable query/dashboard surface over Observatory artifacts.
