@@ -23,6 +23,21 @@ def test_public_payload_does_not_expose_oracle():
     assert "action_effects" not in str(payload)
 
 
+def test_action_result_does_not_leak_hidden_verifier_state():
+    runtime = OperationalRuntime(build_financial_spreadsheet_world(seed=42))
+    result = runtime.act("overwrite_values", range="DCF!F1:F30")
+    assert result == {
+        "action": "overwrite_values",
+        "system": "WORKBOOK",
+        "submitted": True,
+    }
+    assert "forbidden" not in result
+    assert "state_changes" not in result
+    assert "side_effects" not in result
+    assert runtime.trace()[0]["forbidden"] is True
+    assert runtime.trace()[0]["side_effects"] == ["formula_lineage_destroyed"]
+
+
 def test_financial_world_executes_and_verifies_ground_truth():
     runtime = OperationalRuntime(build_financial_spreadsheet_world(seed=42))
     runtime.act("repair_formula", cell="DCF!F18", formula="=SUM(Revenue!B2:B13)")
@@ -90,6 +105,11 @@ def test_persistent_company_mounts_all_worlds_and_replays_state():
         episode.metadata["organization_id"] == "ORG-TEST-001"
         for episode in company.episodes
     )
+    for episode in company.episodes:
+        domain_record_ids = {
+            record.record_id for record in company.substrate.records(domain=episode.task.domain)
+        }
+        assert domain_record_ids == {record.record_id for record in episode.records}
     assert company.substrate.validate_integrity() is True
 
     runtime = company.runtime(WorldDomain.FINANCIAL_SPREADSHEET)
