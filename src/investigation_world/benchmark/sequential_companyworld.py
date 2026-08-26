@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 from collections import Counter
@@ -29,9 +30,18 @@ _GENERIC_ACTIONS = {
 
 
 def _public_hash(episodes) -> str:
-    payload = [episode.public_payload() for episode in episodes]
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
-    return hashlib.sha256(encoded).hexdigest()
+    """Hash public episodes incrementally instead of materializing a second giant payload."""
+    digest = hashlib.sha256()
+    for episode in episodes:
+        encoded = json.dumps(
+            episode.public_payload(),
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode()
+        digest.update(encoded)
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def _stats(values: list[float]) -> dict[str, float]:
@@ -81,6 +91,7 @@ def validate_sequential_companyworld(
 ) -> dict[str, Any]:
     config = SequentialCompanyWorldConfig(per_family=per_family)
     episodes = compile_sequential_distribution(root, config=config)
+    episode_count = len(episodes)
 
     reference_rewards: list[float] = []
     investigation_only_rewards: list[float] = []
@@ -168,7 +179,7 @@ def validate_sequential_companyworld(
 
         compensation_cases += 1
         recovery = SequentialCompanyWorldRuntime(episode)
-        recovery_result, recovery_plan = solve_sequential_public(payload)
+        _, recovery_plan = solve_sequential_public(payload)
         pre_remediation: dict[tuple[str, str, str], Any] | None = None
         remediation_execution = None
         for step in recovery_plan:
@@ -209,11 +220,27 @@ def validate_sequential_companyworld(
 
     first_hash = _public_hash(episodes)
     second_hash = first_hash
+
+    # All aggregate statistics are captured by this point. Release the first model graph before
+    # regenerating the distribution for determinism so full-scale validation does not retain two
+    # complete 1,920-episode object graphs simultaneously.
     if verify_determinism:
-        second_hash = _public_hash(compile_sequential_distribution(root, config=config))
+        del episode
+        del payload
+        del runtime
+        del investigation_only
+        del one_shot
+        del out_of_order
+        del recovery
+        del episodes
+        gc.collect()
+        second_episodes = compile_sequential_distribution(root, config=config)
+        second_hash = _public_hash(second_episodes)
+        del second_episodes
+        gc.collect()
 
     invariants = {
-        "episodes_present": bool(episodes),
+        "episodes_present": episode_count > 0,
         "public_private_boundary": leakage_count == 0,
         "reference_policy_perfect": bool(reference_rewards) and min(reference_rewards) == 1.0,
         "investigation_only_bounded": bool(investigation_only_rewards)
@@ -228,7 +255,7 @@ def validate_sequential_companyworld(
 
     return {
         "passed": all(invariants.values()),
-        "episodes": len(episodes),
+        "episodes": episode_count,
         "task_families": dict(sorted(task_families.items())),
         "actor_roles": dict(sorted(actor_roles.items())),
         "remediation_actions": dict(sorted(remediation_actions.items())),
