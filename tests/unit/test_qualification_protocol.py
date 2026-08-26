@@ -12,17 +12,21 @@ from investigation_world.qualification.models import (
 from investigation_world.qualification.protocol import private_release_manifest, qualify_candidate
 
 
-def _candidate(*, contaminate: bool = False) -> QualificationCandidate:
+def _candidate(*, contaminate: bool = False, private_strata: list[str] | None = None) -> QualificationCandidate:
     scenarios = []
     splits = [
         *([QualificationSplit.TRAIN] * 6),
         *([QualificationSplit.DEV] * 2),
         *([QualificationSplit.PRIVATE_TEST] * 4),
     ]
+    strata = private_strata or ["a", "b", "c", "d"]
     for index, split in enumerate(splits):
         text = f"unique operational scenario {index} service evidence token-{index}"
         if contaminate and index == 8:
             text = "unique operational scenario 0 service evidence token-0"
+        metadata = {}
+        if split == QualificationSplit.PRIVATE_TEST:
+            metadata["class"] = strata[index - 8]
         scenarios.append(
             QualificationScenario(
                 scenario_id=f"S-{index}",
@@ -31,6 +35,7 @@ def _candidate(*, contaminate: bool = False) -> QualificationCandidate:
                 normalized_text=text,
                 public_digest=f"PUB-{index}",
                 private_digest=f"PRIV-{index}",
+                metadata=metadata,
             )
         )
     manifest = EvidenceManifest(
@@ -116,3 +121,38 @@ def test_policy_panel_must_match_private_test_exactly():
 
     with pytest.raises(ValueError, match="exact private-test scenario panel"):
         qualify_candidate(_candidate(), evaluations, thresholds=_thresholds())
+
+
+def test_private_stratum_gate_rejects_majority_class_panel():
+    thresholds = _thresholds().model_copy(
+        update={
+            "private_stratum_metadata_key": "class",
+            "minimum_private_strata": 4,
+            "minimum_private_scenarios_per_stratum": 1,
+            "maximum_private_stratum_fraction": 0.50,
+        }
+    )
+    report = qualify_candidate(
+        _candidate(private_strata=["transient", "transient", "transient", "capacity"]),
+        _evaluations(),
+        thresholds=thresholds,
+    )
+    gate = next(gate for gate in report.gates if gate.name == "private_stratum_coverage")
+    assert gate.passed is False
+    assert gate.observed["counts"] == {"capacity": 1, "transient": 3}
+    assert report.releaseable is False
+
+
+def test_private_stratum_gate_accepts_balanced_support():
+    thresholds = _thresholds().model_copy(
+        update={
+            "private_stratum_metadata_key": "class",
+            "minimum_private_strata": 4,
+            "minimum_private_scenarios_per_stratum": 1,
+            "maximum_private_stratum_fraction": 0.50,
+        }
+    )
+    report = qualify_candidate(_candidate(), _evaluations(), thresholds=thresholds)
+    gate = next(gate for gate in report.gates if gate.name == "private_stratum_coverage")
+    assert gate.passed is True
+    assert report.releaseable is True
