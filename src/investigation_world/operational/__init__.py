@@ -11,8 +11,10 @@ from investigation_world.operational.catalog import (
 from investigation_world.operational.models import (
     ActionKind,
     EpisodeSubmission,
+    OperationalEntity,
     OperationalEpisode,
     OperationalRecord,
+    OperationalRelation,
     OperationalSuiteManifest,
     TaskContract,
     VerificationBreakdown,
@@ -30,8 +32,10 @@ from investigation_world.operational.verifier import verify_operational_episode
 __all__ = [
     "ActionKind",
     "EpisodeSubmission",
+    "OperationalEntity",
     "OperationalEpisode",
     "OperationalRecord",
+    "OperationalRelation",
     "OperationalRuntime",
     "OperationalSnapshot",
     "OperationalStateEvent",
