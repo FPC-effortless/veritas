@@ -6,9 +6,9 @@ from typing import Any, Protocol
 from pydantic import BaseModel, Field
 
 from investigation_world.foundry.expert_trajectories import (
-    ExpertTrajectory,
     PreferencePair,
     TrainingUse,
+    VerifiedTrajectory,
 )
 from investigation_world.foundry.models import CapabilityContract, DistributionSplit, stable_hash
 
@@ -108,7 +108,7 @@ def _required_use(trainer: TrainerKind) -> TrainingUse:
     }[trainer]
 
 
-def _eligible(trajectory: ExpertTrajectory, recipe: TrainingRecipe) -> tuple[bool, str | None]:
+def _eligible(trajectory: VerifiedTrajectory, recipe: TrainingRecipe) -> tuple[bool, str | None]:
     assessment = trajectory.assessment
     if assessment.verifier_score < recipe.minimum_verifier_score:
         return False, "verifier_score"
@@ -123,7 +123,7 @@ def _eligible(trajectory: ExpertTrajectory, recipe: TrainingRecipe) -> tuple[boo
 
 def _preference_example(
     pair: PreferencePair,
-    trajectories: dict[str, ExpertTrajectory],
+    trajectories: dict[str, VerifiedTrajectory],
     recipe: TrainingRecipe,
 ) -> PreferenceTrainingExample | None:
     chosen = trajectories.get(pair.chosen_trajectory_id)
@@ -158,7 +158,7 @@ def _preference_example(
 def compile_training_bundle(
     capability_contract: CapabilityContract,
     recipe: TrainingRecipe,
-    trajectories: list[ExpertTrajectory],
+    trajectories: list[VerifiedTrajectory],
     *,
     preference_pairs: list[PreferencePair] | None = None,
 ) -> TrainingBundle:
