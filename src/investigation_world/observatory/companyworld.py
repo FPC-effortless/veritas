@@ -20,6 +20,7 @@ class CompanyWorldBundleRepository:
         *,
         taskset_version: str,
         splits: dict[str, list[str]] | None = None,
+        bundle_version: str | None = None,
     ):
         if not episodes:
             raise ValueError("CompanyWorld repository requires at least one episode")
@@ -32,6 +33,13 @@ class CompanyWorldBundleRepository:
         if len(world_ids) != 1:
             raise ValueError("one CompanyWorld repository must contain exactly one world_id")
         self.world_id = next(iter(world_ids))
+        canonical = [
+            episode.model_dump(mode="json")
+            for episode in sorted(episodes, key=lambda item: item.episode_id)
+        ]
+        self.bundle_version = bundle_version or (
+            f"CW-{stable_hash([taskset_version, canonical])[:16].upper()}"
+        )
         self._by_task: dict[str, list[CompanyWorldEpisode]] = {}
         for episode in episodes:
             self._by_task.setdefault(episode.task.task_id, []).append(episode)
@@ -77,6 +85,7 @@ class CompanyWorldBundleRepository:
                 for key, value in (public.get("splits") or {}).items()
                 if isinstance(value, list)
             },
+            bundle_version=f"CW-{stable_hash([public, private])[:16].upper()}",
         )
 
     def episode(self, scenario: ScenarioRef) -> CompanyWorldEpisode:
@@ -151,12 +160,12 @@ class CompanyWorldObservatoryRuntimeFactory:
         self,
         repository: CompanyWorldBundleRepository,
         *,
-        world_version: str,
+        world_version: str | None = None,
         runtime_version: str = "companyworld-runtime-v1",
     ):
         self.repository = repository
         self.world_id = repository.world_id
-        self.world_version = world_version
+        self.world_version = world_version or repository.bundle_version
         self.runtime_version = runtime_version
 
     def create(self, cell: LongitudinalCell) -> CompanyWorldRuntimeContext:
