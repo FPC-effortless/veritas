@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from investigation_world.companyworld.models import CompanySystem, CompanyWorldEpisode
-from investigation_world.companyworld.runtime import CompanyWorldRuntime
+from investigation_world.companyworld.runtime import SYSTEM_TOOL_COSTS, CompanyWorldRuntime
 
 
 class ScheduledToolFailure(BaseModel):
@@ -43,6 +43,8 @@ class InterventionAwareCompanyWorldRuntime(CompanyWorldRuntime):
     Intervention steps are zero-based attempted public tool-operation indices. Failed attempts
     advance the operation index but do not consume CompanyWorld budget, so a one-shot failure is
     recoverable by retry while still remaining visible to the tracing layer.
+
+    Outside a declared intervention, public lookup semantics remain identical to CompanyWorldRuntime.
     """
 
     def __init__(
@@ -80,7 +82,11 @@ class InterventionAwareCompanyWorldRuntime(CompanyWorldRuntime):
                 self.revoked_systems.discard(change.system)
             self._applied_permission_changes.add(index)
 
-    def _active_failure(self, step: int, system: CompanySystem | None) -> ScheduledToolFailure | None:
+    def _active_failure(
+        self,
+        step: int,
+        system: CompanySystem | None,
+    ) -> ScheduledToolFailure | None:
         for failure in self.tool_failures:
             if system is not None and failure.system != system:
                 continue
@@ -115,28 +121,20 @@ class InterventionAwareCompanyWorldRuntime(CompanyWorldRuntime):
         self._before_operation(system)
         if system not in self.episode.task.permitted_systems:
             return []
-        self._charge(super_cost := self._system_cost(system))
-        del super_cost
+        self._charge(SYSTEM_TOOL_COSTS[system])
         return [
             record.model_dump(mode="json")
             for record in self.index.search(query, system=system, limit=limit)
         ]
 
-    @staticmethod
-    def _system_cost(system: CompanySystem) -> int:
-        from investigation_world.companyworld.runtime import SYSTEM_TOOL_COSTS
-
-        return SYSTEM_TOOL_COSTS[system]
-
     def search_all(self, query: str, limit: int = 10) -> list[dict]:
         self._before_operation(None)
         self._charge(3)
         candidates = self.index.search(query, limit=100)
-        permitted = set(self.episode.task.permitted_systems) - self.revoked_systems
         return [
             record.model_dump(mode="json")
             for record in candidates
-            if record.system in permitted
+            if record.system not in self.revoked_systems
         ][: max(1, min(limit, 100))]
 
     def open_record(self, record_id: str) -> dict:
@@ -146,8 +144,6 @@ class InterventionAwareCompanyWorldRuntime(CompanyWorldRuntime):
         self._charge(1)
         if record is None:
             raise KeyError(record_id)
-        if record.system not in self.episode.task.permitted_systems:
-            raise PermissionError(f"system {record.system.value} is not permitted for this task")
         if record.system in self.revoked_systems:
             raise PermissionError(
                 f"intervention permission change: access to {record.system.value} revoked"
