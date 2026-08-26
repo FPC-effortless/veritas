@@ -1,6 +1,6 @@
 [project]
 name = "investigation-world"
-version = "0.5.0"
+version = "0.6.0"
 description = "Independent synthetic enterprise-agent evaluation and capability-development environments"
 requires-python = ">=3.12"
 dependencies = [
