@@ -22,6 +22,14 @@ TRUTH_PRESERVING_COMPANYWORLD_MUTATIONS: frozenset[MutationKind] = frozenset(
     }
 )
 
+SOLVABILITY_PRESERVING_COMPANYWORLD_MUTATIONS: frozenset[MutationKind] = frozenset(
+    {
+        MutationKind.REORDER_RECORDS,
+        MutationKind.INJECT_DISTRACTOR,
+        MutationKind.REDACT_OPTIONAL_FIELD,
+    }
+)
+
 
 class InterventionMutation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -35,12 +43,20 @@ class InterventionSpec(BaseModel):
     name: str
     scenario: ScenarioRef
     mutations: list[InterventionMutation] = Field(min_length=1)
+    # ``truth_preserving`` is retained as the compatibility alias for semantic truth preservation.
     truth_preserving: bool = True
+    semantic_truth_preserved: bool | None = None
+    evidence_solvability_preserved: bool | None = None
     intervention_id: str = ""
 
     @model_validator(mode="after")
     def validate_id(self) -> "InterventionSpec":
-        if self.truth_preserving:
+        semantic_truth = (
+            self.truth_preserving
+            if self.semantic_truth_preserved is None
+            else self.semantic_truth_preserved
+        )
+        if semantic_truth:
             unsupported = [
                 mutation.kind
                 for mutation in self.mutations
@@ -48,14 +64,30 @@ class InterventionSpec(BaseModel):
             ]
             if unsupported:
                 raise ValueError(
-                    "truth-preserving CompanyWorld interventions do not support: "
+                    "semantic-truth-preserving CompanyWorld interventions do not support: "
                     + ", ".join(item.value for item in unsupported)
                 )
+
+        inferred_solvability = all(
+            mutation.kind in SOLVABILITY_PRESERVING_COMPANYWORLD_MUTATIONS
+            for mutation in self.mutations
+        )
+        evidence_solvability = (
+            inferred_solvability
+            if self.evidence_solvability_preserved is None
+            else self.evidence_solvability_preserved
+        )
+
+        object.__setattr__(self, "truth_preserving", semantic_truth)
+        object.__setattr__(self, "semantic_truth_preserved", semantic_truth)
+        object.__setattr__(self, "evidence_solvability_preserved", evidence_solvability)
+
         payload = {
             "name": self.name,
             "scenario": self.scenario.model_dump(mode="json"),
             "mutations": [item.model_dump(mode="json") for item in self.mutations],
-            "truth_preserving": self.truth_preserving,
+            "semantic_truth_preserved": semantic_truth,
+            "evidence_solvability_preserved": evidence_solvability,
         }
         expected = f"INT-{stable_hash(payload)[:20].upper()}"
         if self.intervention_id and self.intervention_id != expected:
@@ -71,6 +103,8 @@ class InterventionMaterialization(BaseModel):
     source_world_version: str
     intervention_world_version: str
     truth_preserving: bool
+    semantic_truth_preserved: bool = True
+    evidence_solvability_preserved: bool = True
     lineages: list[MutationLineage] = Field(default_factory=list)
     protected_record_ids: list[str] = Field(default_factory=list)
 
@@ -130,16 +164,24 @@ def _companyworld_parameters(
     mutation: InterventionMutation,
 ) -> dict[str, Any]:
     parameters = dict(mutation.parameters)
-    if mutation.kind in {
-        MutationKind.INJECT_DISTRACTOR,
-        MutationKind.TOOL_FAILURE,
-        MutationKind.PERMISSION_CHANGE,
-    }:
+    if mutation.kind == MutationKind.INJECT_DISTRACTOR:
         parameters = _normalize_system_parameter(episode, parameters, required=True)
     if mutation.kind == MutationKind.TOOL_FAILURE:
+        scope = str(parameters.get("scope", "system")).casefold()
+        if scope not in {"system", "aggregator", "global"}:
+            raise ValueError("tool-failure scope must be 'system', 'aggregator', or 'global'")
+        if scope == "system":
+            parameters = _normalize_system_parameter(episode, parameters, required=True)
+        elif parameters.get("system") is not None:
+            parameters = _normalize_system_parameter(episode, parameters, required=False)
+        if "scope" in mutation.parameters:
+            parameters["scope"] = scope
+        else:
+            parameters.pop("scope", None)
         parameters["at_step"] = max(0, int(parameters.get("at_step", 0)))
         parameters["persistent"] = bool(parameters.get("persistent", False))
     if mutation.kind == MutationKind.PERMISSION_CHANGE:
+        parameters = _normalize_system_parameter(episode, parameters, required=True)
         parameters["at_step"] = max(0, int(parameters.get("at_step", 0)))
         action = str(parameters.get("action", "revoke")).casefold()
         if action not in {"revoke", "restore"}:
@@ -148,13 +190,30 @@ def _companyworld_parameters(
     return parameters
 
 
+def _validate_solvability_support(
+    source: CompanyWorldEpisode,
+    intervention: CompanyWorldEpisode,
+) -> None:
+    available_ids = {record.record_id for record in intervention.records}
+    missing = sorted(set(_supporting_record_ids(source)) - available_ids)
+    if missing:
+        raise ValueError(
+            "intervention declared evidence-solvability-preserving but removed verifier support: "
+            + ", ".join(missing)
+        )
+
+
 def materialize_companyworld_intervention(
     repository: CompanyWorldBundleRepository,
     spec: InterventionSpec,
 ) -> tuple[CompanyWorldBundleRepository, InterventionMaterialization]:
     episode = repository.episode(spec.scenario)
     public_payload = episode.public_payload()
-    protected = _supporting_record_ids(episode) if spec.truth_preserving else []
+    protected = (
+        _supporting_record_ids(episode)
+        if spec.evidence_solvability_preserved
+        else []
+    )
     lineages: list[MutationLineage] = []
     mutated = public_payload
     for mutation in spec.mutations:
@@ -171,6 +230,11 @@ def materialize_companyworld_intervention(
     intervention_episode = CompanyWorldEpisode.model_validate(
         {**mutated, "oracle": episode.oracle.model_dump(mode="json")}
     )
+    if spec.semantic_truth_preserved and intervention_episode.oracle != episode.oracle:
+        raise ValueError("semantic-truth-preserving intervention changed the private oracle")
+    if spec.evidence_solvability_preserved:
+        _validate_solvability_support(episode, intervention_episode)
+
     taskset_version = f"{repository.taskset_version}+{spec.intervention_id}"
     variant = CompanyWorldBundleRepository(
         [intervention_episode],
@@ -182,7 +246,9 @@ def materialize_companyworld_intervention(
         source_episode_id=episode.episode_id,
         source_world_version=repository.bundle_version,
         intervention_world_version=variant.bundle_version,
-        truth_preserving=spec.truth_preserving,
+        truth_preserving=bool(spec.semantic_truth_preserved),
+        semantic_truth_preserved=bool(spec.semantic_truth_preserved),
+        evidence_solvability_preserved=bool(spec.evidence_solvability_preserved),
         lineages=lineages,
         protected_record_ids=protected,
     )
