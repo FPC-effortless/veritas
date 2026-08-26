@@ -7,7 +7,7 @@ from typing import Iterable
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.foundry.models import stable_hash
-from investigation_world.observatory.aggregation import MetricEstimate
+from investigation_world.observatory.aggregation import MetricEstimate, critical_95
 from investigation_world.observatory.interventions import InterventionEffectReport, InterventionSpec
 from investigation_world.observatory.models import ModelSpec
 
@@ -66,7 +66,7 @@ def _estimate(values: list[float]) -> MetricEstimate:
     center = mean(values)
     deviation = stdev(values) if n > 1 else 0.0
     error = deviation / sqrt(n) if n > 1 else 0.0
-    margin = 1.96 * error
+    margin = critical_95(n) * error
     return MetricEstimate(
         n=n,
         mean=center,
@@ -77,6 +77,19 @@ def _estimate(values: list[float]) -> MetricEstimate:
         minimum=min(values),
         maximum=max(values),
     )
+
+
+class ScenarioInterventionEffect(BaseModel):
+    """Treatment-minus-baseline effect retained at the scenario level for paired interactions."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    scenario_id: str
+    scenario_seed: int
+    sample_id: str
+    reward: float
+    cost: float
+    steps: float
+    dimensions: dict[str, float] = Field(default_factory=dict)
 
 
 class AggregatedInterventionEffect(BaseModel):
@@ -94,6 +107,8 @@ class AggregatedInterventionEffect(BaseModel):
     dimensions: dict[str, MetricEstimate] = Field(default_factory=dict)
     degraded_dimensions: list[str] = Field(default_factory=list)
     improved_dimensions: list[str] = Field(default_factory=list)
+    scenario_pairs: list[tuple[str, int]] = Field(default_factory=list)
+    sample_effects: list[ScenarioInterventionEffect] = Field(default_factory=list)
     interpretation: str = (
         "Each observation is a paired treatment-minus-baseline effect for one scenario seed. "
         "The aggregate estimates the mean paired intervention effect across seeds."
@@ -136,6 +151,25 @@ def aggregate_intervention_effects(
     degraded = [name for name, metric in dimensions.items() if metric.mean < -tolerance]
     improved = [name for name, metric in dimensions.items() if metric.mean > tolerance]
     ordered_sample_ids = sorted(sample_ids)
+    sample_effects = sorted(
+        [
+            ScenarioInterventionEffect(
+                scenario_id=item.intervention.scenario.scenario_id,
+                scenario_seed=item.intervention.scenario.seed,
+                sample_id=item.sample_id,
+                reward=item.effect.reward.delta,
+                cost=item.effect.cost.delta,
+                steps=item.effect.steps.delta,
+                dimensions={
+                    name: item.effect.dimensions[name].delta
+                    for name in sorted(common_dimensions)
+                },
+            )
+            for item in items
+        ],
+        key=lambda effect: (effect.scenario_id, effect.scenario_seed),
+    )
+    ordered_pairs = [(effect.scenario_id, effect.scenario_seed) for effect in sample_effects]
     aggregate_id = f"IAGG-{stable_hash([family, model_identity, ordered_sample_ids])[:20].upper()}"
     return AggregatedInterventionEffect(
         aggregate_id=aggregate_id,
@@ -151,6 +185,8 @@ def aggregate_intervention_effects(
         dimensions=dimensions,
         degraded_dimensions=degraded,
         improved_dimensions=improved,
+        scenario_pairs=ordered_pairs,
+        sample_effects=sample_effects,
     )
 
 
@@ -162,19 +198,26 @@ class InteractionEstimate(BaseModel):
     standard_error: float = Field(ge=0.0)
     ci95_low: float
     ci95_high: float
+    n: int = Field(default=0, ge=0)
 
 
-def _interaction(first: MetricEstimate, second: MetricEstimate) -> InteractionEstimate:
-    difference = second.mean - first.mean
-    error = sqrt(first.standard_error**2 + second.standard_error**2)
-    margin = 1.96 * error
+def _paired_interaction(first: list[float], second: list[float]) -> InteractionEstimate:
+    if len(first) != len(second) or not first:
+        raise ValueError("model interaction requires non-empty paired scenario effects")
+    differences = [second_value - first_value for first_value, second_value in zip(first, second)]
+    n = len(differences)
+    center = mean(differences)
+    deviation = stdev(differences) if n > 1 else 0.0
+    error = deviation / sqrt(n) if n > 1 else 0.0
+    margin = critical_95(n) * error
     return InteractionEstimate(
-        first_effect=first.mean,
-        second_effect=second.mean,
-        difference=difference,
+        first_effect=mean(first),
+        second_effect=mean(second),
+        difference=center,
         standard_error=error,
-        ci95_low=difference - margin,
-        ci95_high=difference + margin,
+        ci95_low=center - margin,
+        ci95_high=center + margin,
+        n=n,
     )
 
 
@@ -190,10 +233,12 @@ class ModelInterventionInteractionReport(BaseModel):
     cost: InteractionEstimate
     steps: InteractionEstimate
     dimensions: dict[str, InteractionEstimate] = Field(default_factory=dict)
+    scenario_pairs: list[tuple[str, int]] = Field(default_factory=list)
     interpretation: str = (
-        "Interaction values are second-model minus first-model mean paired intervention effects. "
-        "They measure differential sensitivity to the same intervention family; they are not "
-        "longitudinal model drift. CI95 uses an independent-group normal approximation."
+        "Interaction values are paired scenario-level difference-in-differences: for each identical "
+        "scenario/seed, second-model treatment-minus-baseline minus first-model treatment-minus-"
+        "baseline. They measure differential sensitivity to the same intervention family; they are "
+        "not longitudinal model drift. CI95 is computed from the paired interaction distribution."
     )
 
 
@@ -205,8 +250,24 @@ def compare_model_intervention_effects(
         raise ValueError("model interaction requires the same intervention family")
     if first.model_key == second.model_key:
         raise ValueError("model interaction requires two distinct ModelSpecs")
-    common_dimensions = sorted(set(first.dimensions) & set(second.dimensions))
-    interaction_id = f"IINT-{stable_hash([first.aggregate_id, second.aggregate_id])[:20].upper()}"
+    if not first.sample_effects or not second.sample_effects:
+        raise ValueError("model interaction requires retained scenario-level intervention effects")
+    if first.scenario_pairs != second.scenario_pairs:
+        raise ValueError("model interaction requires identical scenario/seed panels")
+
+    first_by_pair = {
+        (effect.scenario_id, effect.scenario_seed): effect for effect in first.sample_effects
+    }
+    second_by_pair = {
+        (effect.scenario_id, effect.scenario_seed): effect for effect in second.sample_effects
+    }
+    pairs = list(first.scenario_pairs)
+    common_dimensions = sorted(
+        set.intersection(
+            *(set(first_by_pair[pair].dimensions) & set(second_by_pair[pair].dimensions) for pair in pairs)
+        )
+    ) if pairs else []
+    interaction_id = f"IINT-{stable_hash([first.aggregate_id, second.aggregate_id, pairs])[:20].upper()}"
     return ModelInterventionInteractionReport(
         interaction_id=interaction_id,
         family_key=first.family_key,
@@ -214,11 +275,24 @@ def compare_model_intervention_effects(
         second_aggregate_id=second.aggregate_id,
         first_model=first.model,
         second_model=second.model,
-        reward=_interaction(first.reward, second.reward),
-        cost=_interaction(first.cost, second.cost),
-        steps=_interaction(first.steps, second.steps),
+        reward=_paired_interaction(
+            [first_by_pair[pair].reward for pair in pairs],
+            [second_by_pair[pair].reward for pair in pairs],
+        ),
+        cost=_paired_interaction(
+            [first_by_pair[pair].cost for pair in pairs],
+            [second_by_pair[pair].cost for pair in pairs],
+        ),
+        steps=_paired_interaction(
+            [first_by_pair[pair].steps for pair in pairs],
+            [second_by_pair[pair].steps for pair in pairs],
+        ),
         dimensions={
-            name: _interaction(first.dimensions[name], second.dimensions[name])
+            name: _paired_interaction(
+                [first_by_pair[pair].dimensions[name] for pair in pairs],
+                [second_by_pair[pair].dimensions[name] for pair in pairs],
+            )
             for name in common_dimensions
         },
+        scenario_pairs=pairs,
     )
