@@ -195,5 +195,5 @@ def test_truth_preserving_intervention_rejects_unimplemented_runtime_semantics()
             )
         ],
     )
-    with pytest.raises(ValueError, match="do not yet support"):
+    with pytest.raises(ValueError, match="does not yet execute"):
         InterventionSpec(**spec_args)
