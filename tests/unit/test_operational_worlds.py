@@ -82,6 +82,14 @@ def test_persistent_company_mounts_all_worlds_and_replays_state():
     baseline_sequence = company.substrate.sequence
     assert set(company.snapshot().domains) == set(WorldDomain)
     assert len(company.snapshot().mounted_world_ids) == len(WorldDomain)
+    assert all(
+        episode.task.metadata["organization_id"] == "ORG-TEST-001"
+        for episode in company.episodes
+    )
+    assert all(
+        episode.metadata["organization_id"] == "ORG-TEST-001"
+        for episode in company.episodes
+    )
     assert company.substrate.validate_integrity() is True
 
     runtime = company.runtime(WorldDomain.FINANCIAL_SPREADSHEET)
