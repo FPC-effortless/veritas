@@ -16,6 +16,7 @@ from investigation_world.qualification import (
     private_release_manifest,
     qualify_candidate,
 )
+from investigation_world.qualification.cluster_split import repartition_candidate_by_near_duplicates
 
 
 def _fetch_json(url: str, timeout_s: float) -> dict[str, Any]:
@@ -63,6 +64,17 @@ def main() -> None:
         }
 
     candidate, cases = compile_sre_candidate(incidents, version="sre-v1")
+    candidate, split_map = repartition_candidate_by_near_duplicates(candidate)
+    cases = [
+        case.model_copy(
+            update={
+                "scenario": case.scenario.model_copy(
+                    update={"split": split_map[case.scenario.scenario_id]}
+                )
+            }
+        )
+        for case in cases
+    ]
     evaluations = execute_sre_policy_suite(cases, random_seed=args.random_seed)
     report = qualify_candidate(candidate, evaluations, thresholds=QualificationThresholds())
     release = private_release_manifest(candidate, report) if report.releaseable else None
@@ -85,6 +97,7 @@ def main() -> None:
         "report_id": report.report_id,
         "scenarios": len(candidate.scenarios),
         "private_test": sum(item.split.value == "private_test" for item in candidate.scenarios),
+        "near_duplicate_components": candidate.metadata.get("near_duplicate_components"),
         "failed_gates": [item.name for item in report.gates if not item.passed],
     }, indent=2, sort_keys=True))
 
