@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from investigation_world.companyworld.models import (
     CompanySystem,
     CompanyWorldEpisode,
@@ -183,17 +181,58 @@ def test_truth_preserving_intervention_protects_oracle_support():
     assert any(item.record_type == "foundry_distractor" for item in mutated.records)
 
 
-def test_truth_preserving_intervention_rejects_unimplemented_runtime_semantics():
-    spec_args = dict(
+def test_runtime_intervention_materializes_tool_failure_without_changing_oracle():
+    episode = _episode()
+    repository = CompanyWorldBundleRepository([episode], taskset_version="test-v1")
+    scenario = ScenarioRef(scenario_id="EP-1", task_id="TASK-1", seed=1)
+    spec = InterventionSpec(
         name="tool-failure",
-        scenario=ScenarioRef(scenario_id="EP-1", task_id="TASK-1", seed=1),
+        scenario=scenario,
         mutations=[
             InterventionMutation(
                 kind=MutationKind.TOOL_FAILURE,
                 seed=2,
-                parameters={"system": "ERP", "at_step": 1},
+                parameters={"system": "ERP", "at_step": 1, "persistent": True},
             )
         ],
     )
-    with pytest.raises(ValueError, match="does not yet execute"):
-        InterventionSpec(**spec_args)
+
+    variant, materialization = materialize_companyworld_intervention(repository, spec)
+    mutated = variant.episode(scenario)
+
+    assert mutated.oracle == episode.oracle
+    assert mutated.task.constraints["foundry_tool_failures"] == [
+        {"system": "ERP", "at_step": 1, "persistent": True}
+    ]
+    assert materialization.truth_preserving is True
+    assert materialization.lineages[0].kind == MutationKind.TOOL_FAILURE
+
+
+def test_runtime_intervention_preserves_multiple_permission_transitions():
+    episode = _episode()
+    repository = CompanyWorldBundleRepository([episode], taskset_version="test-v1")
+    scenario = ScenarioRef(scenario_id="EP-1", task_id="TASK-1", seed=1)
+    spec = InterventionSpec(
+        name="permission-window",
+        scenario=scenario,
+        mutations=[
+            InterventionMutation(
+                kind=MutationKind.PERMISSION_CHANGE,
+                seed=3,
+                parameters={"system": "ERP", "at_step": 0, "action": "revoke"},
+            ),
+            InterventionMutation(
+                kind=MutationKind.PERMISSION_CHANGE,
+                seed=4,
+                parameters={"system": "ERP", "at_step": 2, "action": "restore"},
+            ),
+        ],
+    )
+
+    variant, _ = materialize_companyworld_intervention(repository, spec)
+    changes = variant.episode(scenario).task.constraints["foundry_permission_change"]
+
+    assert changes == [
+        {"system": "ERP", "at_step": 0, "action": "revoke"},
+        {"system": "ERP", "at_step": 2, "action": "restore"},
+    ]
