@@ -9,6 +9,9 @@ from investigation_world.companyworld.models import CompanyWorldEpisode
 from investigation_world.companyworld.runtime import CompanyWorldRuntime
 from investigation_world.foundry.models import DistributionSplit, stable_hash
 from investigation_world.observatory.models import LongitudinalCell, ScenarioPool, ScenarioRef
+from investigation_world.observatory.runtime_interventions import (
+    InterventionAwareCompanyWorldRuntime,
+)
 
 
 class CompanyWorldBundleRepository:
@@ -161,7 +164,7 @@ class CompanyWorldObservatoryRuntimeFactory:
         repository: CompanyWorldBundleRepository,
         *,
         world_version: str | None = None,
-        runtime_version: str = "companyworld-runtime-v1",
+        runtime_version: str = "companyworld-runtime-v2",
     ):
         self.repository = repository
         self.world_id = repository.world_id
@@ -179,7 +182,14 @@ class CompanyWorldObservatoryRuntimeFactory:
         max_tool_calls = cell.execution.tool_call_budget
         if max_tool_calls is None:
             max_tool_calls = int(constraints.get("max_tool_calls", 30))
-        runtime = CompanyWorldRuntime(
+        intervention_enabled = any(
+            key in constraints
+            for key in ("foundry_tool_failures", "foundry_permission_change")
+        )
+        runtime_type = (
+            InterventionAwareCompanyWorldRuntime if intervention_enabled else CompanyWorldRuntime
+        )
+        runtime = runtime_type(
             episode,
             total_cost=max(1, int(world_cost_budget)),
             max_tool_calls=max(1, int(max_tool_calls)),
