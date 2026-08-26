@@ -65,6 +65,18 @@ from investigation_world.observatory.scheduler import (
     SchedulerReport,
     materialize_jobs,
 )
+from investigation_world.observatory.selective_agency import (
+    SELECTIVE_AGENCY_OBSERVATORY_RUNTIME_VERSION,
+    SELECTIVE_AGENCY_VERIFIER,
+    selective_agency_capability_dimensions,
+    selective_agency_capability_run,
+    selective_agency_cell_matrix,
+    selective_agency_scenario_pool,
+    selective_agency_scenario_ref,
+    selective_agency_scenario_refs,
+    selective_agency_trace,
+    selective_agency_world_ref,
+)
 from investigation_world.observatory.store import ObservatoryStore
 
 __all__ = [
@@ -106,6 +118,8 @@ __all__ = [
     "RunProvenance",
     "RuntimeFactory",
     "RuntimeRegistry",
+    "SELECTIVE_AGENCY_OBSERVATORY_RUNTIME_VERSION",
+    "SELECTIVE_AGENCY_VERIFIER",
     "ScenarioPool",
     "ScenarioRef",
     "SchedulerPolicy",
@@ -124,6 +138,14 @@ __all__ = [
     "experiment_from_matrix",
     "materialize_cells",
     "materialize_jobs",
+    "selective_agency_capability_dimensions",
+    "selective_agency_capability_run",
+    "selective_agency_cell_matrix",
+    "selective_agency_scenario_pool",
+    "selective_agency_scenario_ref",
+    "selective_agency_scenario_refs",
+    "selective_agency_trace",
+    "selective_agency_world_ref",
     "snapshot_key",
     "snapshot_payload",
     "validate_cell_trace_alignment",
