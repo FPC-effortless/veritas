@@ -9,6 +9,15 @@ on:
       - "tools/aggregate_sre_model_evaluations.py"
       - "tests/unit/test_commercial_sre_evaluation.py"
       - "docs/commercial/**"
+  push:
+    branches: [feat/commercial-evaluation-pack-v1]
+    paths:
+      - ".github/workflows/sre-commercial-model-evidence.yml"
+      - "src/investigation_world/commercial/**"
+      - "tools/run_sre_open_model_evaluation.py"
+      - "tools/aggregate_sre_model_evaluations.py"
+      - "tests/unit/test_commercial_sre_evaluation.py"
+      - "docs/commercial/**"
   workflow_dispatch:
 
 permissions:
