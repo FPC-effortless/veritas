@@ -29,24 +29,55 @@ def _contains_failure_signal(value: Any) -> bool:
     return False
 
 
+def _operation_target(method: str, payload: dict[str, Any]) -> str:
+    """Extract the resource/system identity needed to distinguish recovery from substitution."""
+    kwargs = payload.get("kwargs")
+    if isinstance(kwargs, dict):
+        for key in ("system", "record_id", "case_id", "target_id"):
+            value = kwargs.get(key)
+            if value is not None:
+                return f"{key}={value}"
+    args = payload.get("args")
+    if isinstance(args, list) and args:
+        first = args[0]
+        if method == "search_system":
+            return f"system={first}"
+        if method in {"open_record", "case_status"}:
+            return f"target={first}"
+        if method == "act" and isinstance(first, dict):
+            target = first.get("target_id") or first.get("system") or first.get("action_type")
+            if target is not None:
+                return f"action_target={target}"
+    return "target=*"
+
+
+def _operation_key(payload: dict[str, Any]) -> tuple[str, str] | None:
+    method = payload.get("method")
+    if not isinstance(method, str):
+        return None
+    return (method, _operation_target(method, payload))
+
+
 def _recovery_count(trace: RolloutTrace) -> int:
     explicit = 0
-    failed_methods: set[str] = set()
-    recovered_methods: set[str] = set()
+    failed_operations: set[tuple[str, str]] = set()
+    recovered_operations: set[tuple[str, str]] = set()
     for event in trace.events:
         event_type = event.event_type.lower()
         if any(token in event_type for token in ("recover", "retry", "repair", "replay", "fallback")):
             explicit += 1
-        method = event.payload.get("method") if isinstance(event.payload, dict) else None
-        if not isinstance(method, str):
+        if not isinstance(event.payload, dict):
+            continue
+        key = _operation_key(event.payload)
+        if key is None:
             continue
         failed = event.payload.get("success") is False or _contains_failure_signal(event.payload)
         if failed:
-            failed_methods.add(method)
+            failed_operations.add(key)
             continue
-        if method in failed_methods and method not in recovered_methods:
-            recovered_methods.add(method)
-    return explicit + len(recovered_methods)
+        if key in failed_operations and key not in recovered_operations:
+            recovered_operations.add(key)
+    return explicit + len(recovered_operations)
 
 
 def behavior_from_trace(trace: RolloutTrace) -> BehavioralFingerprint:
