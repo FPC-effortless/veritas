@@ -214,3 +214,17 @@ class CapabilityDriftReport(BaseModel):
     dimensions: dict[str, DimensionDelta] = Field(default_factory=dict)
     regressions: list[str] = Field(default_factory=list)
     improvements: list[str] = Field(default_factory=list)
+
+
+class CellMatrixSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    worlds: list[WorldRef] = Field(min_length=1)
+    scenarios: list[ScenarioRef] = Field(min_length=1)
+    models: list[ModelSpec] = Field(min_length=1)
+    harnesses: list[HarnessSpec] = Field(min_length=1)
+    verifiers: list[VerifierSpec] = Field(min_length=1)
+    executions: list[ExecutionSpec] = Field(
+        default_factory=lambda: [ExecutionSpec()],
+        min_length=1,
+    )
+    time_snapshots: list[str] = Field(min_length=1)
