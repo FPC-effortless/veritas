@@ -99,3 +99,48 @@ def test_challenge_promotion_requires_integrity_gates():
     bad = ChallengeValidation(challenge_id="C2", leakage_count=1, oracle_reward=1.0, exploit_max_reward=.1, deterministic=True)
     assert promotable(good)
     assert not promotable(bad)
+
+
+def test_tracing_proxy_and_executable_prefix_replay():
+    from pydantic import BaseModel
+    from investigation_world.foundry.tracing import TracingRuntimeProxy, execute_counterfactual, replay_trace_prefix
+
+    class Result(BaseModel):
+        overall_reward: float = 1.0
+        outcome: float = 1.0
+
+    class FakeRuntime:
+        def __init__(self):
+            self.value = 0
+            self.spent = 0
+        def state_snapshot(self):
+            return {"value": self.value}
+        def budget_snapshot(self):
+            return {"spent": self.spent}
+        def advance(self, ticks=1):
+            self.value += ticks
+            self.spent += ticks
+            return self.value
+        def submit(self, result=None):
+            return Result()
+
+    meta = FoundryTaskMetadata(
+        task_id="TRACING-TASK", split=DistributionSplit.IID_TEST,
+        capability_tags=["planning"], difficulty=DifficultyVector(steps=2), seed=4,
+        taskset_version="t1", harness_version="h1", runtime_version="r1",
+    )
+    proxy = TracingRuntimeProxy(FakeRuntime(), meta, environment_version="e1")
+    proxy.advance(1)
+    proxy.advance(2)
+    proxy.submit(None)
+    trace = proxy.trace()
+    assert trace.total_reward == 1.0
+    assert trace.total_cost == 3.0
+    assert len(trace.events) == 3
+
+    replayed = replay_trace_prefix(FakeRuntime(), trace, through_step=1)
+    assert replayed.value == 3
+    branched = execute_counterfactual(
+        FakeRuntime, trace, branch_step=1, alternate_method="advance", alternate_args=[5]
+    )
+    assert branched.value == 6
