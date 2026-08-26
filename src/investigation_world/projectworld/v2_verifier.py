@@ -89,7 +89,13 @@ def verify_project_world_v2(
     quality = dimension[OutcomeDimension.QUALITY]
     safety = dimension[OutcomeDimension.SAFETY]
     authority = dimension[OutcomeDimension.AUTHORITY]
-    overall = mean([technical, quality, safety, authority, schedule, cost, completion])
+
+    # Dimension scores remain independent diagnostics. Aggregate task reward, however, must not
+    # pay a non-performing policy merely for preserving budget/schedule by doing almost nothing.
+    # Multiplying operational quality by delivered completion preserves those diagnostics while
+    # making terminal reward achievement-sensitive and resistant to no-op/graph-gaming policies.
+    operational_quality = mean([technical, quality, safety, authority, schedule, cost])
+    overall = completion * operational_quality
     passed = (
         not hard_failed
         and completion == 1.0
