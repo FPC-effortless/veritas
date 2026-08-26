@@ -14,6 +14,12 @@ from investigation_world.foundry.models import (
 
 
 _CLASS_CAPABILITIES: dict[SelectiveAgencyTaskClass, list[str]] = {
+    SelectiveAgencyTaskClass.ACTION_WARRANTED: [
+        "state_awareness",
+        "action_boundary",
+        "consequence_reasoning",
+        "execution_judgment",
+    ],
     SelectiveAgencyTaskClass.FALSE_PREMISE: [
         "premise_validation",
         "epistemic_calibration",
