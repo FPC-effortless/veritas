@@ -121,15 +121,14 @@ class OpenAIResponsesProvider(ModelProviderAdapter):
         api_key = os.environ.get(self.api_key_env)
         if not api_key:
             raise RuntimeError(f"missing provider credential environment variable {self.api_key_env}")
-        body: dict[str, Any] = {
-            "model": request.model.model_id,
-            "input": request.payload,
-            "store": False,
-        }
+        body: dict[str, Any] = {}
         provider_parameters = request.model.config.get("provider_parameters", {})
         if isinstance(provider_parameters, dict):
             body.update(provider_parameters)
         body.update(request.parameters)
+        body["model"] = request.model.model_id
+        body["input"] = request.payload
+        body["store"] = False
         endpoint = request.model.endpoint or _join_endpoint(self.base_url, "responses")
         response, latency = _json_post(
             endpoint,
@@ -184,11 +183,13 @@ class OpenAICompatibleChatProvider(ModelProviderAdapter):
             messages = request.payload["messages"]
         else:
             messages = [{"role": "user", "content": str(request.payload)}]
-        body: dict[str, Any] = {"model": request.model.model_id, "messages": messages}
+        body: dict[str, Any] = {}
         provider_parameters = request.model.config.get("provider_parameters", {})
         if isinstance(provider_parameters, dict):
             body.update(provider_parameters)
         body.update(request.parameters)
+        body["model"] = request.model.model_id
+        body["messages"] = messages
         endpoint = request.model.endpoint or _join_endpoint(self.base_url, "chat/completions")
         headers = dict(self.extra_headers)
         if self.api_key_env:
