@@ -10,6 +10,17 @@ from investigation_world.companyworld.dynamic_models import (
 from investigation_world.companyworld.sequential_models import SequentialCompanyWorldVerificationResult
 
 
+def _case_core_score(result: SequentialCompanyWorldVerificationResult) -> float:
+    """Score case-local correctness without charging a case for global portfolio waiting time."""
+    return min(
+        result.domain_outcome_score,
+        result.control_state_score,
+        result.investigation_fact_score,
+        result.evidence_support,
+        result.authority_score,
+    )
+
+
 def verify_dynamic_companyworld(
     scenario: DynamicCompanyWorldScenario,
     *,
@@ -24,15 +35,17 @@ def verify_dynamic_companyworld(
     budget_total: int,
 ) -> DynamicCompanyWorldVerificationResult:
     oracle_by_case = {item.case_id: item for item in scenario.oracle.case_oracles}
+    core_by_case = {
+        case.case_id: _case_core_score(sequential_results[case.case_id])
+        for case in scenario.cases
+    }
     total_weight = sum(case.priority_weight for case in scenario.cases) or 1.0
     weighted_reward = sum(
-        case.priority_weight * sequential_results[case.case_id].overall_reward
+        case.priority_weight * core_by_case[case.case_id]
         for case in scenario.cases
     ) / total_weight
     success_count = sum(
-        1
-        for case in scenario.cases
-        if sequential_results[case.case_id].overall_reward >= 0.999999
+        1 for case in scenario.cases if core_by_case[case.case_id] >= 0.999999
     )
     case_success_rate = success_count / len(scenario.cases) if scenario.cases else 0.0
 
@@ -49,9 +62,7 @@ def verify_dynamic_companyworld(
         and case.sequential.oracle.approval_required
     ]
     recovered_denials = sum(
-        1
-        for case in denied_cases
-        if sequential_results[case.case_id].overall_reward >= 0.999999
+        1 for case in denied_cases if core_by_case[case.case_id] >= 0.999999
     )
     uncertainty_recovery = (
         recovered_denials / len(denied_cases) if denied_cases else 1.0
@@ -74,7 +85,7 @@ def verify_dynamic_companyworld(
             deadline_met=case.case_id not in deadline_missed,
             approval_recovered=(
                 oracle_by_case[case.case_id].approval_outcome != "DENIED"
-                or sequential_results[case.case_id].overall_reward >= 0.999999
+                or core_by_case[case.case_id] >= 0.999999
             ),
         )
         for case in scenario.cases
