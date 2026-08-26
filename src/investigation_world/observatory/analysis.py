@@ -29,6 +29,26 @@ def _contains_failure_signal(value: Any) -> bool:
     return False
 
 
+def _recovery_count(trace: RolloutTrace) -> int:
+    explicit = 0
+    failed_methods: set[str] = set()
+    recovered_methods: set[str] = set()
+    for event in trace.events:
+        event_type = event.event_type.lower()
+        if any(token in event_type for token in ("recover", "retry", "repair", "replay", "fallback")):
+            explicit += 1
+        method = event.payload.get("method") if isinstance(event.payload, dict) else None
+        if not isinstance(method, str):
+            continue
+        failed = event.payload.get("success") is False or _contains_failure_signal(event.payload)
+        if failed:
+            failed_methods.add(method)
+            continue
+        if method in failed_methods and method not in recovered_methods:
+            recovered_methods.add(method)
+    return explicit + len(recovered_methods)
+
+
 def behavior_from_trace(trace: RolloutTrace) -> BehavioralFingerprint:
     counts = Counter(event.event_type for event in trace.events)
     total = len(trace.events)
@@ -42,13 +62,7 @@ def behavior_from_trace(trace: RolloutTrace) -> BehavioralFingerprint:
         "verify" in event.event_type.lower() or "submit" in event.event_type.lower()
         for event in trace.events
     )
-    recovery = sum(
-        any(
-            token in event.event_type.lower()
-            for token in ("recover", "retry", "repair", "replay", "fallback")
-        )
-        for event in trace.events
-    )
+    recovery = _recovery_count(trace)
     failure_signals = sum(
         "fail" in event.event_type.lower()
         or "error" in event.event_type.lower()
