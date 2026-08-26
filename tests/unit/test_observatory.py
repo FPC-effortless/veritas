@@ -1,5 +1,6 @@
 from investigation_world.foundry.models import DistributionSplit, RolloutTrace, TraceEvent
 from investigation_world.observatory import (
+    CellMatrixSpec,
     ExecutionSpec,
     HarnessSpec,
     LongitudinalCell,
@@ -11,6 +12,8 @@ from investigation_world.observatory import (
     WorldRef,
     capability_run_from_trace,
     compare_runs,
+    experiment_from_matrix,
+    materialize_cells,
 )
 
 
@@ -138,3 +141,29 @@ def test_alignment_rejects_wrong_seed():
 
     with pytest.raises(ValueError, match="scenario seed"):
         capability_run_from_trace(make_cell(seed=99), make_trace())
+
+
+def test_matrix_materialization_is_cartesian_and_deterministic():
+    spec = CellMatrixSpec(
+        worlds=[WorldRef(world_id="companyworld", version="cw-1")],
+        scenarios=[
+            ScenarioRef(scenario_id="case-7", seed=7, task_id="task-7"),
+            ScenarioRef(scenario_id="case-8", seed=8, task_id="task-8"),
+        ],
+        models=[
+            ModelSpec(provider="lab", model_id="a"),
+            ModelSpec(provider="lab", model_id="b"),
+        ],
+        harnesses=[HarnessSpec(harness_id="veritas", version="h-1")],
+        verifiers=[VerifierSpec(verifier_id="company", version="v-1")],
+        time_snapshots=["2026-08-26", "2026-09-02"],
+    )
+
+    first = materialize_cells(spec)
+    second = materialize_cells(spec)
+
+    assert len(first) == 8
+    assert [cell.cell_id for cell in first] == [cell.cell_id for cell in second]
+
+    experiment, cells = experiment_from_matrix("weekly drift", spec)
+    assert len(experiment.cell_ids) == len(cells) == 8
