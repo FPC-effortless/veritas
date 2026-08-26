@@ -6,6 +6,7 @@ on:
       - "src/investigation_world/companyworld/verifier.py"
       - "src/investigation_world/training_value/**"
       - "tools/run_training_value_v3.py"
+      - "tools/aggregate_training_value_v3.py"
       - ".github/workflows/training-value-v3.yml"
   workflow_dispatch:
 
@@ -38,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/huggingface
-          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v3-v1
+          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v3-v2
 
       - name: Install Veritas
         run: python -m pip install -e ".[test]"
@@ -61,6 +62,18 @@ jobs:
             --max-length 1536 \
             --max-new-tokens 192
 
+      - name: Validate frozen panel identities and paired statistics
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("training-results/qwen2.5-0.5b-hardened-smoke.json").read_text())
+          assert report["train_panel_id"].startswith("PANEL-")
+          assert report["heldout_panel_id"].startswith("PANEL-")
+          assert report["paired_heldout"]["panel_id"] == report["heldout_panel_id"]
+          assert "proportion_improved" in report["paired_heldout"]
+          PY
+
       - name: Upload hardened smoke report
         uses: actions/upload-artifact@v4
         with:
@@ -77,6 +90,11 @@ jobs:
       fail-fast: false
       matrix:
         training_seed: [7, 17, 29]
+        model:
+          - id: Qwen/Qwen2.5-0.5B-Instruct
+            slug: qwen2.5-0.5b
+          - id: Qwen/Qwen2.5-1.5B-Instruct
+            slug: qwen2.5-1.5b
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
       TOKENIZERS_PARALLELISM: "false"
@@ -90,11 +108,11 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Cache Qwen model files
+      - name: Cache model files
         uses: actions/cache@v4
         with:
           path: .cache/huggingface
-          key: hf-${{ runner.os }}-qwen2.5-0.5b-training-v3-v1
+          key: hf-${{ runner.os }}-${{ matrix.model.slug }}-training-v3-v2
 
       - name: Install Veritas
         run: python -m pip install -e ".[test]"
@@ -107,9 +125,9 @@ jobs:
       - name: Run replicated hardened transfer experiment
         run: |
           python tools/run_training_value_v3.py \
-            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --model "${{ matrix.model.id }}" \
             --training-seed ${{ matrix.training_seed }} \
-            --output training-results/qwen2.5-0.5b-seed-${{ matrix.training_seed }}.json \
+            --output "training-results/${{ matrix.model.slug }}-seed-${{ matrix.training_seed }}.json" \
             --train-examples 24 \
             --heldout-examples 100 \
             --epochs 3 \
@@ -120,7 +138,51 @@ jobs:
       - name: Upload replicated transfer report
         uses: actions/upload-artifact@v4
         with:
-          name: training-value-v3-seed-${{ matrix.training_seed }}
-          path: training-results/qwen2.5-0.5b-seed-${{ matrix.training_seed }}.json
+          name: training-value-v3-${{ matrix.model.slug }}-seed-${{ matrix.training_seed }}
+          path: training-results/${{ matrix.model.slug }}-seed-${{ matrix.training_seed }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  aggregate-replicates:
+    if: github.event_name == 'workflow_dispatch'
+    needs: replicated-transfer
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        model:
+          - id: Qwen/Qwen2.5-0.5B-Instruct
+            slug: qwen2.5-0.5b
+          - id: Qwen/Qwen2.5-1.5B-Instruct
+            slug: qwen2.5-1.5b
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+
+      - name: Download all independent seed reports for model
+        uses: actions/download-artifact@v4
+        with:
+          pattern: training-value-v3-${{ matrix.model.slug }}-seed-*
+          path: seed-reports
+          merge-multiple: true
+
+      - name: Aggregate training-seed variance and paired transfer
+        run: |
+          python tools/aggregate_training_value_v3.py \
+            --input seed-reports/${{ matrix.model.slug }}-seed-*.json \
+            --output training-results/${{ matrix.model.slug }}-replicated-summary.json
+
+      - name: Upload replicated summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-value-v3-${{ matrix.model.slug }}-replicated-summary
+          path: training-results/${{ matrix.model.slug }}-replicated-summary.json
           if-no-files-found: error
           retention-days: 30
