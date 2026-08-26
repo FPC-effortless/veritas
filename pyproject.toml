@@ -1,7 +1,7 @@
 [project]
 name = "investigation-world"
-version = "0.4.0"
-description = "Deterministic synthetic corporate investigation environments"
+version = "0.5.0"
+description = "Independent synthetic enterprise-agent evaluation and capability-development environments"
 requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.7,<3",
