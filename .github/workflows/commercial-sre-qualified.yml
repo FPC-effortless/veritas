@@ -1,0 +1,70 @@
+name: Commercial SRE Qualification
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/qualification/**"
+      - "tools/build_commercial_sre_candidate.py"
+      - "tests/unit/test_commercial_sre_factory.py"
+      - ".github/workflows/commercial-sre-qualified.yml"
+  push:
+    branches: [feat/commercial-sre-qualified-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commercial-sre-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualification-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+      - name: Run commercial SRE factory regression tests
+        run: python -m pytest -q tests/unit/test_commercial_sre_factory.py tests/unit/test_qualification_protocol.py
+      - name: Qualify a public non-release generator realization
+        run: |
+          python tools/build_commercial_sre_candidate.py \
+            --seed 20260826 \
+            --per-class 40 \
+            --version sre-commercial-v1-smoke \
+            --output results/sre-commercial-v1-smoke.json
+      - name: Assert smoke realization qualifies without exposing a commercial release seed
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("results/sre-commercial-v1-smoke.json").read_text())
+          assert report["status"] == "benchmark_candidate", report
+          assert report["private_test_count"] == 32
+          assert report["private_class_counts"] == {
+              "capacity": 8,
+              "infrastructure": 8,
+              "regression": 8,
+              "transient": 8,
+          }
+          assert report["cross_split_near_duplicates"] == 0
+          assert report["source_text_copied"] is False
+          print(json.dumps({
+              "candidate_id": report["candidate_id"],
+              "panel_id": report["panel_id"],
+              "policy_means": report["policy_means"],
+              "private_class_counts": report["private_class_counts"],
+          }, indent=2, sort_keys=True))
+          PY
+      - name: Upload public factory qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-commercial-v1-factory-smoke
+          path: results/sre-commercial-v1-smoke.json
+          retention-days: 90
+          if-no-files-found: error
