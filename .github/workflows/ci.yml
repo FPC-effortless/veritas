@@ -85,6 +85,7 @@ jobs:
           test -s /tmp/search.sqlite
       - name: Exercise unified Veritas operational product
         run: |
+          veritas capabilities
           veritas domains
           veritas build-world financial_spreadsheet --seed 42 --output /tmp/finance_world.json --oracle-output /tmp/finance_oracle.json
           veritas build-suite --seed 42 --output /tmp/operational_suite.json --oracle-output /tmp/operational_oracles.json
