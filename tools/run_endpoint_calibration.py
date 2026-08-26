@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument("--max-new-tokens", type=int, default=320)
     args = parser.parse_args()
 
-    from investigation_world.calibration import run_full_context_calibration
+    from investigation_world.calibration import attach_baseline_adjusted_scores, run_full_context_calibration
 
     api_key = os.getenv(args.api_key_env)
     endpoint = args.endpoint
@@ -67,6 +67,7 @@ def main() -> None:
         return str(content)
 
     report = run_full_context_calibration(generate, model_name=args.model)
+    attach_baseline_adjusted_scores(report)
     report["runtime"] = {
         "wall_seconds": round(time.time() - started, 3),
         "request_seconds": round(request_seconds, 3),
