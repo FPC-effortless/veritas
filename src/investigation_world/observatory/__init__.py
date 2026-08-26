@@ -5,11 +5,13 @@ from investigation_world.observatory.analysis import (
     compare_runs,
     validate_cell_trace_alignment,
 )
+from investigation_world.observatory.matrix import experiment_from_matrix, materialize_cells
 from investigation_world.observatory.models import (
     BehavioralFingerprint,
     CapabilityDriftReport,
     CapabilityProfile,
     CapabilityRun,
+    CellMatrixSpec,
     DimensionDelta,
     ExecutionSpec,
     ExperimentSpec,
@@ -30,6 +32,7 @@ __all__ = [
     "CapabilityDriftReport",
     "CapabilityProfile",
     "CapabilityRun",
+    "CellMatrixSpec",
     "DimensionDelta",
     "ExecutionSpec",
     "ExperimentSpec",
@@ -47,5 +50,7 @@ __all__ = [
     "capability_from_trace",
     "capability_run_from_trace",
     "compare_runs",
+    "experiment_from_matrix",
+    "materialize_cells",
     "validate_cell_trace_alignment",
 ]
