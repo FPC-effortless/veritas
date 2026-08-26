@@ -76,6 +76,15 @@ def _task_payload(episode: Any, public: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _world_id(episode: Any, public: dict[str, Any], task: dict[str, Any]) -> str:
+    return str(
+        task.get("world_id")
+        or public.get("world_id")
+        or getattr(episode, "world_id", "")
+        or "companyworld:unknown"
+    )
+
+
 def infer_companyworld_difficulty(episode: Any) -> DifficultyVector:
     public = _public_payload(episode)
     task = _task_payload(episode, public)
@@ -152,9 +161,11 @@ def companyworld_task_metadata(
 ) -> FoundryTaskMetadata:
     public = _public_payload(episode)
     task = _task_payload(episode, public)
-    task_id = str(task.get("task_id") or task.get("scenario_id") or getattr(episode, "episode_id", ""))
-    if not task_id:
+    local_task_id = str(task.get("task_id") or task.get("scenario_id") or getattr(episode, "episode_id", ""))
+    if not local_task_id:
         raise ValueError("CompanyWorld task has no public task identifier")
+    world_id = _world_id(episode, public, task)
+    task_id = f"{world_id}::{local_task_id}"
     family = str(task.get("task_type") or task.get("base_task_type") or "UNKNOWN")
     tags = list(_FAMILY_CAPABILITIES.get(family, ["discover", "verify"]))
     if task.get("available_actions"):
@@ -171,7 +182,11 @@ def companyworld_task_metadata(
         taskset_version=taskset_version,
         harness_version=harness_version,
         runtime_version=runtime_version,
-        generator_parameters={"companyworld_family": family},
+        generator_parameters={
+            "companyworld_family": family,
+            "companyworld_world_id": world_id,
+            "companyworld_local_task_id": local_task_id,
+        },
     )
 
 
