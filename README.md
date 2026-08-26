@@ -72,6 +72,21 @@ External Investigation is a distinct capability family for OSINT-style and evide
 
 It shares Veritas foundry infrastructure with CompanyWorld but has its own capability contract, source surfaces and transfer targets.
 
+### Selective Agency
+
+Selective Agency evaluates whether an agent should **execute, answer, clarify, correct, reframe, decline, or do nothing** given the actual objective and world state. It is designed to measure blind execution, premature action, no-op recognition, false-premise handling, over-refusal, and disproportionate tool use.
+
+The procedural compiler creates paired operational worlds in which similar instructions flip among execute, clarify, no-op, and reframe based on state, authority, guardrails, and hidden consequences. The default distribution contains 240 cases across train, IID test, OOD, and adversarial partitions, with a separate evaluator-only oracle bundle.
+
+```bash
+python tools/build_selective_agency_distribution.py \
+  --seed 42 \
+  --public-output selective_agency_public.json \
+  --oracle-output selective_agency_private_oracles.json
+```
+
+See [`docs/selective-agency.md`](docs/selective-agency.md) for the task taxonomy, runtime, scoring, and private benchmark boundary.
+
 ## Reality-calibrated synthetic worlds
 
 Veritas distinguishes synthetic generation from realism claims. `WorldCalibrationSpec` can capture public datasets, regulatory filings, operational documents, research corpora, expert knowledge and telemetry as provenance-backed calibration inputs. Distribution, dependency, procedure, failure and recovery targets can then be checked before generated worlds are promoted.
