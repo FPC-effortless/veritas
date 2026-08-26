@@ -1,73 +1,96 @@
-# Veritas CompanyWorld — Commercial Benchmark Card
+# Veritas — Commercial Benchmark Card
 
 ## What Veritas measures
 
-Veritas evaluates whether an AI agent can operate in a synthetic enterprise with private ground truth, heterogeneous systems, conflicting evidence, permissions, delayed effects and resource constraints.
+Veritas evaluates AI models and agents in executable or evidence-grounded operational worlds with independent evaluator truth, reproducible versioning and explicit anti-gaming qualification.
 
-The benchmark has four capability levels that share the same operational world:
+The commercial system is designed to answer concrete model-development questions:
 
-1. **Investigation** — reconstruct facts from evidence and cite support.
-2. **Operational Action** — choose and execute the correct authorized action.
-3. **Sequential Control** — satisfy prerequisites, approvals, delayed effects, reconciliation and closure.
-4. **Dynamic Portfolio Control** — manage concurrent cases under stochastic approvals, outages, deadlines, shared resources and global budgets.
+- which model or harness performs better on a defined operational capability;
+- where an agent fails under incomplete evidence, permissions, state transitions or long-horizon constraints;
+- whether a model/harness/training change produces a credible improvement on a matched private panel;
+- whether a benchmark is itself feasible, discriminative, contaminated or exploitable before it is sold as an evaluation.
 
-## Current validated benchmark substrate
+## Qualification status by environment family
 
-The default CompanyWorld task distribution contains 1,920 cases across 11 operational families. The dynamic layer composes those cases into 640 three-case portfolios.
+### SRE Incident Response — qualified benchmark candidate
 
-Current task families include:
+**Primary commercial SKU:** [Veritas SRE Evaluation Pack v1](sre-evaluation-pack-v1.md).
 
-- shipment discrepancy investigation;
-- duplicate supplier invoice investigation;
-- authority-limit investigation;
-- order-to-cash fulfillment timing;
-- procure-to-pay reconciliation;
-- customer settlement reconstruction;
-- payment-block recovery;
-- incident SLA investigation;
-- safety corrective-action follow-up;
-- cross-system order-to-cash reconstruction;
-- ledger posting reconstruction.
+SRE v3 empirical qualification:
 
-## Ground truth and verifier design
+- candidate `SRE-CAND-24057DDECB32893163ED`;
+- 173 scenarios from five independent status-provider families;
+- 34 private-test scenarios;
+- zero failed qualification gates;
+- oracle 1.0000;
+- competent public-evidence baseline 0.88235;
+- myopic baseline 0.82353;
+- seeded random 0.17647;
+- exploit 0.0000.
 
-CompanyWorld separates public observations from evaluator-only truth. Public episodes contain task instructions and system projections; private oracles contain the expected operational facts, evidence requirements and outcome conditions.
+The evaluated system receives early incident evidence and predicts a causal class. Later resolution evidence is evaluator-side only.
 
-The verifier scores factual correctness, evidence support, calibration, authority compliance, action/outcome correctness and efficiency. Long-horizon layers additionally score prerequisite compliance, state transitions, deadlines, resource conflicts and recovery behavior.
+### ProjectWorld v2 — qualified benchmark candidate
 
-The benchmark has explicit regression tests for common reward-hacking strategies, including empty answers, conclusion-only output, citation-only output, field stuffing, blind trust in divergent projections, authority bypass, out-of-order execution, incorrect compensation and evidence mutation.
+ProjectWorld v2 is a structurally generated full-project operational environment covering project type, delivery model, jurisdiction, systems, contracts, stakeholders, WBS, resources, approvals, risks, requirements and disturbance processes.
 
-## Calibration anchors
+Latest 200-project qualification produced 40 private-test projects with zero failed gates. Policy means were:
 
-Every evaluation can report two anchors:
+- oracle 1.0000;
+- competent 0.23144;
+- myopic 0.14115;
+- random 0.00143;
+- exploit 0.0000.
 
-- **No-work anchor** — the reward obtained by submitting no meaningful work.
-- **Public-reference anchor** — a deterministic oracle-blind policy that solves tasks using only the public evidence and published operational rules.
+ProjectWorld v2 is commercially promising but does not yet have the same buyer-facing integration/report pack as SRE v1.
 
-Customer/model capability can therefore be normalized between these anchors without exposing private ground truth.
+### CompanyWorld / operational distribution — validated substrate, not current primary qualified SKU
 
-## Evaluation modes
+CompanyWorld remains a broad synthetic enterprise environment spanning investigation, action, sequential control and portfolio operation. It has hardened evidence-grounded verification and extensive anti-exploit regression coverage, but the commercial package should distinguish that engineering validation from the generic 0.10 Benchmark Qualification status used for SRE v3 and ProjectWorld v2.
 
-### Full-context planning
+## Generic Benchmark Qualification contract
 
-The model receives the public episode payload and returns a structured answer or plan. This isolates reasoning and instruction following from tool-discovery behavior.
+A candidate is not releaseable merely because tasks execute. Qualification checks include:
 
-### Agent/harness evaluation
+- source-group separation;
+- cross-split near-duplicate contamination;
+- private leakage;
+- provenance completeness;
+- deterministic replay;
+- programmatic verification;
+- broken-case / feasibility rate;
+- oracle feasibility;
+- oracle > competent > myopic policy ordering;
+- random-policy ceiling;
+- exploit-policy ceiling;
+- immutable evidence and private-release manifests.
 
-The customer agent interacts with Veritas system surfaces and budgets through the runtime. This is the preferred commercial evaluation because it measures the customer's actual tool-use policy, state management and recovery behavior.
+The qualification subsystem executes five policy classes on the identical private panel: oracle, competent heuristic, myopic, random and exploit.
 
-## Recommended commercial protocol
+## Private benchmark boundary
 
-For a procurement-grade evaluation:
+Public artifacts may include candidate IDs, panel IDs, evidence-manifest IDs, aggregate scores and gate outcomes. Raw private snapshots, private labels and per-scenario oracle outcomes are kept outside the public repository under the [private benchmark handling policy](private-benchmark-handling.md).
 
-- use a private stratified test set;
-- freeze benchmark and harness versions;
-- run at least 3 attempts per task for stochastic agents;
-- record model/harness versions, tool/token budgets and costs;
-- retain complete trajectories;
-- report per-family results and confidence intervals;
-- keep evaluator oracles and private seeds inaccessible to the evaluated system.
+## Model evaluation protocol
 
-## What Veritas does not currently claim
+A procurement-grade run should:
 
-Veritas does not yet claim that its score is a validated proxy for every real enterprise deployment. External customer validation and stronger-model calibration are ongoing. The benchmark is best described today as a rigorously instrumented synthetic enterprise capability environment with independent ground truth and explicit anti-gaming validation.
+- freeze benchmark candidate, panel and evidence-manifest IDs;
+- keep evaluator truth inaccessible to the model/harness;
+- record exact model and harness identities;
+- use deterministic generation where supported or explicit stochastic replicate identities otherwise;
+- retain structured-output reliability;
+- report uncertainty, not only a point score;
+- preserve matched panels for before/after or model-vs-model comparisons;
+- retire cases whose private truth is disclosed for debugging.
+
+## Current commercial claim
+
+Veritas does **not** claim that one score is a universal proxy for production performance.
+
+The current defensible claim is:
+
+> Veritas can compile and qualify operational benchmark candidates with independent truth, contamination/leakage controls, calibrated policy separation and immutable evidence identities, then evaluate real models or agents on frozen hidden panels and produce reproducible capability reports.
+
+External paid design-partner use remains the next validation layer: a third party must demonstrate that these reports materially improve a model-selection, regression, harness, training or deployment decision.
