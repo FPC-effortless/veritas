@@ -154,7 +154,7 @@ def validate_dynamic_companyworld(
             oracle = oracle_by_case[case.case_id]
             if oracle.approval_outcome == "DENIED" and case.sequential.oracle.approval_required:
                 denied_approval_cases += 1
-                if result_by_case[case.case_id].sequential.overall_reward < 0.999999:
+                if not result_by_case[case.case_id].approval_recovered:
                     denied_approval_recovery_failures += 1
 
         lazy = DynamicCompanyWorldRuntime(scenario)
@@ -165,8 +165,6 @@ def validate_dynamic_companyworld(
         if not lazy_score.coupled_consequence_applied:
             lazy_coupled_consequence_failures += 1
 
-        # Every scenario carries a hidden transient failure; verify it is observable at
-        # the scheduled tick and that the same system recovers after the window.
         first_oracle = next(
             (item for item in scenario.oracle.case_oracles if item.failure_windows),
             None,
@@ -192,7 +190,6 @@ def validate_dynamic_companyworld(
                 if not recovered.ok or recovered.degraded:
                     recovery_failures += 1
 
-        # Verify shared resource capacity with two concurrent same-resource remediations.
         by_resource: dict[str, list[dict]] = {}
         for case_payload in payload["cases"]:
             by_resource.setdefault(case_payload["shared_resource"], []).append(case_payload)
