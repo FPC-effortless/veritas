@@ -86,6 +86,9 @@ class Veritas:
     ) -> VeritasCompany:
         resolved_seed = self.seed if seed is None else seed
         episodes = self.build_suite(seed=resolved_seed)
+        for episode in episodes:
+            episode.metadata["organization_id"] = organization_id
+            episode.task.metadata["organization_id"] = organization_id
         substrate = PersistentOperationalSubstrate(organization_id, seed=resolved_seed)
         substrate.mount_suite(episodes)
         return VeritasCompany(
