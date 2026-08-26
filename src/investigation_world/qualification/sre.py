@@ -109,7 +109,10 @@ def compile_sre_candidate(
             normalized_text=incident.public_text,
             public_digest=public_digest,
             private_digest=private_digest,
-            metadata={"provider": incident.provider},
+            metadata={
+                "provider": incident.provider,
+                "causal_class": incident.causal_class.value,
+            },
         )
         scenarios.append(scenario)
         cases.append(
