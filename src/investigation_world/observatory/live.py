@@ -6,6 +6,15 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from investigation_world.observatory.cadence import (
+    CadencePolicy,
+    CadenceRunResult,
+    CadenceStore,
+    CadencedObservationRunner,
+)
+from investigation_world.observatory.capability_graph import (
+    companyworld_investigation_capability_graph,
+)
 from investigation_world.observatory.companyworld import (
     CompanyWorldBundleRepository,
     CompanyWorldObservatoryRuntimeFactory,
@@ -180,10 +189,41 @@ def run_companyworld_observation(
     store = ObservatoryStore(config.store_root)
     engine = ObservatoryExecutionEngine(registry, store=store)
     scheduler = LocalObservatoryScheduler(engine, store=store)
-    cycle_runner = ObservationCycleRunner(scheduler, store)
+    cycle_runner = ObservationCycleRunner(
+        scheduler,
+        store,
+        capability_graph=companyworld_investigation_capability_graph(),
+    )
     policy = SchedulerPolicy(
         max_workers=config.max_workers,
         max_attempts=config.max_attempts,
         pools={config.pool},
     )
     return cycle_runner.run(experiment, cells, policy=policy)
+
+
+def run_companyworld_cadence(
+    config: CompanyWorldLiveRunConfig,
+    *,
+    interval_hours: int = 168,
+    cadence_root: str | Path | None = None,
+    now: datetime | None = None,
+    force: bool = False,
+) -> CadenceRunResult:
+    """Run a CompanyWorld anchor cycle only when its persisted cadence is due."""
+    if interval_hours < 1:
+        raise ValueError("interval_hours must be at least 1")
+    root = Path(cadence_root) if cadence_root is not None else config.store_root / "cadence"
+    policy = CadencePolicy(
+        name=f"companyworld:{config.provider}:{config.model_id}:{config.split_name}:{config.pool.value}",
+        interval_seconds=interval_hours * 3600,
+    )
+    cadence_store = CadenceStore(root)
+
+    def execute(snapshot: str) -> ObservationCycleReport:
+        return run_companyworld_observation(config.model_copy(update={"time_snapshot": snapshot}))
+
+    return CadencedObservationRunner(policy, cadence_store, execute).run_if_due(
+        now=now,
+        force=force,
+    )
