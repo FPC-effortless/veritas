@@ -25,6 +25,11 @@ from investigation_world.foundry.expert_trajectories import (
     make_preference_pair,
     qualify_expert_trace,
 )
+from investigation_world.foundry.external_investigation import (
+    adapt_external_investigation_tasks,
+    external_investigation_task_metadata,
+    infer_external_investigation_difficulty,
+)
 from investigation_world.foundry.materializer import (
     FoundryCompanyWorldRuntime,
     FoundryRuntimeConfig,
@@ -101,14 +106,16 @@ __all__ = [
     "MutationKind", "MutationLineage", "PreferencePair", "ProcedurePrior", "PromotionPolicy", "RewardWeights",
     "RolloutTrace", "SampledTaskParameters", "StateSnapshot", "TaskDistributionSpec", "TaskPerformance", "TraceEvent",
     "TracingRuntimeProxy", "TrainerKind", "TrainingBundle", "TrainingExample", "TrainingRecipe", "TrainingUse",
-    "TrajectoryRole", "WorldCalibrationSpec", "adapt_companyworld_tasks", "aggregate_task_performance", "append_trace",
-    "apply_mutation", "assess_trace", "branch_from_snapshot", "calibration_fingerprint", "challenge_from_trace",
-    "classify_failure", "companyworld_capability_contract", "companyworld_task_metadata", "compile_training_bundle",
-    "default_companyworld_build_plan", "execute_counterfactual", "external_investigation_capability_contract",
-    "external_investigation_family", "foundry_objective", "frontier_priority", "gated_reward",
-    "infer_companyworld_difficulty", "load_traces", "make_preference_pair", "make_snapshot", "manifest_from_tasks",
-    "materialize_companyworld_build_plan", "materialize_companyworld_task", "pareto_frontier", "patched_generator_source",
-    "promotable", "promotion_failures", "qualify_expert_trace", "replay_trace_prefix", "run_foundry_cycle",
-    "sample_task_batch", "sample_task_parameters", "select_frontier_tasks", "stable_hash", "trace_cost",
-    "validate_calibration_report", "world_manifest_id", "write_companyworld_world_manifest",
+    "TrajectoryRole", "WorldCalibrationSpec", "adapt_companyworld_tasks", "adapt_external_investigation_tasks",
+    "aggregate_task_performance", "append_trace", "apply_mutation", "assess_trace", "branch_from_snapshot",
+    "calibration_fingerprint", "challenge_from_trace", "classify_failure", "companyworld_capability_contract",
+    "companyworld_task_metadata", "compile_training_bundle", "default_companyworld_build_plan", "execute_counterfactual",
+    "external_investigation_capability_contract", "external_investigation_family",
+    "external_investigation_task_metadata", "foundry_objective", "frontier_priority", "gated_reward",
+    "infer_companyworld_difficulty", "infer_external_investigation_difficulty", "load_traces", "make_preference_pair",
+    "make_snapshot", "manifest_from_tasks", "materialize_companyworld_build_plan", "materialize_companyworld_task",
+    "pareto_frontier", "patched_generator_source", "promotable", "promotion_failures", "qualify_expert_trace",
+    "replay_trace_prefix", "run_foundry_cycle", "sample_task_batch", "sample_task_parameters",
+    "select_frontier_tasks", "stable_hash", "trace_cost", "validate_calibration_report", "world_manifest_id",
+    "write_companyworld_world_manifest",
 ]
