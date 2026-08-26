@@ -117,7 +117,7 @@ def test_identity_bound_session_rejects_role_impersonation():
     transition = session.act(ProjectActionKind.START_WORK, target_id="a")
     assert transition.accepted is True
     assert transition.observation.role_id == "builder"
-    assert world.journal[-1].actor_role_id == "builder"
+    assert world.trace()[-1]["actor_role_id"] == "builder"
 
 
 def test_identity_bound_session_validates_role_at_binding_time():
