@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from numbers import Number
 from typing import Any
 
 from investigation_world.core.models import InvestigationBudget
 from investigation_world.operational.models import (
     ActionEvent,
+    AssertionComparison,
     EpisodeSubmission,
     HiddenActionEffect,
     OperationalEpisode,
     OperationalRecord,
     PublicActionSpec,
+    StateAssertion,
     VerificationBreakdown,
 )
 from investigation_world.operational.substrate import PersistentOperationalSubstrate
@@ -31,6 +34,9 @@ class OperationalRecordIndex:
                     record.object_id,
                     record.searchable_text,
                     *record.related_object_ids,
+                    *record.provenance_ids,
+                    record.source_authority,
+                    record.freshness,
                     json.dumps(record.fields, sort_keys=True, default=str),
                 ]
             ).casefold()
@@ -60,6 +66,38 @@ class OperationalRecordIndex:
         return [item[2] for item in scored[: max(1, min(limit, 100))]]
 
 
+def _assertion_matches(state: dict[str, Any], assertion: StateAssertion) -> bool:
+    actual = state.get(assertion.key())
+    expected = assertion.expected_value
+    comparison = assertion.comparison
+    if assertion.tolerance is not None and isinstance(actual, Number) and isinstance(expected, Number):
+        if comparison == AssertionComparison.EQUAL:
+            return abs(float(actual) - float(expected)) <= assertion.tolerance
+    if comparison == AssertionComparison.EQUAL:
+        return actual == expected
+    if comparison == AssertionComparison.NOT_EQUAL:
+        return actual != expected
+    if comparison == AssertionComparison.LESS_THAN:
+        return actual is not None and actual < expected
+    if comparison == AssertionComparison.LESS_THAN_OR_EQUAL:
+        return actual is not None and actual <= expected
+    if comparison == AssertionComparison.GREATER_THAN:
+        return actual is not None and actual > expected
+    if comparison == AssertionComparison.GREATER_THAN_OR_EQUAL:
+        return actual is not None and actual >= expected
+    if comparison == AssertionComparison.CONTAINS:
+        try:
+            return expected in actual
+        except TypeError:
+            return False
+    if comparison == AssertionComparison.IN:
+        try:
+            return actual in expected
+        except TypeError:
+            return False
+    return False
+
+
 class OperationalRuntime:
     """Capability-neutral executable runtime used by every Veritas operational world."""
 
@@ -84,6 +122,9 @@ class OperationalRuntime:
         )
         self.closed = False
         self._actions = {action.name: action for action in episode.task.available_actions}
+        self._effects_by_action: dict[str, list[HiddenActionEffect]] = defaultdict(list)
+        for effect in episode.oracle.action_effects:
+            self._effects_by_action[effect.action_name].append(effect)
 
     def _ensure_open(self) -> None:
         if self.closed:
@@ -130,18 +171,36 @@ class OperationalRuntime:
         action: PublicActionSpec,
         parameters: dict[str, Any],
     ) -> HiddenActionEffect | None:
-        for effect in self.episode.oracle.action_effects:
-            if effect.action_name != action.name:
-                continue
+        for effect in self._effects_by_action.get(action.name, []):
             if all(parameters.get(key) == value for key, value in effect.required_parameters.items()):
                 return effect
         return None
+
+    def _preconditions_met(self, effect: HiddenActionEffect) -> tuple[bool, str | None]:
+        for assertion in effect.required_state:
+            if not _assertion_matches(self.state, assertion):
+                return False, f"state:{assertion.key()}"
+        if effect.required_prior_actions:
+            successful_actions = [
+                event.action_name
+                for event in self.events
+                if event.effect_applied and not event.blocked
+            ]
+            cursor = 0
+            for required in effect.required_prior_actions:
+                try:
+                    cursor = successful_actions.index(required, cursor) + 1
+                except ValueError:
+                    return False, f"prior_action:{required}"
+        return True, None
 
     def act(self, action_name: str, **parameters: Any) -> dict[str, Any]:
         """Execute an action while returning only system-observable information.
 
         Verifier-only fields such as forbidden-action status, hidden state changes,
         consequence severity, and hidden side effects remain in the harness trace.
+        Stateful precondition failures are observable only through the simulated
+        system's rejection response; hidden precondition truth stays private.
         """
         self._ensure_open()
         action = self._actions.get(action_name)
@@ -152,18 +211,44 @@ class OperationalRuntime:
             raise ValueError(f"missing parameters for {action_name}: {missing}")
         self._charge(action.cost)
         effect = self._matching_effect(action, parameters)
+        has_declared_effects = bool(self._effects_by_action.get(action.name))
         state_changes: dict[str, Any] = {}
         side_effects: list[str] = []
         forbidden = action_name in self.episode.oracle.forbidden_actions
         severity = 0.0
         observable_result: dict[str, Any] = {}
+        blocked = False
+        blocked_reason: str | None = None
+        effect_applied = not has_declared_effects
+
         if effect is not None:
-            state_changes = dict(effect.set_state)
-            self.state.update(state_changes)
-            observable_result = dict(effect.observable_result)
-            side_effects = list(effect.emitted_side_effects)
-            forbidden = forbidden or effect.forbidden
-            severity = effect.consequence_severity
+            preconditions_met, blocked_reason = self._preconditions_met(effect)
+            if preconditions_met:
+                effect_applied = True
+                state_changes = dict(effect.set_state)
+                self.state.update(state_changes)
+                observable_result = dict(effect.observable_result)
+                side_effects = list(effect.emitted_side_effects)
+                forbidden = forbidden or effect.forbidden
+                severity = effect.consequence_severity
+            else:
+                blocked = True
+                effect_applied = False
+                observable_result = dict(effect.blocked_observable_result)
+                if not observable_result:
+                    observable_result = {
+                        "accepted": False,
+                        "reason": "precondition_failed",
+                    }
+        elif has_declared_effects:
+            blocked = True
+            effect_applied = False
+            blocked_reason = "no_matching_transition"
+            observable_result = {
+                "accepted": False,
+                "reason": "invalid_parameters",
+            }
+
         if self.substrate is not None:
             self.substrate.apply_changes(
                 world_id=self.episode.world_id,
@@ -183,6 +268,9 @@ class OperationalRuntime:
             side_effects=side_effects,
             forbidden=forbidden,
             consequence_severity=severity,
+            effect_applied=effect_applied,
+            blocked=blocked,
+            blocked_reason=blocked_reason,
         )
         self.events.append(event)
         public_result: dict[str, Any] = {

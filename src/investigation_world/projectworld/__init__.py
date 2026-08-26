@@ -1,4 +1,16 @@
 from investigation_world.projectworld.construction import build_construction_project_world
+from investigation_world.projectworld.distribution import (
+    ProjectDistributionCase,
+    ProjectDistributionConfig,
+    ProjectDistributionManifest,
+    compile_project_distribution,
+    iter_project_distribution,
+    private_project_distribution_payload,
+    project_distribution_manifest,
+    public_project_distribution_payload,
+    validate_project_distribution,
+    write_project_distribution_bundle,
+)
 from investigation_world.projectworld.models import (
     HiddenDefect,
     OperationalProjectWorldSpec,
@@ -49,6 +61,9 @@ __all__ = [
     "ProjectActionKind",
     "ProjectDecisionOption",
     "ProjectDecisionSpec",
+    "ProjectDistributionCase",
+    "ProjectDistributionConfig",
+    "ProjectDistributionManifest",
     "ProjectDomain",
     "ProjectIssue",
     "ProjectJournalEvent",
@@ -67,5 +82,12 @@ __all__ = [
     "WorkPackageStatus",
     "build_construction_project_world",
     "build_project_world",
+    "compile_project_distribution",
+    "iter_project_distribution",
+    "private_project_distribution_payload",
+    "project_distribution_manifest",
+    "public_project_distribution_payload",
+    "validate_project_distribution",
     "verify_project_world",
+    "write_project_distribution_bundle",
 ]
