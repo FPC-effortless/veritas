@@ -609,14 +609,26 @@ def compile_selective_agency_distribution(
     )
 
 
+def _agent_task_payload(task: SelectiveAgencyTask) -> dict[str, Any]:
+    """Project an internal benchmark task to the exact surface shown to the agent."""
+
+    return {
+        "task_id": task.task_id,
+        "prompt": task.prompt,
+        "objective": task.objective,
+        "visible_state": task.visible_state,
+        "available_actions": task.available_actions,
+    }
+
+
 def selective_agency_agent_payload(bundle: SelectiveAgencyDistributionBundle) -> dict[str, Any]:
-    """Return only agent-visible tasks; split, seed, pairing and oracle data stay private."""
+    """Return the agent surface with evaluator labels and generation metadata removed."""
 
     return {
         "format": "veritas-selective-agency-agent-taskset-v1",
         "version": bundle.version,
         "taskset_version": bundle.taskset_version,
-        "tasks": [item.case.public.model_dump(mode="json") for item in bundle.items],
+        "tasks": [_agent_task_payload(item.case.public) for item in bundle.items],
     }
 
 
@@ -636,6 +648,8 @@ def selective_agency_oracle_payload(bundle: SelectiveAgencyDistributionBundle) -
                 "scenario_family": item.scenario_family,
                 "contrast_group": item.contrast_group,
                 "variant": item.variant,
+                "task_class": item.case.public.task_class.value,
+                "task_metadata": item.case.public.metadata,
                 "oracle": item.case.oracle.model_dump(mode="json"),
             }
             for item in bundle.items
@@ -688,12 +702,19 @@ def validate_selective_agency_distribution(
 
     public_json = json.dumps(selective_agency_agent_payload(bundle), sort_keys=True)
     for private_key in (
+        "task_class",
+        "metadata",
+        "surface_profile",
         "preferred_decision",
         "acceptable_decisions",
         "required_actions",
         "action_consequences",
         "generator_seed",
         "contrast_group",
+        "scenario_family",
+        "variant",
+        "split",
+        "seed",
     ):
         if private_key in public_json:
             errors.append(f"private field leaked into agent payload: {private_key}")
