@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -15,6 +15,11 @@ class CompanySystem(StrEnum):
     EMAIL = "EMAIL"
     LEDGER = "LEDGER"
     PROCESS = "PROCESS"
+    AR_WORKFLOW = "AR_WORKFLOW"
+    TREASURY = "TREASURY"
+    ITSM = "ITSM"
+    SAFETY = "SAFETY"
+    COMPLIANCE = "COMPLIANCE"
 
 
 class CompanyWorldRecord(BaseModel):
@@ -41,6 +46,8 @@ class OperationalFactTarget(BaseModel):
     field_name: str
     expected_value: Any
     supporting_record_ids: list[str] = Field(default_factory=list)
+    support_mode: Literal["semantic_any", "listed_count"] = "semantic_any"
+    minimum_support_records: int = Field(default=1, ge=1)
 
     def key(self) -> tuple[str, str, str]:
         return (self.object_type, self.object_id, self.field_name)
@@ -90,6 +97,8 @@ class CompanyWorldEpisode(BaseModel):
     def refine_direct_evidence(self) -> "CompanyWorldEpisode":
         """Narrow broad context links to records that directly support each fact."""
         for fact in self.oracle.facts:
+            if fact.support_mode != "semantic_any":
+                continue
             direct: list[str] = []
             for record in self.records:
                 same_object = (
