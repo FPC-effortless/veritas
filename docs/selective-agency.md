@@ -23,7 +23,7 @@ The primary failure mode is **blind execution**. The symmetric failure modes are
 
 ## Task taxonomy
 
-The public schema supports these task classes:
+The internal benchmark schema supports these evaluator task classes:
 
 - `action_warranted`: state, authority, and guardrails establish that execution is the correct behavior;
 - `false_premise`: the request presupposes something untrue;
@@ -39,27 +39,29 @@ The public schema supports these task classes:
 - `excessive_solution`: the requested method is gratuitously expensive relative to the goal;
 - `no_op`: the desired world state already holds and further action adds no value or adds risk.
 
-## Public task and private oracle
+These labels are **not** shown to the evaluated agent.
 
-`SelectiveAgencyTask` is agent-visible. It contains the prompt, task class, objective, visible state, available actions, and non-secret metadata.
+## Agent surface and private oracle
+
+`SelectiveAgencyTask` is the internal task record used by the benchmark and foundry. It includes evaluator labels such as `task_class` and generation metadata so Veritas can stratify, diagnose, and build training products.
+
+The actual agent projection is narrower. `selective_agency_agent_payload()` emits only:
+
+- `task_id`;
+- `prompt`;
+- `objective`;
+- `visible_state`;
+- `available_actions`.
+
+It explicitly removes task class, split, seed, surface profile, scenario family, contrast-group membership, state-flip variant, and all oracle fields. This projection—not the raw internal Pydantic object—is the surface that should be passed to an evaluated agent.
 
 `SelectiveAgencyOracle` is verifier-only. It contains acceptable and preferred decisions, forbidden and required actions, hidden action effects, action costs, consequence severity, resource bounds, clarification requirements, and whether world-changing action is actually warranted.
 
-The oracle must never be exposed through an agent-facing API or included in the agent taskset. Procedural benchmark generation additionally keeps these fields private:
-
-- train/IID/OOD/adversarial split assignment;
-- generation seed;
-- scenario family;
-- contrast-group membership;
-- state-flip variant;
-- hidden action consequences;
-- evaluator targets.
-
-`selective_agency_agent_payload()` serializes only agent-visible tasks. `selective_agency_oracle_payload()` creates the evaluator-only bundle.
+`selective_agency_oracle_payload()` creates the evaluator-only bundle containing split assignment, generation seed, scenario family, contrast-group membership, state-flip variant, internal task class/metadata, hidden action consequences, and evaluator targets.
 
 ## Procedural distribution
 
-`compile_selective_agency_distribution()` now builds deterministic selective-agency worlds from a versioned seed.
+`compile_selective_agency_distribution()` builds deterministic selective-agency worlds from a versioned seed.
 
 The default distribution contains **240 cases**:
 
