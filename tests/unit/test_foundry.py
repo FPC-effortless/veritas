@@ -144,3 +144,40 @@ def test_tracing_proxy_and_executable_prefix_replay():
         FakeRuntime, trace, branch_step=1, alternate_method="advance", alternate_args=[5]
     )
     assert branched.value == 6
+
+
+def test_closed_loop_cycle_promotes_only_validated_challenges():
+    from investigation_world.foundry import ChallengeValidation, FoundryCycleConfig, run_foundry_cycle
+
+    tasks = [task("T1"), task("T2")]
+    traces = [
+        RolloutTrace(
+            trace_id="TR-FAIL", environment_version="e1", task_id="T1", task_seed=1,
+            split=DistributionSplit.TRAIN, capability_tags=["evidence"], taskset_version="t1",
+            harness_version="h1", runtime_version="r1", initial_state_hash="a",
+            verifier_components={"evidence_support":0.0}, total_reward=0.2,
+            termination_reason="submitted",
+        ),
+        RolloutTrace(
+            trace_id="TR-PASS", environment_version="e1", task_id="T2", task_seed=2,
+            split=DistributionSplit.TRAIN, capability_tags=["evidence"], taskset_version="t1",
+            harness_version="h1", runtime_version="r1", initial_state_hash="b",
+            verifier_components={"evidence_support":1.0}, total_reward=1.0,
+            termination_reason="submitted",
+        ),
+    ]
+    first = run_foundry_cycle(tasks, traces, config=FoundryCycleConfig(frontier_limit=2))
+    assert first.trace_count == 2
+    assert len(first.challenge_proposals) == 1
+    challenge_id = first.challenge_proposals[0].challenge_id
+    assert not first.promoted_challenge_ids
+
+    validated = run_foundry_cycle(
+        tasks, traces,
+        validations=[ChallengeValidation(
+            challenge_id=challenge_id, leakage_count=0, oracle_reward=1.0,
+            exploit_max_reward=.1, deterministic=True,
+        )],
+        config=FoundryCycleConfig(frontier_limit=2),
+    )
+    assert validated.promoted_challenge_ids == [challenge_id]
