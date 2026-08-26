@@ -24,6 +24,12 @@ The Observatory has three scenario-pool semantics:
 
 The pool is independent of the existing train/IID/OOD/adversarial split so Veritas can separately represent distributional role and longitudinal exposure policy.
 
+## Experiment matrices
+
+`CellMatrixSpec` defines a Cartesian experiment over worlds, scenarios, models, harnesses, verifiers, execution configurations, and time snapshots. `materialize_cells()` deterministically expands the matrix into `LongitudinalCell` objects, while `experiment_from_matrix()` binds those cell identities into an immutable `ExperimentSpec`.
+
+This makes longitudinal experiments explicit and reproducible rather than relying on handwritten loops or implicit benchmark configuration.
+
 ## Capability run
 
 Existing `RolloutTrace` objects are converted into `CapabilityRun` objects. A run contains:
@@ -97,11 +103,12 @@ Implemented now:
 - `WorldRef`, `ScenarioRef`, `ModelSpec`, `HarnessSpec`, `VerifierSpec`, `ExecutionSpec`;
 - deterministic `LongitudinalCell` and longitudinal lineage identity;
 - anchor/rotation/sequestered scenario pools;
+- `CellMatrixSpec`, deterministic matrix materialization, and `ExperimentSpec` construction;
 - `CapabilityRun` and provenance;
 - verifier-derived capability profiles;
 - trajectory-derived behavioral fingerprints;
 - longitudinal drift reports;
 - append-only run persistence;
-- unit coverage for identity, alignment, drift, behavior, and storage.
+- unit coverage for identity, alignment, matrix generation, drift, behavior, and storage.
 
-Next implementation layers should add experiment-matrix materialization, repeated-seed aggregation with uncertainty, scheduler/provider adapters, richer investigation-specific capability dimensions, capability-graph attribution, counterfactual/intervention experiment records, and a query/report surface over accumulated runs.
+Next implementation layers should add repeated-seed aggregation with uncertainty, scheduler/provider adapters, richer investigation-specific capability dimensions, capability-graph attribution, counterfactual/intervention experiment records, and a query/report surface over accumulated runs.
