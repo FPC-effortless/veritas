@@ -2,7 +2,7 @@
 
 ## Version
 
-Current benchmark/runtime candidate: **0.8.0**.
+Current benchmark/runtime candidate: **0.9.0**.
 
 ## Implemented
 
@@ -11,12 +11,12 @@ Current benchmark/runtime candidate: **0.8.0**.
 - Deterministic hidden canonical world generation with typed entities and event-sourced temporal relationship intervals.
 - Leakage-safe evidence projection and strict public/private task/oracle separation.
 - Source-aware search surfaces, isolated executable episode runtimes, budgets, trace storage, replay, counterfactuals and failure mining.
-- CompanyWorld, External Investigation, Selective Agency, Continuous Capability Observatory, Reality Calibration and Verified Training Product primitives remain first-class capabilities under one Veritas product facade.
+- CompanyWorld, External Investigation, Selective Agency, Continuous Capability Observatory, Reality Calibration, ProjectWorld and Verified Training Product primitives remain first-class capabilities under one Veritas product facade.
 - Persistent operational substrate with organization-scoped state, append-only event history, deterministic reconstruction, snapshots, counterfactual forks and persistent entity/relation graph.
 
-### Unified Operational Worlds Production v2
+### Unified Operational Worlds Production v3
 
-Five operational domains share one runtime and the same seven-dimensional verification contract:
+Five operational domains still share one runtime and the same seven-dimensional verification contract:
 
 1. Financial / Spreadsheet
 2. Enterprise Operations
@@ -24,76 +24,52 @@ Five operational domains share one runtime and the same seven-dimensional verifi
 4. Investigation / OSINT
 5. GIS Operations
 
-The shared verifier dimensions remain **outcome, state, constraints, side effects, process, efficiency and evidence**. v0.8 deepens how those dimensions are earned; it does not introduce incompatible domain-specific reward surfaces.
+The verifier dimensions remain **outcome, state, constraints, side effects, process, efficiency and evidence**. v0.9 adds native artifact execution behind that contract rather than adding a new reward surface.
 
-### Stateful operational semantics
+### Native artifact execution
 
-v0.8 adds:
+Every generated operational episode carries a deterministic, opaque, lazy `NativeArtifactDescriptor`. Artifacts are materialized only when a rollout needs them, keeping the 4,480-case distribution lightweight.
+
+Current engines:
+
+- Financial / Spreadsheet: `openpyxl-workbook-v1` — real XLSX workbook mutation and checks.
+- Enterprise Operations: `sqlite-enterprise-replica-v1` — CRM/CPQ/ERP/IAM/credit/audit relational replica.
+- DevOps / Incident Response: `declarative-kubernetes-sandbox-v1` — Kubernetes-style manifests plus executable cluster/telemetry state.
+- Investigation / OSINT: `rendered-evidence-corpus-v1` — registry JSON, archive HTML, directory CSV and mutable casefile.
+- GIS Operations: `shapely-pyproj-vector-v1` — real GeoJSON reprojection, geometry repair and overlay execution.
+
+`NativeOperationalRuntime` mirrors only successful, unblocked operational transitions into the artifact. Native checks are injected into hidden target state before the ordinary verifier runs, so an agent cannot receive full outcome/state credit while leaving the actual artifact incorrect.
+
+### Parameterized native fidelity
+
+`ParameterizedNativeArtifactWorkspace` derives materialized bytes and validation targets from each procedurally generated episode rather than reference-case constants.
+
+This currently covers generated variation in:
+
+- spreadsheet formula ranges, sheet/cell targets and enterprise value;
+- enterprise deal/order/account/control state;
+- DevOps service identity and recovered error-rate target;
+- OSINT identities, companies and supported resolution;
+- GIS source/target layers and CRS pair.
+
+A regression test executes a non-reference generated training case from every domain and requires both native artifact validity and 1.0 shared state/outcome scores.
+
+### Stateful operational semantics retained
+
+v0.9 preserves the v0.8 deep semantics:
 
 - hidden state preconditions on action effects;
 - hidden required-prior-action conditions;
-- realistic blocked system responses when prerequisites are not met;
-- blocked actions do not mutate truth and do not satisfy required process steps;
-- ordered required procedures inside the existing process score;
-- repeated required action counts;
-- richer assertion comparisons, including threshold checks;
+- blocked system responses when prerequisites are not met;
+- blocked actions do not mutate truth or satisfy required process steps;
+- ordered and repeated required procedures;
+- threshold/tolerance assertions;
 - final-state and trajectory-wide (`always`) invariants;
-- transient invariant violations remain detectable even when later repaired;
-- temporal/provenance-rich public records with validity interval, observation time, freshness, source authority, confidence and provenance roots.
+- temporal/provenance-rich public records.
 
-### Deep financial / spreadsheet cases
+### Production-scale distributions retained
 
-Production cases now include workbook manifests, formula-lineage/dependency graphs, calculation chains, authoritative ledger reconciliation, model-governance policy and review context.
-
-Representative workflow:
-
-`inspect lineage -> reconcile source -> repair formula -> recalculate -> validate controls`
-
-Artifact contract: `xlsx_formula_dependency_graph_v2`.
-
-### Deep enterprise-operations cases
-
-Production cases now span CRM, CPQ, ERP, IAM and finance-control evidence. They include role/authority assignments, credit profiles, quote versions, order state, customer/account context and immutable audit events.
-
-Representative workflow:
-
-`verify authority -> validate credit -> request approval -> hold order -> update stage -> reconcile systems`
-
-Artifact contract: `crm_cpq_erp_control_graph_v2`.
-
-### Deep DevOps / incident-response cases
-
-Production cases now include change-management evidence, deployment state, distributed dependency graphs, log signatures, SLI windows, SLO policy and Kubernetes deployment specifications.
-
-Representative workflow:
-
-`correlate change -> inspect dependencies -> recover service -> verify health -> validate SLO`
-
-Artifact contract: `incident_telemetry_dependency_graph_v2`.
-
-### Deep investigation / OSINT cases
-
-Production cases now include explicit hypothesis state, repeated evidence linking, source provenance, independence metadata, identifier crosswalks, negative evidence, archived reporting and chain-of-custody invariants.
-
-Representative workflow:
-
-`record hypothesis -> resolve identity -> link independent evidence -> corroborate -> close case`
-
-Artifact contract: `multi_source_provenance_casefile_v2`.
-
-### Deep GIS cases
-
-Production cases now include catalog metadata, CRS definitions, datum/axis-order context, spatial extent, topology rules, schema profiles, lineage and output contracts.
-
-Representative workflow:
-
-`inspect metadata -> reproject -> repair geometry -> validate topology -> execute overlay`
-
-Artifact contract: `vector_crs_topology_lineage_v2`.
-
-## Production-scale distribution
-
-The default `OperationalDistributionConfig` remains **4,480 executable episodes**:
+Operational distribution remains exactly **4,480 executable episodes**:
 
 - train: 512 per domain / 2,560 total;
 - IID test: 128 per domain / 640 total;
@@ -101,61 +77,80 @@ The default `OperationalDistributionConfig` remains **4,480 executable episodes*
 - adversarial: 128 per domain / 640 total;
 - 896 cases per domain across all five domains.
 
-The v2 compiler preserves the v0.7 scale/integrity guarantees and adds deep-realism validation:
+The v3 operational compiler retains opaque IDs, split/oracle isolation, deterministic fingerprints, deep-realism constraints and anti-leakage checks, and additionally validates native engine assignment, opaque artifact IDs and source-record lineage for every episode.
 
-- deterministic generation and fingerprints;
-- opaque public world/task/record identifiers;
-- hash-mixed public ordering;
-- split, seed, scenario-family, surface-profile, difficulty and oracle remain evaluator-only;
-- generator-only scenario fields are stripped before public packaging;
-- literal private scenario labels are rejected if leaked publicly;
-- difficulty vectors are recomputed after domain-depth expansion;
-- every deep case must satisfy minimum system heterogeneity, action-surface depth, ordered procedure depth, temporal/provenance evidence, stateful preconditions and trajectory invariants;
-- OOD/adversarial pressure and train/held-out isolation remain intact.
+ProjectWorld remains a separate long-horizon environment family with a default **896-project** construction distribution and its own versioned runtime/verifier contract.
 
-See `docs/operational-production-scale.md` and `docs/domain-realism-v08.md`.
+See:
+
+- `docs/operational-production-scale.md`
+- `docs/domain-realism-v08.md`
+- `docs/native-artifact-fidelity-v09.md`
+- `docs/projectworld-procedural-distribution.md`
+
+## Native fidelity release gate
+
+CI now has a dedicated `Native artifact fidelity` job:
+
+```bash
+veritas validate-native-fidelity --seed 42 --cases-per-split 8
+```
+
+It deterministically selects and executes one case from every operational **domain × split** cell:
+
+- 5 domains;
+- train, IID, OOD and adversarial;
+- **20 native artifact executions** total.
+
+For each sampled case the evaluator procedure must execute without blocked/missing transitions, the actual artifact must pass every native check, and submission through the ordinary verifier must achieve state=1.0 and outcome=1.0.
+
+This complements, rather than replaces, exhaustive descriptor/integrity validation over all 4,480 cases.
 
 ## Regression coverage
 
 The test suite covers the existing Veritas contract plus:
 
+- real XLSX creation/mutation and formula-state validation;
+- SQLite enterprise state transitions and audit history;
+- declarative infrastructure recovery state;
+- heterogeneous OSINT corpus/casefile mutation;
+- pyproj reprojection, Shapely geometry repair and overlay creation;
+- native artifact tampering reducing ordinary verifier state/outcome scores;
+- generated-case parameter propagation into native artifacts;
 - state-gated actions and blocked transitions;
-- blocked required actions not satisfying process credit;
-- ordered process verification;
-- repeated required actions;
+- ordered/repeated process verification;
 - transient trajectory-invariant detection;
-- threshold/tolerance assertions;
-- deep-domain record/action/system minimums;
-- opaque realism-layer record IDs;
 - deep public/private leakage checks;
-- preservation of all five domains and all four distribution partitions.
+- preservation of all operational and ProjectWorld distribution gates.
 
 ## CI release gate
 
-The required workflow continues to gate merge on:
+Merge is gated on the exact candidate head passing:
 
 - Python 3.12 tests;
 - Python 3.13 tests;
 - package build;
 - environment/unified-product smoke tests;
+- native artifact fidelity across all 20 domain × split cells;
+- full **4,480-case** operational distribution validation;
+- full **896-project** ProjectWorld distribution validation;
 - Next.js build;
 - container build and API health;
-- the dedicated `Production-scale operational distribution` job, which compiles and validates all **4,480** default episodes;
 - aggregate `Required` status;
-- Security workflow checks.
-
-v0.8 must pass this gate on the exact PR head before merge.
+- Security source and dependency checks.
 
 ## Remaining fidelity work
 
-v0.8 is materially deeper at the operational state, evidence, procedure, control and verification layers. It does **not** claim that every domain already runs a native industrial engine. The main remaining fidelity layer is:
+v0.9 is **native artifact fidelity**, not universal industrial simulation.
 
-- real XLSX files and formula-evaluation/dependency engines;
-- containerized Kubernetes/Terraform/cloud sandboxes;
-- richer enterprise application/database replicas;
-- large rendered evidence/document corpora for investigation work;
-- native vector/raster GIS execution and output-file verification;
-- deeper cross-domain causal propagation and long-horizon multi-episode task compilation;
-- empirical calibration against real operational distributions and failure rates.
+Remaining high-value integrations include:
 
-Those engines should attach behind the existing `TaskContract -> Runtime -> HiddenOracle -> seven-dimensional verifier` boundary rather than fragmenting Veritas into incompatible products.
+- a broader Excel-compatible calculation engine for arbitrary formulas, macros, Power Query and external links;
+- live Kubernetes/container/network sandboxes plus Terraform/cloud-provider control planes;
+- vendor-deeper enterprise application replicas and richer transactional failure modes;
+- browser-scale rendered web, OCR/image-heavy investigation corpora and larger search surfaces;
+- raster GIS, GDAL/PostGIS-scale execution and rendered map products;
+- deeper cross-domain causal propagation and long-horizon multi-episode operational tasks;
+- empirical calibration of artifact/state distributions and failure rates against real operational data.
+
+These should plug behind the existing `TaskContract -> Runtime -> HiddenOracle -> seven-dimensional verifier` boundary rather than fragmenting Veritas into incompatible products.
