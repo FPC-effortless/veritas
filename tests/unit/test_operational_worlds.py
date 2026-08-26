@@ -75,3 +75,24 @@ def test_suite_manifest_declares_shared_verifier_contract():
         "efficiency",
         "evidence",
     ]
+
+
+def test_persistent_company_mounts_all_worlds_and_replays_state():
+    company = Veritas(seed=42).build_company(organization_id="ORG-TEST-001")
+    baseline_sequence = company.substrate.sequence
+    assert set(company.snapshot().domains) == set(WorldDomain)
+    assert len(company.snapshot().mounted_world_ids) == len(WorldDomain)
+    assert company.substrate.validate_integrity() is True
+
+    runtime = company.runtime(WorldDomain.FINANCIAL_SPREADSHEET)
+    runtime.act("repair_formula", cell="DCF!F18", formula="=SUM(Revenue!B2:B13)")
+    runtime.act("recalculate_model")
+
+    assert company.snapshot().state["valuation.enterprise_value_m"] == 125.0
+    assert company.substrate.sequence == baseline_sequence + 2
+    assert company.substrate.validate_integrity() is True
+
+    counterfactual = company.fork(baseline_sequence)
+    assert counterfactual.snapshot().state["valuation.enterprise_value_m"] == 118.4
+    assert counterfactual.substrate.sequence == baseline_sequence
+    assert counterfactual.substrate.validate_integrity() is True
