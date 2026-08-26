@@ -21,6 +21,7 @@ class SelectiveAgencyActionResult(BaseModel):
     cost: float = Field(default=0.0, ge=0.0)
     consequence_severity: float = Field(default=0.0, ge=0.0, le=1.0)
     forbidden: bool = False
+    world_changed: bool = False
 
 
 class SelectiveAgencyRuntime:
@@ -69,6 +70,7 @@ class SelectiveAgencyRuntime:
                 min(1.0, float(oracle.action_consequences.get(action, 0.0))),
             ),
             forbidden=action in oracle.forbidden_actions,
+            world_changed=bool(effect),
         )
         self._results.append(result)
         return result
@@ -80,11 +82,16 @@ class SelectiveAgencyRuntime:
         answer: str = "",
         confidence: float | None = None,
     ) -> SelectiveAgencyAttempt:
+        consequential_actions = [
+            result.action
+            for result in self._results
+            if result.world_changed or result.forbidden or result.consequence_severity > 0.0
+        ]
         return SelectiveAgencyAttempt(
             decision=decision,
             tool_calls=len(self._results),
             cost=self.total_cost,
-            actions=[result.action for result in self._results],
+            actions=consequential_actions,
             answer=answer,
             confidence=confidence,
         )
