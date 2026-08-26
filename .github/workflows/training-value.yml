@@ -1,9 +1,7 @@
 name: Training Value
 
 on:
-  push:
-    branches:
-      - feature/commercial-readiness
+  pull_request:
     paths:
       - "src/investigation_world/training_value/**"
       - "tools/run_training_value_experiment.py"
