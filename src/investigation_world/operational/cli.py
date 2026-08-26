@@ -5,6 +5,7 @@ from pathlib import Path
 
 import typer
 
+from investigation_world.operational.distribution import OperationalDistributionConfig
 from investigation_world.operational.models import WorldDomain
 from investigation_world.veritas import Veritas
 
@@ -22,6 +23,7 @@ def capabilities_cmd() -> None:
         json.dumps(
             {
                 "product": veritas.info.name,
+                "default_operational_distribution_cases": veritas.info.default_operational_distribution_cases,
                 "capabilities": [
                     {
                         "capability_id": capability.capability_id,
@@ -85,7 +87,7 @@ def build_suite_cmd(
     output: Path = Path("veritas_operational_suite.json"),
     oracle_output: Path | None = None,
 ) -> None:
-    """Build all five public worlds with optional evaluator-only oracle bundle."""
+    """Build one reference episode for each operational domain."""
     veritas = Veritas(seed=seed)
     episodes = veritas.build_suite()
     payload = {
@@ -115,6 +117,69 @@ def build_suite_cmd(
         )
         result["private_oracle_output"] = str(oracle_output)
     typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("build-distribution")
+def build_distribution_cmd(
+    seed: int = 42,
+    train_per_domain: int = 512,
+    iid_per_domain: int = 128,
+    ood_per_domain: int = 128,
+    adversarial_per_domain: int = 128,
+    output: Path = Path("veritas_operational_distribution_public.json"),
+    oracle_output: Path = Path("veritas_operational_distribution_private.json"),
+) -> None:
+    """Build the production-scale train/IID/OOD/adversarial operational distribution."""
+    config = OperationalDistributionConfig(
+        seed=seed,
+        train_per_domain=train_per_domain,
+        iid_per_domain=iid_per_domain,
+        ood_per_domain=ood_per_domain,
+        adversarial_per_domain=adversarial_per_domain,
+    )
+    validation = Veritas(seed=seed).write_distribution(
+        output=output,
+        oracle_output=oracle_output,
+        config=config,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "valid": validation["valid"],
+                "total_cases": validation["manifest"]["total_cases"],
+                "split_counts": validation["manifest"]["split_counts"],
+                "domain_counts": validation["manifest"]["domain_counts"],
+                "public_hash": validation["manifest"]["public_hash"],
+                "public_output": str(output),
+                "private_oracle_output": str(oracle_output),
+            },
+            indent=2,
+        )
+    )
+
+
+@app.command("validate-production-scale")
+def validate_production_scale_cmd(
+    seed: int = 42,
+    train_per_domain: int = 512,
+    iid_per_domain: int = 128,
+    ood_per_domain: int = 128,
+    adversarial_per_domain: int = 128,
+) -> None:
+    """Compile and validate a production-scale distribution without writing artifacts."""
+    config = OperationalDistributionConfig(
+        seed=seed,
+        train_per_domain=train_per_domain,
+        iid_per_domain=iid_per_domain,
+        ood_per_domain=ood_per_domain,
+        adversarial_per_domain=adversarial_per_domain,
+    )
+    veritas = Veritas(seed=seed)
+    cases = veritas.build_distribution(config)
+    validation = veritas.validate_distribution(cases, config=config)
+    typer.echo(json.dumps(validation, indent=2, default=str))
+    if not validation["valid"]:
+        raise typer.Exit(1)
 
 
 @app.command("build-company")
