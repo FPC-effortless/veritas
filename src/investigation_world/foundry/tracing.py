@@ -64,7 +64,7 @@ def _numeric_components(verification: Any) -> dict[str, float]:
 
 
 class TracingRuntimeProxy:
-    """Record runtime operations without changing the wrapped runtime semantics."""
+    """Record public runtime operations without changing wrapped runtime semantics."""
 
     def __init__(
         self,
@@ -110,11 +110,17 @@ class TracingRuntimeProxy:
     def search_system(self, *args: Any, **kwargs: Any) -> Any:
         return self._record_call("search_system", *args, **kwargs)
 
+    def search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("search", *args, **kwargs)
+
     def search_all(self, *args: Any, **kwargs: Any) -> Any:
         return self._record_call("search_all", *args, **kwargs)
 
     def open_record(self, *args: Any, **kwargs: Any) -> Any:
         return self._record_call("open_record", *args, **kwargs)
+
+    def case_status(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("case_status", *args, **kwargs)
 
     def act(self, *args: Any, **kwargs: Any) -> Any:
         return self._record_call("act", *args, **kwargs)
@@ -153,17 +159,32 @@ class TracingRuntimeProxy:
         )
 
 
+def _company_system(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    from investigation_world.companyworld.models import CompanySystem
+    try:
+        return CompanySystem(value)
+    except ValueError:
+        return value
+
+
 def _decode_replay_arg(method: str, position: int, value: Any) -> Any:
     if method == "act" and isinstance(value, dict) and "action_type" in value:
         from investigation_world.companyworld.interactive_models import OperationalAction
         return OperationalAction.model_validate(value)
-    if method == "search_system" and position in {0, 1} and isinstance(value, str):
-        from investigation_world.companyworld.models import CompanySystem
-        try:
-            return CompanySystem(value)
-        except ValueError:
-            return value
+    if method == "search_system":
+        # Interactive/sequential: system is arg 0. Dynamic: case id is arg 0, system arg 1.
+        if position in {0, 1}:
+            return _company_system(value)
     return value
+
+
+def _decode_replay_kwargs(method: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+    decoded = dict(kwargs)
+    if method in {"search", "search_system"} and "system" in decoded:
+        decoded["system"] = _company_system(decoded["system"])
+    return decoded
 
 
 def replay_trace_prefix(runtime: Any, trace: RolloutTrace, *, through_step: int | None = None) -> Any:
@@ -184,8 +205,9 @@ def replay_trace_prefix(runtime: Any, trace: RolloutTrace, *, through_step: int 
             _decode_replay_arg(method, index, value)
             for index, value in enumerate(raw_args if isinstance(raw_args, list) else [])
         ]
-        kwargs = event.payload.get("kwargs", {})
-        function(*args, **(kwargs if isinstance(kwargs, dict) else {}))
+        raw_kwargs = event.payload.get("kwargs", {})
+        kwargs = _decode_replay_kwargs(method, raw_kwargs if isinstance(raw_kwargs, dict) else {})
+        function(*args, **kwargs)
     return runtime
 
 
@@ -205,5 +227,6 @@ def execute_counterfactual(
         _decode_replay_arg(alternate_method, index, _dump(value))
         for index, value in enumerate(alternate_args)
     ]
-    getattr(runtime, alternate_method)(*decoded, **(alternate_kwargs or {}))
+    kwargs = _decode_replay_kwargs(alternate_method, _dump(alternate_kwargs or {}))
+    getattr(runtime, alternate_method)(*decoded, **kwargs)
     return runtime
