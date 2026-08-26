@@ -61,23 +61,20 @@ class CompanyWorldRecordIndex:
         terms = [term.casefold() for term in query.split() if term.strip()]
         if not terms:
             return []
-        candidates = (
-            self._by_system[system]
-            if system is not None
-            else list(self._records.values())
-        )
+        candidates = self._by_system.get(system, []) if system else list(self._records.values())
         scored: list[tuple[int, str, CompanyWorldRecord]] = []
         for record in candidates:
             text = self._search_text[record.record_id]
-            score = sum(term in text for term in terms)
-            if score:
-                scored.append((score, record.record_id, record))
+            if not all(term in text for term in terms):
+                continue
+            score = sum(text.count(term) for term in terms)
+            scored.append((score, record.record_id, record))
         scored.sort(key=lambda item: (-item[0], item[1]))
-        return [record for _, _, record in scored[: max(0, limit)]]
+        return [item[2] for item in scored[: max(1, min(limit, 100))]]
 
 
 class CompanyWorldRuntime:
-    """In-process, isolated CompanyWorld episode runtime for RL and eval harnesses."""
+    """Executable, isolated CompanyWorld episode with budgeted system tools."""
 
     def __init__(
         self,
@@ -88,19 +85,16 @@ class CompanyWorldRuntime:
     ):
         self.episode = episode
         self.index = CompanyWorldRecordIndex(episode.records)
-        self.budget = InvestigationBudget(
-            total_cost=total_cost,
-            max_tool_calls=max_tool_calls,
-        )
+        self.budget = InvestigationBudget(total_cost=total_cost, max_tool_calls=max_tool_calls)
         self.closed = False
 
-    def task(self) -> dict:
-        return self.episode.task.model_dump(mode="json")
-
-    def _charge(self, system: CompanySystem) -> None:
+    def _ensure_open(self) -> None:
         if self.closed:
             raise ValueError("episode already submitted")
-        self.budget.charge(SYSTEM_TOOL_COSTS[system])
+
+    def _charge(self, cost: int) -> None:
+        self._ensure_open()
+        self.budget.charge(cost)
 
     def search_system(
         self,
@@ -108,8 +102,9 @@ class CompanyWorldRuntime:
         query: str,
         limit: int = 10,
     ) -> list[dict]:
-        """Search one enterprise system surface; retained as the stable runtime API."""
-        self._charge(system)
+        if system not in self.episode.task.permitted_systems:
+            return []
+        self._charge(SYSTEM_TOOL_COSTS[system])
         return [
             record.model_dump(mode="json")
             for record in self.index.search(query, system=system, limit=limit)
@@ -122,24 +117,28 @@ class CompanyWorldRuntime:
         system: CompanySystem,
         limit: int = 10,
     ) -> list[dict]:
-        """Keyword-friendly alias for `search_system`."""
+        """Keyword-friendly alias for the stable `search_system` API."""
         return self.search_system(system, query, limit=limit)
 
+    def search_all(self, query: str, limit: int = 10) -> list[dict]:
+        self._charge(3)
+        return [
+            record.model_dump(mode="json")
+            for record in self.index.search(query, limit=limit)
+        ]
+
     def open_record(self, record_id: str) -> dict:
-        if self.closed:
-            raise ValueError("episode already submitted")
+        self._charge(1)
         record = self.index.get(record_id)
         if record is None:
             raise KeyError(record_id)
-        self.budget.charge(1)
         return record.model_dump(mode="json")
 
     def budget_snapshot(self) -> dict:
-        return self.budget.model_dump(mode="json")
+        return self.budget.model_dump()
 
     def submit(self, result: InvestigationResult) -> CompanyWorldVerificationResult:
-        if self.closed:
-            raise ValueError("episode already submitted")
+        self._ensure_open()
         verification = verify_companyworld(
             result,
             self.episode,
