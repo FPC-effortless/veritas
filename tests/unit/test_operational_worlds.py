@@ -15,6 +15,23 @@ def test_operational_suite_covers_all_domains():
     assert len({episode.task.task_id for episode in suite}) == len(WorldDomain)
 
 
+def test_veritas_product_catalog_unifies_existing_capabilities():
+    veritas = Veritas(seed=42)
+    capability_ids = {capability.capability_id for capability in veritas.capabilities()}
+    assert {
+        "unified_operational_worlds",
+        "companyworld",
+        "external_investigation",
+        "selective_agency",
+        "capability_foundry",
+        "continuous_capability_observatory",
+        "reality_calibration",
+        "verified_training_products",
+    }.issubset(capability_ids)
+    assert set(veritas.info.domains) == {domain.value for domain in WorldDomain}
+    assert set(veritas.info.capability_ids) == capability_ids
+
+
 def test_public_payload_does_not_expose_oracle():
     episode = build_financial_spreadsheet_world(seed=42)
     payload = episode.public_payload()
@@ -95,8 +112,12 @@ def test_suite_manifest_declares_shared_verifier_contract():
 def test_persistent_company_mounts_all_worlds_and_replays_state():
     company = Veritas(seed=42).build_company(organization_id="ORG-TEST-001")
     baseline_sequence = company.substrate.sequence
-    assert set(company.snapshot().domains) == set(WorldDomain)
-    assert len(company.snapshot().mounted_world_ids) == len(WorldDomain)
+    snapshot = company.snapshot()
+    assert set(snapshot.domains) == set(WorldDomain)
+    assert len(snapshot.mounted_world_ids) == len(WorldDomain)
+    assert snapshot.entity_count > len(WorldDomain)
+    assert snapshot.relation_count >= snapshot.entity_count - 1
+    assert company.substrate.entity("ORG-TEST-001").entity_type == "organization"
     assert all(
         episode.task.metadata["organization_id"] == "ORG-TEST-001"
         for episode in company.episodes
@@ -110,6 +131,7 @@ def test_persistent_company_mounts_all_worlds_and_replays_state():
             record.record_id for record in company.substrate.records(domain=episode.task.domain)
         }
         assert domain_record_ids == {record.record_id for record in episode.records}
+        assert company.substrate.entities(domain=episode.task.domain)
     assert company.substrate.validate_integrity() is True
 
     runtime = company.runtime(WorldDomain.FINANCIAL_SPREADSHEET)
@@ -123,4 +145,6 @@ def test_persistent_company_mounts_all_worlds_and_replays_state():
     counterfactual = company.fork(baseline_sequence)
     assert counterfactual.snapshot().state["valuation.enterprise_value_m"] == 118.4
     assert counterfactual.substrate.sequence == baseline_sequence
+    assert counterfactual.snapshot().entity_count == snapshot.entity_count
+    assert counterfactual.snapshot().relation_count == snapshot.relation_count
     assert counterfactual.substrate.validate_integrity() is True
