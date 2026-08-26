@@ -13,7 +13,13 @@ from investigation_world.benchmark.models import (
     PolicyStatistics,
 )
 from investigation_world.benchmark.policies import DEFAULT_PUBLIC_POLICIES, PublicPolicy
-from investigation_world.companyworld import CompanyWorldAdapter, split_episode_ids, verify_companyworld
+from investigation_world.companyworld import (
+    CompanyWorldAdapter,
+    compile_companyworld_distribution,
+    split_episode_ids,
+    stratified_split_episode_ids,
+    verify_companyworld,
+)
 from investigation_world.companyworld.models import CompanyWorldEpisode
 from investigation_world.core.models import InvestigationResult
 
@@ -70,7 +76,11 @@ def _statistics(
     )
 
 
-def _oracle_result(episode: CompanyWorldEpisode, *, include_evidence: bool = True) -> InvestigationResult:
+def _oracle_result(
+    episode: CompanyWorldEpisode,
+    *,
+    include_evidence: bool = True,
+) -> InvestigationResult:
     claims = []
     evidence = []
     for fact in episode.oracle.facts:
@@ -83,7 +93,11 @@ def _oracle_result(episode: CompanyWorldEpisode, *, include_evidence: bool = Tru
             }
         )
         if include_evidence and fact.supporting_record_ids:
-            evidence.append({"record_id": fact.supporting_record_ids[0]})
+            count = min(len(fact.supporting_record_ids), fact.minimum_support_records)
+            evidence.extend(
+                {"record_id": record_id}
+                for record_id in fact.supporting_record_ids[:count]
+            )
     return InvestigationResult(
         claims=claims,
         evidence=evidence,
@@ -103,7 +117,9 @@ def _score_public_policy(
     return _statistics(policy.name, scored)
 
 
-def _score_privileged_oracle(episodes: Iterable[CompanyWorldEpisode]) -> PolicyStatistics:
+def _score_privileged_oracle(
+    episodes: Iterable[CompanyWorldEpisode],
+) -> PolicyStatistics:
     scored: list[tuple[str, float]] = []
     for episode in episodes:
         reward = verify_companyworld(_oracle_result(episode), episode).overall_reward
@@ -111,7 +127,9 @@ def _score_privileged_oracle(episodes: Iterable[CompanyWorldEpisode]) -> PolicyS
     return _statistics("privileged_oracle", scored, privileged=True)
 
 
-def _score_oracle_without_evidence(episodes: Iterable[CompanyWorldEpisode]) -> PolicyStatistics:
+def _score_oracle_without_evidence(
+    episodes: Iterable[CompanyWorldEpisode],
+) -> PolicyStatistics:
     scored: list[tuple[str, float]] = []
     for episode in episodes:
         reward = verify_companyworld(
@@ -124,7 +142,12 @@ def _score_oracle_without_evidence(episodes: Iterable[CompanyWorldEpisode]) -> P
 def _public_hash(episodes: list[CompanyWorldEpisode]) -> str:
     payload = [episode.public_payload() for episode in episodes]
     return hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode()
+        json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode()
     ).hexdigest()
 
 
@@ -150,23 +173,42 @@ def validate_companyworld_benchmark(
     limit: int | None = None,
     policies: tuple[PublicPolicy, ...] = DEFAULT_PUBLIC_POLICIES,
     verify_determinism: bool = True,
+    expanded: bool = False,
+    per_family: int = 200,
+    include_legacy: bool = True,
+    families: tuple[str, ...] | None = None,
 ) -> CompanyWorldBenchmarkReport:
     adapter = CompanyWorldAdapter(dataset)
     source_report = adapter.validate()
-    episodes = adapter.compile_episodes(limit=limit)
+    if expanded:
+        adapter, episodes = compile_companyworld_distribution(
+            dataset,
+            per_family=per_family,
+            include_legacy=include_legacy,
+            legacy_limit=limit,
+            families=families,
+        )
+        split_counts = {
+            name: len(ids)
+            for name, ids in stratified_split_episode_ids(episodes).items()
+        }
+    else:
+        episodes = adapter.compile_episodes(limit=limit)
+        split_counts = {
+            name: len(ids) for name, ids in split_episode_ids(episodes).items()
+        }
     family_counts = Counter(episode.task.task_type for episode in episodes)
-    split_counts = {
-        name: len(ids) for name, ids in split_episode_ids(episodes).items()
-    }
 
     policy_stats = [_score_public_policy(policy, episodes) for policy in policies]
     policy_stats.append(_score_privileged_oracle(episodes))
     policy_stats.append(_score_oracle_without_evidence(episodes))
     by_name = {item.policy: item for item in policy_stats}
 
-    leakage_count = sum(bool(adapter.public_projection_leaks(episode)) for episode in episodes)
+    leakage_count = sum(
+        bool(adapter.public_projection_leaks(episode)) for episode in episodes
+    )
     missing_direct_support = sum(
-        not fact.supporting_record_ids
+        len(set(fact.supporting_record_ids)) < fact.minimum_support_records
         for episode in episodes
         for fact in episode.oracle.facts
     )
@@ -183,8 +225,18 @@ def validate_companyworld_benchmark(
             "CompanyWorld's ledger/FK/inventory validation and task-oracle alignment must pass.",
         ),
         _invariant("public_oracle_leakage", leakage_count == 0, leakage_count, 0),
-        _invariant("direct_evidence_available", missing_direct_support == 0, missing_direct_support, 0),
-        _invariant("answerable_tasks_have_records", answerable_without_records == 0, answerable_without_records, 0),
+        _invariant(
+            "direct_evidence_available",
+            missing_direct_support == 0,
+            missing_direct_support,
+            0,
+        ),
+        _invariant(
+            "answerable_tasks_have_records",
+            answerable_without_records == 0,
+            answerable_without_records,
+            0,
+        ),
         _invariant(
             "privileged_oracle_succeeds",
             by_name["privileged_oracle"].min_reward >= 1.0 - 1e-12,
@@ -198,7 +250,12 @@ def validate_companyworld_benchmark(
             1.0,
             "Every task must be solvable from public evidence without oracle access.",
         ),
-        _invariant("empty_policy_zero", by_name["empty"].max_reward == 0.0, by_name["empty"].max_reward, 0.0),
+        _invariant(
+            "empty_policy_zero",
+            by_name["empty"].max_reward == 0.0,
+            by_name["empty"].max_reward,
+            0.0,
+        ),
         _invariant(
             "conclusion_only_zero",
             by_name["conclusion_only"].max_reward == 0.0,
@@ -232,7 +289,8 @@ def validate_companyworld_benchmark(
         ),
         _invariant(
             "evidence_has_value",
-            by_name["oracle_without_evidence"].max_reward < by_name["privileged_oracle"].min_reward,
+            by_name["oracle_without_evidence"].max_reward
+            < by_name["privileged_oracle"].min_reward,
             {
                 "without_evidence_max": by_name["oracle_without_evidence"].max_reward,
                 "with_evidence_min": by_name["privileged_oracle"].min_reward,
@@ -242,7 +300,16 @@ def validate_companyworld_benchmark(
     ]
 
     if verify_determinism:
-        repeat = CompanyWorldAdapter(dataset).compile_episodes(limit=limit)
+        if expanded:
+            _, repeat = compile_companyworld_distribution(
+                dataset,
+                per_family=per_family,
+                include_legacy=include_legacy,
+                legacy_limit=limit,
+                families=families,
+            )
+        else:
+            repeat = CompanyWorldAdapter(dataset).compile_episodes(limit=limit)
         first_hash = _public_hash(episodes)
         second_hash = _public_hash(repeat)
         invariants.append(
@@ -269,6 +336,8 @@ def validate_companyworld_benchmark(
             "public_payload_sha256": _public_hash(episodes),
             "policy_interface": "public_payload_only",
             "determinism_checked": verify_determinism,
+            "expanded_distribution": expanded,
+            "per_family": per_family if expanded else None,
         },
     )
 
@@ -279,11 +348,19 @@ def write_companyworld_benchmark_report(
     *,
     limit: int | None = None,
     verify_determinism: bool = True,
+    expanded: bool = False,
+    per_family: int = 200,
+    include_legacy: bool = True,
+    families: tuple[str, ...] | None = None,
 ) -> CompanyWorldBenchmarkReport:
     report = validate_companyworld_benchmark(
         dataset,
         limit=limit,
         verify_determinism=verify_determinism,
+        expanded=expanded,
+        per_family=per_family,
+        include_legacy=include_legacy,
+        families=families,
     )
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
