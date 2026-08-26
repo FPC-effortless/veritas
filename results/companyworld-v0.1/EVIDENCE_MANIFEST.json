@@ -1,0 +1,41 @@
+{
+  "benchmark_version": "CompanyWorld-v0.1",
+  "calibration_runs": [
+    {
+      "artifacts": [
+        {"artifact_digest":"sha256:0fb13dd4bbfb74113480a194051340059305acf019a44fec6bf3b6ed669943cf","id":9590088578,"name":"calibration-smollm2-135m"},
+        {"artifact_digest":"sha256:22d34ebda621197571f957951ae0b164b9a0e98f3cba200dcd10ca8c7e6ac6a2","id":9590169844,"name":"calibration-smollm2-360m"},
+        {"artifact_digest":"sha256:c2978f6faf8e9f8ac5e07586bc5e342619c8daf3d6dcbe1bce4519cf4f8b8052","id":9590131436,"name":"calibration-qwen2.5-0.5b"}
+      ],
+      "conclusion":"success","source_commit":"514ac440261109d53fc59a54d664b9e717d7a471","workflow_run_id":32921589170
+    },
+    {
+      "artifacts": [
+        {"artifact_digest":"sha256:0a6a6bf4605e4e901bb38cea90eddef332ff9348b0832207807693ff5e898434","id":9590488537,"name":"calibration-qwen2.5-1.5b"},
+        {"artifact_digest":"sha256:500603edab3e75608966ed0e58712c0a3ecd15bf61e2c361affcfb34e58d3125","id":9590796851,"name":"calibration-smollm2-1.7b"}
+      ],
+      "conclusion":"success","source_commit":"e0da2e21bb43ea3d72b1d60f01341b619e5d1025","workflow_run_id":32922331861
+    },
+    {
+      "artifacts":[{"artifact_digest":"sha256:96bdaa0e76810a1b1f3a19f630994939c7b7aa40d38b34d2774e440275fc8892","id":9594081467,"name":"calibration-qwen2.5-3b"}],
+      "conclusion":"failure_partial_artifact","note":"Qwen 3B artifact completed; sibling Phi job failed.","source_commit":"707b58df6347723c1164b4af1f1f7eb444a1490a","workflow_run_id":32925893247
+    }
+  ],
+  "evidence_collected_at":"2026-08-26",
+  "interpretation":{"derived_net_score":"model_mean - empty_anchor_mean","derived_normalized_score":"(model_mean - empty_anchor_mean) / (reference_anchor_mean - empty_anchor_mean)","raw_scores_primary":true},
+  "raw_files":[
+    {"path":"qwen2.5-0.5b.json","sha256":"41eb4f23760a2f18157f2afbd5123783fcdfa9ff71eb189eb26c92833e4c2fb6"},
+    {"path":"qwen2.5-1.5b.json","sha256":"039873af6640014639312216b273442a13715ade0f01f1f409de2a3db7ff7d31"},
+    {"path":"qwen2.5-3b.json","sha256":"c54df96c639c9283c6a9b1747f2df08835d2e6fbb396c764917d846113299576"},
+    {"path":"smollm2-1.7b.json","sha256":"a698bc28e32fb79709c3285884d93c2776d17bcdaba3c43036692a673d143208"},
+    {"path":"smollm2-135m.json","sha256":"be649299cc9f5724dce7bc256f143628c22bdf0c182e48db18ea5760038e9bdf"},
+    {"path":"smollm2-360m.json","sha256":"feaf000cf51d6cfee91cb82006c3a6b5e8fc250c353f8ef8c06f000bb66f83f3"},
+    {"path":"diagnostic-sft.json","sha256":"640593c6ec6ee7a36518e2460ad3d8083884d82984f5f3e26edc64be5f2d40ac"},
+    {"path":"qwen0.5b-diagnostic-sft.json","sha256":"0e0945aef06b59f9c90a1fd8774e534643520211d082ae4c3a3e8f718283e4c2"}
+  ],
+  "schema_version":"0.1.0",
+  "training_runs":[
+    {"artifacts":[{"artifact_digest":"sha256:5b911c8ba89d41948d1d6030d3fc6c6b59c17c27551d9ab9cc91d49e6c19a0fb","id":9591637579,"name":"training-value-diagnostic-sft"}],"conclusion":"success","source_commit":"1fc943b0a64926de9ae0a760d29fb2f3095cd9e8","workflow_run_id":32925975876},
+    {"artifacts":[{"artifact_digest":"sha256:fa46392e6a0403484e656b4b06beee8fef5d7f47b80990a0b3f1a0aa7910d9f2","id":9591905427,"name":"training-value-qwen0.5b-diagnostic-sft"}],"conclusion":"success","source_commit":"48c291b719bdbd9c5dcb910e4fdbd1e540532bcb","workflow_run_id":32926539533}
+  ]
+}
