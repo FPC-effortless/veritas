@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from investigation_world.foundry.models import DifficultyVector, stable_hash
-from investigation_world.operational import distribution as base
+import investigation_world.operational.distribution as base
 from investigation_world.operational.models import OperationalEpisode
 from investigation_world.operational.realism import apply_domain_realism
 
@@ -20,6 +20,14 @@ class OperationalDistributionConfig(base.OperationalDistributionConfig):
 OperationalDistributionCase = base.OperationalDistributionCase
 OperationalDistributionManifest = base.OperationalDistributionManifest
 SCENARIO_FAMILIES = base.SCENARIO_FAMILIES
+
+
+def _strip_private_generator_labels(episode: OperationalEpisode) -> None:
+    """Remove generator labels that may have been useful while constructing public records."""
+
+    for record in episode.records:
+        record.fields.pop("scenario", None)
+        record.fields.pop("scenario_family", None)
 
 
 def _opaque_new_record_ids(episode: OperationalEpisode) -> OperationalEpisode:
@@ -85,6 +93,7 @@ def _deepen_case(case: OperationalDistributionCase) -> OperationalDistributionCa
         index=case.seed % 10_000,
         scenario_family=case.scenario_family,
     )
+    _strip_private_generator_labels(episode)
     case.episode = _opaque_new_record_ids(episode)
     case.difficulty = _deep_difficulty(case)
     return case
@@ -174,6 +183,10 @@ def validate_operational_distribution(
         public_text = json.dumps(episode.public_payload(), sort_keys=True, default=str)
         if "required_action_order" in public_text or "required_state" in public_text:
             errors.append(f"{episode.task.task_id}: hidden process truth leaked publicly")
+            break
+        normalized_family = case.scenario_family.replace("_", " ").casefold()
+        if case.scenario_family.casefold() in public_text.casefold() or normalized_family in public_text.casefold():
+            errors.append(f"{episode.task.task_id}: scenario-family label leaked publicly")
             break
 
     manifest = distribution_manifest(cases, config=config)
