@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -103,7 +104,9 @@ class CompanyWorldJSONAgentHarness:
         budget = context.runtime.budget_snapshot()
         payload = {
             "task": task,
-            "permitted_systems": [item.value for item in context.runtime.episode.task.permitted_systems],
+            "permitted_systems": [
+                item.value for item in context.runtime.episode.task.permitted_systems
+            ],
             "budget": budget,
             "history": history,
         }
@@ -134,6 +137,24 @@ class CompanyWorldJSONAgentHarness:
             return True, proxy.submit(result)
         raise ValueError(f"unsupported agent action {action_name!r}")
 
+    def _budget_exhausted(
+        self,
+        cell: LongitudinalCell,
+        provider: ProviderSession,
+        started: float,
+    ) -> bool:
+        summary = provider.summary()
+        if cell.execution.token_budget is not None:
+            if summary.total_tokens >= cell.execution.token_budget:
+                return True
+        if cell.execution.cost_budget is not None:
+            if summary.cost >= cell.execution.cost_budget:
+                return True
+        if cell.execution.time_limit_s is not None:
+            if time.perf_counter() - started >= cell.execution.time_limit_s:
+                return True
+        return False
+
     def run(
         self,
         cell: LongitudinalCell,
@@ -154,7 +175,10 @@ class CompanyWorldJSONAgentHarness:
         parse_failures = 0
         action_failures = 0
         submitted = False
+        started = time.perf_counter()
         for step in range(self.config.max_steps):
+            if self._budget_exhausted(cell, provider, started):
+                break
             response = provider.generate(self._prompt(runtime, history))
             try:
                 action = _first_json_object(str(response.output))
@@ -188,10 +212,7 @@ class CompanyWorldJSONAgentHarness:
                         "error": f"{type(exc).__name__}: {exc}",
                     }
                 )
-            token_budget = cell.execution.token_budget
-            if token_budget is not None and provider.summary().total_tokens >= token_budget:
-                break
-            if submitted:
+            if submitted or self._budget_exhausted(cell, provider, started):
                 break
         if not submitted:
             fallback = InvestigationResult(
