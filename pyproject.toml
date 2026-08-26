@@ -1,7 +1,7 @@
 [project]
 name = "investigation-world"
-version = "0.5.0"
-description = "Independent synthetic enterprise-agent evaluation and capability-development environments"
+version = "0.7.0"
+description = "Veritas verified capability foundry for persistent operational-world agent training and evaluation"
 requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.7,<3",
@@ -20,6 +20,7 @@ test = [
 
 [project.scripts]
 iworld = "investigation_world.cli:app"
+veritas = "investigation_world.operational.cli:app"
 
 [build-system]
 requires = ["hatchling"]
