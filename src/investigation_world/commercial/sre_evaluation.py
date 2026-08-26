@@ -41,8 +41,9 @@ def parse_sre_prediction(raw: str) -> SRECausalClass | None:
             except json.JSONDecodeError:
                 pass
     value = str(payload.get("causal_class", "")).strip().casefold() if payload else text.casefold()
+    normalized = value.strip("\"'` .")
     for label in _ALLOWED:
-        if value == label or value.strip('"\'` .') == label:
+        if value == label or normalized == label:
             return SRECausalClass(label)
     return None
 
