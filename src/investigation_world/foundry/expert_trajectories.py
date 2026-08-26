@@ -35,7 +35,7 @@ class ExpertiseAssessment(BaseModel):
     rationale: list[str] = Field(default_factory=list)
 
 
-class ExpertTrajectory(BaseModel):
+class VerifiedTrajectory(BaseModel):
     trajectory_id: str
     source_trace_id: str
     task_id: str
@@ -46,6 +46,10 @@ class ExpertTrajectory(BaseModel):
     training_uses: list[TrainingUse] = Field(default_factory=list)
     trace: RolloutTrace
     annotations: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExpertTrajectory(VerifiedTrajectory):
+    pass
 
 
 class PreferencePair(BaseModel):
@@ -62,7 +66,7 @@ class DemonstrationSet(BaseModel):
     dataset_id: str
     version: str
     capability_contract_id: str
-    trajectories: list[ExpertTrajectory] = Field(default_factory=list)
+    trajectories: list[VerifiedTrajectory] = Field(default_factory=list)
     preference_pairs: list[PreferencePair] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -98,6 +102,35 @@ def assess_trace(
         recovery_success=trace.metadata.get("recovery_success"),
         evidence_quality=trace.metadata.get("evidence_quality"),
         rationale=rationale,
+    )
+
+
+def curate_verified_trace(
+    trace: RolloutTrace,
+    *,
+    role: TrajectoryRole,
+    training_uses: list[TrainingUse] | None = None,
+    annotations: dict[str, Any] | None = None,
+) -> VerifiedTrajectory:
+    assessment = assess_trace(trace, min_verifier_score=0.0, require_success=False)
+    uses = training_uses or [TrainingUse.EVAL_ONLY]
+    payload = {
+        "trace_id": trace.trace_id,
+        "role": role.value,
+        "uses": [item.value for item in uses],
+        "verifier_score": assessment.verifier_score,
+    }
+    return VerifiedTrajectory(
+        trajectory_id=f"verified-{stable_hash(payload)[:16]}",
+        source_trace_id=trace.trace_id,
+        task_id=trace.task_id,
+        split=trace.split,
+        capability_tags=trace.capability_tags,
+        role=role,
+        assessment=assessment,
+        training_uses=uses,
+        trace=trace,
+        annotations=annotations or {},
     )
 
 
@@ -139,8 +172,8 @@ def qualify_expert_trace(
 
 
 def make_preference_pair(
-    chosen: ExpertTrajectory,
-    rejected: ExpertTrajectory,
+    chosen: VerifiedTrajectory,
+    rejected: VerifiedTrajectory,
     *,
     reason: str,
 ) -> PreferencePair:
