@@ -8,7 +8,7 @@ from investigation_world.operational.catalog import (
     build_operational_world,
     operational_suite_manifest,
 )
-from investigation_world.operational.distribution import (
+from investigation_world.operational.deep_distribution import (
     OperationalDistributionCase,
     OperationalDistributionConfig,
     OperationalDistributionManifest,
@@ -23,6 +23,7 @@ from investigation_world.operational.distribution import (
 )
 from investigation_world.operational.models import (
     ActionKind,
+    AssertionComparison,
     EpisodeSubmission,
     OperationalEntity,
     OperationalEpisode,
@@ -44,6 +45,7 @@ from investigation_world.operational.verifier import verify_operational_episode
 
 __all__ = [
     "ActionKind",
+    "AssertionComparison",
     "EpisodeSubmission",
     "OperationalDistributionCase",
     "OperationalDistributionConfig",
