@@ -1,9 +1,18 @@
+import json
+
+from investigation_world.foundry.models import DistributionSplit
 from investigation_world.operational import (
     EpisodeSubmission,
+    OperationalDistributionConfig,
     OperationalRuntime,
     WorldDomain,
     build_financial_spreadsheet_world,
     build_operational_suite,
+    compile_operational_distribution,
+    distribution_manifest,
+    private_oracle_payload,
+    public_distribution_payload,
+    validate_operational_distribution,
 )
 from investigation_world.veritas import Veritas
 
@@ -30,6 +39,12 @@ def test_veritas_product_catalog_unifies_existing_capabilities():
     }.issubset(capability_ids)
     assert set(veritas.info.domains) == {domain.value for domain in WorldDomain}
     assert set(veritas.info.capability_ids) == capability_ids
+    assert veritas.info.default_operational_distribution_cases == 4480
+    unified = next(
+        capability for capability in veritas.capabilities()
+        if capability.capability_id == "unified_operational_worlds"
+    )
+    assert unified.maturity == "production_scale_distribution"
 
 
 def test_public_payload_does_not_expose_oracle():
@@ -148,3 +163,96 @@ def test_persistent_company_mounts_all_worlds_and_replays_state():
     assert counterfactual.snapshot().entity_count == snapshot.entity_count
     assert counterfactual.snapshot().relation_count == snapshot.relation_count
     assert counterfactual.substrate.validate_integrity() is True
+
+
+def _small_distribution_config() -> OperationalDistributionConfig:
+    return OperationalDistributionConfig(
+        seed=314,
+        train_per_domain=3,
+        iid_per_domain=2,
+        ood_per_domain=2,
+        adversarial_per_domain=2,
+        max_distractors=8,
+    )
+
+
+def test_production_distribution_has_disjoint_splits_and_all_domains():
+    config = _small_distribution_config()
+    cases = compile_operational_distribution(config)
+    validation = validate_operational_distribution(cases, config=config)
+    assert validation["valid"] is True
+    assert validation["errors"] == []
+    assert len(cases) == 45
+    assert {case.episode.task.domain for case in cases} == set(WorldDomain)
+    for domain in WorldDomain:
+        domain_cases = [case for case in cases if case.episode.task.domain == domain]
+        assert len(domain_cases) == 9
+        assert {case.split for case in domain_cases} == set(DistributionSplit)
+
+
+def test_production_distribution_is_deterministic_and_parameterized():
+    config = _small_distribution_config()
+    first = compile_operational_distribution(config)
+    second = compile_operational_distribution(config)
+    first_manifest = distribution_manifest(first, config=config)
+    second_manifest = distribution_manifest(second, config=config)
+    assert first_manifest.public_hash == second_manifest.public_hash
+    assert first_manifest.private_hash == second_manifest.private_hash
+    assert [case.episode.task.task_id for case in first] == [
+        case.episode.task.task_id for case in second
+    ]
+    for domain in WorldDomain:
+        domain_cases = [case for case in first if case.episode.task.domain == domain]
+        objectives = {case.episode.task.objective for case in domain_cases}
+        object_sets = {
+            tuple(sorted(record.object_id for record in case.episode.records))
+            for case in domain_cases
+        }
+        assert len(objectives) > 1 or len(object_sets) > 1
+
+
+def test_public_distribution_hides_split_seed_family_and_oracle():
+    config = _small_distribution_config()
+    cases = compile_operational_distribution(config)
+    public = public_distribution_payload(cases, config=config)
+    private = private_oracle_payload(cases, config=config)
+    public_text = json.dumps(public, sort_keys=True)
+    assert public["manifest"]["seed"] is None
+    assert public["manifest"]["private_hash"] is None
+    assert "scenario_families_per_domain" not in public["manifest"]["metadata"]
+    assert '"oracle"' not in public_text
+    assert '"generator_seed"' not in public_text
+    assert '"scenario_family"' not in public_text
+    assert '"surface_profile"' not in public_text
+    assert private["manifest"]["seed"] == config.seed
+    assert private["manifest"]["private_hash"]
+    assert all("split" in case for case in private["cases"])
+    public_task_ids = [episode["task"]["task_id"] for episode in public["episodes"]]
+    assert not any(
+        split.value in task_id for task_id in public_task_ids for split in DistributionSplit
+    )
+
+
+def test_adversarial_distribution_adds_conflict_and_pressure():
+    config = _small_distribution_config()
+    cases = compile_operational_distribution(config)
+    adversarial = [case for case in cases if case.split == DistributionSplit.ADVERSARIAL]
+    assert adversarial
+    for case in adversarial:
+        assert case.difficulty.adversarial_pressure >= 0.5
+        assert case.difficulty.conflict_probability >= 0.4
+        assert any(
+            record.record_type == "conflicting_context"
+            for record in case.episode.records
+        )
+
+
+def test_veritas_facade_builds_and_validates_distribution():
+    config = _small_distribution_config()
+    veritas = Veritas(seed=config.seed)
+    cases = veritas.build_distribution(config)
+    manifest = veritas.distribution_manifest(cases, config=config)
+    validation = veritas.validate_distribution(cases, config=config)
+    assert manifest.total_cases == config.total_cases
+    assert validation["valid"] is True
+    assert manifest.domain_counts == {domain.value: 9 for domain in WorldDomain}
