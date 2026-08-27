@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from investigation_world.portability.evidence import PortableQualificationEvidence
 from investigation_world.portability.models import PortableEnvironmentManifest
 from investigation_world.portability.package import PortablePackageBuildResult, write_portable_package
 from investigation_world.portability.sre_private import SREPrivatePortableTask
@@ -96,7 +97,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-include = ["env.py", "tasks.py", "private_tasks.json", "portable_manifest.json"]
+include = [
+  "env.py",
+  "tasks.py",
+  "private_tasks.json",
+  "portable_manifest.json",
+  "qualification_evidence.json",
+]
 '''
 
 
@@ -118,7 +125,9 @@ def _render_readme(manifest: PortableEnvironmentManifest) -> str:
 Generated from portable manifest `{manifest.manifest_id}`.
 
 This directory is an **operator-private evaluation package**. `private_tasks.json` contains hidden
-scoring truth and must not be published as a buyer-safe/public artifact.
+scoring truth and must not be published as a buyer-safe/public artifact. `qualification_evidence.json`
+is buyer-safe and intentionally contains only release identities, aggregate counts, gate outcomes,
+and policy anchors—not scenario IDs or hidden labels.
 
 Local protocol smoke test:
 
@@ -137,6 +146,7 @@ def build_hud_sre_package(
     *,
     manifest: PortableEnvironmentManifest,
     private_tasks: list[SREPrivatePortableTask],
+    qualification_evidence: PortableQualificationEvidence | None = None,
 ) -> PortablePackageBuildResult:
     if not private_tasks:
         raise ValueError("HUD private SRE package requires at least one private task")
@@ -144,6 +154,8 @@ def build_hud_sre_package(
         raise ValueError(
             "HUD private task count must match the sealed private count declared by the manifest"
         )
+    if qualification_evidence is not None and qualification_evidence.release != manifest.release:
+        raise ValueError("HUD qualification evidence release identity must match portable manifest")
 
     private_payload = [record.model_dump(mode="json") for record in private_tasks]
     files = {
@@ -158,6 +170,10 @@ def build_hud_sre_package(
         "Dockerfile.hud": _render_dockerfile(),
         "README.md": _render_readme(manifest),
     }
+    if qualification_evidence is not None:
+        files["qualification_evidence.json"] = json.dumps(
+            qualification_evidence.model_dump(mode="json"), indent=2, sort_keys=True
+        ) + "\n"
     return write_portable_package(
         output_dir,
         adapter="hud-v6",
