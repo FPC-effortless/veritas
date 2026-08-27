@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo
+from pydantic import field_validator, model_validator
 
 SANDBOX_CONTRACT_VERSION = "sandbox-provider-v1"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -27,6 +30,19 @@ def _validate_relative_path(value: str) -> str:
 
 def _path_is_within(path: str, root: str) -> bool:
     return path == root or path.startswith(f"{root}/")
+
+
+def _decode_json_bytes(value: Any, info: ValidationInfo) -> Any:
+    if info.mode != "json" or not isinstance(value, str):
+        return value
+    try:
+        encoded = value.encode("ascii")
+        return base64.b64decode(encoded, altchars=b"-_", validate=True)
+    except (UnicodeEncodeError, binascii.Error, ValueError) as exc:
+        raise ValueError("binary JSON fields must contain URL-safe base64") from exc
+
+
+SandboxBytes = Annotated[bytes, BeforeValidator(_decode_json_bytes)]
 
 
 class SandboxFailureOrigin(StrEnum):
@@ -164,18 +180,13 @@ class SandboxCreateRequest(BaseModel):
 
 
 class SandboxExecutionRequest(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        ser_json_bytes="base64",
-        val_json_bytes="base64",
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True, ser_json_bytes="base64")
 
     kind: SandboxExecutionKind
     name: str = Field(min_length=1)
     argv: tuple[str, ...] = ()
     arguments: dict[str, Any] = Field(default_factory=dict)
-    stdin: bytes = b""
+    stdin: SandboxBytes = b""
 
     @model_validator(mode="after")
     def validate_kind_shape(self) -> "SandboxExecutionRequest":
@@ -235,30 +246,20 @@ class SandboxArtifactMetadata(BaseModel):
 
 
 class SandboxArtifact(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        ser_json_bytes="base64",
-        val_json_bytes="base64",
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True, ser_json_bytes="base64")
 
     path: str
-    content: bytes
+    content: SandboxBytes
     size_bytes: int = Field(ge=0)
     sha256: str
 
 
 class SandboxExecutionResult(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        ser_json_bytes="base64",
-        val_json_bytes="base64",
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True, ser_json_bytes="base64")
 
     status: SandboxExecutionStatus
-    stdout: bytes = b""
-    stderr: bytes = b""
+    stdout: SandboxBytes = b""
+    stderr: SandboxBytes = b""
     exit_code: int | None = None
     artifacts: tuple[SandboxArtifactMetadata, ...] = ()
     failure: SandboxFailureStatus | None = None
