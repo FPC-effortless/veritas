@@ -1,3 +1,4 @@
+import base64
 import json
 import tomllib
 from pathlib import Path
@@ -15,14 +16,23 @@ from investigation_world.exporters.harbor import (
     replay_harbor_trajectory,
 )
 from investigation_world.exporters.harbor.mcp_service import (
+    _MCPRequestError,
+    _discover_result,
+    _parameter_header_bindings,
     _tool_wire_result,
+    _validate_mcp_request,
+    _validate_parameter_headers,
     _validate_runtime_control_url,
 )
 from investigation_world.exporters.harbor.verifier import (
     HarborVerificationResult,
     _write_outputs,
 )
-from investigation_world.mcp_compiler import MCPToolSourceKind, compile_mcp_surface
+from investigation_world.mcp_compiler import (
+    MCP_PROTOCOL_VERSION,
+    MCPToolSourceKind,
+    compile_mcp_surface,
+)
 from investigation_world.operational.models import (
     ActionKind,
     HiddenActionEffect,
@@ -121,6 +131,14 @@ def _alias(surface, kind: MCPToolSourceKind, canonical_name: str) -> str:
         for item in surface.catalog.provenance
         if item.source_kind is kind and item.canonical_name == canonical_name
     )
+
+
+def _modern_meta(version: str = MCP_PROTOCOL_VERSION) -> dict[str, object]:
+    return {
+        "io.modelcontextprotocol/protocolVersion": version,
+        "io.modelcontextprotocol/clientInfo": {"name": "harbor-test", "version": "1"},
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
 
 
 def test_render_is_deterministic_and_public_files_exclude_private_truth() -> None:
@@ -230,6 +248,98 @@ def test_verifier_natively_scores_unsubmitted_trajectory(tmp_path: Path) -> None
     assert verified.reward_components == expected_final.reward_components.model_dump(mode="json")
 
 
+def test_mcp_2026_discovery_and_request_envelope_are_stateless() -> None:
+    discover = _discover_result()
+    assert discover["supportedVersions"] == [MCP_PROTOCOL_VERSION]
+    assert discover["resultType"] == "complete"
+    assert discover["ttlMs"] == 0
+    assert discover["cacheScope"] == "private"
+    assert discover["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "veritas-harbor"
+
+    body = {
+        "jsonrpc": "2.0",
+        "id": "discover-1",
+        "method": "server/discover",
+        "params": {"_meta": _modern_meta()},
+    }
+    headers = {
+        "mcp-protocol-version": MCP_PROTOCOL_VERSION,
+        "mcp-method": "server/discover",
+    }
+    request_id, method, params = _validate_mcp_request(body, headers)
+    assert request_id == "discover-1"
+    assert method == "server/discover"
+    assert params["_meta"]["io.modelcontextprotocol/protocolVersion"] == MCP_PROTOCOL_VERSION
+
+    with pytest.raises(_MCPRequestError) as mismatch:
+        _validate_mcp_request(body, {**headers, "mcp-method": "tools/list"})
+    assert mismatch.value.code == -32020
+    assert mismatch.value.status_code == 400
+
+    old_version = "2025-11-25"
+    old_body = {
+        **body,
+        "params": {"_meta": _modern_meta(old_version)},
+    }
+    with pytest.raises(_MCPRequestError) as unsupported:
+        _validate_mcp_request(
+            old_body,
+            {"mcp-protocol-version": old_version, "mcp-method": "server/discover"},
+        )
+    assert unsupported.value.code == -32022
+    assert unsupported.value.data == {
+        "supported": [MCP_PROTOCOL_VERSION],
+        "requested": old_version,
+    }
+
+
+def test_mcp_tools_call_requires_name_routing_header() -> None:
+    body = {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {
+            "name": "approve_order",
+            "arguments": {"order_id": "ORDER-001"},
+            "_meta": _modern_meta(),
+        },
+    }
+    headers = {
+        "mcp-protocol-version": MCP_PROTOCOL_VERSION,
+        "mcp-method": "tools/call",
+        "mcp-name": "approve_order",
+    }
+    assert _validate_mcp_request(body, headers)[1] == "tools/call"
+    with pytest.raises(_MCPRequestError) as mismatch:
+        _validate_mcp_request(body, {**headers, "mcp-name": "wrong-tool"})
+    assert mismatch.value.code == -32020
+
+
+def test_mcp_parameter_routing_headers_match_annotated_arguments() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "region": {"type": "string", "x-mcp-header": "Region"},
+            "count": {"type": "integer", "x-mcp-header": "Count"},
+        },
+    }
+    bindings = _parameter_header_bindings(schema)
+    encoded_region = "=?base64?" + base64.b64encode(b" west").decode("ascii") + "?="
+    _validate_parameter_headers(
+        bindings,
+        {"region": " west", "count": 7},
+        {"mcp-param-Region": encoded_region, "mcp-param-Count": "7.0"},
+    )
+    with pytest.raises(_MCPRequestError) as mismatch:
+        _validate_parameter_headers(
+            bindings,
+            {"region": "west", "count": 7},
+            {"mcp-param-Region": "east", "mcp-param-Count": "7"},
+        )
+    assert mismatch.value.code == -32020
+    assert mismatch.value.status_code == 400
+
+
 def test_mcp_wire_response_does_not_publish_reward_or_private_runtime_metadata() -> None:
     step = {
         "observation": {"accepted": True},
@@ -244,15 +354,33 @@ def test_mcp_wire_response_does_not_publish_reward_or_private_runtime_metadata()
     wire = _tool_wire_result(step)
     serialized = json.dumps(wire, sort_keys=True)
     assert wire["structuredContent"] == {"accepted": True}
+    assert wire["resultType"] == "complete"
     assert "0.9375" not in serialized
     assert "private-digest" not in serialized
     assert "reward" not in serialized
 
 
-def test_mcp_wire_does_not_wrap_non_object_observations() -> None:
+def test_mcp_2026_preserves_non_object_structured_observations() -> None:
     wire = _tool_wire_result({"observation": ["a", "b"], "failure": None})
-    assert "structuredContent" not in wire
+    assert wire["structuredContent"] == ["a", "b"]
     assert wire["content"][0]["text"] == '["a","b"]'
+    assert wire["resultType"] == "complete"
+
+
+def test_mcp_failure_message_cannot_leak_private_runtime_detail() -> None:
+    wire = _tool_wire_result(
+        {
+            "observation": None,
+            "failure": {
+                "code": "invalid_action",
+                "message": "HARBOR-PRIVATE-OMEGA must never cross the MCP boundary",
+            },
+        }
+    )
+    serialized = json.dumps(wire, sort_keys=True)
+    assert "HARBOR-PRIVATE-OMEGA" not in serialized
+    assert "invalid_action" in serialized
+    assert wire["isError"] is True
 
 
 def test_runtime_control_url_is_fixed_to_private_compose_service() -> None:
