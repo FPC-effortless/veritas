@@ -1,0 +1,71 @@
+name: Materialize public calibration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/operational-world-compiler]
+    paths:
+      - tools/materialize_public_calibration.py
+      - src/investigation_world/operational_world/fusion.py
+      - .github/workflows/materialize-public-calibration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Veritas
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Materialize current public calibration slices
+        run: |
+          python tools/materialize_public_calibration.py --output-dir calibration/public
+      - name: Validate generated profiles
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from investigation_world.operational_world import CalibrationProfile
+
+          files = sorted(Path("calibration/public").glob("*-v1.json"))
+          assert len(files) >= 5, files
+          for path in files:
+              profile = CalibrationProfile.model_validate_json(path.read_text())
+              assert profile.state in {"hybrid", "empirical"}, (path, profile.state)
+              assert profile.empirical_observation_count > 0, path
+              # A measured metric must not claim zero observations.
+              for metric, distribution in profile.distributions.items():
+                  if distribution.source_ids:
+                      assert distribution.observation_count > 0 or metric.startswith((
+                          "procurement.po_amount_usd",
+                          "procurement.receipt_lag_days",
+                          "procurement.vendors_per_100_employees",
+                          "procurement.purchase_orders_per_employee_year",
+                          "firm.employee_count",
+                          "communications.emails_per_employee_day",
+                          "controls.approval_limit_usd",
+                          "finance.invoice_lag_days",
+                          "finance.payment_lag_days",
+                      )), (path, metric, distribution.model_dump())
+          print(f"validated {len(files)} calibration profiles")
+          PY
+      - name: Commit materialized calibration profiles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add calibration/public
+          if git diff --cached --quiet; then
+            echo "Calibration profiles unchanged"
+            exit 0
+          fi
+          git commit -m "Materialize balanced multi-region public calibration profiles"
+          git push origin HEAD:${{ github.ref_name }}
