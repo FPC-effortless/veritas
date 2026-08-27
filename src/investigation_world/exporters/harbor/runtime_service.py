@@ -134,8 +134,13 @@ def main() -> None:
     contract_path = Path(
         os.environ.get("VERITAS_CONTRACT_PATH", "/opt/veritas-harbor/contract.json")
     )
+    # The default is inside the isolated runtime-control container. The evaluated
+    # agent has no filesystem or network route to this service-private temp path.
     trajectory_path = Path(
-        os.environ.get("VERITAS_TRAJECTORY_PATH", "/tmp/veritas-runtime/trajectory.jsonl")
+        os.environ.get(
+            "VERITAS_TRAJECTORY_PATH",
+            "/tmp/veritas-runtime/trajectory.jsonl",  # nosec B108
+        )
     )
     seed = int(os.environ.get("VERITAS_RUNTIME_SEED", "0"))
     control = RuntimeControl(
@@ -143,7 +148,14 @@ def main() -> None:
         seed=seed,
         trajectory_path=trajectory_path,
     )
-    uvicorn.run(create_runtime_app(control), host="0.0.0.0", port=8081, log_level="warning")
+    # Sibling Compose services require a container-wide bind. The generated
+    # runtime-control service publishes no host port and joins only its private network.
+    uvicorn.run(
+        create_runtime_app(control),
+        host="0.0.0.0",  # nosec B104
+        port=8081,
+        log_level="warning",
+    )
 
 
 if __name__ == "__main__":
