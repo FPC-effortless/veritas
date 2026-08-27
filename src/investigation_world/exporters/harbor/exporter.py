@@ -21,7 +21,8 @@ from investigation_world.portable_contract import PortableOperationalContract
 
 HARBOR_TASK_SCHEMA_VERSION = "1.4"
 HARBOR_EXPORT_SCHEMA_VERSION = "veritas-harbor-export-v1"
-_TRAJECTORY_PATH = "/tmp/veritas-runtime/trajectory.jsonl"
+# This is a container-private ephemeral artifact, not a shared-host temp file.
+_TRAJECTORY_PATH = "/tmp/veritas-runtime/trajectory.jsonl"  # nosec B108
 
 
 @dataclass(frozen=True)
