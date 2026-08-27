@@ -147,8 +147,9 @@ def test_hud_package_is_deterministic_and_operator_private(tmp_path, monkeypatch
     assert "private-id" not in public_manifest
     assert "expected_causal_class" not in public_manifest
     readme = (tmp_path / "first" / "README.md").read_text()
-    assert "hud build ." in readme
-    assert "Dockerfile.hud" in readme
+    assert "docker build -f Dockerfile.hud" in readme
+    assert "hud task start" in readme
+    assert "hud task grade" in readme
 
 
 def test_prime_package_is_deterministic_and_v1_shaped(tmp_path, monkeypatch) -> None:
