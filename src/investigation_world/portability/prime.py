@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from investigation_world.portability.evidence import PortableQualificationEvidence
 from investigation_world.portability.models import PortableEnvironmentManifest
 from investigation_world.portability.package import PortablePackageBuildResult, write_portable_package
 from investigation_world.portability.sre_private import SREPrivatePortableTask
@@ -95,6 +96,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["veritas_sre_prime"]
+include = ["portable_manifest.json", "qualification_evidence.json"]
 
 [tool.verifiers.eval]
 num_examples = 30
@@ -108,7 +110,8 @@ def _render_readme(manifest: PortableEnvironmentManifest) -> str:
 Generated from portable manifest `{manifest.manifest_id}`.
 
 This is an **operator-private taskset package**. The generated `private_tasks.json` contains hidden
-scoring truth and must remain restricted.
+scoring truth and must remain restricted. `qualification_evidence.json` is buyer-safe and contains
+only aggregate qualification evidence and immutable release identities.
 
 The package exports `SRETaskset` using `verifiers.v1`, separating the taskset (what is solved and
 how it is scored) from the harness/runtime chosen by the evaluator or trainer.
@@ -120,6 +123,7 @@ def build_prime_sre_package(
     *,
     manifest: PortableEnvironmentManifest,
     private_tasks: list[SREPrivatePortableTask],
+    qualification_evidence: PortableQualificationEvidence | None = None,
 ) -> PortablePackageBuildResult:
     if not private_tasks:
         raise ValueError("Prime private SRE package requires at least one private task")
@@ -127,6 +131,8 @@ def build_prime_sre_package(
         raise ValueError(
             "Prime private task count must match the sealed private count declared by the manifest"
         )
+    if qualification_evidence is not None and qualification_evidence.release != manifest.release:
+        raise ValueError("Prime qualification evidence release identity must match portable manifest")
 
     private_payload = [record.model_dump(mode="json") for record in private_tasks]
     files = {
@@ -143,6 +149,10 @@ def build_prime_sre_package(
         )
         + "\n",
     }
+    if qualification_evidence is not None:
+        files["qualification_evidence.json"] = json.dumps(
+            qualification_evidence.model_dump(mode="json"), indent=2, sort_keys=True
+        ) + "\n"
     return write_portable_package(
         output_dir,
         adapter="prime-verifiers-v1",
