@@ -132,7 +132,13 @@ and policy anchors—not scenario IDs or hidden labels.
 Local HUD build:
 
 ```bash
-hud build . --tag veritas-sre-v1:local
+hud build .
+```
+
+Direct Docker equivalent:
+
+```bash
+docker build -f Dockerfile.hud -t veritas-sre-v1:local .
 ```
 
 The package follows HUD's protocol-first v6 task-template model: the environment yields the prompt,
@@ -166,7 +172,7 @@ def build_hud_sre_package(
         "env.py": _render_env_module(),
         "tasks.py": _render_tasks_module(),
         "pyproject.toml": _render_pyproject(),
-        "Dockerfile": _render_dockerfile(),
+        "Dockerfile.hud": _render_dockerfile(),
         "README.md": _render_readme(manifest),
     }
     if qualification_evidence is not None:
