@@ -109,6 +109,8 @@ def _task_toml(
 def _compose(config: HarborExportConfig) -> str:
     return f"""services:
   main:
+    build:
+      context: ./main
     depends_on:
       mcp-server:
         condition: service_healthy
@@ -270,7 +272,7 @@ def render_harbor_package(
             ),
             HarborArtifactVisibility.PROVENANCE,
         ),
-        "environment/Dockerfile": _RenderedFile(
+        "environment/main/Dockerfile": _RenderedFile(
             _agent_dockerfile(config).encode("utf-8"),
             HarborArtifactVisibility.AGENT_PUBLIC,
         ),
