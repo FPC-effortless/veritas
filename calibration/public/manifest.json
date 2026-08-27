@@ -1,0 +1,246 @@
+{
+  "format": "veritas-public-calibration-materialization-v2",
+  "method": "OCDS structural observations only; missing fields remain missing; currency and date-derived fields are excluded until publisher-specific normalization/quality gates are available. Global quantiles are source-balanced so each admitted publisher contributes equal total mass per metric.",
+  "source_observation_counts": {
+    "italy_anac_ocds": 29107,
+    "nigeria_nocopo": 353,
+    "thailand_bma_ocds": 143878,
+    "uruguay_arce_ocds": 113292
+  },
+  "acquisition": [
+    {
+      "source_id": "nigeria_nocopo",
+      "region": "africa",
+      "publication_id": 64,
+      "year": 2026,
+      "url": "https://data.open-contracting.org/en/publication/64/download?name=2026.jsonl.gz",
+      "compressed_bytes": 55032,
+      "observations": 353
+    },
+    {
+      "source_id": "italy_anac_ocds",
+      "region": "europe",
+      "publication_id": 117,
+      "year": 2025,
+      "url": "https://data.open-contracting.org/en/publication/117/download?name=2025.jsonl.gz",
+      "compressed_bytes": 3438185,
+      "observations": 29107
+    },
+    {
+      "source_id": "uruguay_arce_ocds",
+      "region": "latin_america",
+      "publication_id": 43,
+      "year": 2026,
+      "url": "https://data.open-contracting.org/en/publication/43/download?name=2026.jsonl.gz",
+      "compressed_bytes": 15618640,
+      "observations": 113292
+    },
+    {
+      "source_id": "thailand_bma_ocds",
+      "region": "east_asia_pacific",
+      "publication_id": 158,
+      "year": 2026,
+      "url": "https://data.open-contracting.org/en/publication/158/download?name=2026.jsonl.gz",
+      "compressed_bytes": 6418386,
+      "observations": 143878
+    }
+  ],
+  "profiles": [
+    {
+      "profile_id": "global-procurement-ocds-v1",
+      "state": "hybrid",
+      "balance_sources": true,
+      "empirical_observation_count": 286630,
+      "metrics": [
+        "communications.emails_per_employee_day",
+        "controls.approval_limit_usd",
+        "finance.invoice_lag_days",
+        "finance.payment_lag_days",
+        "firm.employee_count",
+        "procurement.awards_per_process",
+        "procurement.contracts_per_process",
+        "procurement.items_per_tender",
+        "procurement.parties_per_process",
+        "procurement.po_amount_usd",
+        "procurement.purchase_orders_per_employee_year",
+        "procurement.receipt_lag_days",
+        "procurement.vendors_per_100_employees"
+      ],
+      "observed_metric_sources": {
+        "procurement.parties_per_process": [
+          "italy_anac_ocds",
+          "nigeria_nocopo",
+          "thailand_bma_ocds",
+          "uruguay_arce_ocds"
+        ],
+        "procurement.items_per_tender": [
+          "italy_anac_ocds",
+          "nigeria_nocopo",
+          "thailand_bma_ocds",
+          "uruguay_arce_ocds"
+        ],
+        "procurement.awards_per_process": [
+          "italy_anac_ocds",
+          "nigeria_nocopo",
+          "thailand_bma_ocds",
+          "uruguay_arce_ocds"
+        ],
+        "procurement.contracts_per_process": [
+          "italy_anac_ocds",
+          "nigeria_nocopo",
+          "thailand_bma_ocds"
+        ]
+      },
+      "source_ids": [
+        "italy_anac_ocds",
+        "nigeria_nocopo",
+        "thailand_bma_ocds",
+        "uruguay_arce_ocds"
+      ]
+    },
+    {
+      "profile_id": "africa-procurement-ocds-v1",
+      "state": "hybrid",
+      "balance_sources": false,
+      "empirical_observation_count": 333,
+      "metrics": [
+        "communications.emails_per_employee_day",
+        "controls.approval_limit_usd",
+        "finance.invoice_lag_days",
+        "finance.payment_lag_days",
+        "firm.employee_count",
+        "procurement.awards_per_process",
+        "procurement.items_per_tender",
+        "procurement.parties_per_process",
+        "procurement.po_amount_usd",
+        "procurement.purchase_orders_per_employee_year",
+        "procurement.receipt_lag_days",
+        "procurement.vendors_per_100_employees"
+      ],
+      "observed_metric_sources": {
+        "procurement.parties_per_process": [
+          "nigeria_nocopo"
+        ],
+        "procurement.items_per_tender": [
+          "nigeria_nocopo"
+        ],
+        "procurement.awards_per_process": [
+          "nigeria_nocopo"
+        ]
+      },
+      "source_ids": [
+        "nigeria_nocopo"
+      ]
+    },
+    {
+      "profile_id": "east_asia_pacific-procurement-ocds-v1",
+      "state": "hybrid",
+      "balance_sources": false,
+      "empirical_observation_count": 143878,
+      "metrics": [
+        "communications.emails_per_employee_day",
+        "controls.approval_limit_usd",
+        "finance.invoice_lag_days",
+        "finance.payment_lag_days",
+        "firm.employee_count",
+        "procurement.awards_per_process",
+        "procurement.contracts_per_process",
+        "procurement.items_per_tender",
+        "procurement.parties_per_process",
+        "procurement.po_amount_usd",
+        "procurement.purchase_orders_per_employee_year",
+        "procurement.receipt_lag_days",
+        "procurement.vendors_per_100_employees"
+      ],
+      "observed_metric_sources": {
+        "procurement.awards_per_process": [
+          "thailand_bma_ocds"
+        ],
+        "procurement.contracts_per_process": [
+          "thailand_bma_ocds"
+        ],
+        "procurement.parties_per_process": [
+          "thailand_bma_ocds"
+        ],
+        "procurement.items_per_tender": [
+          "thailand_bma_ocds"
+        ]
+      },
+      "source_ids": [
+        "thailand_bma_ocds"
+      ]
+    },
+    {
+      "profile_id": "europe-procurement-ocds-v1",
+      "state": "hybrid",
+      "balance_sources": false,
+      "empirical_observation_count": 29107,
+      "metrics": [
+        "communications.emails_per_employee_day",
+        "controls.approval_limit_usd",
+        "finance.invoice_lag_days",
+        "finance.payment_lag_days",
+        "firm.employee_count",
+        "procurement.awards_per_process",
+        "procurement.contracts_per_process",
+        "procurement.items_per_tender",
+        "procurement.parties_per_process",
+        "procurement.po_amount_usd",
+        "procurement.purchase_orders_per_employee_year",
+        "procurement.receipt_lag_days",
+        "procurement.vendors_per_100_employees"
+      ],
+      "observed_metric_sources": {
+        "procurement.items_per_tender": [
+          "italy_anac_ocds"
+        ],
+        "procurement.awards_per_process": [
+          "italy_anac_ocds"
+        ],
+        "procurement.contracts_per_process": [
+          "italy_anac_ocds"
+        ],
+        "procurement.parties_per_process": [
+          "italy_anac_ocds"
+        ]
+      },
+      "source_ids": [
+        "italy_anac_ocds"
+      ]
+    },
+    {
+      "profile_id": "latin_america-procurement-ocds-v1",
+      "state": "hybrid",
+      "balance_sources": false,
+      "empirical_observation_count": 113292,
+      "metrics": [
+        "communications.emails_per_employee_day",
+        "controls.approval_limit_usd",
+        "finance.invoice_lag_days",
+        "finance.payment_lag_days",
+        "firm.employee_count",
+        "procurement.awards_per_process",
+        "procurement.items_per_tender",
+        "procurement.parties_per_process",
+        "procurement.po_amount_usd",
+        "procurement.purchase_orders_per_employee_year",
+        "procurement.receipt_lag_days",
+        "procurement.vendors_per_100_employees"
+      ],
+      "observed_metric_sources": {
+        "procurement.items_per_tender": [
+          "uruguay_arce_ocds"
+        ],
+        "procurement.awards_per_process": [
+          "uruguay_arce_ocds"
+        ],
+        "procurement.parties_per_process": [
+          "uruguay_arce_ocds"
+        ]
+      },
+      "source_ids": [
+        "uruguay_arce_ocds"
+      ]
+    }
+  ]
+}
