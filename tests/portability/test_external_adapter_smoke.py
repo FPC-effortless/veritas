@@ -161,7 +161,7 @@ def test_generated_hud_package_clean_installs_and_loads_with_current_sdk(
 def test_generated_prime_package_clean_installs_and_loads_with_current_v1_sdk(
     tmp_path: Path, monkeypatch
 ) -> None:
-    pytest.importorskip("verifiers.v1")
+    vf = pytest.importorskip("verifiers.v1")
     release, manifest = _manifest(monkeypatch)
     package_root = tmp_path / "prime-src"
     build_prime_sre_package(
@@ -174,7 +174,7 @@ def test_generated_prime_package_clean_installs_and_loads_with_current_v1_sdk(
     sys.path.insert(0, str(install_root))
     try:
         module = importlib.import_module("veritas_sre_prime")
-        taskset = module.SRETaskset()
+        taskset = module.SRETaskset(vf.TasksetConfig())
         tasks = taskset.load()
         assert len(tasks) == 1
         assert tasks[0].data.portable_task_id.startswith("PTASK-")
