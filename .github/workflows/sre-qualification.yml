@@ -27,21 +27,35 @@ jobs:
           cache: pip
       - name: Install Veritas
         run: python -m pip install -e ".[test]"
-      - name: Acquire independent provider family and qualify SRE v3 candidate
+      - name: Acquire fresh provider family and qualify SRE v4 candidate
         run: |
           python tools/build_sre_qualification_candidate.py \
-            --snapshot-dir results/sre-v3/sources \
-            --output results/sre-v3/qualification.json \
-            --version sre-v3 \
-            --providers circleci discord dropbox mongodb npm \
-            --early-updates 2 \
-            --random-seed 7
+            --snapshot-dir results/sre-v4/sources \
+            --output results/sre-v4/qualification.json \
+            --version sre-v4 \
+            --providers render supabase elastic grafana figma \
+            --early-updates 1 \
+            --random-seed 7 \
+            --require-explicit-causal-label
+      - name: Require an actually qualified candidate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("results/sre-v4/qualification.json").read_text())
+          failed = [gate["name"] for gate in report["qualification"]["gates"] if not gate["passed"]]
+          assert report["status"] == "benchmark_candidate", (
+              f"SRE v4 did not qualify; failed gates: {failed}; "
+              f"strata: {report.get('stratum_summary')}"
+          )
+          assert report.get("private_release_manifest"), "qualified candidate lacks private release manifest"
+          PY
       - name: Build buyer-safe qualification summary
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("results/sre-v3/qualification.json").read_text())
+          report = json.loads(Path("results/sre-v4/qualification.json").read_text())
           q = report["qualification"]
           candidate = report["candidate"]
           summary = {
@@ -54,20 +68,23 @@ jobs:
               "evidence_manifest_id": candidate["evidence_manifest"]["manifest_id"],
               "scenario_count": len(candidate["scenarios"]),
               "private_test_count": sum(s["split"] == "private_test" for s in candidate["scenarios"]),
+              "private_strata": report.get("stratum_summary", {}).get("private_test", {}),
+              "train_strata": report.get("stratum_summary", {}).get("train", {}),
               "near_duplicate_components": candidate.get("metadata", {}).get("near_duplicate_components"),
+              "split_protocol": candidate.get("metadata", {}).get("split_protocol"),
               "providers": sorted(report["source_summary"]),
               "policy_means": q["policy_means"],
               "gates": q["gates"],
               "private_release_manifest_id": (
                   report.get("private_release_manifest") or {}
-              ).get("release_id"),
+              ).get("manifest_id"),
               "public_artifact_contract": {
                   "raw_source_snapshots_included": False,
                   "per_scenario_policy_outcomes_included": False,
                   "private_causal_labels_included": False,
               },
           }
-          Path("results/sre-v3/public-summary.json").write_text(
+          Path("results/sre-v4/public-summary.json").write_text(
               json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8"
           )
           print(json.dumps(summary, indent=2, sort_keys=True))
@@ -75,7 +92,7 @@ jobs:
       - name: Upload buyer-safe qualification evidence only
         uses: actions/upload-artifact@v4
         with:
-          name: sre-v3-public-qualification
-          path: results/sre-v3/public-summary.json
+          name: sre-v4-public-qualification
+          path: results/sre-v4/public-summary.json
           if-no-files-found: error
           retention-days: 90
