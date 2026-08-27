@@ -308,6 +308,8 @@ class TrajectoryV2(CanonicalModel):
 
     @model_validator(mode="after")
     def validate_trajectory(self) -> "TrajectoryV2":
+        if self.original_evaluation.verifier != self.verifier:
+            raise ValueError("original evaluation verifier must match trajectory verifier")
         expected = f"TRAJ-V2-{canonical_hash(self.identity_payload())[:32].upper()}"
         if self.trajectory_id and self.trajectory_id != expected:
             raise ValueError("trajectory_id does not match immutable semantic contents")
