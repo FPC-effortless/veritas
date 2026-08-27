@@ -195,7 +195,7 @@ def build_sre_portable_manifest(
             ),
         ),
         adapters=["hud", "prime-verifiers-v1", "prime-load-environment-compat"],
-        dependencies=["investigation-world>=0.10,<0.12"],
+        dependencies=[],
         provenance={
             "source": "sealed-veritas-qualification-release",
             "scientifically_qualified": release.qualification.releaseable,
