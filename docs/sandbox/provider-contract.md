@@ -21,7 +21,9 @@ The core models and protocols contain no Daytona, Modal, Docker, Kubernetes, or 
 
 Assets are declared by logical `asset_id`, normalized relative POSIX mount path, expected SHA-256, and read-only flag. Mounting accepts bytes only. There is no host-path field in the provider-neutral contract, so a caller cannot request an arbitrary host filesystem mount through this API.
 
-Execution artifacts are accepted only under `writable_paths`. Read-only mounted assets cannot be overwritten. `capture()` is also restricted to writable artifact paths, so mounted input fixtures are not accidentally turned into public trajectory artifacts.
+Execution artifacts are accepted only under `writable_paths`. Read-only asset mounts are rejected if they fall inside a writable output root, preventing mounted input material from becoming capturable output by configuration accident. Read-only mounted assets cannot be overwritten. `capture()` is restricted to writable artifact paths.
+
+Binary stdin, stdout, stderr, and artifact content are represented as bytes in Python and use URL-safe base64 in JSON. Decoding is implemented explicitly so the contract remains compatible with the repository's Pydantic 2.7 dependency floor.
 
 `LocalDeterministicSandboxProvider` is the first implementation. It uses an in-memory virtual filesystem and registered trusted handlers; model/workload input can only select an allow-listed handler and cannot supply executable Python. The provider itself does not invoke host subprocesses or expose host filesystem paths through the contract. Handlers receive a read-only virtual-filesystem snapshot and return a proposed filesystem delta. The delta is committed only after timeout/output/artifact/path policy checks pass. This test double validates contract semantics; it is not a security boundary for untrusted handler code.
 
