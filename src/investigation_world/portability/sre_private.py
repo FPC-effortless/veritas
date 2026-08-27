@@ -4,9 +4,12 @@ from pydantic import BaseModel, ConfigDict
 
 from investigation_world.commercial.sre_evaluation import build_sre_prompt
 from investigation_world.commercial.sre_release import SealedSRERelease
-from investigation_world.foundry.models import stable_hash
 from investigation_world.portability.identity import portable_task_id
-from investigation_world.portability.sre import SRE_PORTABLE_ENVIRONMENT_ID
+from investigation_world.portability.sre import (
+    SRE_PORTABLE_ENVIRONMENT_ID,
+    _portable_source_digest,
+    _task_seed,
+)
 from investigation_world.qualification import QualificationSplit
 
 
@@ -26,10 +29,6 @@ class SREPrivatePortableTask(BaseModel):
     public_digest: str
 
 
-def _task_seed(public_digest: str) -> int:
-    return int(stable_hash({"public_digest": public_digest})[:16], 16)
-
-
 def build_sre_private_portable_tasks(release: SealedSRERelease) -> list[SREPrivatePortableTask]:
     private_cases = [
         case for case in release.cases if case.scenario.split == QualificationSplit.PRIVATE_TEST
@@ -40,14 +39,19 @@ def build_sre_private_portable_tasks(release: SealedSRERelease) -> list[SREPriva
         raise RuntimeError("operator private task projection does not match sealed private panel")
 
     records: list[SREPrivatePortableTask] = []
-    for case in sorted(private_cases, key=lambda item: item.scenario.public_digest):
-        seed = _task_seed(case.scenario.public_digest)
+    ordered_cases = sorted(
+        private_cases,
+        key=lambda item: (item.scenario.public_digest, item.scenario.scenario_id),
+    )
+    for case in ordered_cases:
+        source_digest = _portable_source_digest(release, case.scenario)
+        seed = _task_seed(source_digest)
         records.append(
             SREPrivatePortableTask(
                 task_id=portable_task_id(
                     environment_id=SRE_PORTABLE_ENVIRONMENT_ID,
                     environment_version=release.candidate.version,
-                    source_digest=case.scenario.public_digest,
+                    source_digest=source_digest,
                     split=case.scenario.split.value,
                     seed=seed,
                 ),
@@ -57,4 +61,6 @@ def build_sre_private_portable_tasks(release: SealedSRERelease) -> list[SREPriva
                 public_digest=case.scenario.public_digest,
             )
         )
+    if len({record.task_id for record in records}) != len(records):
+        raise RuntimeError("operator private task projection produced non-unique portable task IDs")
     return records
