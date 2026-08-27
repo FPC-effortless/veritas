@@ -20,7 +20,11 @@ from investigation_world.operational.models import (
     TaskContract,
     WorldDomain,
 )
-from investigation_world.portable_contract import compile_operational_episode
+from investigation_world.portable_contract import (
+    PortableOperationalContract,
+    PortablePublicContract,
+    compile_operational_episode,
+)
 from investigation_world.portable_runtime import (
     PortableOperationalRuntime,
     PortableRuntimeFailureCode,
@@ -141,6 +145,36 @@ def _adapter(contract):
     return NeMoOperationalAdapter(
         contract.public,
         lambda: PortableOperationalRuntime(contract),
+    )
+
+
+def _typed_contract() -> PortableOperationalContract:
+    baseline = _contract()
+    public_payload = baseline.public.model_dump(mode="python", exclude={"public_id"})
+    actions = list(public_payload["actions"])
+    approve_index = next(
+        index
+        for index, action in enumerate(actions)
+        if action["name"] == "approve_order"
+    )
+    approve = dict(actions[approve_index])
+    approve["input_schema"] = {
+        "type": "object",
+        "properties": {
+            "order_id": {"type": "string"},
+            "note": {"type": "string"},
+        },
+        "required": ["order_id", "note"],
+        "additionalProperties": False,
+    }
+    approve["additional_parameters_allowed"] = False
+    actions[approve_index] = approve
+    public_payload["actions"] = tuple(actions)
+    public = PortablePublicContract(**public_payload)
+    return PortableOperationalContract(
+        schema_version=baseline.schema_version,
+        public=public,
+        private=baseline.private,
     )
 
 
@@ -319,7 +353,7 @@ def test_private_evaluator_state_never_reaches_nemo_surfaces() -> None:
 
 
 def test_invalid_typed_input_is_runtime_failure_and_non_mutating() -> None:
-    contract = _contract()
+    contract = _typed_contract()
     adapter = _adapter(contract)
     metadata = {"veritas": _reset_metadata(contract, seed=11)}
     _, reset_info = asyncio.run(adapter.reset(metadata, "session"))
