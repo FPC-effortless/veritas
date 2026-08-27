@@ -203,8 +203,10 @@ def test_generated_prime_package_clean_installs_and_loads_with_current_v1_sdk(
         tasks = taskset.load()
         assert len(tasks) == 1
         assert tasks[0].data.portable_task_id.startswith("PTASK-")
-        assert Path(module.__file__).resolve().is_relative_to(install_root.resolve())
-        assert (install_root / "qualification_evidence.json").is_file()
+        package_dir = Path(module.__file__).resolve().parent
+        assert package_dir.is_relative_to(install_root.resolve())
+        assert (package_dir / "portable_manifest.json").is_file()
+        assert (package_dir / "qualification_evidence.json").is_file()
         _assert_parser_parity(taskset_module._parse_prediction)
 
         legacy_env = module.load_environment()
