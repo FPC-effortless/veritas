@@ -132,6 +132,8 @@ def test_render_is_deterministic_and_public_files_exclude_private_truth() -> Non
     assert b"HARBOR-PRIVATE-OMEGA" not in public
     assert b"HARBOR-PRIVATE-ANSWER" not in public
     assert contract.canonical_bytes() not in public
+    assert "environment/main/Dockerfile" in first
+    assert "environment/Dockerfile" not in first
     assert b"HARBOR-PRIVATE-OMEGA" in first[
         "environment/runtime-control/contract.json"
     ].payload
@@ -168,6 +170,8 @@ def test_harbor_task_and_compose_enforce_native_mcp_and_separate_verifier_bounda
     main_service = main_block.split("  mcp-server:\n", maxsplit=1)[0]
     mcp_service = main_block.split("  mcp-server:\n", maxsplit=1)[1]
     runtime_service = runtime_block.split("\nnetworks:\n", maxsplit=1)[0]
+    assert "      context: ./main\n" in main_service
+    assert "      context: .\n" not in main_service
     assert "      - runtime-control\n" not in main_service
     assert "      - runtime-control\n" in mcp_service
     assert "      - agent-mcp\n" not in runtime_service
