@@ -2,9 +2,25 @@
 
 ## Version
 
-Current release candidate: **0.10.0**.
+Current software version: **0.11.0**.
 
-Veritas 0.10 is the benchmark-qualification release built on the 0.9 native-artifact runtime and the 0.9.1 experimental-integrity hardening.
+Canonical release tag: **v0.11.0**.
+
+Veritas 0.11 is the commercial-portability release. It is built on the 0.9 native-artifact runtime, the 0.9.1 experimental-integrity hardening, and the 0.10 benchmark-qualification release. The merged portability implementation is the software release identity; 0.11 is no longer reserved for a future industrial-sandbox rewrite.
+
+## Release identity
+
+The buyer-facing 0.11 release must agree across all public surfaces:
+
+- Python package version: `0.11.0`;
+- README software version: `0.11.0`;
+- portability manifest schema: `0.11.0`;
+- generated HUD package version: `0.11.0`;
+- generated Prime package version: `0.11.0`;
+- Git tag / GitHub release: `v0.11.0`;
+- licensing: root Apache-2.0 public grant plus explicit commercial restrictions for private evaluation assets and separately delivered generated data.
+
+Release automation verifies these identities before publishing artifacts.
 
 ## Canonical capability stack
 
@@ -18,7 +34,27 @@ Veritas currently includes:
 - matched longitudinal panels, paired model × intervention effects, generation replicates and recovery/cadence integrity;
 - native artifact mutation behind the existing seven-dimensional verifier;
 - generic benchmark qualification with source-disjoint splitting, near-duplicate clustering, provenance, replay, leakage, contamination, feasibility, policy-ordering and exploit-resistance gates;
-- private-panel stratum coverage gates that reject majority-class benchmark artifacts.
+- private-panel stratum coverage gates that reject majority-class benchmark artifacts;
+- vendor-neutral portable environment/task/release/capability/reset/verifier/artifact/metering contracts;
+- standalone HUD v6 and Prime Verifiers v1 packaging for the qualified SRE v4 release.
+
+## 0.11 commercial portability
+
+The portability layer preserves a vendor-neutral internal contract. HUD and Prime are adapters over that contract rather than dependencies of Veritas core.
+
+The exact sealed SRE v4 proof establishes:
+
+- deterministic task and run identity;
+- deterministic reset for identical environment version + task + seed;
+- exact reward parity with the canonical SRE verifier;
+- no canonical private scenario IDs in buyer-safe material;
+- no canonical private scenario IDs in generated operator task records;
+- clean HUD installation and image build;
+- live HUD task start and grade;
+- Prime Verifiers v1 taskset loading plus the legacy compatibility bridge;
+- deterministic HUD and Prime package identities.
+
+The validated buyer-safe identities are pinned in `release/0.11.0/PORTABILITY_IDENTITIES.json` and are carried into the GitHub release provenance record.
 
 ## Operational Worlds Production v3
 
@@ -68,41 +104,37 @@ The latest 200-project qualification remains a **benchmark candidate** with a 40
 
 SRE v1 and v2 remain historical `not_qualified` candidates.
 
-SRE v3 previously passed the older qualification protocol but is now **retired as a private benchmark** for two reasons:
+SRE v3 is retired as a private benchmark because the stronger private-stratum coverage gate rejects its imbalanced private panel and historical Actions artifacts exposed raw qualification material.
 
-1. the stronger 0.10 `private_stratum_coverage` gate correctly rejects its 34-case private panel because it is dominated by the transient class;
-2. historical Actions artifacts exposed raw v3 qualification material, so the suite can no longer be treated as secret private test data.
+SRE v4 is the qualified, frozen commercial benchmark candidate. The sealed release uses 16 fresh Statuspage providers and contains **87 scenarios** with exactly **30 private-test cases**. Private causal support is capacity 6, infrastructure 6, regression 10, transient 8.
 
-SRE v4 is now a **qualified and frozen benchmark candidate**. The frozen release uses 16 fresh Statuspage providers: Airtable, Claude, Elastic, Figma, Grafana, Hedera, HubSpot, IBM Cloud Security, Instructure, New Relic, Postman, Reddit, Render, Snowflake, Supabase and Webflow.
-
-The sealed v4 release contains **87 scenarios** and exactly **30 private-test cases**. Private causal support is balanced enough to pass the release contract: capacity 6, infrastructure 6, regression 10, transient 8. Its exact private-panel policy means are:
+Its exact private-panel policy means are:
 
 `oracle 1.0000 > competent 0.4000 > myopic 0.3000 > random 0.2333`, with exploit `0.0000`.
 
-All 18 qualification gates pass. Canonical public identities are recorded in `results/sre-v4/RELEASE.json`; the source snapshots, exact split, private causal evidence and private release manifest are retained only in the sealed private bundle. The private bundle SHA-256 is also pinned in the public release record.
-
-The one-time sealing run encrypted the private bundle before artifact transport. Public CI no longer downloads live provider feeds or reconstructs/splits SRE v4. It now verifies only the immutable release identities, frozen hash, aggregate qualification evidence and public-artifact secrecy contract.
+All 18 qualification gates pass. Canonical public identities are recorded in `results/sre-v4/RELEASE.json`; source snapshots, exact split, private causal evidence and the private release manifest remain in the sealed private bundle. Public CI verifies immutable identities, frozen hash, aggregate qualification evidence and secrecy boundaries rather than rebuilding the private benchmark from live feeds.
 
 ## Release gate
 
-0.10 may merge only when the exact candidate head passes:
+Veritas 0.11.0 is publishable only when the exact release commit passes:
 
 - Python 3.12 and 3.13 tests;
-- package build;
+- package build and metadata validation;
 - environment/product smoke tests;
 - native artifact fidelity;
 - full 4,480-case operational distribution validation;
 - ProjectWorld distribution and ProjectWorld v2 qualification;
-- frozen SRE v4 release-identity verification with no failed qualification gates;
+- frozen SRE v4 release-identity verification;
+- portability tests and external HUD/Prime adapter gates;
 - frontend build;
 - container/API health;
 - aggregate `Required` check;
-- Security.
+- Security;
+- release-identity consistency tests;
+- root-license and commercial-licensing policy checks.
 
-`main` repository protection is an external repository-administration requirement and must require the aggregate `Required` and `Security` checks before 0.10 is considered operationally released.
+The release workflow then emits an immutable procurement object containing Python distribution hashes, GHCR image digest, pinned HUD/Prime/qualification identities, SBOM and provenance.
 
-## Next release: 0.11
+## Next release: 0.12
 
-0.11 is reserved for industrial sandbox fidelity, not another benchmark-integrity rewrite. Candidate integrations include live Kubernetes/container/network execution, Terraform/cloud control planes, broader Excel calculation semantics, deeper enterprise replicas, browser/OCR investigation surfaces, raster/PostGIS GIS execution, and deeper cross-domain causal propagation.
-
-0.11 work should begin only after 0.10 is merged with the frozen qualified SRE v4 release and the commercial evaluation pack is rebased onto that release with exact sealed-panel model evidence.
+0.12 is the next industrial-fidelity and procurement-hardening line. Candidate integrations include live Kubernetes/container/network execution, Terraform/cloud control planes, broader Excel calculation semantics, deeper enterprise replicas, browser/OCR investigation surfaces, raster/PostGIS GIS execution, deeper cross-domain causal propagation, stronger supply-chain attestations, and additional commercially qualified environment SKUs.
