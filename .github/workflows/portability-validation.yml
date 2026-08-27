@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "src/investigation_world/portability/**"
+      - "integrations/prime/veritas-sre-open/**"
       - "tools/export_*.py"
       - "tools/portability_*.py"
       - "tests/portability/**"
@@ -38,6 +39,7 @@ jobs:
       - name: Compile portability modules and exporters
         run: |
           python -m compileall -q src/investigation_world/portability
+          python -m compileall -q integrations/prime/veritas-sre-open/veritas_sre_open
           python -m compileall -q tools/export_sre_portable_manifest.py
           python -m compileall -q tools/export_sre_portable_package.py
           python -m compileall -q tools/portability_verify_sealed_sre.py
@@ -66,6 +68,29 @@ jobs:
 
       - name: Load generated packages against current SDK APIs
         run: python -m pytest tests/portability/test_external_adapter_smoke.py -q
+
+      - name: Build and load public Prime Hub package
+        run: |
+          python -m pip install -e integrations/prime/veritas-sre-open
+          mkdir -p "$RUNNER_TEMP/veritas-sre-open-wheel"
+          python -m pip wheel --no-deps \
+            --wheel-dir "$RUNNER_TEMP/veritas-sre-open-wheel" \
+            integrations/prime/veritas-sre-open
+          test "$(find "$RUNNER_TEMP/veritas-sre-open-wheel" -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
+          python - <<'PY'
+          import verifiers.v1 as vf
+          from veritas_sre_open import SREOpenTaskset, load_environment
+
+          taskset = SREOpenTaskset(vf.TasksetConfig())
+          tasks = taskset.load()
+          assert len(tasks) == 12
+          assert len({task.data.public_task_id for task in tasks}) == 12
+          assert all(task.data.public_task_id.startswith("VOPEN-") for task in tasks)
+
+          legacy = load_environment()
+          assert legacy is not None
+          print("Public Prime Hub taskset and compatibility entrypoint loaded")
+          PY
 
       - name: Generate deterministic external fixture packages
         run: |
