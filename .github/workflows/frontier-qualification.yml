@@ -1,0 +1,64 @@
+name: Frontier Qualification
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/frontier/**"
+      - "tools/frontier_*.py"
+      - "tests/frontier/**"
+      - "docs/frontier/**"
+      - ".github/workflows/frontier-qualification.yml"
+  push:
+    branches:
+      - feat/frontier-qualification
+    paths:
+      - "src/investigation_world/frontier/**"
+      - "tools/frontier_*.py"
+      - "tests/frontier/**"
+      - "docs/frontier/**"
+      - ".github/workflows/frontier-qualification.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  frontier-qualification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install -e ".[test]"
+      - name: Compile Frontier-owned Python
+        run: python -m compileall -q src/investigation_world/frontier tools/frontier_*.py tests/frontier
+      - name: Run Frontier Qualification tests
+        run: python -m pytest tests/frontier
+      - name: Generate deterministic fixture reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/frontier-a /tmp/frontier-b
+          for out in /tmp/frontier-a /tmp/frontier-b; do
+            python tools/frontier_task_diversity.py \
+              --input tests/frontier/fixtures/tasks.json \
+              --benchmark-name SyntheticFrontierFixture \
+              --benchmark-version fixture-v1 \
+              --candidate-id FIXTURE-CAND-1 \
+              --output "$out/diversity.json" >/dev/null
+            python tools/frontier_calibration.py \
+              --observations tests/frontier/fixtures/observations.json \
+              --output "$out/calibration.json" >/dev/null
+            python tools/frontier_qualify.py \
+              --qualification tests/frontier/fixtures/scientific_qualification.json \
+              --diversity "$out/diversity.json" \
+              --calibration "$out/calibration.json" \
+              --training-value tests/frontier/fixtures/training_value.json \
+              --generalization tests/frontier/fixtures/generalization.json \
+              --output "$out/frontier-report.json" >/dev/null
+          done
+          cmp /tmp/frontier-a/diversity.json /tmp/frontier-b/diversity.json
+          cmp /tmp/frontier-a/calibration.json /tmp/frontier-b/calibration.json
+          cmp /tmp/frontier-a/frontier-report.json /tmp/frontier-b/frontier-report.json

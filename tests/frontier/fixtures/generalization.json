@@ -1,0 +1,15 @@
+{
+  "component_disjoint": "PASS",
+  "compositional_ood_transfer": "PASS",
+  "evidence_ids": {
+    "random_held_out": [
+      "GEN-1"
+    ],
+    "source_disjoint": [
+      "GEN-2"
+    ]
+  },
+  "grammar_disjoint": "PASS",
+  "random_held_out": "PASS",
+  "source_disjoint": "PASS"
+}
