@@ -118,7 +118,7 @@ The current native operational semantics are deterministic and do not consume th
 
 `state_digest()` and `budget_state()` are harness/runtime-control outputs. They expose no evaluator values. A C-wave adapter may return them as protocol metadata, but must not reinterpret them as agent-visible hidden state.
 
-The `contract` property is evaluator-side input/configuration and contains the full portable contract. It must not be serialized into an agent observation.
+The full `PortableOperationalContract` is constructor-only evaluator configuration. It is deliberately not exposed through `PortableRuntimeProtocol` or `PortableOperationalRuntime`; C-wave adapters must use the stable runtime operations and separately supplied public contract/schema material rather than reaching through the runtime for evaluator-private configuration.
 
 ## Action validation
 
