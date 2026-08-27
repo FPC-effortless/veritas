@@ -339,16 +339,17 @@ def test_openenv_execution_matches_direct_portable_runtime_and_reward() -> None:
 
 
 def test_openenv_preserves_truncated_distinct_from_terminated() -> None:
-    contract = _contract(max_cost=0, max_tool_calls=8)
+    contract = _contract(max_cost=1, max_tool_calls=8)
     export = compile_openenv_export(contract)
     env = export.create_environment()
     direct = PortableOperationalRuntime(contract)
     env.reset(seed=3)
     direct.reset(seed=3)
 
-    prepare = _transport_tool(export, "prepare_order")
-    portable = dispatch_mcp_tool(direct, export.mcp_surface, prepare, {})
-    openenv = env.step(export.action_type(tool=prepare, arguments={}))
+    approve = _transport_tool(export, "approve_order")
+    arguments = {"order_id": "ORDER-001", "note": "budget-falsifier"}
+    portable = dispatch_mcp_tool(direct, export.mcp_surface, approve, arguments)
+    openenv = env.step(export.action_type(tool=approve, arguments=arguments))
 
     _assert_projection_matches(portable, openenv)
     assert portable.terminated is False
