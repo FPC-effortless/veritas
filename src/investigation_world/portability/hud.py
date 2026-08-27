@@ -129,11 +129,10 @@ scoring truth and must not be published as a buyer-safe/public artifact. `qualif
 is buyer-safe and intentionally contains only release identities, aggregate counts, gate outcomes,
 and policy anchors—not scenario IDs or hidden labels.
 
-Local protocol smoke test:
+Local HUD build:
 
 ```bash
-docker build -f Dockerfile.hud -t veritas-sre-hud .
-docker run --rm -p 8765:8765 veritas-sre-hud
+hud build . --tag veritas-sre-v1:local
 ```
 
 The package follows HUD's protocol-first v6 task-template model: the environment yields the prompt,
@@ -167,7 +166,7 @@ def build_hud_sre_package(
         "env.py": _render_env_module(),
         "tasks.py": _render_tasks_module(),
         "pyproject.toml": _render_pyproject(),
-        "Dockerfile.hud": _render_dockerfile(),
+        "Dockerfile": _render_dockerfile(),
         "README.md": _render_readme(manifest),
     }
     if qualification_evidence is not None:
