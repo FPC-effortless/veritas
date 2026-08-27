@@ -129,16 +129,18 @@ scoring truth and must not be published as a buyer-safe/public artifact. `qualif
 is buyer-safe and intentionally contains only release identities, aggregate counts, gate outcomes,
 and policy anchors—not scenario IDs or hidden labels.
 
-Local HUD build:
-
-```bash
-hud build .
-```
-
-Direct Docker equivalent:
+Build the HUD protocol server image:
 
 ```bash
 docker build -f Dockerfile.hud -t veritas-sre-v1:local .
+```
+
+Then run it and use HUD's protocol client against port 8765:
+
+```bash
+docker run --rm -p 8765:8765 veritas-sre-v1:local
+hud task start sre_causal_classification --url tcp://127.0.0.1:8765 --args '<task-args-json>'
+hud task grade sre_causal_classification --url tcp://127.0.0.1:8765 --args '<task-args-json>' --answer '<answer>'
 ```
 
 The package follows HUD's protocol-first v6 task-template model: the environment yields the prompt,
