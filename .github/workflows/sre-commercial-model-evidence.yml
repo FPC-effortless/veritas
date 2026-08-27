@@ -1,0 +1,186 @@
+name: SRE Commercial Model Evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sre-commercial-model-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  secure-fixed-panel-evaluation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      VERITAS_SRE_PRIVATE_BUNDLE_URL: ${{ secrets.VERITAS_SRE_PRIVATE_BUNDLE_URL }}
+      VERITAS_SRE_PRIVATE_BUNDLE_SHA256: ${{ secrets.VERITAS_SRE_PRIVATE_BUNDLE_SHA256 }}
+      VERITAS_SRE_PRIVATE_CANDIDATE_ID: ${{ secrets.VERITAS_SRE_PRIVATE_CANDIDATE_ID }}
+      VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID: ${{ secrets.VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID }}
+      VERITAS_SRE_PRIVATE_REPORT_ID: ${{ secrets.VERITAS_SRE_PRIVATE_REPORT_ID }}
+      VERITAS_SRE_PRIVATE_PANEL_ID: ${{ secrets.VERITAS_SRE_PRIVATE_PANEL_ID }}
+      VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID: ${{ secrets.VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Veritas
+        run: python -m pip install -e .
+      - name: Install CPU model runtime
+        run: python -m pip install "torch>=2.4" "transformers>=4.45,<5" accelerate sentencepiece
+      - name: Cache model files
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: sre-commercial-v4-${{ runner.os }}-open-models-v1
+
+      - name: Require private bundle and sealed identity configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            VERITAS_SRE_PRIVATE_BUNDLE_URL \
+            VERITAS_SRE_PRIVATE_BUNDLE_SHA256 \
+            VERITAS_SRE_PRIVATE_CANDIDATE_ID \
+            VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID \
+            VERITAS_SRE_PRIVATE_REPORT_ID \
+            VERITAS_SRE_PRIVATE_PANEL_ID \
+            VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID
+          do
+            test -n "${!name}" || { echo "$name is not configured" >&2; exit 1; }
+          done
+
+      - name: Retrieve checksum-pinned private SRE v4 bundle into ephemeral runner storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_root="$RUNNER_TEMP/veritas-sre-private"
+          mkdir -p "$private_root"
+          python - <<'PY'
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          target = Path(os.environ["RUNNER_TEMP"]) / "veritas-sre-private" / "bundle.zip"
+          request = urllib.request.Request(
+              os.environ["VERITAS_SRE_PRIVATE_BUNDLE_URL"],
+              headers={"User-Agent": "Veritas-Private-Evaluator/0.10"},
+          )
+          with urllib.request.urlopen(request, timeout=120) as response:  # nosec B310 - operator-configured private bundle URL
+              target.write_bytes(response.read())
+          PY
+          actual="$(sha256sum "$private_root/bundle.zip" | awk '{print $1}')"
+          test "$actual" = "$VERITAS_SRE_PRIVATE_BUNDLE_SHA256" || {
+            echo "private bundle checksum mismatch" >&2
+            exit 1
+          }
+          unzip -q "$private_root/bundle.zip" -d "$private_root/bundle"
+          test -f "$private_root/bundle/qualification.json"
+
+      - name: Verify exact sealed v4 release before model execution
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from investigation_world.commercial.sre_release import load_sealed_sre_release
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "veritas-sre-private" / "bundle" / "qualification.json"
+          release = load_sealed_sre_release(
+              path,
+              expected_candidate_id=os.environ["VERITAS_SRE_PRIVATE_CANDIDATE_ID"],
+              expected_evidence_manifest_id=os.environ["VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID"],
+              expected_report_id=os.environ["VERITAS_SRE_PRIVATE_REPORT_ID"],
+              expected_panel_id=os.environ["VERITAS_SRE_PRIVATE_PANEL_ID"],
+              expected_private_release_manifest_id=os.environ["VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"],
+          )
+          assert release.candidate.version == "sre-v4"
+          print("exact sealed private SRE v4 release verified")
+          PY
+
+      - name: Evaluate open models on the exact sealed private panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          qualification="$RUNNER_TEMP/veritas-sre-private/bundle/qualification.json"
+          private_reports="$RUNNER_TEMP/veritas-sre-private/operator-reports"
+          mkdir -p "$private_reports" results/public-model-evidence
+
+          common_args=(
+            --qualification "$qualification"
+            --expected-candidate-id "$VERITAS_SRE_PRIVATE_CANDIDATE_ID"
+            --expected-evidence-manifest-id "$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID"
+            --expected-report-id "$VERITAS_SRE_PRIVATE_REPORT_ID"
+            --expected-panel-id "$VERITAS_SRE_PRIVATE_PANEL_ID"
+            --expected-private-release-manifest-id "$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"
+          )
+
+          python tools/run_sre_open_model_evaluation.py \
+            "${common_args[@]}" \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --output "$private_reports/qwen2.5-0.5b.json" \
+            --public-output results/public-model-evidence/qwen2.5-0.5b.json
+
+          python tools/run_sre_open_model_evaluation.py \
+            "${common_args[@]}" \
+            --model Qwen/Qwen2.5-1.5B-Instruct \
+            --output "$private_reports/qwen2.5-1.5b.json" \
+            --public-output results/public-model-evidence/qwen2.5-1.5b.json
+
+          python tools/run_sre_open_model_evaluation.py \
+            "${common_args[@]}" \
+            --model HuggingFaceTB/SmolLM2-1.7B-Instruct \
+            --output "$private_reports/smollm2-1.7b.json" \
+            --public-output results/public-model-evidence/smollm2-1.7b.json
+
+      - name: Aggregate only sanitized exact-panel reports
+        run: |
+          python tools/aggregate_sre_model_evaluations.py \
+            --input results/public-model-evidence/*.json \
+            --qualification "$RUNNER_TEMP/veritas-sre-private/bundle/qualification.json" \
+            --output results/sre-commercial-model-evidence.json
+
+      - name: Reject accidental private-row persistence
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          expected = {
+              "candidate_id": os.environ["VERITAS_SRE_PRIVATE_CANDIDATE_ID"],
+              "evidence_manifest_id": os.environ["VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID"],
+              "qualification_report_id": os.environ["VERITAS_SRE_PRIVATE_REPORT_ID"],
+              "panel_id": os.environ["VERITAS_SRE_PRIVATE_PANEL_ID"],
+              "private_release_manifest_id": os.environ["VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"],
+          }
+          for path in Path("results/public-model-evidence").glob("*.json"):
+              report = json.loads(path.read_text())
+              assert "cases" not in report, path
+              for key, value in expected.items():
+                  assert report[key] == value, (path, key, report[key], value)
+              contract = report["artifact_contract"]
+              assert contract["scenario_ids_included"] is False
+              assert contract["per_case_predictions_included"] is False
+              assert contract["per_case_expected_labels_included"] is False
+          aggregate = json.loads(Path("results/sre-commercial-model-evidence.json").read_text())
+          assert aggregate["artifact_contract"]["per_case_expected_labels_included"] is False
+          for key, value in expected.items():
+              assert aggregate[key] == value, (key, aggregate[key], value)
+          PY
+
+      - name: Upload buyer-safe model evidence only
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-commercial-model-evidence
+          path: |
+            results/public-model-evidence/*.json
+            results/sre-commercial-model-evidence.json
+          retention-days: 90
+          if-no-files-found: error
