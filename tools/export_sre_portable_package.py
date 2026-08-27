@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from investigation_world.commercial.sre_release import load_sealed_sre_release
+from investigation_world.portability.evidence import build_sre_portable_qualification_evidence
 from investigation_world.portability.hud import build_hud_sre_package
 from investigation_world.portability.models import PortableVisibility
 from investigation_world.portability.prime import build_prime_sre_package
@@ -42,6 +43,10 @@ def main() -> None:
         source_bundle_sha256=args.source_bundle_sha256,
         **identity_kwargs,
     )
+    qualification_evidence = build_sre_portable_qualification_evidence(
+        release,
+        source_bundle_sha256=args.source_bundle_sha256,
+    )
     private_tasks = build_sre_private_portable_tasks(release)
 
     results = []
@@ -51,6 +56,7 @@ def main() -> None:
                 args.output / "hud",
                 manifest=manifest,
                 private_tasks=private_tasks,
+                qualification_evidence=qualification_evidence,
             )
         )
     if args.adapter in {"prime", "both"}:
@@ -59,6 +65,7 @@ def main() -> None:
                 args.output / "prime",
                 manifest=manifest,
                 private_tasks=private_tasks,
+                qualification_evidence=qualification_evidence,
             )
         )
 
