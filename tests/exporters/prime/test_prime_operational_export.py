@@ -331,6 +331,7 @@ def test_generated_taskset_is_valid_python_and_keeps_reward_private(tmp_path: Pa
     assert '"budget_status"' not in source
     assert 'getattr(mcp, "_tool_manager", None)' in source
     assert "manager.get_tool(tool_name)" in source
+    assert 'await self._push_state(b"")' in source
     assert "tool.parameters = binding[\"input_schema\"]" in source
 
 
