@@ -332,7 +332,7 @@ def test_generated_taskset_is_valid_python_and_keeps_reward_private(tmp_path: Pa
     assert 'getattr(mcp, "_tool_manager", None)' in source
     assert "manager.get_tool(tool_name)" in source
     assert 'await self._push_state(b"")' in source
-    assert "tool.parameters = binding[\"input_schema\"]" in source
+    assert 'tool.parameters = copy.deepcopy(binding["input_schema"])' in source
 
 
 def test_nonempty_output_directory_is_rejected_instead_of_packaging_stale_files(
