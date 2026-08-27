@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Protocol, runtime_checkable
 
-from investigation_world.portable_contract import PortableOperationalContract
 from investigation_world.portable_runtime.models import (
     PortableBudgetStatus,
     PortableResetResult,
@@ -16,9 +15,6 @@ from investigation_world.portable_runtime.models import (
 @runtime_checkable
 class PortableRuntimeProtocol(Protocol):
     """Runtime-neutral API consumed by C-wave external-runtime adapters."""
-
-    @property
-    def contract(self) -> PortableOperationalContract: ...
 
     def reset(self, *, seed: int | None = 0) -> PortableResetResult: ...
 
