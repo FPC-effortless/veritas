@@ -1,3 +1,8 @@
+from investigation_world.portability.evidence import (
+    PortableGateSummary,
+    PortableQualificationEvidence,
+    build_sre_portable_qualification_evidence,
+)
 from investigation_world.portability.hud import build_hud_sre_package
 from investigation_world.portability.identity import portable_run_id, portable_task_id, state_digest
 from investigation_world.portability.models import (
@@ -41,10 +46,12 @@ __all__ = [
     "PortableCapability",
     "PortableEnvironmentManifest",
     "PortableEpisodeStart",
+    "PortableGateSummary",
     "PortableGradeResult",
     "PortableMeteringContract",
     "PortablePackageBuildResult",
     "PortablePackageFile",
+    "PortableQualificationEvidence",
     "PortableReleaseIdentity",
     "PortableResetContract",
     "PortableSplit",
@@ -58,6 +65,7 @@ __all__ = [
     "build_hud_sre_package",
     "build_prime_sre_package",
     "build_sre_portable_manifest",
+    "build_sre_portable_qualification_evidence",
     "build_sre_private_portable_tasks",
     "portable_run_id",
     "portable_task_id",
