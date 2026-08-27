@@ -44,13 +44,16 @@ def _parse_prediction(raw: object) -> str | None:
     return normalized if normalized in _ALLOWED else None
 
 
+def _score_prediction(raw: object, expected_causal_class: str) -> float:
+    return float(_parse_prediction(raw) == expected_causal_class)
+
+
 @env.template(id="sre_causal_classification")
 async def sre_causal_classification(prompt: str, expected_causal_class: str):
     answer = yield prompt
     prediction = _parse_prediction(answer)
-    reward = float(prediction == expected_causal_class)
     yield EvaluationResult(
-        reward=reward,
+        reward=_score_prediction(answer, expected_causal_class),
         content="deterministic causal-classification verifier",
         info={"parsed": prediction is not None},
     )
