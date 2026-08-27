@@ -1,0 +1,267 @@
+name: Portability Validation
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/portability/**"
+      - "tools/export_*.py"
+      - "tools/portability_*.py"
+      - "tests/portability/**"
+      - ".github/workflows/portability-validation.yml"
+      - "docs/portability/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  portability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas test dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Run portability tests
+        run: python -m pytest tests/portability -q
+
+      - name: Compile portability modules and exporters
+        run: |
+          python -m compileall -q src/investigation_world/portability
+          python -m compileall -q tools/export_sre_portable_manifest.py
+          python -m compileall -q tools/export_sre_portable_package.py
+          python -m compileall -q tools/portability_verify_sealed_sre.py
+          python -m compileall -q tests/portability/build_fixture_exports.py
+
+  external-adapter-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas test dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Install current external environment SDKs
+        run: |
+          python -m pip install "hud>=0.6,<0.7"
+          python -m pip install "verifiers>=0.2,<0.3"
+
+      - name: Load generated packages against current SDK APIs
+        run: python -m pytest tests/portability/test_external_adapter_smoke.py -q
+
+      - name: Generate deterministic external fixture packages
+        run: |
+          rm -rf "$RUNNER_TEMP/veritas-portability-fixture"
+          python tests/portability/build_fixture_exports.py \
+            --output "$RUNNER_TEMP/veritas-portability-fixture"
+
+      - name: Build generated HUD protocol image
+        working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
+        run: docker build -f Dockerfile.hud -t veritas-sre-portability-fixture:ci .
+
+      - name: Exercise HUD task start and grade protocol
+        working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
+        run: |
+          set -euo pipefail
+          docker run -d --name veritas-hud-portability-smoke -p 8765:8765 \
+            veritas-sre-portability-fixture:ci
+          trap 'docker rm -f veritas-hud-portability-smoke >/dev/null 2>&1 || true' EXIT
+
+          ARGS='{"prompt":"Worker demand exceeded capacity and queues accumulated.","expected_causal_class":"capacity"}'
+          START_OUTPUT=""
+          ready=0
+          for attempt in $(seq 1 30); do
+            if START_OUTPUT=$(hud task start sre_causal_classification \
+              --url tcp://127.0.0.1:8765 --args "$ARGS" 2>&1); then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs veritas-hud-portability-smoke
+            printf '%s\n' "$START_OUTPUT"
+            exit 1
+          fi
+          printf '%s\n' "$START_OUTPUT" | grep -F "Worker demand exceeded capacity"
+
+          GRADE_OUTPUT=$(hud task grade sre_causal_classification \
+            --url tcp://127.0.0.1:8765 --args "$ARGS" \
+            --answer '{"causal_class":"capacity"}')
+          printf '%s\n' "$GRADE_OUTPUT" | grep -Eq '(^|[^0-9])1(\.0+)?([^0-9]|$)'
+
+      - name: Exercise Prime v1 and legacy compatibility entrypoints
+        env:
+          PRIME_FIXTURE_ROOT: ${{ runner.temp }}/veritas-portability-fixture/prime
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["PRIME_FIXTURE_ROOT"])
+          sys.path.insert(0, str(root))
+          import verifiers.v1 as vf
+          from veritas_sre_prime import SRETaskset, load_environment
+
+          taskset = SRETaskset(vf.TasksetConfig())
+          tasks = taskset.load()
+          assert len(tasks) == 1
+          assert tasks[0].data.portable_task_id.startswith("PTASK-")
+
+          legacy = load_environment()
+          assert legacy is not None
+          print("Prime v1 taskset and compatibility-only legacy bridge loaded")
+          PY
+
+  sealed-sre-portability:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.head_ref == 'feat/0.11-portability' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERITAS_SRE_PRIVATE_CANDIDATE_ID: SRE-CAND-92A84929AD1E82E24357
+      VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID: EVID-2C69B48DCDD5F2232EABDC9B
+      VERITAS_SRE_PRIVATE_REPORT_ID: QREPORT-C585121E94D91766BB6664E3
+      VERITAS_SRE_PRIVATE_PANEL_ID: QPANEL-AFF065BA4C2FD75BE9BB3EBE
+      VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID: PRIVREL-036192DA63716D331C929C0C
+      VERITAS_SRE_PRIVATE_BUNDLE_SHA256: 531d1358883ec399add640c3519c31a36f6c93981796d7a3e8b37e2a7ace0d2a
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas
+        run: python -m pip install -e .
+
+      - name: Download retained frozen encrypted SRE v4 seal
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v4-portability-encrypted-seal-retained
+          path: ${{ runner.temp }}/sre-v4-seal
+          github-token: ${{ github.token }}
+          repository: FPC-effortless/veritas
+          run-id: 33058148037
+
+      - name: Verify ciphertext and decrypt frozen private release
+        shell: bash
+        env:
+          VERITAS_SRE_SEAL_PRIVATE_KEY_PEM: ${{ secrets.VERITAS_SRE_SEAL_PRIVATE_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          seal_root="$RUNNER_TEMP/sre-v4-seal"
+          private_root="$RUNNER_TEMP/veritas-sre-portability-private"
+          mkdir -p "$private_root"
+
+          test -n "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" || {
+            echo "VERITAS_SRE_SEAL_PRIVATE_KEY_PEM is not configured" >&2
+            exit 1
+          }
+          test "$(sha256sum "$seal_root/private-release.zip.enc" | awk '{print $1}')" = \
+            "1a230dec590184f4ce0244965ce8a52727a84884f663ad2aaa90f338e2aeaf1d"
+          test "$(sha256sum "$seal_root/data-key.bin.enc" | awk '{print $1}')" = \
+            "836d0a52551b91094420bc6ec0bf58239162e8223acc0c3be15bf7f7c5778790"
+
+          key_file="$private_root/seal-private.pem"
+          data_key="$private_root/data-key.bin"
+          bundle="$private_root/private-release.zip"
+          printf '%s\n' "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" > "$key_file"
+          chmod 600 "$key_file"
+
+          cleanup_secret_material() {
+            rm -f "$key_file" "$data_key"
+          }
+          trap cleanup_secret_material EXIT
+
+          openssl pkeyutl -decrypt \
+            -inkey "$key_file" \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in "$seal_root/data-key.bin.enc" \
+            -out "$data_key"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in "$seal_root/private-release.zip.enc" \
+            -out "$bundle" \
+            -pass file:"$data_key"
+
+          test "$(sha256sum "$bundle" | awk '{print $1}')" = "$VERITAS_SRE_PRIVATE_BUNDLE_SHA256"
+          mkdir -p "$private_root/bundle"
+          unzip -q "$bundle" -d "$private_root/bundle"
+          qualification="$(find "$private_root/bundle" -type f -name qualification.json -path '*/sre-v4/*' -print -quit)"
+          test -n "$qualification"
+          echo "VERITAS_SRE_QUALIFICATION_PATH=$qualification" >> "$GITHUB_ENV"
+
+      - name: Verify exact sealed SRE portability and deterministic packaging
+        run: |
+          python tools/portability_verify_sealed_sre.py \
+            --qualification "$VERITAS_SRE_QUALIFICATION_PATH" \
+            --output "$RUNNER_TEMP/veritas-sre-portability-proof" \
+            --source-bundle-sha256 "$VERITAS_SRE_PRIVATE_BUNDLE_SHA256" \
+            --expected-candidate-id "$VERITAS_SRE_PRIVATE_CANDIDATE_ID" \
+            --expected-evidence-manifest-id "$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID" \
+            --expected-report-id "$VERITAS_SRE_PRIVATE_REPORT_ID" \
+            --expected-panel-id "$VERITAS_SRE_PRIVATE_PANEL_ID" \
+            --expected-private-release-manifest-id "$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID" \
+            --expected-private-count 30
+
+      - name: Build exact sealed HUD distribution image
+        working-directory: ${{ runner.temp }}/veritas-sre-portability-proof/first/hud
+        run: docker build -f Dockerfile.hud -t veritas-sre-v4-portability:sealed .
+
+      - name: Build exact sealed Prime distribution wheel
+        working-directory: ${{ runner.temp }}/veritas-sre-portability-proof/first/prime
+        run: |
+          mkdir -p "$RUNNER_TEMP/veritas-sre-prime-wheel"
+          python -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/veritas-sre-prime-wheel" .
+          test "$(find "$RUNNER_TEMP/veritas-sre-prime-wheel" -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
+
+      - name: Retain ciphertext-only seal for portability validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-portability-encrypted-seal-retained
+          path: |
+            ${{ runner.temp }}/sre-v4-seal/private-release.zip.enc
+            ${{ runner.temp }}/sre-v4-seal/data-key.bin.enc
+            ${{ runner.temp }}/sre-v4-seal/SHA256SUMS
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload buyer-safe sealed portability proof only
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-portability-proof
+          path: ${{ runner.temp }}/veritas-sre-portability-proof/buyer_safe_proof.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Remove decrypted private release
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/veritas-sre-portability-private"
