@@ -139,6 +139,10 @@ def _canonical_value(raw: str) -> str | None:
     return parsed.value if parsed is not None else None
 
 
+def _canonical_reward(raw: str, expected: str) -> float:
+    return float(_canonical_value(raw) == expected)
+
+
 def _assert_parser_parity(parser) -> None:
     samples = [
         '{"causal_class":"capacity"}',
@@ -148,6 +152,19 @@ def _assert_parser_parity(parser) -> None:
     ]
     for raw in samples:
         assert parser(raw) == _canonical_value(raw)
+
+
+def _assert_reward_parity(scorer) -> None:
+    expected = "capacity"
+    samples = [
+        '{"causal_class":"capacity"}',
+        "capacity",
+        'prefix {"causal_class":"capacity"} suffix',
+        '{"causal_class":"regression"}',
+        "not-a-valid-class",
+    ]
+    for raw in samples:
+        assert scorer(raw, expected) == _canonical_reward(raw, expected)
 
 
 def test_generated_hud_package_clean_installs_and_loads_with_current_sdk(
@@ -174,6 +191,7 @@ def test_generated_hud_package_clean_installs_and_loads_with_current_sdk(
         assert Path(tasks_module.__file__).resolve().is_relative_to(install_root.resolve())
         assert (install_root / "qualification_evidence.json").is_file()
         _assert_parser_parity(env_module._parse_prediction)
+        _assert_reward_parity(env_module._score_prediction)
     finally:
         sys.path.remove(str(install_root))
         sys.modules.pop("env", None)
@@ -208,6 +226,7 @@ def test_generated_prime_package_clean_installs_and_loads_with_current_v1_sdk(
         assert (package_dir / "portable_manifest.json").is_file()
         assert (package_dir / "qualification_evidence.json").is_file()
         _assert_parser_parity(taskset_module._parse_prediction)
+        _assert_reward_parity(taskset_module._score_prediction)
 
         legacy_env = module.load_environment()
         assert len(legacy_env.dataset) == 1
