@@ -21,6 +21,11 @@ SRE_V4_PROVIDERS: tuple[str, ...] = (
     "instructure",
     "ibmcloudsecurity",
     "hedera",
+    "snyk",
+    "snowflake",
+    "newrelic",
+    "hubspot",
+    "temporal",
 )
 
 STATUSPAGE_INCIDENT_ENDPOINTS: dict[str, str] = {
@@ -55,6 +60,11 @@ STATUSPAGE_INCIDENT_ENDPOINTS: dict[str, str] = {
     "instructure": "https://status.instructure.com/api/v2/incidents.json",
     "ibmcloudsecurity": "https://statuspage.ibmcloudsecurity.com/api/v2/incidents.json",
     "hedera": "https://status.hedera.com/api/v2/incidents.json",
+    "snyk": "https://status.snyk.io/api/v2/incidents.json",
+    "snowflake": "https://status.snowflake.com/api/v2/incidents.json",
+    "newrelic": "https://status.newrelic.com/api/v2/incidents.json",
+    "hubspot": "https://status.hubspot.com/api/v2/incidents.json",
+    "temporal": "https://status.temporal.io/api/v2/incidents.json",
 }
 
 
@@ -99,13 +109,17 @@ def _infer_causal_class_with_rule(text: str) -> tuple[SRECausalClass, str, bool]
     )
     infrastructure_patterns = (
         r"\b(?:network|dns|routing|bgp)(?: connectivity)? (?:issue|fail(?:ed|ure)|outage|incident|partition)\b",
+        r"\b(?:network|dns|routing|bgp)(?: connectivity)? (?:was |has )?(?:degraded|unavailable)\b",
         r"\b(?:hardware|disk|storage|power) (?:fail(?:ed|ure)|fault|outage|incident)\b",
         r"\b(?:database|datastore) (?:failover|fail(?:ed|ure)|outage|unavailable|corruption)\b",
-        r"\b(?:region|availability zone|data ?center) (?:fail(?:ed|ure)|outage|incident)\b",
-        r"\b(?:cloud|upstream|third[- ]party|dependency) provider (?:fail(?:ed|ure)|outage|incident)\b",
-        r"\b(?:degraded|failed|unhealthy) (?:node|host|server)\b",
+        r"\b(?:region|availability zone|data ?center) (?:fail(?:ed|ure)|outage|incident|unavailable)\b",
+        r"\b(?:cloud|upstream|third[- ]party|dependency) provider (?:fail(?:ed|ure)|outage|incident|unavailable)\b",
+        r"\b(?:degraded|failed|unhealthy) (?:[\w.-]+ ){0,3}(?:node|host|server)\b",
         r"\b(?:node|host|server|cluster) (?:fail(?:ed|ure)|unavailable|unhealthy)\b",
         r"\b(?:fiber|cable) (?:cut|failure)\b",
+        r"\b(?:isp|carrier|transit provider|network provider)\b.*\b(?:outage|failure|connectivity|routing|unavailable)\b",
+        r"\b(?:outage|failure|connectivity|routing)\b.*\b(?:isp|carrier|transit provider|network provider)\b",
+        r"\b(?:packet loss|network partition|connection reset)\b",
     )
     transient_patterns = (
         r"\btransient\b",
