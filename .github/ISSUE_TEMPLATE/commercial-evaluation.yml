@@ -1,8 +1,6 @@
 name: Commercial evaluation inquiry
 description: Request a private Veritas evaluation, environment license, or design-partner pilot
 title: "Commercial inquiry: "
-labels:
-  - commercial-inquiry
 body:
   - type: markdown
     attributes:
