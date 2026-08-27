@@ -11,6 +11,43 @@ from investigation_world.portable_contract.identity import (
 )
 
 
+class FrozenDict(dict[str, Any]):
+    """A recursively frozen JSON-object representation.
+
+    ``dict`` inheritance keeps canonical JSON/Pydantic serialization behavior while
+    every mutating method fails closed after construction.
+    """
+
+    @staticmethod
+    def _immutable(*_args: Any, **_kwargs: Any) -> None:
+        raise TypeError("portable contract mappings are immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+    __ior__ = _immutable
+
+
+def _deep_freeze(value: Any) -> Any:
+    if isinstance(value, FrozenDict):
+        return value
+    if isinstance(value, dict):
+        return FrozenDict({key: _deep_freeze(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_deep_freeze(item) for item in value)
+    if isinstance(value, tuple):
+        return tuple(_deep_freeze(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(_deep_freeze(item) for item in value)
+    if isinstance(value, frozenset):
+        return frozenset(_deep_freeze(item) for item in value)
+    return value
+
+
 class PortableVisibility(StrEnum):
     PUBLIC = "public"
     EVALUATOR_PRIVATE = "evaluator_private"
@@ -24,6 +61,15 @@ class InteractionMode(StrEnum):
 
 class FrozenContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+    @model_validator(mode="after")
+    def freeze_nested_values(self) -> "FrozenContractModel":
+        for field_name in type(self).model_fields:
+            value = getattr(self, field_name)
+            frozen = _deep_freeze(value)
+            if frozen is not value:
+                object.__setattr__(self, field_name, frozen)
+        return self
 
 
 class PortableProvenance(FrozenContractModel):
