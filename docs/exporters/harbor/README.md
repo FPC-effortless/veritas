@@ -35,9 +35,17 @@ Agent-public generated files contain only the `PortablePublicContract`, instruct
 - `environment/runtime-control/contract.json`, whose derived image and build context are isolated from the agent network and agent image;
 - `tests/contract.json`, whose derived image is used only by Harbor's separate verifier.
 
-The MCP sidecar recompiles its tool catalog from `PortablePublicContract` using `compile_mcp_surface`. The runtime-control service also compiles the same surface and executes calls exclusively through `dispatch_mcp_tool` over `PortableOperationalRuntime`. The MCP wire response returns only the portable observation; reward, reward components, state digests, and verifier metadata are not forwarded to the evaluated agent. Object observations are also emitted as MCP `structuredContent`; array or scalar observations remain exact JSON text instead of being wrapped into a different schema.
+The MCP sidecar recompiles its tool catalog from `PortablePublicContract` using `compile_mcp_surface`. The runtime-control service also compiles the same surface and executes calls exclusively through `dispatch_mcp_tool` over `PortableOperationalRuntime`. The MCP wire response returns only the portable observation; reward, reward components, state digests, and verifier metadata are not forwarded to the evaluated agent. MCP 2026-07-28 structured content may carry any JSON value, so object, array, scalar, and null observations retain their original JSON shape rather than being wrapped into a different schema.
 
 The current shared portable runtime requires the complete operational contract to reconstruct operational hidden state. Therefore the runtime-control sidecar necessarily receives the full contract. This is isolated evaluator infrastructure, not the Harbor `main` container or MCP container. If the portable runtime later supports a smaller execution-only private projection, this exporter should narrow the runtime-control input accordingly rather than duplicating that semantic split here.
+
+## MCP 2026-07-28 transport
+
+The shared MCP compiler pins protocol revision `2026-07-28`, so the Harbor sidecar implements that stateless transport rather than the retired initialize/session lifecycle. It implements `server/discover`, `tools/list`, and `tools/call` over a single Streamable HTTP POST endpoint and does not create an MCP session.
+
+Every modern request is validated independently. The body must carry the protocol version and client capabilities in `_meta`; a present `clientInfo` must be well formed. HTTP `MCP-Protocol-Version` and `Mcp-Method` must match the body, and `tools/call` must also provide a matching `Mcp-Name`. Unsupported versions and header/body mismatches fail before runtime dispatch. If a compiled tool schema uses valid `x-mcp-header` annotations, the corresponding `Mcp-Param-*` values are decoded and checked against the exact tool arguments before dispatch.
+
+Every successful result is marked `resultType = "complete"` and carries server identity in `_meta`. Tool-origin runtime failures are exposed only as sanitized MCP tool errors; private runtime failure messages are not forwarded. The MCP sidecar never computes reward or invokes verification.
 
 ## Determinism and provenance
 
@@ -131,6 +139,7 @@ The owned tests fail if:
 - mutable container image tags are accepted;
 - `main` joins the runtime-control network or runtime-control publishes a host port;
 - the MCP bridge accepts an arbitrary runtime-control URL;
+- the Harbor MCP bridge regresses to handshake-era transport or accepts inconsistent modern routing headers;
 - Harbor does not use a separate verifier;
 - the generated MCP surface identity differs from the shared compiler;
 - MCP dispatch results differ from direct portable-runtime results;
