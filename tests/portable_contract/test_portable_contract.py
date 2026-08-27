@@ -346,3 +346,25 @@ def test_models_are_frozen_at_the_contract_boundary() -> None:
 
     with pytest.raises(ValidationError):
         contract.public.objective = "mutated"
+
+
+def test_identity_bearing_json_values_are_recursively_immutable() -> None:
+    episode = _episode()
+    episode.task.metadata["nested"] = {"values": [1, 2]}
+    contract = compile_operational_episode(episode)
+    original_id = contract.contract_id
+    original_public_id = contract.public.public_id
+    original_bytes = serialize_portable_contract(contract)
+
+    with pytest.raises(TypeError, match="immutable"):
+        contract.public.task_metadata["new"] = "mutation"
+    with pytest.raises(TypeError, match="immutable"):
+        contract.public.task_metadata["nested"]["new"] = "mutation"
+    with pytest.raises(TypeError):
+        contract.public.task_metadata["nested"]["values"][0] = 9
+    with pytest.raises(TypeError, match="immutable"):
+        contract.private.semantic_state.initial_state["order.status"] = "changed"
+
+    assert contract.contract_id == original_id
+    assert contract.public.public_id == original_public_id
+    assert serialize_portable_contract(contract) == original_bytes
