@@ -26,15 +26,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
       - name: Install Veritas
         run: python -m pip install -e .
+
       - name: Install CPU model runtime
         run: python -m pip install "torch>=2.4" "transformers>=4.45,<5" accelerate sentencepiece
+
       - name: Cache model files
         uses: actions/cache@v4
         with:
@@ -82,7 +86,10 @@ jobs:
             exit 1
           }
           unzip -q "$private_root/bundle.zip" -d "$private_root/bundle"
-          test -f "$private_root/bundle/qualification.json"
+
+          qualification="$(find "$private_root/bundle" -type f -name qualification.json -path '*/sre-v4/*' -print -quit)"
+          test -n "$qualification" || { echo "sealed SRE v4 qualification.json not found in bundle" >&2; exit 1; }
+          echo "VERITAS_SRE_QUALIFICATION_PATH=$qualification" >> "$GITHUB_ENV"
 
       - name: Verify exact sealed v4 release before model execution
         run: |
@@ -91,7 +98,7 @@ jobs:
           from pathlib import Path
           from investigation_world.commercial.sre_release import load_sealed_sre_release
 
-          path = Path(os.environ["RUNNER_TEMP"]) / "veritas-sre-private" / "bundle" / "qualification.json"
+          path = Path(os.environ["VERITAS_SRE_QUALIFICATION_PATH"])
           release = load_sealed_sre_release(
               path,
               expected_candidate_id=os.environ["VERITAS_SRE_PRIVATE_CANDIDATE_ID"],
@@ -108,7 +115,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          qualification="$RUNNER_TEMP/veritas-sre-private/bundle/qualification.json"
+          qualification="$VERITAS_SRE_QUALIFICATION_PATH"
           private_reports="$RUNNER_TEMP/veritas-sre-private/operator-reports"
           mkdir -p "$private_reports" results/public-model-evidence
 
@@ -143,7 +150,7 @@ jobs:
         run: |
           python tools/aggregate_sre_model_evaluations.py \
             --input results/public-model-evidence/*.json \
-            --qualification "$RUNNER_TEMP/veritas-sre-private/bundle/qualification.json" \
+            --qualification "$VERITAS_SRE_QUALIFICATION_PATH" \
             --output results/sre-commercial-model-evidence.json
 
       - name: Reject accidental private-row persistence
@@ -160,7 +167,9 @@ jobs:
               "panel_id": os.environ["VERITAS_SRE_PRIVATE_PANEL_ID"],
               "private_release_manifest_id": os.environ["VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"],
           }
-          for path in Path("results/public-model-evidence").glob("*.json"):
+          reports = list(Path("results/public-model-evidence").glob("*.json"))
+          assert len(reports) >= 2, "commercial evidence requires at least two real-model reports"
+          for path in reports:
               report = json.loads(path.read_text())
               assert "cases" not in report, path
               for key, value in expected.items():
