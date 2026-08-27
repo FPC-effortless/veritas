@@ -7,6 +7,22 @@ from typing import Any
 from investigation_world.qualification.sre import SRECausalClass, SREIncidentSource
 
 
+SRE_V4_PROVIDERS: tuple[str, ...] = (
+    "render",
+    "supabase",
+    "elastic",
+    "grafana",
+    "figma",
+    "postman",
+    "airtable",
+    "webflow",
+    "reddit",
+    "claude",
+    "instructure",
+    "ibmcloudsecurity",
+    "hedera",
+)
+
 STATUSPAGE_INCIDENT_ENDPOINTS: dict[str, str] = {
     "github": "https://www.githubstatus.com/api/v2/incidents.json",
     "atlassian": "https://status.atlassian.com/api/v2/incidents.json",
@@ -24,13 +40,21 @@ STATUSPAGE_INCIDENT_ENDPOINTS: dict[str, str] = {
     "dropbox": "https://status.dropbox.com/api/v2/incidents.json",
     "mongodb": "https://status.mongodb.com/api/v2/incidents.json",
     "npm": "https://status.npmjs.org/api/v2/incidents.json",
-    # Fresh SRE v4 provider family. These Statuspage incident APIs were selected before v4 model
-    # evaluation and are disjoint from the v1-v3 provider families.
+    # Fresh SRE v4 provider family. These Statuspage incident APIs are disjoint from the v1-v3
+    # provider families and are frozen before any v4 model evidence is run.
     "render": "https://status.render.com/api/v2/incidents.json",
     "supabase": "https://status.supabase.com/api/v2/incidents.json",
     "elastic": "https://status.elastic.co/api/v2/incidents.json",
     "grafana": "https://status.grafana.com/api/v2/incidents.json",
     "figma": "https://status.figma.com/api/v2/incidents.json",
+    "postman": "https://status.postman.com/api/v2/incidents.json",
+    "airtable": "https://status.airtable.com/api/v2/incidents.json",
+    "webflow": "https://status.webflow.com/api/v2/incidents.json",
+    "reddit": "https://www.redditstatus.com/api/v2/incidents.json",
+    "claude": "https://status.claude.com/api/v2/incidents.json",
+    "instructure": "https://status.instructure.com/api/v2/incidents.json",
+    "ibmcloudsecurity": "https://statuspage.ibmcloudsecurity.com/api/v2/incidents.json",
+    "hedera": "https://status.hedera.com/api/v2/incidents.json",
 }
 
 
@@ -47,10 +71,8 @@ def _matches(value: str, patterns: tuple[str, ...]) -> bool:
 def _infer_causal_class_with_rule(text: str) -> tuple[SRECausalClass, str, bool]:
     """Infer a coarse causal class only from later/private evidence.
 
-    Regression rules deliberately require causal wording. A generic phrase such as "deployed a
-    fix" must not turn an unrelated incident into a regression label. The boolean indicates
-    whether the private text contained an explicit causal signal rather than falling back to the
-    residual transient class.
+    Rules require causal/resolution language rather than generic remediation language. In
+    particular, "deployed a fix" is not evidence that a deployment caused the incident.
     """
     value = " ".join(text.split())
 
@@ -59,7 +81,10 @@ def _infer_causal_class_with_rule(text: str) -> tuple[SRECausalClass, str, bool]
         r"\b(?:recent|new|previous) (?:deploy(?:ment)?|release|version|change)\b.*\b(?:caus|introduc|trigger)",
         r"\b(?:caus|introduc|trigger)(?:ed|ing|es)? by\b.*\b(?:deploy(?:ment)?|release|change|configuration|config)\b",
         r"\b(?:configuration|config|code|software) change\b.*\b(?:caus|introduc|trigger)",
-        r"\brollback\b.*\b(?:restor|resolv|recover)",
+        r"\b(?:bad|incorrect|invalid|faulty) (?:configuration|config|deploy(?:ment)?|release|change)\b",
+        r"\brollback\b.*\b(?:restor|resolv|recover|normal|function)",
+        r"\broll(?:ed|ing)? back\b.*\b(?:restor|resolv|recover|normal|function)",
+        r"\brevert(?:ed|ing)?\b.*\b(?:change|deploy|release|config|restor|resolv|recover)",
     )
     capacity_patterns = (
         r"\bcapacity\b",
@@ -68,13 +93,19 @@ def _infer_causal_class_with_rule(text: str) -> tuple[SRECausalClass, str, bool]
         r"\brate limit(?:ing|ed)?\b",
         r"\btoo many connections\b",
         r"\bqueue backlog\b",
+        r"\b(?:memory|cpu) pressure\b",
+        r"\bconnection pool (?:exhaust|saturat)\w*\b",
+        r"\bresource contention\b",
     )
     infrastructure_patterns = (
-        r"\b(?:network|dns|routing|bgp) (?:issue|failure|outage|incident|partition)\b",
-        r"\b(?:hardware|disk|storage|power) (?:failure|fault|outage|incident)\b",
-        r"\b(?:database|datastore) (?:failover|failure|outage|unavailable|corruption)\b",
-        r"\b(?:region|availability zone|data ?center) (?:failure|outage|incident)\b",
-        r"\b(?:cloud|upstream|third[- ]party|dependency) provider (?:failure|outage|incident)\b",
+        r"\b(?:network|dns|routing|bgp)(?: connectivity)? (?:issue|fail(?:ed|ure)|outage|incident|partition)\b",
+        r"\b(?:hardware|disk|storage|power) (?:fail(?:ed|ure)|fault|outage|incident)\b",
+        r"\b(?:database|datastore) (?:failover|fail(?:ed|ure)|outage|unavailable|corruption)\b",
+        r"\b(?:region|availability zone|data ?center) (?:fail(?:ed|ure)|outage|incident)\b",
+        r"\b(?:cloud|upstream|third[- ]party|dependency) provider (?:fail(?:ed|ure)|outage|incident)\b",
+        r"\b(?:degraded|failed|unhealthy) (?:node|host|server)\b",
+        r"\b(?:node|host|server|cluster) (?:fail(?:ed|ure)|unavailable|unhealthy)\b",
+        r"\b(?:fiber|cable) (?:cut|failure)\b",
     )
     transient_patterns = (
         r"\btransient\b",
@@ -110,11 +141,9 @@ def parse_statuspage_incidents(
 ) -> list[SREIncidentSource]:
     """Compile resolved Statuspage incidents into early-public/later-private evidence.
 
-    Statuspage returns incident updates newest-first on common provider pages. We reorder by
-    timestamp, expose the earliest updates to the candidate, and reserve later resolution/RCA
-    updates for private truth. Incidents without a separable later evidence segment are discarded.
-    Commercial/private candidates can additionally require an explicit later causal signal instead
-    of accepting the residual fallback class.
+    Incident updates are ordered by creation time. The earliest updates form public evidence; later
+    resolution/RCA updates and an optional Statuspage postmortem form evaluator-only evidence.
+    Incidents without a separable later evidence segment are discarded.
     """
     incidents: list[SREIncidentSource] = []
     source_endpoint = endpoint or STATUSPAGE_INCIDENT_ENDPOINTS.get(provider, "")
@@ -128,6 +157,9 @@ def parse_statuspage_incidents(
             continue
         early = bodies[:early_update_count]
         later = bodies[early_update_count:]
+        postmortem = str(raw.get("postmortem_body") or "").strip()
+        if postmortem and postmortem not in later:
+            later = [*later, postmortem]
         private_text = "\n".join(later)
         causal_class, causal_rule, explicit_causal_signal = _infer_causal_class_with_rule(private_text)
         if require_explicit_causal_label and not explicit_causal_signal:
@@ -150,10 +182,11 @@ def parse_statuspage_incidents(
                 metadata={
                     "impact": raw.get("impact"),
                     "status": raw.get("status"),
-                    "compiler": "statuspage-v3-causal",
+                    "compiler": "statuspage-v4-causal",
                     "source_endpoint": source_endpoint,
                     "causal_label_rule": causal_rule,
                     "explicit_causal_signal": explicit_causal_signal,
+                    "postmortem_included": bool(postmortem),
                 },
             )
         )
