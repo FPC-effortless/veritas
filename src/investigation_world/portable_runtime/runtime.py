@@ -535,12 +535,6 @@ class PortableOperationalRuntime:
         self._budget_exhaustion_resources: tuple[str, ...] = ()
         self.reset(seed=0)
 
-    @property
-    def contract(self) -> PortableOperationalContract:
-        """Evaluator-side full contract. Do not place this object in agent payloads."""
-
-        return self._contract
-
     def reset(self, *, seed: int | None = 0) -> PortableResetResult:
         if seed is None:
             seed = 0
