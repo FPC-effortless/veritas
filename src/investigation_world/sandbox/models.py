@@ -11,15 +11,13 @@ SANDBOX_CONTRACT_VERSION = "sandbox-provider-v1"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
-def _validate_relative_path(value: str, *, allow_dot: bool = False) -> str:
+def _validate_relative_path(value: str) -> str:
     if not value:
         raise ValueError("path must not be empty")
     path = PurePosixPath(value)
     if path.is_absolute():
         raise ValueError("path must be relative to the sandbox root")
     if any(part in {"", ".", ".."} for part in path.parts):
-        if allow_dot and value == ".":
-            return value
         raise ValueError("path must not contain traversal or dot segments")
     normalized = path.as_posix()
     if normalized != value:
@@ -155,7 +153,12 @@ class SandboxCreateRequest(BaseModel):
 
 
 class SandboxExecutionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
 
     kind: SandboxExecutionKind
     name: str = Field(min_length=1)
@@ -221,7 +224,12 @@ class SandboxArtifactMetadata(BaseModel):
 
 
 class SandboxArtifact(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
 
     path: str
     content: bytes
@@ -230,7 +238,12 @@ class SandboxArtifact(BaseModel):
 
 
 class SandboxExecutionResult(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        ser_json_bytes="base64",
+        val_json_bytes="base64",
+    )
 
     status: SandboxExecutionStatus
     stdout: bytes = b""
