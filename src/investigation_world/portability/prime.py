@@ -75,10 +75,53 @@ class SRETaskset(vf.Taskset[SRETask, vf.TasksetConfig]):
 '''
 
 
-def _render_init_module() -> str:
-    return '''from veritas_sre_prime.taskset import SRETaskset
+def _render_legacy_module() -> str:
+    return '''from __future__ import annotations
 
-__all__ = ["SRETaskset"]
+import json
+from pathlib import Path
+
+from datasets import Dataset
+import verifiers as vf
+
+from veritas_sre_prime.taskset import _parse_prediction
+
+
+def load_environment() -> vf.Environment:
+    """Compatibility-only v0 bridge; new integrations should use SRETaskset."""
+    records = json.loads(
+        Path(__file__).with_name("private_tasks.json").read_text(encoding="utf-8")
+    )
+    dataset = Dataset.from_list(
+        [
+            {
+                "question": record["prompt"],
+                "answer": record["expected_causal_class"],
+                "portable_task_id": record["task_id"],
+            }
+            for record in records
+        ]
+    )
+
+    async def causal_classification(completion, answer, **kwargs) -> float:
+        del kwargs
+        if isinstance(completion, list) and completion:
+            last = completion[-1]
+            raw = last.get("content", "") if isinstance(last, dict) else str(last)
+        else:
+            raw = completion
+        return float(_parse_prediction(raw) == str(answer))
+
+    rubric = vf.Rubric(funcs=[causal_classification])
+    return vf.SingleTurnEnv(dataset=dataset, rubric=rubric)
+'''
+
+
+def _render_init_module() -> str:
+    return '''from veritas_sre_prime.legacy import load_environment
+from veritas_sre_prime.taskset import SRETaskset
+
+__all__ = ["SRETaskset", "load_environment"]
 '''
 
 
@@ -113,8 +156,11 @@ This is an **operator-private taskset package**. The generated `private_tasks.js
 scoring truth and must remain restricted. `qualification_evidence.json` is buyer-safe and contains
 only aggregate qualification evidence and immutable release identities.
 
-The package exports `SRETaskset` using `verifiers.v1`, separating the taskset (what is solved and
-how it is scored) from the harness/runtime chosen by the evaluator or trainer.
+The primary package export is `SRETaskset` using `verifiers.v1`, separating the taskset (what is
+solved and how it is scored) from the harness/runtime chosen by the evaluator or trainer.
+
+`load_environment()` is also exported strictly as a compatibility bridge for legacy v0 Prime flows.
+It is not the internal Veritas portability abstraction and should not be used for new v1 integrations.
 '''
 
 
@@ -144,6 +190,7 @@ def build_prime_sre_package(
         "README.md": _render_readme(manifest),
         "veritas_sre_prime/__init__.py": _render_init_module(),
         "veritas_sre_prime/taskset.py": _render_taskset_module(),
+        "veritas_sre_prime/legacy.py": _render_legacy_module(),
         "veritas_sre_prime/private_tasks.json": json.dumps(
             private_payload, indent=2, sort_keys=True
         )
