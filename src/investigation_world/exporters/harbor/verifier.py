@@ -129,7 +129,10 @@ def _write_outputs(
 ) -> None:
     reward_path.parent.mkdir(parents=True, exist_ok=True)
     details_path.parent.mkdir(parents=True, exist_ok=True)
-    reward_path.write_text(f"{result.reward:.6f}\n", encoding="utf-8")
+    # json.dumps uses Python's shortest round-trippable float representation, so
+    # Harbor receives the native verifier reward without exporter-side rounding.
+    reward_text = json.dumps(result.reward, allow_nan=False)
+    reward_path.write_text(reward_text + "\n", encoding="utf-8")
     details_path.write_text(
         json.dumps(
             {
@@ -141,6 +144,7 @@ def _write_outputs(
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
+            allow_nan=False,
         )
         + "\n",
         encoding="utf-8",
