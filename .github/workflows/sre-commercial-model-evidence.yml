@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: sre-commercial-model-evidence-${{ github.ref }}
@@ -16,13 +17,11 @@ jobs:
     timeout-minutes: 360
     env:
       HF_HOME: ${{ github.workspace }}/.cache/huggingface
-      VERITAS_SRE_PRIVATE_BUNDLE_URL: ${{ secrets.VERITAS_SRE_PRIVATE_BUNDLE_URL }}
-      VERITAS_SRE_PRIVATE_BUNDLE_SHA256: ${{ secrets.VERITAS_SRE_PRIVATE_BUNDLE_SHA256 }}
-      VERITAS_SRE_PRIVATE_CANDIDATE_ID: ${{ secrets.VERITAS_SRE_PRIVATE_CANDIDATE_ID }}
-      VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID: ${{ secrets.VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID }}
-      VERITAS_SRE_PRIVATE_REPORT_ID: ${{ secrets.VERITAS_SRE_PRIVATE_REPORT_ID }}
-      VERITAS_SRE_PRIVATE_PANEL_ID: ${{ secrets.VERITAS_SRE_PRIVATE_PANEL_ID }}
-      VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID: ${{ secrets.VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID }}
+      VERITAS_SRE_PRIVATE_CANDIDATE_ID: SRE-CAND-92A84929AD1E82E24357
+      VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID: EVID-2C69B48DCDD5F2232EABDC9B
+      VERITAS_SRE_PRIVATE_REPORT_ID: QREPORT-C585121E94D91766BB6664E3
+      VERITAS_SRE_PRIVATE_PANEL_ID: QPANEL-AFF065BA4C2FD75BE9BB3EBE
+      VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID: PRIVREL-036192DA63716D331C929C0C
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,59 +36,94 @@ jobs:
         run: python -m pip install -e .
 
       - name: Install CPU model runtime
-        run: python -m pip install "torch>=2.4" "transformers>=4.45,<5" accelerate sentencepiece
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+          python -m pip install "transformers>=4.45,<5" accelerate sentencepiece
 
       - name: Cache model files
         uses: actions/cache@v4
         with:
           path: .cache/huggingface
-          key: sre-commercial-v4-${{ runner.os }}-open-models-v1
+          key: sre-commercial-v4-${{ runner.os }}-open-models-v2
 
-      - name: Require private bundle and sealed identity configuration
+      - name: Download frozen encrypted SRE v4 seal
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v4-encrypted-private-seal
+          path: ${{ runner.temp }}/sre-v4-seal
+          github-token: ${{ github.token }}
+          repository: FPC-effortless/veritas
+          run-id: 33044205900
+
+      - name: Verify ciphertext and decrypt frozen private release
         shell: bash
+        env:
+          VERITAS_SRE_SEAL_PRIVATE_KEY_PEM: ${{ secrets.VERITAS_SRE_SEAL_PRIVATE_KEY_PEM }}
         run: |
           set -euo pipefail
-          for name in \
-            VERITAS_SRE_PRIVATE_BUNDLE_URL \
-            VERITAS_SRE_PRIVATE_BUNDLE_SHA256 \
-            VERITAS_SRE_PRIVATE_CANDIDATE_ID \
-            VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID \
-            VERITAS_SRE_PRIVATE_REPORT_ID \
-            VERITAS_SRE_PRIVATE_PANEL_ID \
-            VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID
-          do
-            test -n "${!name}" || { echo "$name is not configured" >&2; exit 1; }
-          done
-
-      - name: Retrieve checksum-pinned private SRE v4 bundle into ephemeral runner storage
-        shell: bash
-        run: |
-          set -euo pipefail
+          seal_root="$RUNNER_TEMP/sre-v4-seal"
           private_root="$RUNNER_TEMP/veritas-sre-private"
           mkdir -p "$private_root"
-          python - <<'PY'
-          import os
-          import urllib.request
-          from pathlib import Path
 
-          target = Path(os.environ["RUNNER_TEMP"]) / "veritas-sre-private" / "bundle.zip"
-          request = urllib.request.Request(
-              os.environ["VERITAS_SRE_PRIVATE_BUNDLE_URL"],
-              headers={"User-Agent": "Veritas-Private-Evaluator/0.10"},
-          )
-          with urllib.request.urlopen(request, timeout=120) as response:  # nosec B310 - operator-configured private bundle URL
-              target.write_bytes(response.read())
-          PY
-          actual="$(sha256sum "$private_root/bundle.zip" | awk '{print $1}')"
-          test "$actual" = "$VERITAS_SRE_PRIVATE_BUNDLE_SHA256" || {
-            echo "private bundle checksum mismatch" >&2
+          test -n "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" || {
+            echo "VERITAS_SRE_SEAL_PRIVATE_KEY_PEM is not configured" >&2
             exit 1
           }
-          unzip -q "$private_root/bundle.zip" -d "$private_root/bundle"
+          test -f "$seal_root/private-release.zip.enc"
+          test -f "$seal_root/data-key.bin.enc"
 
+          test "$(sha256sum "$seal_root/private-release.zip.enc" | awk '{print $1}')" = \
+            "1a230dec590184f4ce0244965ce8a52727a84884f663ad2aaa90f338e2aeaf1d"
+          test "$(sha256sum "$seal_root/data-key.bin.enc" | awk '{print $1}')" = \
+            "836d0a52551b91094420bc6ec0bf58239162e8223acc0c3be15bf7f7c5778790"
+
+          key_file="$private_root/seal-private.pem"
+          data_key="$private_root/data-key.bin"
+          bundle="$private_root/private-release.zip"
+          printf '%s\n' "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" > "$key_file"
+          chmod 600 "$key_file"
+
+          cleanup_secret_material() {
+            rm -f "$key_file" "$data_key"
+          }
+          trap cleanup_secret_material EXIT
+
+          openssl pkeyutl -decrypt \
+            -inkey "$key_file" \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in "$seal_root/data-key.bin.enc" \
+            -out "$data_key"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in "$seal_root/private-release.zip.enc" \
+            -out "$bundle" \
+            -pass file:"$data_key"
+
+          test "$(sha256sum "$bundle" | awk '{print $1}')" = \
+            "531d1358883ec399add640c3519c31a36f6c93981796d7a3e8b37e2a7ace0d2a"
+
+          mkdir -p "$private_root/bundle"
+          unzip -q "$bundle" -d "$private_root/bundle"
           qualification="$(find "$private_root/bundle" -type f -name qualification.json -path '*/sre-v4/*' -print -quit)"
-          test -n "$qualification" || { echo "sealed SRE v4 qualification.json not found in bundle" >&2; exit 1; }
+          test -n "$qualification" || {
+            echo "sealed SRE v4 qualification.json not found after decryption" >&2
+            exit 1
+          }
           echo "VERITAS_SRE_QUALIFICATION_PATH=$qualification" >> "$GITHUB_ENV"
+
+      - name: Retain ciphertext-only frozen seal
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-encrypted-private-seal-retained
+          path: |
+            ${{ runner.temp }}/sre-v4-seal/private-release.zip.enc
+            ${{ runner.temp }}/sre-v4-seal/data-key.bin.enc
+            ${{ runner.temp }}/sre-v4-seal/SHA256SUMS
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Verify exact sealed v4 release before model execution
         run: |
@@ -108,43 +142,44 @@ jobs:
               expected_private_release_manifest_id=os.environ["VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"],
           )
           assert release.candidate.version == "sre-v4"
+          assert len(release.private_release_manifest.private_test_scenario_ids) == 30
           print("exact sealed private SRE v4 release verified")
           PY
 
-      - name: Evaluate open models on the exact sealed private panel
+      - name: Evaluate Qwen2.5 0.5B on exact sealed panel
         shell: bash
         run: |
           set -euo pipefail
-          qualification="$VERITAS_SRE_QUALIFICATION_PATH"
           private_reports="$RUNNER_TEMP/veritas-sre-private/operator-reports"
           mkdir -p "$private_reports" results/public-model-evidence
-
-          common_args=(
-            --qualification "$qualification"
-            --expected-candidate-id "$VERITAS_SRE_PRIVATE_CANDIDATE_ID"
-            --expected-evidence-manifest-id "$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID"
-            --expected-report-id "$VERITAS_SRE_PRIVATE_REPORT_ID"
-            --expected-panel-id "$VERITAS_SRE_PRIVATE_PANEL_ID"
-            --expected-private-release-manifest-id "$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"
-          )
-
           python tools/run_sre_open_model_evaluation.py \
-            "${common_args[@]}" \
+            --qualification "$VERITAS_SRE_QUALIFICATION_PATH" \
             --model Qwen/Qwen2.5-0.5B-Instruct \
+            --expected-candidate-id "$VERITAS_SRE_PRIVATE_CANDIDATE_ID" \
+            --expected-evidence-manifest-id "$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID" \
+            --expected-report-id "$VERITAS_SRE_PRIVATE_REPORT_ID" \
+            --expected-panel-id "$VERITAS_SRE_PRIVATE_PANEL_ID" \
+            --expected-private-release-manifest-id "$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID" \
+            --max-new-tokens 32 \
             --output "$private_reports/qwen2.5-0.5b.json" \
             --public-output results/public-model-evidence/qwen2.5-0.5b.json
 
+      - name: Evaluate SmolLM2 360M on exact sealed panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_reports="$RUNNER_TEMP/veritas-sre-private/operator-reports"
           python tools/run_sre_open_model_evaluation.py \
-            "${common_args[@]}" \
-            --model Qwen/Qwen2.5-1.5B-Instruct \
-            --output "$private_reports/qwen2.5-1.5b.json" \
-            --public-output results/public-model-evidence/qwen2.5-1.5b.json
-
-          python tools/run_sre_open_model_evaluation.py \
-            "${common_args[@]}" \
-            --model HuggingFaceTB/SmolLM2-1.7B-Instruct \
-            --output "$private_reports/smollm2-1.7b.json" \
-            --public-output results/public-model-evidence/smollm2-1.7b.json
+            --qualification "$VERITAS_SRE_QUALIFICATION_PATH" \
+            --model HuggingFaceTB/SmolLM2-360M-Instruct \
+            --expected-candidate-id "$VERITAS_SRE_PRIVATE_CANDIDATE_ID" \
+            --expected-evidence-manifest-id "$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID" \
+            --expected-report-id "$VERITAS_SRE_PRIVATE_REPORT_ID" \
+            --expected-panel-id "$VERITAS_SRE_PRIVATE_PANEL_ID" \
+            --expected-private-release-manifest-id "$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID" \
+            --max-new-tokens 32 \
+            --output "$private_reports/smollm2-360m.json" \
+            --public-output results/public-model-evidence/smollm2-360m.json
 
       - name: Aggregate only sanitized exact-panel reports
         run: |
