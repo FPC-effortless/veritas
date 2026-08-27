@@ -88,7 +88,7 @@ from veritas_sre_prime.taskset import _parse_prediction
 
 
 def load_environment() -> vf.Environment:
-    """Compatibility-only v0 bridge; new integrations should use SRETaskset."""
+    """compatibility-only v0 bridge; new integrations should use SRETaskset."""
     records = json.loads(
         Path(__file__).with_name("private_tasks.json").read_text(encoding="utf-8")
     )
