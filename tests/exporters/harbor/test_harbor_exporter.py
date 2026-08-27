@@ -14,7 +14,14 @@ from investigation_world.exporters.harbor import (
     render_harbor_package,
     replay_harbor_trajectory,
 )
-from investigation_world.exporters.harbor.mcp_service import _tool_wire_result
+from investigation_world.exporters.harbor.mcp_service import (
+    _tool_wire_result,
+    _validate_runtime_control_url,
+)
+from investigation_world.exporters.harbor.verifier import (
+    HarborVerificationResult,
+    _write_outputs,
+)
 from investigation_world.mcp_compiler import MCPToolSourceKind, compile_mcp_surface
 from investigation_world.operational.models import (
     ActionKind,
@@ -166,10 +173,9 @@ def test_harbor_task_and_compose_enforce_native_mcp_and_separate_verifier_bounda
     ]
 
     compose = rendered["environment/docker-compose.yaml"].payload.decode()
-    main_block, runtime_block = compose.split("  runtime-control:\n", maxsplit=1)
-    main_service = main_block.split("  mcp-server:\n", maxsplit=1)[0]
-    mcp_service = main_block.split("  mcp-server:\n", maxsplit=1)[1]
-    runtime_service = runtime_block.split("\nnetworks:\n", maxsplit=1)[0]
+    main_service, after_main = compose.split("\n  mcp-server:\n", maxsplit=1)
+    mcp_service, after_mcp = after_main.split("\n  runtime-control:\n", maxsplit=1)
+    runtime_service = after_mcp.split("\nnetworks:\n", maxsplit=1)[0]
     assert "      context: ./main\n" in main_service
     assert "      context: .\n" not in main_service
     assert "      - runtime-control\n" not in main_service
@@ -241,6 +247,43 @@ def test_mcp_wire_response_does_not_publish_reward_or_private_runtime_metadata()
     assert "0.9375" not in serialized
     assert "private-digest" not in serialized
     assert "reward" not in serialized
+
+
+def test_mcp_wire_does_not_wrap_non_object_observations() -> None:
+    wire = _tool_wire_result({"observation": ["a", "b"], "failure": None})
+    assert "structuredContent" not in wire
+    assert wire["content"][0]["text"] == '["a","b"]'
+
+
+def test_runtime_control_url_is_fixed_to_private_compose_service() -> None:
+    assert (
+        _validate_runtime_control_url("http://runtime-control:8081")
+        == "http://runtime-control:8081"
+    )
+    for value in (
+        "file:///tmp/runtime.sock",
+        "http://localhost:8081",
+        "http://runtime-control:8082",
+        "https://runtime-control:8081",
+        "http://runtime-control:8081/tool",
+    ):
+        with pytest.raises(ValueError, match="runtime-control"):
+            _validate_runtime_control_url(value)
+
+
+def test_verifier_reward_output_round_trips_native_float_exactly(tmp_path: Path) -> None:
+    native_reward = 0.12345678912345678
+    reward_path = tmp_path / "reward.txt"
+    details_path = tmp_path / "details.json"
+    result = HarborVerificationResult(
+        reward=native_reward,
+        reward_components={"outcome": native_reward},
+        final_result={"reward": native_reward},
+        replayed_tool_calls=1,
+    )
+    _write_outputs(result, reward_path, details_path)
+    assert float(reward_path.read_text().strip()) == native_reward
+    assert json.loads(details_path.read_text())["reward"] == native_reward
 
 
 def test_export_materializes_only_declared_files_and_refuses_stale_output(
