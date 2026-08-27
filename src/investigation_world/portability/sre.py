@@ -18,7 +18,7 @@ from investigation_world.portability.models import (
     PortableVisibility,
 )
 from investigation_world.portability.validation import require_portable_manifest
-from investigation_world.qualification import QualificationSplit
+from investigation_world.qualification import QualificationScenario, QualificationSplit
 
 SRE_PORTABLE_ENVIRONMENT_ID = "veritas.sre.causal-classification"
 SRE_PORTABLE_SKU = "Veritas SRE Evaluation Pack v1"
@@ -29,17 +29,40 @@ def _portable_split(split: QualificationSplit) -> PortableSplit:
     return PortableSplit(split.value)
 
 
-def _task_seed(public_digest: str) -> int:
-    return int(stable_hash({"public_digest": public_digest})[:16], 16)
+def _portable_source_digest(
+    release: SealedSRERelease,
+    scenario: QualificationScenario,
+) -> str:
+    """Opaque, collision-resistant source identity for portable task projection.
+
+    Canonical scenario IDs are required to distinguish sealed cases that intentionally share the
+    same public digest, but they are never copied into a portable task record. Only this one-way hash
+    is used to derive portable task/seed identity.
+    """
+
+    return stable_hash(
+        {
+            "schema": "veritas-portable-sre-source-v1",
+            "candidate_id": release.candidate.candidate_id,
+            "candidate_version": release.candidate.version,
+            "scenario_id": scenario.scenario_id,
+            "public_digest": scenario.public_digest,
+        }
+    )
+
+
+def _task_seed(source_digest: str) -> int:
+    return int(stable_hash({"portable_source_digest": source_digest})[:16], 16)
 
 
 def _portable_task(release: SealedSRERelease, scenario_index: int) -> PortableTask:
     scenario = release.candidate.scenarios[scenario_index]
-    seed = _task_seed(scenario.public_digest)
+    source_digest = _portable_source_digest(release, scenario)
+    seed = _task_seed(source_digest)
     task_id = portable_task_id(
         environment_id=SRE_PORTABLE_ENVIRONMENT_ID,
         environment_version=release.candidate.version,
-        source_digest=scenario.public_digest,
+        source_digest=source_digest,
         split=scenario.split.value,
         seed=seed,
     )
@@ -54,6 +77,11 @@ def _portable_task(release: SealedSRERelease, scenario_index: int) -> PortableTa
         verifier_reference=SRE_PORTABLE_VERIFIER_ID,
         metadata={"source_identity_exposed": False, "ground_truth_exposed": False},
     )
+
+
+def _scenario_sort_key(item: tuple[int, QualificationScenario]) -> tuple[str, str]:
+    _, scenario = item
+    return scenario.public_digest, scenario.scenario_id
 
 
 def build_sre_portable_manifest(
@@ -103,10 +131,10 @@ def build_sre_portable_manifest(
     ]
 
     if visibility == PortableVisibility.PRIVATE_OPERATOR:
-        selected = sorted(indexed, key=lambda item: item[1].public_digest)
+        selected = sorted(indexed, key=_scenario_sort_key)
         private_ids_included = True
     else:
-        selected = sorted(public_candidates, key=lambda item: item[1].public_digest)[:public_sample_limit]
+        selected = sorted(public_candidates, key=_scenario_sort_key)[:public_sample_limit]
         private_ids_included = False
 
     visible_tasks = [_portable_task(release, index) for index, _ in selected]
