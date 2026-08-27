@@ -35,7 +35,8 @@ def test_prime_public_package_has_hub_metadata_and_balanced_synthetic_tasks() ->
     pyproject = tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert pyproject["project"]["name"] == "veritas-sre-open"
     assert pyproject["project"]["version"] == "0.11.0"
-    assert pyproject["project"]["license"] == "Apache-2.0"
+    assert pyproject["project"]["license"] == {"file": "LICENSE"}
+    assert "Apache License" in (PACKAGE_ROOT / "LICENSE").read_text(encoding="utf-8")
     assert any(dep.startswith("verifiers") for dep in pyproject["project"]["dependencies"])
     assert pyproject["tool"]["verifiers"]["eval"] == {
         "num_examples": 12,
