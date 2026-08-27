@@ -22,12 +22,7 @@ def near_duplicate_components(
     jaccard_threshold: float = 0.90,
     simhash_distance: int = 3,
 ) -> list[list[QualificationScenario]]:
-    """Return transitive near-duplicate components independent of the current split.
-
-    Qualification must partition *clusters* rather than individual scenarios; otherwise two
-    semantically equivalent scenarios can be deterministically assigned to different splits and
-    then correctly fail the contamination gate.
-    """
+    """Return transitive near-duplicate components independent of the current split."""
     if not scenarios:
         return []
     parent = list(range(len(scenarios)))
@@ -108,9 +103,6 @@ def cluster_disjoint_split_map(
     targets = _targets(len(scenarios), train_fraction=train_fraction, dev_fraction=dev_fraction)
     loads = {split: 0 for split in targets}
     assignments: dict[str, QualificationSplit] = {}
-
-    # Seed every split with one independent component. Put the largest component in train, then
-    # private test, then dev; this avoids a tiny private panel when one boilerplate family is large.
     seeded = [
         QualificationSplit.TRAIN,
         QualificationSplit.PRIVATE_TEST,
@@ -146,16 +138,16 @@ def stratified_cluster_disjoint_split_map(
     stratum_metadata_key: str,
     minimum_private_scenarios_per_stratum: int = 5,
     minimum_train_scenarios_per_stratum: int = 1,
+    minimum_private_scenarios_total: int = 0,
+    minimum_dev_scenarios_total: int = 1,
     train_fraction: float = 0.60,
     dev_fraction: float = 0.20,
 ) -> dict[str, QualificationSplit]:
-    """Partition duplicate clusters while deterministically protecting label/stratum coverage.
+    """Partition duplicate clusters while protecting stratum and panel-size requirements.
 
-    The split is allowed to use evaluator-only stratum metadata because it is constructed before
-    any model or policy result is inspected. Near-duplicate components remain atomic, so this does
-    not trade class balance for contamination. If the source pool lacks enough examples of a
-    stratum, the function makes the best deterministic allocation and the qualification coverage
-    gate remains responsible for rejecting the candidate.
+    Evaluator-only stratum metadata may be used before model/policy results are inspected. Whole
+    near-duplicate components remain atomic. If the source pool cannot meet a requested minimum,
+    the best deterministic allocation is produced and qualification still rejects the candidate.
     """
     components = near_duplicate_components(scenarios)
     if len(components) < 3:
@@ -165,20 +157,14 @@ def stratified_cluster_disjoint_split_map(
 
     component_counts = [_component_strata(component, stratum_metadata_key) for component in components]
     all_strata = sorted(
-        {
-            str(item.metadata.get(stratum_metadata_key, "<missing>"))
-            for item in scenarios
-        }
+        {str(item.metadata.get(stratum_metadata_key, "<missing>")) for item in scenarios}
     )
     targets = _targets(len(scenarios), train_fraction=train_fraction, dev_fraction=dev_fraction)
     loads = {split: 0 for split in targets}
     assignments: dict[str, QualificationSplit] = {}
     unassigned = set(range(len(components)))
 
-    def allocate_for_deficits(
-        split: QualificationSplit,
-        minimum_per_stratum: int,
-    ) -> None:
+    def allocate_for_deficits(split: QualificationSplit, minimum_per_stratum: int) -> None:
         if minimum_per_stratum <= 0:
             return
         deficits = {stratum: minimum_per_stratum for stratum in all_strata}
@@ -196,59 +182,50 @@ def stratified_cluster_disjoint_split_map(
                 )
                 size = len(components[index])
                 density = covered / max(size, 1)
-                # max() prefers high useful support/density, then smaller clusters, then a stable key.
                 return (covered, strata_covered, density, -size, _component_key(components[index]))
 
             index = max(unassigned, key=support)
             useful = support(index)[0]
             if useful <= 0:
                 break
-            _assign_component(
-                components[index],
-                split,
-                assignments=assignments,
-                loads=loads,
-            )
+            _assign_component(components[index], split, assignments=assignments, loads=loads)
             unassigned.remove(index)
             for stratum, count in component_counts[index].items():
                 if stratum in deficits:
                     deficits[stratum] = max(0, deficits[stratum] - count)
 
-    # Protect private support first, then enough labelled training support for the public baseline.
+    def allocate_until_total(split: QualificationSplit, minimum_total: int) -> None:
+        while unassigned and loads[split] < minimum_total:
+            # Prefer the smallest remaining component to minimize unnecessary overshoot while
+            # preserving a deterministic tie break.
+            index = min(
+                unassigned,
+                key=lambda item: (len(components[item]), _component_key(components[item])),
+            )
+            _assign_component(components[index], split, assignments=assignments, loads=loads)
+            unassigned.remove(index)
+
+    # Protect hidden-test class support first, then labelled train support.
     allocate_for_deficits(QualificationSplit.PRIVATE_TEST, minimum_private_scenarios_per_stratum)
     allocate_for_deficits(QualificationSplit.TRAIN, minimum_train_scenarios_per_stratum)
 
-    # Every split must still contain at least one independent component.
-    if loads[QualificationSplit.DEV] == 0 and unassigned:
-        index = min(unassigned, key=lambda i: _component_key(components[i]))
-        _assign_component(
-            components[index],
-            QualificationSplit.DEV,
-            assignments=assignments,
-            loads=loads,
-        )
-        unassigned.remove(index)
-    if loads[QualificationSplit.TRAIN] == 0 and unassigned:
-        index = min(unassigned, key=lambda i: _component_key(components[i]))
-        _assign_component(
-            components[index],
-            QualificationSplit.TRAIN,
-            assignments=assignments,
-            loads=loads,
-        )
-        unassigned.remove(index)
-    if loads[QualificationSplit.PRIVATE_TEST] == 0 and unassigned:
-        index = min(unassigned, key=lambda i: _component_key(components[i]))
-        _assign_component(
-            components[index],
-            QualificationSplit.PRIVATE_TEST,
-            assignments=assignments,
-            loads=loads,
-        )
-        unassigned.remove(index)
+    # Reserve enough independent development material before filling the private total.
+    allocate_until_total(QualificationSplit.DEV, minimum_dev_scenarios_total)
+    allocate_until_total(QualificationSplit.PRIVATE_TEST, minimum_private_scenarios_total)
 
-    # Fill toward the requested global fractions without breaking the protected coverage above.
-    for index in sorted(unassigned, key=lambda i: _component_key(components[i])):
+    # Ensure no split is empty even when requested minima were zero.
+    for split in (
+        QualificationSplit.TRAIN,
+        QualificationSplit.DEV,
+        QualificationSplit.PRIVATE_TEST,
+    ):
+        if loads[split] == 0 and unassigned:
+            index = min(unassigned, key=lambda item: _component_key(components[item]))
+            _assign_component(components[index], split, assignments=assignments, loads=loads)
+            unassigned.remove(index)
+
+    # Remaining clusters go to the most under-target split. Protected minima are never undone.
+    for index in sorted(unassigned, key=lambda item: _component_key(components[item])):
         component = components[index]
         size = len(component)
         split = min(
@@ -270,6 +247,8 @@ def repartition_candidate_by_near_duplicates(
     stratum_metadata_key: str | None = None,
     minimum_private_scenarios_per_stratum: int = 0,
     minimum_train_scenarios_per_stratum: int = 0,
+    minimum_private_scenarios_total: int = 0,
+    minimum_dev_scenarios_total: int = 1,
 ) -> tuple[QualificationCandidate, dict[str, QualificationSplit]]:
     if stratum_metadata_key:
         mapping = stratified_cluster_disjoint_split_map(
@@ -277,8 +256,10 @@ def repartition_candidate_by_near_duplicates(
             stratum_metadata_key=stratum_metadata_key,
             minimum_private_scenarios_per_stratum=minimum_private_scenarios_per_stratum,
             minimum_train_scenarios_per_stratum=minimum_train_scenarios_per_stratum,
+            minimum_private_scenarios_total=minimum_private_scenarios_total,
+            minimum_dev_scenarios_total=minimum_dev_scenarios_total,
         )
-        split_protocol = "near-duplicate-component-disjoint-stratified-v2"
+        split_protocol = "near-duplicate-component-disjoint-stratified-v3"
     else:
         mapping = cluster_disjoint_split_map(candidate.scenarios)
         split_protocol = "near-duplicate-component-disjoint-v1"
@@ -298,6 +279,8 @@ def repartition_candidate_by_near_duplicates(
                 "stratum_metadata_key": stratum_metadata_key,
                 "minimum_private_scenarios_per_stratum": minimum_private_scenarios_per_stratum,
                 "minimum_train_scenarios_per_stratum": minimum_train_scenarios_per_stratum,
+                "minimum_private_scenarios_total": minimum_private_scenarios_total,
+                "minimum_dev_scenarios_total": minimum_dev_scenarios_total,
             }
         )
     return candidate.model_copy(update={"scenarios": scenarios, "metadata": metadata}), mapping
