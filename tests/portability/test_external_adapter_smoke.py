@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import subprocess
 import sys
 from pathlib import Path
 
@@ -112,47 +113,74 @@ def _manifest(monkeypatch):
     )
 
 
-def test_generated_hud_package_loads_with_current_sdk(tmp_path: Path, monkeypatch) -> None:
+def _clean_install(package_root: Path, install_root: Path) -> Path:
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--target",
+            str(install_root),
+            str(package_root),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return install_root
+
+
+def test_generated_hud_package_clean_installs_and_loads_with_current_sdk(
+    tmp_path: Path, monkeypatch
+) -> None:
     pytest.importorskip("hud")
     release, manifest = _manifest(monkeypatch)
-    package_root = tmp_path / "hud"
+    package_root = tmp_path / "hud-src"
     build_hud_sre_package(
         package_root,
         manifest=manifest,
         private_tasks=build_sre_private_portable_tasks(release),
     )
+    install_root = _clean_install(package_root, tmp_path / "hud-install")
 
-    sys.path.insert(0, str(package_root))
+    sys.path.insert(0, str(install_root))
     try:
         env_module = importlib.import_module("env")
         tasks_module = importlib.import_module("tasks")
         assert env_module.env is not None
         assert len(tasks_module.tasks) == 1
+        assert Path(tasks_module.__file__).resolve().is_relative_to(install_root.resolve())
     finally:
-        sys.path.remove(str(package_root))
+        sys.path.remove(str(install_root))
         sys.modules.pop("env", None)
         sys.modules.pop("tasks", None)
 
 
-def test_generated_prime_package_loads_with_current_v1_sdk(tmp_path: Path, monkeypatch) -> None:
+def test_generated_prime_package_clean_installs_and_loads_with_current_v1_sdk(
+    tmp_path: Path, monkeypatch
+) -> None:
     pytest.importorskip("verifiers.v1")
     release, manifest = _manifest(monkeypatch)
-    package_root = tmp_path / "prime"
+    package_root = tmp_path / "prime-src"
     build_prime_sre_package(
         package_root,
         manifest=manifest,
         private_tasks=build_sre_private_portable_tasks(release),
     )
+    install_root = _clean_install(package_root, tmp_path / "prime-install")
 
-    sys.path.insert(0, str(package_root))
+    sys.path.insert(0, str(install_root))
     try:
         module = importlib.import_module("veritas_sre_prime")
         taskset = module.SRETaskset()
         tasks = taskset.load()
         assert len(tasks) == 1
         assert tasks[0].data.portable_task_id.startswith("PTASK-")
+        assert Path(module.__file__).resolve().is_relative_to(install_root.resolve())
     finally:
-        sys.path.remove(str(package_root))
+        sys.path.remove(str(install_root))
         for name in list(sys.modules):
             if name == "veritas_sre_prime" or name.startswith("veritas_sre_prime."):
                 sys.modules.pop(name, None)
