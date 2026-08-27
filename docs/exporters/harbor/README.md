@@ -24,13 +24,15 @@ Separate Harbor verifier (started after environment collection)
 
 The `main` Harbor service is attached only to `agent-mcp`. The MCP service bridges `agent-mcp` and `runtime-control`. The runtime-control service is attached only to `runtime-control`, has no host-published port, and exposes only health plus shared MCP-dispatch execution. It exposes no verification endpoint.
 
+Each Compose service also has a disjoint Docker build context. In particular, `main` builds from `environment/main/`, so the agent image build context does not include `environment/runtime-control/contract.json` or any other operational-private file.
+
 The separate verifier is a Harbor `environment_mode = "separate"` verifier with a `no-network` baseline. Harbor collects `/tmp/veritas-runtime/trajectory.jsonl` directly from the runtime-control sidecar and rematerializes it at the same path in the verifier container.
 
 ## Public/private split
 
 Agent-public generated files contain only the `PortablePublicContract`, instructions, immutable image references, and the MCP/network topology. The full `PortableOperationalContract` is emitted only into:
 
-- `environment/runtime-control/contract.json`, whose derived image is isolated from the agent network;
+- `environment/runtime-control/contract.json`, whose derived image and build context are isolated from the agent network and agent image;
 - `tests/contract.json`, whose derived image is used only by Harbor's separate verifier.
 
 The MCP sidecar recompiles its tool catalog from `PortablePublicContract` using `compile_mcp_surface`. The runtime-control service also compiles the same surface and executes calls exclusively through `dispatch_mcp_tool` over `PortableOperationalRuntime`. The MCP wire response returns only the portable observation; reward, reward components, state digests, and verifier metadata are not forwarded to the evaluated agent.
@@ -80,8 +82,9 @@ No reward formula is implemented in the Harbor exporter.
   task.toml
   provenance.json
   environment/
-    Dockerfile
     docker-compose.yaml
+    main/
+      Dockerfile
     mcp-server/
       Dockerfile
       public-contract.json
@@ -94,7 +97,7 @@ No reward formula is implemented in the Harbor exporter.
     test.sh
 ```
 
-`environment/docker-compose.yaml` is the required Harbor compose path and the primary service remains named `main`. `task.toml` declares the MCP sidecar as a `streamable-http` server at `http://mcp-server:8000/mcp`.
+`environment/docker-compose.yaml` is the Harbor compose definition and the primary service is named `main`. Its build context is `./main`; the MCP and runtime-control services use `./mcp-server` and `./runtime-control` respectively. `task.toml` declares the MCP sidecar as a `streamable-http` server at `http://mcp-server:8000/mcp`.
 
 ## Usage
 
@@ -117,13 +120,14 @@ result = export_harbor_package(
 print(result.package_id)
 ```
 
-Run the resulting task with a Harbor environment provider that supports Docker Compose and MCP sidecars. The local Docker provider is the compatibility baseline. Do not replace the digest-pinned image references with mutable tags for sealed evaluations.
+Run the resulting task with a Harbor environment provider that supports Docker Compose and MCP sidecars. Harbor's local Docker environment is the compatibility baseline; current cloud providers generally do not support multi-container Compose tasks. Do not replace the digest-pinned image references with mutable tags for sealed evaluations.
 
 ## Falsifiers covered by tests
 
 The owned tests fail if:
 
 - evaluator-private markers enter agent-public package files;
+- the agent image build context expands to include the private runtime-control subtree;
 - mutable container image tags are accepted;
 - `main` joins the runtime-control network or runtime-control publishes a host port;
 - Harbor does not use a separate verifier;
