@@ -1,10 +1,6 @@
 name: SRE Pilot Dress Rehearsal
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/sre-pilot-dress-rehearsal.yml"
-      - "tools/serve_sre_openai_compatible_rehearsal.py"
   workflow_dispatch:
 
 permissions:
