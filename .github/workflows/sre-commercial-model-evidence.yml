@@ -1,9 +1,6 @@
 name: SRE Commercial Model Evidence
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/sre-commercial-model-evidence.yml"
   workflow_dispatch:
 
 permissions:
