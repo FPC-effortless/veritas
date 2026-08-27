@@ -25,6 +25,10 @@ def _validate_relative_path(value: str) -> str:
     return normalized
 
 
+def _path_is_within(path: str, root: str) -> bool:
+    return path == root or path.startswith(f"{root}/")
+
+
 class SandboxFailureOrigin(StrEnum):
     REQUEST = "request"
     POLICY = "policy"
@@ -149,6 +153,13 @@ class SandboxCreateRequest(BaseModel):
             raise ValueError("secret aliases must be unique")
         if len(set(opaque_ids)) != len(opaque_ids):
             raise ValueError("secret opaque ids must be unique")
+        for asset in self.assets:
+            if asset.read_only and any(
+                _path_is_within(asset.mount_path, root) for root in self.writable_paths
+            ):
+                raise ValueError(
+                    f"read-only asset mount must not be inside a writable path: {asset.mount_path}"
+                )
         return self
 
 
