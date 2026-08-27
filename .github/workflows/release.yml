@@ -2,41 +2,92 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+    paths:
+      - "pyproject.toml"
+      - "README.md"
+      - "BUILD_STATUS.md"
+      - "LICENSE"
+      - "LICENSING.md"
+      - "release/**"
+      - "tools/verify_release_identity.py"
+      - "tools/build_release_manifest.py"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
   packages: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Resolve release identity
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+      should_release: ${{ steps.identity.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify repository release identity
+        run: python tools/verify_release_identity.py
+      - name: Resolve version and release state
+        id: identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          tag="v${version}"
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != "$tag" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match repository release identity $tag" >&2
+            exit 1
+          fi
+
+          should_release=true
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            should_release=false
+            echo "GitHub release $tag already exists; release publication is idempotently skipped."
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+
   validate-release:
     name: Validate release
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    needs: prepare
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-      - name: Verify tag matches package version
+      - name: Validate Python package and release identity
         run: |
-          PACKAGE_VERSION=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          test "$TAG_VERSION" = "$PACKAGE_VERSION" || {
-            echo "Tag version $TAG_VERSION does not match pyproject version $PACKAGE_VERSION" >&2
-            exit 1
-          }
-      - name: Test Python package
-        run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip build twine
           python -m pip install -e ".[test]"
-          python -m compileall -q src
+          python tools/verify_release_identity.py
+          python -m compileall -q src tools
           python -m pytest tests/
+          python -m build
+          python -m twine check dist/*
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -51,12 +102,20 @@ jobs:
           pnpm exec tsc --noEmit
           pnpm build
 
-  python-release:
-    name: Build and publish GitHub release assets
+  publish-release:
+    name: Publish immutable procurement release
+    if: needs.prepare.outputs.should_release == 'true'
     runs-on: ubuntu-latest
-    needs: validate-release
+    needs:
+      - prepare
+      - validate-release
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -64,19 +123,21 @@ jobs:
       - name: Build Python distributions
         run: |
           python -m pip install --upgrade pip build twine
+          python tools/verify_release_identity.py
           python -m build
           python -m twine check dist/*
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes --verify-tag
 
-  container-release:
-    name: Publish container to GHCR
-    runs-on: ubuntu-latest
-    needs: validate-release
-    steps:
-      - uses: actions/checkout@v4
+      - name: Build CycloneDX SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv .release-sbom
+          .release-sbom/bin/python -m pip install --upgrade pip
+          .release-sbom/bin/python -m pip install dist/*.whl cyclonedx-bom
+          .release-sbom/bin/cyclonedx-py environment \
+            --output-format JSON \
+            --output-file sbom.cdx.json
+
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -84,25 +145,87 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Normalize GHCR image name
+      - name: Resolve image name
         id: image
         shell: bash
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-      - name: Generate image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.image.outputs.name }}
-          tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-      - name: Build and push image
+      - name: Build and push immutable release image
+        id: container
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ env.VERSION }}
+            ${{ steps.image.outputs.name }}:${{ env.TAG }}
+          labels: |
+            org.opencontainers.image.title=Veritas
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build release provenance
+        env:
+          CONTAINER_IMAGE: ${{ steps.image.outputs.name }}
+          CONTAINER_DIGEST: ${{ steps.container.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/build_release_manifest.py \
+            --version "$VERSION" \
+            --tag "$TAG" \
+            --source-commit "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-run "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --container-image "$CONTAINER_IMAGE" \
+            --container-digest "$CONTAINER_DIGEST" \
+            --dist-dir dist \
+            --sbom sbom.cdx.json \
+            --portability-identities "release/$VERSION/PORTABILITY_IDENTITIES.json" \
+            --license LICENSE \
+            --licensing-policy LICENSING.md \
+            --output provenance.json
+
+      - name: Generate release checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            dist/* \
+            sbom.cdx.json \
+            provenance.json \
+            "release/$VERSION/PORTABILITY_IDENTITIES.json" \
+            LICENSE \
+            LICENSING.md \
+            | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            dist/*
+            SHA256SUMS
+            sbom.cdx.json
+            provenance.json
+            "release/$VERSION/PORTABILITY_IDENTITIES.json"
+            LICENSE
+            LICENSING.md
+          )
+
+          if git show-ref --tags --verify --quiet "refs/tags/$TAG"; then
+            tag_args=(--verify-tag)
+          else
+            tag_args=(--target "$GITHUB_SHA")
+          fi
+
+          gh release create "$TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Veritas $VERSION" \
+            --notes-file "release/$VERSION/RELEASE_NOTES.md" \
+            "${tag_args[@]}"

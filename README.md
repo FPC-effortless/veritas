@@ -6,7 +6,7 @@ Veritas builds persistent operational substrates, capability contracts, calibrat
 
 The product is broader than any one benchmark family. CompanyWorld remains the first commercial evaluation wedge. Unified Operational Worlds provides one execution and verification architecture across finance/spreadsheets, enterprise operations, DevOps/incident response, investigation/OSINT, and GIS. ProjectWorld adds a separate long-horizon project-delivery environment family under the same Veritas product.
 
-**Veritas 0.9 keeps the 4,480-case operational distribution and seven-dimensional verifier contract from 0.8, but adds real native artifacts behind the runtime.** Successful agent actions can now mutate XLSX workbooks, SQLite enterprise replicas, Kubernetes-style infrastructure bundles, heterogeneous OSINT evidence corpora, and GeoJSON/Shapely/pyproj workspaces. Native artifact checks feed back into the existing hidden target-state verifier, so correct API verbs are not sufficient when the actual artifact is wrong.
+**Veritas 0.11.0 is the commercial-portability release.** It retains the native-artifact fidelity introduced in 0.9, incorporates the 0.10 benchmark-qualification and experimental-integrity gates, and adds a vendor-neutral portability contract plus standalone HUD and Prime Intellect distribution for qualified environments. The first exact portability proof is the frozen, qualified SRE v4 evaluation pack.
 
 See:
 
@@ -15,7 +15,15 @@ See:
 - [`docs/operational-production-scale.md`](docs/operational-production-scale.md) — production distribution contract;
 - [`docs/domain-realism-v08.md`](docs/domain-realism-v08.md) — stateful/deep-domain semantics;
 - [`docs/native-artifact-fidelity-v09.md`](docs/native-artifact-fidelity-v09.md) — native artifact execution contract;
-- [`docs/projectworld-procedural-distribution.md`](docs/projectworld-procedural-distribution.md) — long-horizon construction distribution.
+- [`docs/projectworld-procedural-distribution.md`](docs/projectworld-procedural-distribution.md) — long-horizon construction distribution;
+- [`docs/portability/README.md`](docs/portability/README.md) — 0.11 vendor-neutral HUD/Prime portability contract;
+- [`LICENSING.md`](LICENSING.md) — public, private-benchmark, customer-output, and generated-data licensing policy.
+
+## Current release — 0.11.0
+
+The canonical software release is **Veritas 0.11.0** / tag **`v0.11.0`**. Buyer-facing release artifacts pin the Python distribution hashes, container digest, SRE qualification identities, portable manifest identity, HUD package identity, Prime package identity, SBOM, and provenance record. The release process is defined in [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+The 0.11 portability layer does not require buyers to adopt the full Veritas repository or a Veritas-hosted backend. It exports qualified environments through a vendor-neutral manifest and deterministic runtime contract, with HUD and Prime adapters layered on top.
 
 ## What a buyer gets today
 
@@ -229,7 +237,7 @@ Regression coverage includes non-reference generated cases from all five domains
 
 The v3 compiler preserves deterministic generation, opaque public IDs, hash-mixed public ordering, split/oracle isolation, OOD/adversarial pressure, temporal/provenance evidence, ordered/stateful procedures, trajectory invariants and anti-leakage validation.
 
-v0.9 additionally requires every case to carry the correct native engine declaration, opaque artifact ID and public source-record lineage. The native bytes remain lazily generated rather than stored in the distribution bundle.
+The native-fidelity layer introduced in v0.9 requires every case to carry the correct native engine declaration, opaque artifact ID and public source-record lineage. The native bytes remain lazily generated rather than stored in the distribution bundle.
 
 Full distribution integrity gate:
 
@@ -350,15 +358,18 @@ Repository CI validates:
 - native artifact materialization/verification across all 20 operational domain × split cells;
 - the full 4,480-case operational distribution;
 - the full 896-project ProjectWorld construction distribution;
+- qualification release identity and frozen SRE v4 integrity;
+- HUD and Prime portability contracts;
+- release-version and licensing consistency;
 - Next.js build;
 - Docker startup/API health;
 - dependency and source security scanning.
 
 ## Commercial and fidelity boundary
 
-The public repository contains framework code, schemas, validation machinery, procedural generators, native artifact engines and buyer-facing methodology. Frozen private benchmark seeds, hidden ground truth, evaluator oracles and unreleased adversarial suites should remain outside the public repository for commercial evaluation use.
+The public repository contains framework code, schemas, validation machinery, procedural generators, native artifact engines and buyer-facing methodology. Project-authored public repository material is licensed under the root Apache-2.0 license unless a file states otherwise. Frozen private benchmark seeds, hidden ground truth, evaluator oracles and unreleased adversarial suites remain outside that public grant and are governed by the commercial policy in [`LICENSING.md`](LICENSING.md).
 
-Veritas 0.9 is **native artifact fidelity**, not universal industrial simulation. It does not yet claim:
+The native artifact layer introduced in Veritas 0.9 provides **native artifact fidelity**. Veritas 0.10 added benchmark qualification and experimental-integrity hardening, and Veritas 0.11 adds commercial portability. The current release still does not claim universal industrial simulation or the following procurement milestones:
 
 - a full Excel-compatible calculation engine with arbitrary formulas, macros, Power Query and external links;
 - live Kubernetes clusters, Terraform/cloud-provider APIs or production network simulation;
@@ -367,9 +378,11 @@ Veritas 0.9 is **native artifact fidelity**, not universal industrial simulation
 - raster GIS, GDAL/PostGIS-scale workloads or production cartographic rendering;
 - SOC 2 certification, third-party penetration testing or external benchmark validation.
 
-Those are higher-cost fidelity/procurement milestones that can now attach behind the stable task/runtime/oracle/verifier contract rather than requiring another benchmark redesign.
+Those are higher-cost fidelity/procurement milestones that can attach behind the stable task/runtime/oracle/verifier/portability contract rather than requiring another benchmark redesign.
 
-> Software version: 0.9.0  
+> Software version: 0.11.0  
+> Release tag: v0.11.0  
 > Commercial benchmark line: Veritas CompanyWorld Pilot v1  
+> Commercial portability SKU: Veritas SRE Evaluation Pack v1  
 > Operational distribution line: Veritas Unified Operational Worlds Production v3  
 > Project distribution line: Veritas ProjectWorld Construction Distribution v1

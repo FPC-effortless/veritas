@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "veritas_version": "0.11.0",
+  "release_tag": "v0.11.0",
+  "portability_source_merge_commit": "4a11b1faa05814c4f6de2c104df660c71f49b735",
+  "proof_source_pull_request": 64,
+  "sre_release": {
+    "candidate_id": "SRE-CAND-92A84929AD1E82E24357",
+    "candidate_version": "sre-v4",
+    "evidence_manifest_id": "EVID-2C69B48DCDD5F2232EABDC9B",
+    "qualification_report_id": "QREPORT-C585121E94D91766BB6664E3",
+    "panel_id": "QPANEL-AFF065BA4C2FD75BE9BB3EBE",
+    "private_release_manifest_id": "PRIVREL-036192DA63716D331C929C0C",
+    "source_bundle_sha256": "531d1358883ec399add640c3519c31a36f6c93981796d7a3e8b37e2a7ace0d2a",
+    "private_task_count": 30
+  },
+  "portable_manifest_id": "PENV-DE328F39E1BD750BC7516C02",
+  "portable_qualification_evidence_id": "PEVID-76FD66B1FC7183C425D3EA35",
+  "hud_package_id": "PPKG-828947A2846FB779C2E9F2A9",
+  "prime_package_id": "PPKG-711A02F085678ACACD12656D",
+  "proof_assertions": {
+    "same_task_seed_same_state": true,
+    "canonical_reward_parity": true,
+    "private_scenario_ids_in_buyer_safe_material": false,
+    "private_scenario_ids_in_operator_task_records": false,
+    "hud_image_builds": true,
+    "prime_wheel_builds": true
+  }
+}
