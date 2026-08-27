@@ -139,7 +139,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["veritas_sre_prime"]
-include = ["portable_manifest.json", "qualification_evidence.json"]
 
 [tool.verifiers.eval]
 num_examples = 30
@@ -152,9 +151,11 @@ def _render_readme(manifest: PortableEnvironmentManifest) -> str:
 
 Generated from portable manifest `{manifest.manifest_id}`.
 
-This is an **operator-private taskset package**. The generated `private_tasks.json` contains hidden
-scoring truth and must remain restricted. `qualification_evidence.json` is buyer-safe and contains
-only aggregate qualification evidence and immutable release identities.
+This is an **operator-private taskset package**. The generated
+`veritas_sre_prime/private_tasks.json` contains hidden scoring truth and must remain restricted.
+`veritas_sre_prime/qualification_evidence.json` is buyer-safe and contains only aggregate
+qualification evidence and immutable release identities. The portable manifest is packaged at
+`veritas_sre_prime/portable_manifest.json` so both metadata artifacts survive wheel installation.
 
 The primary package export is `SRETaskset` using `verifiers.v1`, separating the taskset (what is
 solved and how it is scored) from the harness/runtime chosen by the evaluator or trainer.
@@ -182,22 +183,22 @@ def build_prime_sre_package(
 
     private_payload = [record.model_dump(mode="json") for record in private_tasks]
     files = {
-        "portable_manifest.json": json.dumps(
-            manifest.model_dump(mode="json"), indent=2, sort_keys=True
-        )
-        + "\n",
         "pyproject.toml": _render_pyproject(),
         "README.md": _render_readme(manifest),
         "veritas_sre_prime/__init__.py": _render_init_module(),
         "veritas_sre_prime/taskset.py": _render_taskset_module(),
         "veritas_sre_prime/legacy.py": _render_legacy_module(),
+        "veritas_sre_prime/portable_manifest.json": json.dumps(
+            manifest.model_dump(mode="json"), indent=2, sort_keys=True
+        )
+        + "\n",
         "veritas_sre_prime/private_tasks.json": json.dumps(
             private_payload, indent=2, sort_keys=True
         )
         + "\n",
     }
     if qualification_evidence is not None:
-        files["qualification_evidence.json"] = json.dumps(
+        files["veritas_sre_prime/qualification_evidence.json"] = json.dumps(
             qualification_evidence.model_dump(mode="json"), indent=2, sort_keys=True
         ) + "\n"
     return write_portable_package(
