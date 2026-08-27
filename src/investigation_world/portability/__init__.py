@@ -5,6 +5,12 @@ from investigation_world.portability.evidence import (
 )
 from investigation_world.portability.hud import build_hud_sre_package
 from investigation_world.portability.identity import portable_run_id, portable_task_id, state_digest
+from investigation_world.portability.metering import (
+    InMemoryPortableMeteringSink,
+    PortableMeteringEvent,
+    PortableMeteringEventKind,
+    PortableMeteringHook,
+)
 from investigation_world.portability.models import (
     PortableArtifactReference,
     PortableCapability,
@@ -42,6 +48,7 @@ from investigation_world.portability.validation import (
 )
 
 __all__ = [
+    "InMemoryPortableMeteringSink",
     "PortableArtifactReference",
     "PortableCapability",
     "PortableEnvironmentManifest",
@@ -49,6 +56,9 @@ __all__ = [
     "PortableGateSummary",
     "PortableGradeResult",
     "PortableMeteringContract",
+    "PortableMeteringEvent",
+    "PortableMeteringEventKind",
+    "PortableMeteringHook",
     "PortablePackageBuildResult",
     "PortablePackageFile",
     "PortableQualificationEvidence",
