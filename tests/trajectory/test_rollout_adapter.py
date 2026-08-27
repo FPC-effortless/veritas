@@ -171,6 +171,42 @@ def test_provider_accounting_is_preserved_when_supplied() -> None:
     assert trajectory.usage.elapsed_s == 2.5
 
 
+def test_partial_provider_accounting_remains_unknown() -> None:
+    context = _context(
+        provider_calls=(
+            ProviderCallSummary(
+                call_index=0,
+                provider_id="hf",
+                model_id="model-a",
+                model_snapshot="sha-abc",
+                input_tokens=100,
+                output_tokens=20,
+                total_tokens=120,
+                cost=0.01,
+                duration_s=0.4,
+            ),
+            ProviderCallSummary(
+                call_index=1,
+                provider_id="hf",
+                model_id="model-a",
+                model_snapshot="sha-abc",
+                input_tokens=None,
+                output_tokens=10,
+                total_tokens=None,
+                cost=None,
+                duration_s=0.3,
+            ),
+        )
+    )
+    trajectory = trajectory_v2_from_rollout_trace(_trace(), context=context)
+
+    assert trajectory.usage.input_tokens is None
+    assert trajectory.usage.total_tokens is None
+    assert trajectory.usage.provider_cost is None
+    assert trajectory.usage.environment_cost == 3.0
+    assert trajectory.usage.total_cost is None
+
+
 def test_private_fields_cannot_enter_public_or_buyer_safe_serialization() -> None:
     private_ref = TrajectoryReference(
         reference_id="PRIVATE-EVIDENCE-SECRET",
