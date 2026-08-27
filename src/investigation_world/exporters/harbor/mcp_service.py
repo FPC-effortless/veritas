@@ -23,6 +23,8 @@ _SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
 _SERVER_INFO = {"name": "veritas-harbor", "version": "1"}
 _HEADER_MISMATCH = -32020
 _UNSUPPORTED_PROTOCOL_VERSION = -32022
+_RUNTIME_CONTROL_HOST = "runtime-control"
+_RUNTIME_CONTROL_PORT = 8081
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,30 @@ def _validate_origin(headers: Mapping[str, str]) -> None:
         raise _MCPRequestError(-32600, "Origin not allowed", status_code=403)
 
 
+def _validate_runtime_control_url(value: str) -> str:
+    """Allow only the generated private Compose service boundary."""
+
+    parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("invalid Harbor runtime-control URL") from exc
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname != _RUNTIME_CONTROL_HOST
+        or port != _RUNTIME_CONTROL_PORT
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "Harbor runtime-control URL must be exactly the private runtime-control service"
+        )
+    return f"http://{_RUNTIME_CONTROL_HOST}:{_RUNTIME_CONTROL_PORT}"
+
+
 def _validate_mcp_request(body: Any, headers: Mapping[str, str]) -> tuple[Any, str, dict[str, Any]]:
     _validate_origin(headers)
     if not isinstance(body, dict) or body.get("jsonrpc") != "2.0" or "id" not in body:
@@ -181,13 +207,15 @@ def _call_runtime(base_url: str, name: str, arguments: dict[str, Any]) -> dict[s
         separators=(",", ":"),
     ).encode("utf-8")
     request = urllib.request.Request(
-        base_url.rstrip("/") + "/tool",
+        base_url + "/tool",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        # The base URL is validated at app construction to the fixed private
+        # Compose service; file/custom schemes and arbitrary hosts are impossible here.
+        with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         try:
@@ -225,23 +253,23 @@ def _tool_wire_result(step: dict[str, Any]) -> dict[str, Any]:
             }
         )
     observation = step.get("observation")
-    return _stamp_result(
-        {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps(
-                        observation,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                        ensure_ascii=False,
-                    ),
-                }
-            ],
-            "structuredContent": observation,
-            "isError": False,
-        }
-    )
+    result: dict[str, Any] = {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps(
+                    observation,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                ),
+            }
+        ],
+        "isError": False,
+    }
+    if isinstance(observation, dict):
+        result["structuredContent"] = observation
+    return _stamp_result(result)
 
 
 def _load_public_contract(path: Path) -> PortablePublicContract:
@@ -250,6 +278,7 @@ def _load_public_contract(path: Path) -> PortablePublicContract:
 
 def create_mcp_app(public: PortablePublicContract, runtime_control_url: str) -> FastAPI:
     surface = compile_mcp_surface(public)
+    runtime_base_url = _validate_runtime_control_url(runtime_control_url)
     app = FastAPI(
         title="Veritas Harbor MCP",
         docs_url=None,
@@ -260,8 +289,9 @@ def create_mcp_app(public: PortablePublicContract, runtime_control_url: str) -> 
     @app.get("/health")
     def health() -> dict[str, Any] | JSONResponse:
         try:
-            url = runtime_control_url.rstrip("/") + "/health"
-            with urllib.request.urlopen(url, timeout=2) as response:
+            url = runtime_base_url + "/health"
+            # Same fixed, validated private Compose URL as tool dispatch above.
+            with urllib.request.urlopen(url, timeout=2) as response:  # nosec B310
                 upstream = json.loads(response.read().decode("utf-8"))
             return {"ok": bool(upstream.get("ok")), "surface_id": surface.surface_id}
         except Exception:
@@ -296,7 +326,7 @@ def create_mcp_app(public: PortablePublicContract, runtime_control_url: str) -> 
                     _json_rpc_error(request_id, -32602, "Invalid params")
                 )
             try:
-                step = _call_runtime(runtime_control_url, name, arguments)
+                step = _call_runtime(runtime_base_url, name, arguments)
             except _RuntimeCallRejected as exc:
                 data: dict[str, Any] = {"code": exc.code}
                 if exc.path is not None:
@@ -330,7 +360,9 @@ def main() -> None:
         "http://runtime-control:8081",
     )
     app = create_mcp_app(_load_public_contract(public_path), runtime_url)
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+    # Required for sibling Compose services to reach the sidecar. The generated
+    # service publishes no host port and only joins declared internal networks.
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")  # nosec B104
 
 
 if __name__ == "__main__":
