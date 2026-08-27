@@ -1,0 +1,81 @@
+name: SRE Benchmark Qualification
+# SRE v4 is frozen; this workflow validates release identity only and must not reacquire sources.
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/qualification/**"
+      - "tools/build_sre_qualification_candidate.py"
+      - "results/sre-v4/RELEASE.json"
+      - ".github/workflows/sre-qualification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sre-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frozen-release-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify frozen SRE v4 release identity and public-only contract
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          release = json.loads(Path("results/sre-v4/RELEASE.json").read_text(encoding="utf-8"))
+          expected = {
+              "candidate_id": "SRE-CAND-92A84929AD1E82E24357",
+              "evidence_manifest_id": "EVID-2C69B48DCDD5F2232EABDC9B",
+              "report_id": "QREPORT-C585121E94D91766BB6664E3",
+              "panel_id": "QPANEL-AFF065BA4C2FD75BE9BB3EBE",
+              "private_release_manifest_id": "PRIVREL-036192DA63716D331C929C0C",
+              "private_bundle_sha256": "531d1358883ec399add640c3519c31a36f6c93981796d7a3e8b37e2a7ace0d2a",
+              "frozen_from_head": "ffecc4004ace47768b1d3355537e63a3218fb9dc",
+              "frozen_from_workflow_run": 33044205900,
+          }
+          for key, value in expected.items():
+              assert release[key] == value, (key, release[key], value)
+
+          assert release["schema_version"] == "0.10.0-frozen-public-release"
+          assert release["version"] == "sre-v4"
+          assert release["status"] == "benchmark_candidate"
+          assert release["failed_gates"] == []
+          assert release["gates_passed"] == 18
+          assert release["scenario_count"] == 87
+          assert release["private_test_count"] == 30
+          assert len(release["providers"]) == 16
+          assert min(release["private_strata"].values()) >= 5
+          assert max(release["private_strata"].values()) / release["private_test_count"] <= 0.5
+
+          means = release["policy_means"]
+          assert means["oracle"] > means["competent_heuristic"] > means["myopic"] > means["random"]
+          assert means["exploit"] <= 0.2
+
+          public_contract = release["public_artifact_contract"]
+          assert public_contract == {
+              "per_scenario_policy_outcomes_included": False,
+              "private_causal_labels_included": False,
+              "raw_source_snapshots_included": False,
+          }
+          storage_contract = release["storage_contract"]
+          assert storage_contract["private_bundle_publicly_stored"] is False
+          assert storage_contract["raw_private_bundle_in_actions_artifact"] is False
+          assert storage_contract["transport_encrypted_before_artifact_upload"] is True
+          assert re.fullmatch(r"[0-9a-f]{64}", release["private_bundle_sha256"])
+          print(json.dumps(release, indent=2, sort_keys=True))
+          PY
+      - name: Upload frozen buyer-safe release record only
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-public-qualification
+          path: results/sre-v4/RELEASE.json
+          if-no-files-found: error
+          retention-days: 90
