@@ -23,7 +23,7 @@ Assets are declared by logical `asset_id`, normalized relative POSIX mount path,
 
 Execution artifacts are accepted only under `writable_paths`. Read-only mounted assets cannot be overwritten. `capture()` is also restricted to writable artifact paths, so mounted input fixtures are not accidentally turned into public trajectory artifacts.
 
-`LocalDeterministicSandboxProvider` is the first implementation. It uses an in-memory virtual filesystem and registered pure handlers; it does not invoke host subprocesses or expose host filesystem paths. Handlers receive a read-only snapshot and return a filesystem delta. The delta is committed only after timeout/output/artifact/path policy checks pass.
+`LocalDeterministicSandboxProvider` is the first implementation. It uses an in-memory virtual filesystem and registered trusted handlers; model/workload input can only select an allow-listed handler and cannot supply executable Python. The provider itself does not invoke host subprocesses or expose host filesystem paths through the contract. Handlers receive a read-only virtual-filesystem snapshot and return a proposed filesystem delta. The delta is committed only after timeout/output/artifact/path policy checks pass. This test double validates contract semantics; it is not a security boundary for untrusted handler code.
 
 ## Failure attribution
 
@@ -63,7 +63,7 @@ Reset restores the mounted baseline, removes execution-created files, sets the e
 
 The initial neutral policy supports deterministic ceilings that the local test double can actually enforce:
 
-- timeout in milliseconds;
+- timeout in milliseconds (modeled by handler-reported execution duration in the deterministic local double; physical providers must enforce actual termination);
 - maximum combined stdout/stderr bytes;
 - maximum bytes in an execution's artifact delta;
 - maximum dispatched executions per reset generation.
