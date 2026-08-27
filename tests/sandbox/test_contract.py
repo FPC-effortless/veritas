@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import time
 
 import pytest
 from pydantic import ValidationError
@@ -95,7 +94,9 @@ def test_reset_restores_mounted_baseline_and_removes_execution_state() -> None:
 
     fresh = LocalDeterministicSandboxProvider(tools={"inspect": inspect_fixture}).create(request())
     fresh.mount("fixture", b"fixture")
-    observed = fresh.execute(SandboxExecutionRequest(kind=SandboxExecutionKind.TOOL, name="inspect"))
+    observed = fresh.execute(
+        SandboxExecutionRequest(kind=SandboxExecutionKind.TOOL, name="inspect")
+    )
     assert observed.stdout == b"fixture"
 
 
@@ -112,7 +113,9 @@ def test_infrastructure_failure_is_distinct_from_workload_failure() -> None:
     def failed_command(_request, _context):
         return LocalSandboxHandlerResult(exit_code=3, stderr="bad invocation")
 
-    workload_session = LocalDeterministicSandboxProvider(commands={"echo": failed_command}).create(request())
+    workload_session = LocalDeterministicSandboxProvider(
+        commands={"echo": failed_command}
+    ).create(request())
     workload = workload_session.execute(
         SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="echo")
     )
@@ -137,7 +140,9 @@ def test_secret_material_is_redacted_from_results_artifacts_and_errors() -> None
         secret_values={"secret://token": b"super-secret"},
     )
     session = provider.create(create)
-    result = session.execute(SandboxExecutionRequest(kind=SandboxExecutionKind.TOOL, name="inspect"))
+    result = session.execute(
+        SandboxExecutionRequest(kind=SandboxExecutionKind.TOOL, name="inspect")
+    )
     captured = session.capture(["outputs/leak.txt"])
     serialized = result.model_dump_json().encode() + captured.model_dump_json().encode()
     assert b"super-secret" not in serialized
@@ -151,7 +156,9 @@ def test_secret_material_is_redacted_from_results_artifacts_and_errors() -> None
         tools={"inspect": crashing_tool},
         secret_values={"secret://token": b"super-secret"},
     ).create(create)
-    failure = crashed.execute(SandboxExecutionRequest(kind=SandboxExecutionKind.TOOL, name="inspect"))
+    failure = crashed.execute(
+        SandboxExecutionRequest(kind=SandboxExecutionKind.TOOL, name="inspect")
+    )
     assert failure.failure is not None
     assert "super-secret" not in failure.failure.message
     assert "[REDACTED]" in failure.failure.message
@@ -162,17 +169,21 @@ def test_execution_cannot_write_outside_declared_virtual_paths() -> None:
         return LocalSandboxHandlerResult(artifacts={"../escape": b"x"})
 
     session = LocalDeterministicSandboxProvider(commands={"echo": bad}).create(request())
-    result = session.execute(SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="echo"))
+    result = session.execute(
+        SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="echo")
+    )
     assert result.status is SandboxExecutionStatus.REJECTED
     assert result.failure is not None
     assert result.failure.origin is SandboxFailureOrigin.POLICY
     assert result.failure.code is SandboxFailureCode.PATH_NOT_ALLOWED
 
 
-def test_timeout_output_and_artifact_policies_are_enforced_without_committing_delta() -> None:
+def test_resource_policies_reject_without_committing_artifact_delta() -> None:
     def slow(_request, _context):
-        time.sleep(0.05)
-        return LocalSandboxHandlerResult(artifacts={"work/late.txt": b"late"})
+        return LocalSandboxHandlerResult(
+            artifacts={"work/late.txt": b"late"},
+            duration_ms=50,
+        )
 
     timed = LocalDeterministicSandboxProvider(commands={"echo": slow}).create(
         request(resources=SandboxResourcePolicy(timeout_ms=5))
@@ -224,8 +235,12 @@ def test_replay_metadata_is_deterministic_for_same_spec_mounts_and_execution() -
 
     for session in (left, right):
         session.mount("fixture", b"fixture")
-    left_result = left.execute(SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="echo"))
-    right_result = right.execute(SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="echo"))
+    left_result = left.execute(
+        SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="echo")
+    )
+    right_result = right.execute(
+        SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="echo")
+    )
     assert left_result.stdout == right_result.stdout
     assert left_result.metadata == right_result.metadata
 
