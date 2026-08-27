@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import urlsplit
@@ -18,6 +21,7 @@ from investigation_world.mcp_compiler import MCP_PROTOCOL_VERSION, compile_mcp_s
 from investigation_world.portable_contract import PortablePublicContract
 
 _PROTOCOL_META = "io.modelcontextprotocol/protocolVersion"
+_CLIENT_INFO_META = "io.modelcontextprotocol/clientInfo"
 _CLIENT_CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities"
 _SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
 _SERVER_INFO = {"name": "veritas-harbor", "version": "1"}
@@ -25,6 +29,8 @@ _HEADER_MISMATCH = -32020
 _UNSUPPORTED_PROTOCOL_VERSION = -32022
 _RUNTIME_CONTROL_HOST = "runtime-control"
 _RUNTIME_CONTROL_PORT = 8081
+_HEADER_TOKEN_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -40,6 +46,13 @@ class _RuntimeCallRejected(Exception):
     json_rpc_code: int
     code: str
     path: tuple[str | int, ...] | None = None
+
+
+@dataclass(frozen=True)
+class _MCPParameterHeader:
+    header_name: str
+    path: tuple[str, ...]
+    value_type: str
 
 
 def _json_rpc_result(request_id: Any, result: Any) -> dict[str, Any]:
@@ -79,6 +92,62 @@ def _discover_result() -> dict[str, Any]:
     )
 
 
+def _contains_parameter_header(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return "x-mcp-header" in value or any(
+            _contains_parameter_header(item) for item in value.values()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(_contains_parameter_header(item) for item in value)
+    return False
+
+
+def _parameter_header_bindings(schema: Mapping[str, Any]) -> tuple[_MCPParameterHeader, ...]:
+    bindings: list[_MCPParameterHeader] = []
+    seen_headers: set[str] = set()
+
+    def walk(node: Mapping[str, Any], path: tuple[str, ...]) -> None:
+        annotation = node.get("x-mcp-header")
+        if annotation is not None:
+            value_type = node.get("type")
+            if (
+                not path
+                or not isinstance(annotation, str)
+                or not annotation
+                or not _HEADER_TOKEN_RE.fullmatch(annotation)
+                or value_type not in {"string", "integer", "boolean"}
+            ):
+                raise ValueError("invalid x-mcp-header annotation in compiled MCP input schema")
+            normalized = annotation.lower()
+            if normalized in seen_headers:
+                raise ValueError("duplicate x-mcp-header annotation in compiled MCP input schema")
+            seen_headers.add(normalized)
+            bindings.append(
+                _MCPParameterHeader(
+                    header_name=f"mcp-param-{annotation}",
+                    path=path,
+                    value_type=value_type,
+                )
+            )
+
+        properties = node.get("properties")
+        if isinstance(properties, Mapping):
+            for name, child in properties.items():
+                if isinstance(name, str) and isinstance(child, Mapping):
+                    walk(child, path + (name,))
+
+        for key, value in node.items():
+            if key in {"properties", "x-mcp-header"}:
+                continue
+            if _contains_parameter_header(value):
+                raise ValueError(
+                    "x-mcp-header annotations must be statically reachable through properties"
+                )
+
+    walk(schema, ())
+    return tuple(bindings)
+
+
 def _decode_header_value(value: str) -> str:
     prefix = "=?base64?"
     suffix = "?="
@@ -86,14 +155,15 @@ def _decode_header_value(value: str) -> str:
         encoded = value[len(prefix) : -len(suffix)]
         try:
             return base64.b64decode(encoded, validate=True).decode("utf-8")
-        except (ValueError, UnicodeDecodeError) as exc:
+        except (binascii.Error, ValueError, UnicodeDecodeError) as exc:
             raise _MCPRequestError(
                 _HEADER_MISMATCH,
                 "Malformed encoded MCP routing header",
                 status_code=400,
             ) from exc
     if value != value.strip(" \t") or any(
-        ord(character) < 0x20 or ord(character) > 0x7E for character in value
+        (ord(character) < 0x20 and character != "\t") or ord(character) > 0x7E
+        for character in value
     ):
         raise _MCPRequestError(
             _HEADER_MISMATCH,
@@ -155,8 +225,15 @@ def _validate_mcp_request(body: Any, headers: Mapping[str, str]) -> tuple[Any, s
         raise _MCPRequestError(-32602, "Missing request metadata")
     requested_version = meta.get(_PROTOCOL_META)
     client_capabilities = meta.get(_CLIENT_CAPABILITIES_META)
+    client_info = meta.get(_CLIENT_INFO_META)
     if not isinstance(requested_version, str) or not isinstance(client_capabilities, dict):
         raise _MCPRequestError(-32602, "Invalid request metadata")
+    if client_info is not None and (
+        not isinstance(client_info, dict)
+        or not isinstance(client_info.get("name"), str)
+        or not isinstance(client_info.get("version"), str)
+    ):
+        raise _MCPRequestError(-32602, "Invalid client information")
 
     header_version = headers.get("mcp-protocol-version")
     header_method = headers.get("mcp-method")
@@ -198,6 +275,57 @@ def _validate_mcp_request(body: Any, headers: Mapping[str, str]) -> tuple[Any, s
                 status_code=400,
             )
     return request_id, method, params
+
+
+def _extract_argument(arguments: Mapping[str, Any], path: tuple[str, ...]) -> Any:
+    value: Any = arguments
+    for component in path:
+        if not isinstance(value, Mapping) or component not in value:
+            return _MISSING
+        value = value[component]
+    return value
+
+
+def _header_matches_value(raw_header: str, value: Any, value_type: str) -> bool:
+    decoded = _decode_header_value(raw_header)
+    if value_type == "string":
+        return isinstance(value, str) and decoded == value
+    if value_type == "boolean":
+        return isinstance(value, bool) and decoded == ("true" if value else "false")
+    if value_type == "integer":
+        if not isinstance(value, int) or isinstance(value, bool):
+            return False
+        try:
+            return Decimal(decoded) == Decimal(value)
+        except InvalidOperation:
+            return False
+    return False
+
+
+def _validate_parameter_headers(
+    bindings: tuple[_MCPParameterHeader, ...],
+    arguments: Mapping[str, Any],
+    headers: Mapping[str, str],
+) -> None:
+    for binding in bindings:
+        value = _extract_argument(arguments, binding.path)
+        raw_header = headers.get(binding.header_name)
+        if value is _MISSING or value is None:
+            if raw_header is not None:
+                raise _MCPRequestError(
+                    _HEADER_MISMATCH,
+                    "MCP parameter header has no matching request value",
+                    status_code=400,
+                )
+            continue
+        if raw_header is None or not _header_matches_value(
+            raw_header, value, binding.value_type
+        ):
+            raise _MCPRequestError(
+                _HEADER_MISMATCH,
+                "MCP parameter header does not match the request body",
+                status_code=400,
+            )
 
 
 def _call_runtime(base_url: str, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -253,23 +381,23 @@ def _tool_wire_result(step: dict[str, Any]) -> dict[str, Any]:
             }
         )
     observation = step.get("observation")
-    result: dict[str, Any] = {
-        "content": [
-            {
-                "type": "text",
-                "text": json.dumps(
-                    observation,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    ensure_ascii=False,
-                ),
-            }
-        ],
-        "isError": False,
-    }
-    if isinstance(observation, dict):
-        result["structuredContent"] = observation
-    return _stamp_result(result)
+    return _stamp_result(
+        {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        observation,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=False,
+                    ),
+                }
+            ],
+            "structuredContent": observation,
+            "isError": False,
+        }
+    )
 
 
 def _load_public_contract(path: Path) -> PortablePublicContract:
@@ -279,6 +407,9 @@ def _load_public_contract(path: Path) -> PortablePublicContract:
 def create_mcp_app(public: PortablePublicContract, runtime_control_url: str) -> FastAPI:
     surface = compile_mcp_surface(public)
     runtime_base_url = _validate_runtime_control_url(runtime_control_url)
+    parameter_headers = {
+        tool.name: _parameter_header_bindings(tool.input_schema) for tool in surface.catalog.tools
+    }
     app = FastAPI(
         title="Veritas Harbor MCP",
         docs_url=None,
@@ -322,8 +453,15 @@ def create_mcp_app(public: PortablePublicContract, runtime_control_url: str) -> 
             name = params["name"]
             arguments = params.get("arguments") or {}
             if not isinstance(arguments, dict):
+                return JSONResponse(_json_rpc_error(request_id, -32602, "Invalid params"))
+            try:
+                _validate_parameter_headers(
+                    parameter_headers.get(name, ()), arguments, request.headers
+                )
+            except _MCPRequestError as exc:
                 return JSONResponse(
-                    _json_rpc_error(request_id, -32602, "Invalid params")
+                    _json_rpc_error(request_id, exc.code, exc.message, exc.data),
+                    status_code=exc.status_code,
                 )
             try:
                 step = _call_runtime(runtime_base_url, name, arguments)
