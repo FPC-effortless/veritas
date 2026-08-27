@@ -71,35 +71,39 @@ jobs:
           python tests/portability/build_fixture_exports.py \
             --output "$RUNNER_TEMP/veritas-portability-fixture"
 
-      - name: Build generated HUD image with HUD CLI
+      - name: Build generated HUD protocol image
         working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
-        run: hud build .
+        run: docker build -f Dockerfile.hud -t veritas-sre-portability-fixture:ci .
 
       - name: Exercise HUD task start and grade protocol
         working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
         run: |
           set -euo pipefail
-          IMAGE=$(awk '/local:/ {print $2; exit}' hud.lock.yaml)
-          test -n "$IMAGE"
-          docker run -d --name veritas-hud-portability-smoke -p 8765:8765 "$IMAGE"
+          docker run -d --name veritas-hud-portability-smoke -p 8765:8765 \
+            veritas-sre-portability-fixture:ci
           trap 'docker rm -f veritas-hud-portability-smoke >/dev/null 2>&1 || true' EXIT
 
           ARGS='{"prompt":"Worker demand exceeded capacity and queues accumulated.","expected_causal_class":"capacity"}'
           START_OUTPUT=""
+          ready=0
           for attempt in $(seq 1 30); do
             if START_OUTPUT=$(hud task start sre_causal_classification \
               --url tcp://127.0.0.1:8765 --args "$ARGS" 2>&1); then
+              ready=1
               break
             fi
             sleep 1
           done
-          printf '%s\n' "$START_OUTPUT"
+          if [ "$ready" -ne 1 ]; then
+            docker logs veritas-hud-portability-smoke
+            printf '%s\n' "$START_OUTPUT"
+            exit 1
+          fi
           printf '%s\n' "$START_OUTPUT" | grep -F "Worker demand exceeded capacity"
 
           GRADE_OUTPUT=$(hud task grade sre_causal_classification \
             --url tcp://127.0.0.1:8765 --args "$ARGS" \
             --answer '{"causal_class":"capacity"}')
-          printf '%s\n' "$GRADE_OUTPUT"
           printf '%s\n' "$GRADE_OUTPUT" | grep -Eq '(^|[^0-9])1(\.0+)?([^0-9]|$)'
 
       - name: Exercise Prime v1 and legacy compatibility entrypoints
