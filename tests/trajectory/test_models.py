@@ -131,3 +131,18 @@ def test_arbitrary_event_payload_keys_remain_identity_bearing() -> None:
         events=(TrajectoryEvent(step=0, event_type="observe", payload={"visibility": "beta"}),)
     )
     assert first.trajectory_id != second.trajectory_id
+
+
+def test_original_evaluation_verifier_must_match_trajectory_verifier() -> None:
+    with pytest.raises(ValidationError, match="original evaluation verifier must match"):
+        TrajectoryV2(
+            world=WorldIdentity(environment_id="env", environment_version="1"),
+            task=TaskIdentity(task_id="task"),
+            verifier=VerifierIdentity(verifier_id="original", version="1"),
+            initial_state=StateDigest(digest="a" * 64),
+            original_evaluation=EvaluationRecord(
+                verifier=VerifierIdentity(verifier_id="different", version="1"),
+                component_scores={},
+                reward=0.0,
+            ),
+        )
