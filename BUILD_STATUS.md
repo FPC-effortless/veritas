@@ -73,7 +73,15 @@ SRE v3 previously passed the older qualification protocol but is now **retired a
 1. the stronger 0.10 `private_stratum_coverage` gate correctly rejects its 34-case private panel because it is dominated by the transient class;
 2. historical Actions artifacts exposed raw v3 qualification material, so the suite can no longer be treated as secret private test data.
 
-SRE v4 is the replacement construction path. It uses a fresh provider family, explicit later-evidence causal labels, duplicate-cluster-safe deterministic stratification, and a hard CI assertion that the candidate must actually be `benchmark_candidate`. Public CI artifacts contain only buyer-safe aggregate qualification summaries and never raw snapshots, private labels or per-scenario oracle outcomes.
+SRE v4 is now a **qualified and frozen benchmark candidate**. The frozen release uses 16 fresh Statuspage providers: Airtable, Claude, Elastic, Figma, Grafana, Hedera, HubSpot, IBM Cloud Security, Instructure, New Relic, Postman, Reddit, Render, Snowflake, Supabase and Webflow.
+
+The sealed v4 release contains **87 scenarios** and exactly **30 private-test cases**. Private causal support is balanced enough to pass the release contract: capacity 6, infrastructure 6, regression 10, transient 8. Its exact private-panel policy means are:
+
+`oracle 1.0000 > competent 0.4000 > myopic 0.3000 > random 0.2333`, with exploit `0.0000`.
+
+All 18 qualification gates pass. Canonical public identities are recorded in `results/sre-v4/RELEASE.json`; the source snapshots, exact split, private causal evidence and private release manifest are retained only in the sealed private bundle. The private bundle SHA-256 is also pinned in the public release record.
+
+The one-time sealing run encrypted the private bundle before artifact transport. Public CI no longer downloads live provider feeds or reconstructs/splits SRE v4. It now verifies only the immutable release identities, frozen hash, aggregate qualification evidence and public-artifact secrecy contract.
 
 ## Release gate
 
@@ -85,7 +93,7 @@ SRE v4 is the replacement construction path. It uses a fresh provider family, ex
 - native artifact fidelity;
 - full 4,480-case operational distribution validation;
 - ProjectWorld distribution and ProjectWorld v2 qualification;
-- SRE v4 qualification with no failed gates;
+- frozen SRE v4 release-identity verification with no failed qualification gates;
 - frontend build;
 - container/API health;
 - aggregate `Required` check;
@@ -97,4 +105,4 @@ SRE v4 is the replacement construction path. It uses a fresh provider family, ex
 
 0.11 is reserved for industrial sandbox fidelity, not another benchmark-integrity rewrite. Candidate integrations include live Kubernetes/container/network execution, Terraform/cloud control planes, broader Excel calculation semantics, deeper enterprise replicas, browser/OCR investigation surfaces, raster/PostGIS GIS execution, and deeper cross-domain causal propagation.
 
-0.11 work should begin only after 0.10 is merged with a genuinely qualified fresh SRE private panel and the commercial evaluation pack is rebased onto that release.
+0.11 work should begin only after 0.10 is merged with the frozen qualified SRE v4 release and the commercial evaluation pack is rebased onto that release with exact sealed-panel model evidence.
