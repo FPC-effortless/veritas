@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from investigation_world.commercial.sre_evaluation import parse_sre_prediction
 from investigation_world.commercial.sre_release import SealedSRERelease
+from investigation_world.portability.evidence import build_sre_portable_qualification_evidence
 from investigation_world.portability.hud import build_hud_sre_package
 from investigation_world.portability.prime import build_prime_sre_package
 from investigation_world.portability.sre import build_sre_portable_manifest
@@ -132,16 +134,34 @@ def _clean_install(package_root: Path, install_root: Path) -> Path:
     return install_root
 
 
+def _canonical_value(raw: str) -> str | None:
+    parsed = parse_sre_prediction(raw)
+    return parsed.value if parsed is not None else None
+
+
+def _assert_parser_parity(parser) -> None:
+    samples = [
+        '{"causal_class":"capacity"}',
+        "regression",
+        'prefix {"causal_class":"transient"} suffix',
+        "not-a-valid-class",
+    ]
+    for raw in samples:
+        assert parser(raw) == _canonical_value(raw)
+
+
 def test_generated_hud_package_clean_installs_and_loads_with_current_sdk(
     tmp_path: Path, monkeypatch
 ) -> None:
     pytest.importorskip("hud")
     release, manifest = _manifest(monkeypatch)
+    qualification_evidence = build_sre_portable_qualification_evidence(release)
     package_root = tmp_path / "hud-src"
     build_hud_sre_package(
         package_root,
         manifest=manifest,
         private_tasks=build_sre_private_portable_tasks(release),
+        qualification_evidence=qualification_evidence,
     )
     install_root = _clean_install(package_root, tmp_path / "hud-install")
 
@@ -152,6 +172,8 @@ def test_generated_hud_package_clean_installs_and_loads_with_current_sdk(
         assert env_module.env is not None
         assert len(tasks_module.tasks) == 1
         assert Path(tasks_module.__file__).resolve().is_relative_to(install_root.resolve())
+        assert (install_root / "qualification_evidence.json").is_file()
+        _assert_parser_parity(env_module._parse_prediction)
     finally:
         sys.path.remove(str(install_root))
         sys.modules.pop("env", None)
@@ -163,22 +185,30 @@ def test_generated_prime_package_clean_installs_and_loads_with_current_v1_sdk(
 ) -> None:
     vf = pytest.importorskip("verifiers.v1")
     release, manifest = _manifest(monkeypatch)
+    qualification_evidence = build_sre_portable_qualification_evidence(release)
     package_root = tmp_path / "prime-src"
     build_prime_sre_package(
         package_root,
         manifest=manifest,
         private_tasks=build_sre_private_portable_tasks(release),
+        qualification_evidence=qualification_evidence,
     )
     install_root = _clean_install(package_root, tmp_path / "prime-install")
 
     sys.path.insert(0, str(install_root))
     try:
         module = importlib.import_module("veritas_sre_prime")
+        taskset_module = importlib.import_module("veritas_sre_prime.taskset")
         taskset = module.SRETaskset(vf.TasksetConfig())
         tasks = taskset.load()
         assert len(tasks) == 1
         assert tasks[0].data.portable_task_id.startswith("PTASK-")
         assert Path(module.__file__).resolve().is_relative_to(install_root.resolve())
+        assert (install_root / "qualification_evidence.json").is_file()
+        _assert_parser_parity(taskset_module._parse_prediction)
+
+        legacy_env = module.load_environment()
+        assert len(legacy_env.dataset) == 1
     finally:
         sys.path.remove(str(install_root))
         for name in list(sys.modules):
