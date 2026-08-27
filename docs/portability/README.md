@@ -179,3 +179,7 @@ The sealed production proof records only buyer-safe facts: exact release identit
 SHA, private task count, deterministic package IDs, reset/reward parity booleans, and explicit
 no-private-scenario-ID assertions. It does not publish task rows, private labels, predictions,
 decryption material, or plaintext benchmark artifacts.
+
+A release PR is merged only after the review-ready merge ref has fresh successful CI, Security, and
+Portability Validation checks. Draft-state checks are evidence for debugging but are not used to
+bypass branch protection after GitHub regenerates the merge ref on the ready-for-review transition.
