@@ -33,7 +33,7 @@ jobs:
             --snapshot-dir results/sre-v4/sources \
             --output results/sre-v4/qualification.json \
             --version sre-v4 \
-            --providers render supabase elastic grafana figma postman airtable webflow reddit claude instructure ibmcloudsecurity hedera \
+            --providers render supabase elastic grafana figma postman airtable webflow reddit claude instructure ibmcloudsecurity hedera snowflake newrelic hubspot \
             --early-updates 1 \
             --random-seed 7 \
             --require-explicit-causal-label
