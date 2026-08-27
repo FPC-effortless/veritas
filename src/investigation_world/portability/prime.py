@@ -43,6 +43,10 @@ def _parse_prediction(raw: object) -> str | None:
     return normalized if normalized in _ALLOWED else None
 
 
+def _score_prediction(raw: object, expected_causal_class: str) -> float:
+    return float(_parse_prediction(raw) == expected_causal_class)
+
+
 class SREData(vf.TaskData):
     expected_causal_class: str
     portable_task_id: str
@@ -51,8 +55,7 @@ class SREData(vf.TaskData):
 class SRETask(vf.Task[SREData, vf.State, vf.TaskConfig]):
     @vf.reward
     async def causal_classification(self, trace: vf.Trace) -> float:
-        prediction = _parse_prediction(trace.last_reply)
-        return float(prediction == self.data.expected_causal_class)
+        return _score_prediction(trace.last_reply, self.data.expected_causal_class)
 
 
 class SRETaskset(vf.Taskset[SRETask, vf.TasksetConfig]):
@@ -84,7 +87,7 @@ from pathlib import Path
 from datasets import Dataset
 import verifiers as vf
 
-from veritas_sre_prime.taskset import _parse_prediction
+from veritas_sre_prime.taskset import _score_prediction
 
 
 def load_environment() -> vf.Environment:
@@ -110,7 +113,7 @@ def load_environment() -> vf.Environment:
             raw = last.get("content", "") if isinstance(last, dict) else str(last)
         else:
             raw = completion
-        return float(_parse_prediction(raw) == str(answer))
+        return _score_prediction(raw, str(answer))
 
     rubric = vf.Rubric(funcs=[causal_classification])
     return vf.SingleTurnEnv(dataset=dataset, rubric=rubric)
