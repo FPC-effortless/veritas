@@ -112,8 +112,6 @@ def _manifest(monkeypatch):
     )
 
 
-@pytest.mark.external_adapter
-
 def test_generated_hud_package_loads_with_current_sdk(tmp_path: Path, monkeypatch) -> None:
     pytest.importorskip("hud")
     release, manifest = _manifest(monkeypatch)
@@ -135,8 +133,6 @@ def test_generated_hud_package_loads_with_current_sdk(tmp_path: Path, monkeypatc
         sys.modules.pop("env", None)
         sys.modules.pop("tasks", None)
 
-
-@pytest.mark.external_adapter
 
 def test_generated_prime_package_loads_with_current_v1_sdk(tmp_path: Path, monkeypatch) -> None:
     pytest.importorskip("verifiers.v1")
