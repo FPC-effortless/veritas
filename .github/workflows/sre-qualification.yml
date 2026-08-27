@@ -1,4 +1,5 @@
 name: SRE Benchmark Qualification
+# SRE v4 is frozen; this workflow validates release identity only and must not reacquire sources.
 
 on:
   pull_request:
