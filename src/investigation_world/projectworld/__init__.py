@@ -37,6 +37,7 @@ from investigation_world.projectworld.models import (
     WorkPackageStatus,
 )
 from investigation_world.projectworld.runtime import OperationalProjectWorld, ProjectActionError
+from investigation_world.projectworld.session import ProjectWorldSession
 from investigation_world.projectworld.verifier import verify_project_world
 
 
@@ -77,6 +78,7 @@ __all__ = [
     "ProjectTransition",
     "ProjectVerificationReport",
     "ProjectWorkPackageSpec",
+    "ProjectWorldSession",
     "ProjectWorldState",
     "ResourceKind",
     "WorkPackageStatus",

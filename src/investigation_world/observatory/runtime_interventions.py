@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.companyworld.models import CompanySystem, CompanyWorldEpisode
 from investigation_world.companyworld.runtime import SYSTEM_TOOL_COSTS, CompanyWorldRuntime
@@ -10,9 +10,16 @@ from investigation_world.companyworld.runtime import SYSTEM_TOOL_COSTS, CompanyW
 
 class ScheduledToolFailure(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    system: CompanySystem
+    system: CompanySystem | None = None
     at_step: int = Field(default=0, ge=0)
     persistent: bool = False
+    scope: Literal["system", "aggregator", "global"] = "system"
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> "ScheduledToolFailure":
+        if self.scope == "system" and self.system is None:
+            raise ValueError("system-scoped tool failure requires a system")
+        return self
 
 
 class ScheduledPermissionChange(BaseModel):
@@ -79,9 +86,16 @@ class InterventionAwareCompanyWorldRuntime(CompanyWorldRuntime):
         self,
         step: int,
         system: CompanySystem | None,
+        operation_scope: Literal["system", "aggregator"],
     ) -> ScheduledToolFailure | None:
         for failure in self.tool_failures:
-            if system is not None and failure.system != system:
+            if failure.scope == "global":
+                applies = True
+            elif operation_scope == "aggregator":
+                applies = failure.scope == "aggregator"
+            else:
+                applies = failure.scope == "system" and failure.system == system
+            if not applies:
                 continue
             if failure.persistent and step >= failure.at_step:
                 return failure
@@ -89,15 +103,21 @@ class InterventionAwareCompanyWorldRuntime(CompanyWorldRuntime):
                 return failure
         return None
 
-    def _before_operation(self, system: CompanySystem | None) -> int:
+    def _before_operation(
+        self,
+        system: CompanySystem | None,
+        *,
+        operation_scope: Literal["system", "aggregator"] = "system",
+    ) -> int:
         self._ensure_open()
         step = self.operation_index
         self.operation_index += 1
         self._apply_permission_changes(step)
-        failure = self._active_failure(step, system)
+        failure = self._active_failure(step, system, operation_scope)
         if failure is not None:
+            target = failure.system.value if failure.system is not None else failure.scope
             raise RuntimeError(
-                f"intervention tool failure: {failure.system.value} unavailable at operation {step}"
+                f"intervention tool failure: {target} unavailable at operation {step}"
             )
         if system is not None and system in self.revoked_systems:
             raise PermissionError(
@@ -121,7 +141,9 @@ class InterventionAwareCompanyWorldRuntime(CompanyWorldRuntime):
         ]
 
     def search_all(self, query: str, limit: int = 10) -> list[dict]:
-        self._before_operation(None)
+        # A system-specific outage must not implicitly disable the cross-system aggregator. The
+        # aggregator can still search healthy systems and filters any revoked systems below.
+        self._before_operation(None, operation_scope="aggregator")
         self._charge(3)
         candidates = self.index.search(query, limit=100)
         return [

@@ -126,6 +126,47 @@ def test_persistent_tool_failure_remains_unavailable():
     assert runtime.budget.calls == 0
 
 
+def test_system_specific_failure_does_not_disable_cross_system_search():
+    runtime = InterventionAwareCompanyWorldRuntime(
+        _episode(
+            {
+                "foundry_tool_failures": [
+                    {"system": "ERP", "at_step": 0, "persistent": True}
+                ]
+            }
+        )
+    )
+
+    visible = runtime.search_all("ORD-1")
+    assert {item["record_id"] for item in visible} == {"ERP-1", "WMS-1"}
+    with pytest.raises(RuntimeError, match="ERP unavailable"):
+        runtime.search_system(CompanySystem.ERP, "ORD-1")
+    wms = runtime.search_system(CompanySystem.WMS, "ORD-1")
+    assert wms and wms[0]["record_id"] == "WMS-1"
+
+
+def test_aggregator_failure_is_distinct_from_system_failure():
+    runtime = InterventionAwareCompanyWorldRuntime(
+        _episode(
+            {
+                "foundry_tool_failures": [
+                    {
+                        "scope": "aggregator",
+                        "system": None,
+                        "at_step": 0,
+                        "persistent": True,
+                    }
+                ]
+            }
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="aggregator unavailable"):
+        runtime.search_all("ORD-1")
+    erp = runtime.search_system(CompanySystem.ERP, "ORD-1")
+    assert erp and erp[0]["record_id"] == "ERP-1"
+
+
 def test_permission_revoke_blocks_target_system_and_search_all_cannot_bypass():
     runtime = InterventionAwareCompanyWorldRuntime(
         _episode(
