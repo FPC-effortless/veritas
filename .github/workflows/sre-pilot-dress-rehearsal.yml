@@ -1,0 +1,436 @@
+name: SRE Pilot Dress Rehearsal
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/sre-pilot-dress-rehearsal.yml"
+      - "tools/serve_sre_openai_compatible_rehearsal.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: sre-pilot-dress-rehearsal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  customer-equivalent-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      VERITAS_REHEARSAL_MODEL: Qwen/Qwen2.5-0.5B-Instruct
+      VERITAS_REHEARSAL_ENDPOINT: http://127.0.0.1:8765/v1/chat/completions
+      VERITAS_REHEARSAL_SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      VERITAS_SRE_PRIVATE_CANDIDATE_ID: SRE-CAND-92A84929AD1E82E24357
+      VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID: EVID-2C69B48DCDD5F2232EABDC9B
+      VERITAS_SRE_PRIVATE_REPORT_ID: QREPORT-C585121E94D91766BB6664E3
+      VERITAS_SRE_PRIVATE_PANEL_ID: QPANEL-AFF065BA4C2FD75BE9BB3EBE
+      VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID: PRIVREL-036192DA63716D331C929C0C
+      VERITAS_SRE_PRIVATE_BUNDLE_SHA256: 531d1358883ec399add640c3519c31a36f6c93981796d7a3e8b37e2a7ace0d2a
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas
+        run: python -m pip install -e .
+
+      - name: Install CPU model runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.4"
+          python -m pip install "transformers>=4.45,<5" accelerate sentencepiece
+
+      - name: Restore model cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: sre-commercial-v4-${{ runner.os }}-open-models-v2
+
+      - name: Download retained encrypted SRE v4 seal
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v4-encrypted-private-seal-retained
+          path: ${{ runner.temp }}/sre-v4-seal
+          github-token: ${{ github.token }}
+          repository: FPC-effortless/veritas
+          run-id: 33049337587
+
+      - name: Download prior buyer-safe real-model evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v4-commercial-model-evidence
+          path: ${{ runner.temp }}/prior-model-evidence
+          github-token: ${{ github.token }}
+          repository: FPC-effortless/veritas
+          run-id: 33049337587
+
+      - name: Decrypt and verify exact frozen private release
+        shell: bash
+        env:
+          VERITAS_SRE_SEAL_PRIVATE_KEY_PEM: ${{ secrets.VERITAS_SRE_SEAL_PRIVATE_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          seal_root="$RUNNER_TEMP/sre-v4-seal"
+          private_root="$RUNNER_TEMP/veritas-sre-rehearsal-private"
+          mkdir -p "$private_root"
+
+          test -n "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" || {
+            echo "VERITAS_SRE_SEAL_PRIVATE_KEY_PEM is not configured" >&2
+            exit 1
+          }
+          test "$(sha256sum "$seal_root/private-release.zip.enc" | awk '{print $1}')" = \
+            "1a230dec590184f4ce0244965ce8a52727a84884f663ad2aaa90f338e2aeaf1d"
+          test "$(sha256sum "$seal_root/data-key.bin.enc" | awk '{print $1}')" = \
+            "836d0a52551b91094420bc6ec0bf58239162e8223acc0c3be15bf7f7c5778790"
+
+          key_file="$private_root/seal-private.pem"
+          data_key="$private_root/data-key.bin"
+          bundle="$private_root/private-release.zip"
+          printf '%s\n' "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" > "$key_file"
+          chmod 600 "$key_file"
+          trap 'rm -f "$key_file" "$data_key"' EXIT
+
+          openssl pkeyutl -decrypt \
+            -inkey "$key_file" \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in "$seal_root/data-key.bin.enc" \
+            -out "$data_key"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in "$seal_root/private-release.zip.enc" \
+            -out "$bundle" \
+            -pass file:"$data_key"
+
+          test "$(sha256sum "$bundle" | awk '{print $1}')" = "$VERITAS_SRE_PRIVATE_BUNDLE_SHA256"
+          mkdir -p "$private_root/bundle"
+          unzip -q "$bundle" -d "$private_root/bundle"
+          qualification="$(find "$private_root/bundle" -type f -name qualification.json -path '*/sre-v4/*' -print -quit)"
+          test -n "$qualification"
+          echo "VERITAS_SRE_QUALIFICATION_PATH=$qualification" >> "$GITHUB_ENV"
+          echo "VERITAS_REHEARSAL_PRIVATE_ROOT=$private_root" >> "$GITHUB_ENV"
+
+      - name: Verify exact sealed release and freeze rehearsal manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p results/pilot-dress-rehearsal
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from investigation_world.commercial.sre_release import load_sealed_sre_release
+
+          release = load_sealed_sre_release(
+              Path(os.environ["VERITAS_SRE_QUALIFICATION_PATH"]),
+              expected_candidate_id=os.environ["VERITAS_SRE_PRIVATE_CANDIDATE_ID"],
+              expected_evidence_manifest_id=os.environ["VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID"],
+              expected_report_id=os.environ["VERITAS_SRE_PRIVATE_REPORT_ID"],
+              expected_panel_id=os.environ["VERITAS_SRE_PRIVATE_PANEL_ID"],
+              expected_private_release_manifest_id=os.environ["VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"],
+          )
+          assert release.candidate.version == "sre-v4"
+          assert len(release.private_release_manifest.private_test_scenario_ids) == 30
+
+          manifest = {
+              "schema_version": "1.0.0",
+              "rehearsal": "veritas-sre-commercial-pilot-dress-rehearsal",
+              "created_at": datetime.now(timezone.utc).isoformat(),
+              "operator": "github-actions",
+              "operator_interventions": 0,
+              "software_head_sha": os.environ.get("VERITAS_REHEARSAL_SOURCE_HEAD_SHA") or os.environ["GITHUB_SHA"],
+              "benchmark_version": "sre-v4",
+              "candidate_id": os.environ["VERITAS_SRE_PRIVATE_CANDIDATE_ID"],
+              "evidence_manifest_id": os.environ["VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID"],
+              "qualification_report_id": os.environ["VERITAS_SRE_PRIVATE_REPORT_ID"],
+              "panel_id": os.environ["VERITAS_SRE_PRIVATE_PANEL_ID"],
+              "private_release_manifest_id": os.environ["VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID"],
+              "test_suite_content_sha256": os.environ["VERITAS_SRE_PRIVATE_BUNDLE_SHA256"],
+              "private_cases": 30,
+              "model": os.environ["VERITAS_REHEARSAL_MODEL"],
+              "harness": "veritas-openai-compatible-http-v1",
+              "endpoint": "http://127.0.0.1:8765/v1/chat/completions",
+              "authentication": "ephemeral-bearer-token",
+              "attempts_per_task": 1,
+              "max_new_tokens": 32,
+              "request_timeout_seconds": 120,
+              "retry_budget": 0,
+              "manual_score_edits_allowed": False,
+              "private_oracle_exposure_allowed": False,
+          }
+          Path("results/pilot-dress-rehearsal/evaluation-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8"
+          )
+          PY
+
+      - name: Start authenticated OpenAI-compatible rehearsal endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(openssl rand -hex 32)"
+          echo "::add-mask::$token"
+          echo "VERITAS_REHEARSAL_API_KEY=$token" >> "$GITHUB_ENV"
+          endpoint_log="$RUNNER_TEMP/veritas-rehearsal-endpoint.log"
+          nohup env VERITAS_REHEARSAL_API_KEY="$token" \
+            python tools/serve_sre_openai_compatible_rehearsal.py \
+              --model "$VERITAS_REHEARSAL_MODEL" \
+              --host 127.0.0.1 \
+              --port 8765 \
+            >"$endpoint_log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/veritas-rehearsal-endpoint.pid"
+
+          for _ in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8765/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$endpoint_log" >&2
+          exit 1
+
+      - name: Integration smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload='{"model":"Qwen/Qwen2.5-0.5B-Instruct","messages":[{"role":"system","content":"Return JSON only."},{"role":"user","content":"Return {\"causal_class\":\"transient\"}."}],"temperature":0,"max_tokens":24}'
+
+          unauth_status="$(curl -sS -o "$RUNNER_TEMP/unauth.json" -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d "$payload" \
+            "$VERITAS_REHEARSAL_ENDPOINT")"
+          test "$unauth_status" = "401"
+
+          auth_status="$(curl -sS -o "$RUNNER_TEMP/smoke.json" -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $VERITAS_REHEARSAL_API_KEY" \
+            -d "$payload" \
+            "$VERITAS_REHEARSAL_ENDPOINT")"
+          test "$auth_status" = "200"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          payload = json.loads((Path(os.environ["RUNNER_TEMP"]) / "smoke.json").read_text())
+          assert isinstance(payload["choices"][0]["message"]["content"], str)
+          PY
+
+      - name: Execute frozen private panel through endpoint harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_report="$VERITAS_REHEARSAL_PRIVATE_ROOT/endpoint-private-evaluation.json"
+          public_report="results/pilot-dress-rehearsal/endpoint-evaluation.json"
+          python tools/run_sre_endpoint_evaluation.py \
+            --qualification "$VERITAS_SRE_QUALIFICATION_PATH" \
+            --endpoint "$VERITAS_REHEARSAL_ENDPOINT" \
+            --model "$VERITAS_REHEARSAL_MODEL" \
+            --api-key-env VERITAS_REHEARSAL_API_KEY \
+            --expected-candidate-id "$VERITAS_SRE_PRIVATE_CANDIDATE_ID" \
+            --expected-evidence-manifest-id "$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID" \
+            --expected-report-id "$VERITAS_SRE_PRIVATE_REPORT_ID" \
+            --expected-panel-id "$VERITAS_SRE_PRIVATE_PANEL_ID" \
+            --expected-private-release-manifest-id "$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID" \
+            --timeout 120 \
+            --max-new-tokens 32 \
+            --output "$private_report" \
+            --public-output "$public_report"
+
+      - name: Reproduce scorecard from retained raw output and verify integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from investigation_world.commercial.sre_evaluation import sanitize_sre_evaluation
+
+          private_root = Path(os.environ["VERITAS_REHEARSAL_PRIVATE_ROOT"])
+          private_report = json.loads((private_root / "endpoint-private-evaluation.json").read_text())
+          public_path = Path("results/pilot-dress-rehearsal/endpoint-evaluation.json")
+          public_report = json.loads(public_path.read_text())
+
+          assert len(private_report["cases"]) == 30
+          assert private_report["private_cases"] == 30
+          assert all(isinstance(row["correct"], bool) for row in private_report["cases"])
+          assert all(row["prediction"] for row in private_report["cases"])
+          assert private_report["prompt_contract"]["private_causal_label_exposed"] is False
+          assert private_report["prompt_contract"]["private_resolution_notes_exposed"] is False
+          assert sanitize_sre_evaluation(private_report) == public_report
+          assert "cases" not in public_report
+          assert public_report["artifact_contract"]["scenario_ids_included"] is False
+          assert public_report["artifact_contract"]["per_case_predictions_included"] is False
+          assert public_report["artifact_contract"]["per_case_expected_labels_included"] is False
+          assert public_report["runtime"]["transport"] == "openai-compatible-http"
+          assert public_report["runtime"]["model_calls"] == 30
+          assert public_report["runtime"]["endpoint_host"] == "127.0.0.1:8765"
+
+          prior_root = Path(os.environ["RUNNER_TEMP"]) / "prior-model-evidence"
+          prior_qwen = json.loads((prior_root / "public-model-evidence" / "qwen2.5-0.5b.json").read_text())
+          compare_fields = ["accuracy", "balanced_accuracy", "macro_f1", "parse_failures"]
+          deltas = {field: public_report[field] - prior_qwen[field] for field in compare_fields}
+
+          correct_rows = [row for row in private_report["cases"] if row["correct"]]
+          incorrect_rows = [row for row in private_report["cases"] if not row["correct"]]
+          representatives = {
+              "success": correct_rows[0] if correct_rows else None,
+              "failure": incorrect_rows[0] if incorrect_rows else None,
+          }
+          (private_root / "representative-trajectories.json").write_text(
+              json.dumps(representatives, indent=2, sort_keys=True), encoding="utf-8"
+          )
+
+          scorecard = {
+              key: public_report[key]
+              for key in (
+                  "model", "private_cases", "accuracy", "balanced_accuracy", "macro_f1",
+                  "majority_baseline_accuracy", "accuracy_lift_over_majority", "parse_failures",
+                  "parse_failure_rate", "per_class", "runtime"
+              )
+          }
+          Path("results/pilot-dress-rehearsal/aggregate-scorecard.json").write_text(
+              json.dumps(scorecard, indent=2, sort_keys=True), encoding="utf-8"
+          )
+
+          verification = {
+              "schema_version": "1.0.0",
+              "exact_frozen_bundle_hash_verified": True,
+              "exact_release_identities_verified": True,
+              "private_cases_terminal": 30,
+              "retries_used": 0,
+              "manual_score_edits": 0,
+              "private_oracle_fields_exposed_to_model": False,
+              "raw_to_public_reproduction_exact": True,
+              "public_scenario_ids_included": False,
+              "public_per_case_predictions_included": False,
+              "public_per_case_expected_labels_included": False,
+              "endpoint_authentication_required": True,
+              "endpoint_transport": "openai-compatible-http",
+              "operator_interventions": 0,
+              "invalid_tasks_quarantined": 0,
+              "comparison_to_direct_model_evidence": {
+                  "prior_model": prior_qwen["model"],
+                  "changed_dimension": "transport/harness: direct transformers -> authenticated OpenAI-compatible HTTP",
+                  "metric_deltas": deltas,
+              },
+          }
+          Path("results/pilot-dress-rehearsal/rehearsal-verification.json").write_text(
+              json.dumps(verification, indent=2, sort_keys=True), encoding="utf-8"
+          )
+          PY
+
+      - name: Build customer-equivalent report and operator readout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/build_sre_customer_evaluation_report.py \
+            results/pilot-dress-rehearsal/endpoint-evaluation.json \
+            --customer-name "Pilot Dress Rehearsal" \
+            --output results/pilot-dress-rehearsal/buyer-report.md
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("results/pilot-dress-rehearsal")
+          report = json.loads((root / "endpoint-evaluation.json").read_text())
+          verification = json.loads((root / "rehearsal-verification.json").read_text())
+          deltas = verification["comparison_to_direct_model_evidence"]["metric_deltas"]
+
+          limitations = f"""# Pilot Dress Rehearsal — Limitations\n\n- This rehearsal measures `{report['model']}` on one frozen 30-case SRE v4 private panel; it is not a claim of universal production reliability.\n- The endpoint is an authenticated local OpenAI-compatible service inside the GitHub runner. It validates HTTP/authentication/harness behavior without depending on a customer credential or paid external endpoint.\n- The panel has class counts {report['class_distribution']}; balanced accuracy and macro F1 remain the primary capability metrics.\n- Private case-level oracle labels, predictions, and scenario identifiers are retained only in an encrypted operator artifact and are excluded from buyer-safe outputs.\n- Reuse of this panel remains appropriate only while its case-level ground truth is undisclosed.\n"""
+          (root / "limitations.md").write_text(limitations, encoding="utf-8")
+
+          recommendation = f"""# Recommended Next Experiment\n\nThe rehearsal transport is operational. The next capability experiment should hold SRE v4 and the endpoint harness fixed while changing the model or prompting/training intervention. Current balanced accuracy is **{100*report['balanced_accuracy']:.1f}%** and macro F1 is **{100*report['macro_f1']:.1f}%**. Use a stronger model as the treatment and preserve the same sealed panel for strict regression comparison.\n"""
+          (root / "recommended-next-experiment.md").write_text(recommendation, encoding="utf-8")
+
+          readout = f"""# Simulated Buyer Readout\n\n## First five minutes\n\n1. **Decision:** the Veritas SRE commercial evaluation path is operational and repeatable; this small Qwen baseline should not be selected as a high-confidence SRE causal classifier without improvement.\n2. **Strongest result:** the complete authenticated endpoint path evaluated all {report['private_cases']} frozen private cases with **{100*report['balanced_accuracy']:.1f}% balanced accuracy** and **{100*report['macro_f1']:.1f}% macro F1**.\n3. **Highest-risk failure mode:** class collapse remains the primary observed weakness; the scorecard should be read by causal class rather than raw accuracy alone.\n4. **Representative trajectory:** one successful and one failed case-level trajectory were retained in the encrypted operator artifact; they are deliberately not disclosed in the buyer-safe package because doing so would consume private benchmark information.\n5. **Next experiment:** keep the panel and endpoint harness fixed, substitute a stronger model or changed training/prompt treatment, and compare balanced accuracy, macro F1, parse failures, and per-class recall.\n\n## Reproducibility note\n\nThe direct-transformers baseline and the authenticated HTTP rehearsal differ only in transport/harness. Recorded metric deltas are `{json.dumps(deltas, sort_keys=True)}`.\n"""
+          (root / "operator-readout.md").write_text(readout, encoding="utf-8")
+          PY
+
+      - name: Reject credential or private-row leakage from buyer-safe rehearsal package
+        shell: bash
+        run: |
+          set -euo pipefail
+          public_root="results/pilot-dress-rehearsal"
+          if grep -R -F "$VERITAS_REHEARSAL_API_KEY" "$public_root" >/dev/null; then
+            echo "ephemeral endpoint credential leaked into public rehearsal artifacts" >&2
+            exit 1
+          fi
+          if grep -R '"scenario_id"' "$public_root" >/dev/null; then
+            echo "private scenario id leaked into public rehearsal artifacts" >&2
+            exit 1
+          fi
+          if grep -R '"expected"' "$public_root" >/dev/null; then
+            echo "per-case expected label leaked into public rehearsal artifacts" >&2
+            exit 1
+          fi
+          if grep -R '"prediction"' "$public_root" >/dev/null; then
+            echo "per-case prediction leaked into public rehearsal artifacts" >&2
+            exit 1
+          fi
+
+      - name: Seal private raw results and representative trajectories
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_root="$VERITAS_REHEARSAL_PRIVATE_ROOT"
+          seal_root="$RUNNER_TEMP/veritas-rehearsal-private-seal"
+          mkdir -p "$seal_root"
+          tar -czf "$seal_root/private-rehearsal.tar.gz" \
+            -C "$private_root" \
+            endpoint-private-evaluation.json \
+            representative-trajectories.json
+          openssl rand 32 > "$seal_root/data-key.bin"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -in "$seal_root/private-rehearsal.tar.gz" \
+            -out "$seal_root/private-rehearsal.tar.gz.enc" \
+            -pass file:"$seal_root/data-key.bin"
+          openssl pkeyutl -encrypt \
+            -pubin \
+            -inkey ops/sre-v4-seal-public.pem \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in "$seal_root/data-key.bin" \
+            -out "$seal_root/data-key.bin.enc"
+          sha256sum "$seal_root/private-rehearsal.tar.gz.enc" "$seal_root/data-key.bin.enc" \
+            > "$seal_root/SHA256SUMS"
+          rm -f "$seal_root/data-key.bin" "$seal_root/private-rehearsal.tar.gz"
+          rm -f "$private_root/endpoint-private-evaluation.json" "$private_root/representative-trajectories.json"
+
+      - name: Stop rehearsal endpoint
+        if: always()
+        shell: bash
+        run: |
+          if test -f "$RUNNER_TEMP/veritas-rehearsal-endpoint.pid"; then
+            kill "$(cat "$RUNNER_TEMP/veritas-rehearsal-endpoint.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload encrypted private rehearsal evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-pilot-dress-rehearsal-private-seal
+          path: |
+            ${{ runner.temp }}/veritas-rehearsal-private-seal/private-rehearsal.tar.gz.enc
+            ${{ runner.temp }}/veritas-rehearsal-private-seal/data-key.bin.enc
+            ${{ runner.temp }}/veritas-rehearsal-private-seal/SHA256SUMS
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload buyer-safe pilot dress rehearsal package
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-pilot-dress-rehearsal
+          path: results/pilot-dress-rehearsal
+          retention-days: 90
+          if-no-files-found: error
