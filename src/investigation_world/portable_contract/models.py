@@ -12,11 +12,7 @@ from investigation_world.portable_contract.identity import (
 
 
 class FrozenDict(dict[str, Any]):
-    """A recursively frozen JSON-object representation.
-
-    ``dict`` inheritance keeps canonical JSON/Pydantic serialization behavior while
-    every mutating method fails closed after construction.
-    """
+    """A recursively frozen JSON-object representation."""
 
     @staticmethod
     def _immutable(*_args: Any, **_kwargs: Any) -> None:
@@ -32,13 +28,34 @@ class FrozenDict(dict[str, Any]):
     __ior__ = _immutable
 
 
+class FrozenList(list[Any]):
+    """A list-compatible recursively frozen JSON-array representation."""
+
+    @staticmethod
+    def _immutable(*_args: Any, **_kwargs: Any) -> None:
+        raise TypeError("portable contract sequences are immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    append = _immutable
+    clear = _immutable
+    extend = _immutable
+    insert = _immutable
+    pop = _immutable
+    remove = _immutable
+    reverse = _immutable
+    sort = _immutable
+    __iadd__ = _immutable
+    __imul__ = _immutable
+
+
 def _deep_freeze(value: Any) -> Any:
-    if isinstance(value, FrozenDict):
+    if isinstance(value, (FrozenDict, FrozenList)):
         return value
     if isinstance(value, dict):
         return FrozenDict({key: _deep_freeze(item) for key, item in value.items()})
     if isinstance(value, list):
-        return tuple(_deep_freeze(item) for item in value)
+        return FrozenList(_deep_freeze(item) for item in value)
     if isinstance(value, tuple):
         return tuple(_deep_freeze(item) for item in value)
     if isinstance(value, set):
