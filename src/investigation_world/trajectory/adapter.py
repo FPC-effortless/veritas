@@ -122,23 +122,27 @@ def _resource_call(index: int, event: TraceEvent) -> ResourceCallSummary:
     )
 
 
-def _sum_known(values: list[int | float | None]) -> int | float | None:
-    known = [value for value in values if value is not None]
-    if not known:
+def _sum_complete(values: list[int | float | None]) -> int | float | None:
+    if not values or any(value is None for value in values):
         return None
-    return sum(known)
+    return sum(value for value in values if value is not None)
 
 
 def _usage(trace: RolloutTrace, context: RolloutTraceAdapterContext) -> UsageTotals:
     calls = context.provider_calls
-    input_tokens = _sum_known([item.input_tokens for item in calls])
-    output_tokens = _sum_known([item.output_tokens for item in calls])
-    total_tokens = _sum_known([item.total_tokens for item in calls])
-    provider_cost = _sum_known([item.cost for item in calls])
+    input_tokens = _sum_complete([item.input_tokens for item in calls])
+    output_tokens = _sum_complete([item.output_tokens for item in calls])
+    total_tokens = _sum_complete([item.total_tokens for item in calls])
+    provider_cost = _sum_complete([item.cost for item in calls])
     resolved_total_tokens = int(total_tokens) if total_tokens is not None else None
     if resolved_total_tokens is None and input_tokens is not None and output_tokens is not None:
         resolved_total_tokens = int(input_tokens + output_tokens)
-    total_cost = trace.total_cost + float(provider_cost or 0.0)
+    if not calls:
+        total_cost = trace.total_cost
+    elif provider_cost is None:
+        total_cost = None
+    else:
+        total_cost = trace.total_cost + float(provider_cost)
     return UsageTotals(
         input_tokens=int(input_tokens) if input_tokens is not None else None,
         output_tokens=int(output_tokens) if output_tokens is not None else None,
