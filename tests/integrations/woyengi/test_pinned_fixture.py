@@ -6,11 +6,11 @@ from pathlib import Path
 from investigation_world.integrations.woyengi import adapt_pinned_world_bundle_fixture
 
 
-PINNED_SHA256 = "3577aa29266dac59921c31e65d22ad657c4b7a9191011e9f5448aed32781e10b"
+PINNED_SHA256 = "62172d94b6e5d34774714b3c3da7c3fc61d71c61d7798f71d5a94a8243177a86"
 FIXTURE = Path(__file__).parent / "fixtures" / "veritas-adapter-v0.1.json"
 
 
-def test_upstream_pinned_fixture_bytes_match_woyengi_issue_9_hash():
+def test_upstream_pinned_fixture_bytes_match_woyengi_action_schema_hash():
     raw = FIXTURE.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == PINNED_SHA256
 
