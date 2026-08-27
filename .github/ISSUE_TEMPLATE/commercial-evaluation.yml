@@ -1,0 +1,69 @@
+name: Commercial evaluation inquiry
+description: Request a private Veritas evaluation, environment license, or design-partner pilot
+title: "Commercial inquiry: "
+labels:
+  - commercial-inquiry
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for buyer-safe commercial inquiries only. Do not paste API keys, customer-confidential data, private benchmark rows, hidden labels, or other secrets into this public issue.
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: Request type
+      options:
+        - Private model/agent evaluation
+        - Environment/taskset license
+        - Custom capability environment
+        - Research or marketplace partnership
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: organization
+    attributes:
+      label: Organization
+      description: Company, lab, research group, or independent project name.
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision or capability question
+      description: What concrete model-selection, regression, training, harness, safety, or deployment decision should the evaluation support?
+      placeholder: "Example: Compare two agent harnesses on incident-cause diagnosis under incomplete early evidence."
+    validations:
+      required: true
+  - type: textarea
+    id: system
+    attributes:
+      label: System to evaluate
+      description: Buyer-safe description only. Do not include credentials or private endpoint details.
+    validations:
+      required: true
+  - type: dropdown
+    id: integration
+    attributes:
+      label: Preferred integration
+      options:
+        - OpenAI-compatible endpoint
+        - Local/open checkpoint
+        - Customer-controlled runner
+        - HUD
+        - Prime Intellect
+        - Other / to be scoped
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Timing and constraints
+      description: Desired timeline, confidentiality, deployment, or procurement constraints that are safe to disclose publicly.
+  - type: checkboxes
+    id: acknowledgement
+    attributes:
+      label: Public issue acknowledgement
+      options:
+        - label: I have not included credentials, private benchmark content, personal data, or customer-confidential information in this issue.
+          required: true
