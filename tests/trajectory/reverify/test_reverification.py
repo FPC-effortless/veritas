@@ -29,7 +29,6 @@ from investigation_world.trajectory import (
     TrajectoryV2,
     UsageTotals,
     VerifierIdentity,
-    VisibilityClass,
     WorldIdentity,
     canonical_hash,
 )
