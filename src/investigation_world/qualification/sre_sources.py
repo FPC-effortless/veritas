@@ -108,12 +108,14 @@ def _infer_causal_class_with_rule(text: str) -> tuple[SRECausalClass, str, bool]
         r"\bresource contention\b",
     )
     infrastructure_patterns = (
-        r"\b(?:network|dns|routing|bgp)(?: connectivity)? (?:issue|fail(?:ed|ure)|outage|incident|partition)\b",
-        r"\b(?:network|dns|routing|bgp)(?: connectivity)? (?:was |has )?(?:degraded|unavailable)\b",
+        r"\b(?:network|dns|routing|bgp)(?: connectivity)? (?:issues?|problems?|fail(?:ed|ure)|outage|incident|partition|interruption|congestion|impairment|degradation)\b",
+        r"\b(?:network|dns|routing|bgp)(?: connectivity)? (?:was |has )?(?:degraded|unavailable|interrupted)\b",
         r"\b(?:hardware|disk|storage|power) (?:fail(?:ed|ure)|fault|outage|incident)\b",
         r"\b(?:database|datastore) (?:failover|fail(?:ed|ure)|outage|unavailable|corruption)\b",
         r"\b(?:region|availability zone|data ?center) (?:fail(?:ed|ure)|outage|incident|unavailable)\b",
-        r"\b(?:cloud|upstream|third[- ]party|dependency) provider (?:fail(?:ed|ure)|outage|incident|unavailable)\b",
+        r"\b(?:cloud|upstream|third[- ]party) provider (?:fail(?:ed|ure)|outage|incident|unavailable)\b",
+        r"\bcloud provider (?:network|routing|connectivity|infrastructure) (?:issues?|problems?|fail(?:ed|ure)|outage|incident|interruption|congestion|impairment|degradation)\b",
+        r"\bthird[- ]party cloud platform\b.*\b(?:virtual machine|network|routing|connectivity|infrastructure)\b.*\b(?:issues?|problems?|fail(?:ed|ure)|outage|incident|interruption|unavailable|degraded)\b",
         r"\b(?:degraded|failed|unhealthy) (?:[\w.-]+ ){0,3}(?:node|host|server)\b",
         r"\b(?:node|host|server|cluster) (?:fail(?:ed|ure)|unavailable|unhealthy)\b",
         r"\b(?:fiber|cable) (?:cut|failure)\b",
