@@ -123,19 +123,21 @@ class PortableTasksetManifest(BaseModel):
 class PortableMeteringContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    run_id_required: bool = True
-    task_id_required: bool = True
-    environment_version_required: bool = True
+    hook_optional: bool = True
+    event_identity_content_derived: bool = True
+    consumer_adds_wall_clock_time: bool = True
     fields: list[str] = Field(
         default_factory=lambda: [
+            "event_id",
+            "kind",
             "run_id",
             "environment_id",
             "environment_version",
             "task_id",
             "seed",
-            "started_at",
-            "finished_at",
+            "state_digest",
             "reward",
+            "metadata",
         ]
     )
 
