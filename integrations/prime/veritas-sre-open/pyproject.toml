@@ -3,7 +3,7 @@ name = "veritas-sre-open"
 version = "0.11.0"
 description = "Public synthetic Prime Verifiers environment demonstrating Veritas SRE causal-class evaluation semantics"
 readme = "README.md"
-license = "Apache-2.0"
+license = {file = "LICENSE"}
 requires-python = ">=3.12,<3.13"
 dependencies = ["verifiers>=0.2,<0.3"]
 keywords = ["evaluation", "agents", "sre", "incident-response", "verifiers", "reasoning"]
