@@ -89,6 +89,40 @@ jobs:
           )
           print(json.dumps(summary, indent=2, sort_keys=True))
           PY
+      - name: Seal private candidate before artifact transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          seal_root="$RUNNER_TEMP/sre-v4-seal"
+          mkdir -p "$seal_root"
+          zip -qr "$seal_root/private-release.zip" \
+            results/sre-v4/qualification.json \
+            results/sre-v4/sources
+          openssl rand 32 > "$seal_root/data-key.bin"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -in "$seal_root/private-release.zip" \
+            -out "$seal_root/private-release.zip.enc" \
+            -pass file:"$seal_root/data-key.bin"
+          openssl pkeyutl -encrypt \
+            -pubin \
+            -inkey ops/sre-v4-seal-public.pem \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in "$seal_root/data-key.bin" \
+            -out "$seal_root/data-key.bin.enc"
+          rm -f "$seal_root/data-key.bin" "$seal_root/private-release.zip"
+          sha256sum "$seal_root/private-release.zip.enc" "$seal_root/data-key.bin.enc" \
+            > "$seal_root/SHA256SUMS"
+      - name: Upload encrypted private seal only
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-v4-encrypted-private-seal
+          path: |
+            ${{ runner.temp }}/sre-v4-seal/private-release.zip.enc
+            ${{ runner.temp }}/sre-v4-seal/data-key.bin.enc
+            ${{ runner.temp }}/sre-v4-seal/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload buyer-safe qualification evidence only
         uses: actions/upload-artifact@v4
         with:
