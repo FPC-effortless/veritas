@@ -22,11 +22,11 @@ Portable runtime-control sidecar
 Separate Harbor verifier (started after environment collection)
 ```
 
-The `main` Harbor service is attached only to `agent-mcp`. The MCP service bridges `agent-mcp` and `runtime-control`. The runtime-control service is attached only to `runtime-control`, has no host-published port, and exposes only health plus shared MCP-dispatch execution. It exposes no verification endpoint.
+The `main` Harbor service is attached only to `agent-mcp`. The MCP service bridges `agent-mcp` and `runtime-control`. The runtime-control service is attached only to `runtime-control`, has no host-published port, and exposes only health plus shared MCP-dispatch execution. It exposes no verification endpoint. The MCP bridge validates its upstream URL to exactly `http://runtime-control:8081`; alternate schemes, hosts, ports, paths, credentials, queries, or fragments fail closed instead of turning the bridge into a general URL fetcher.
 
 Each Compose service also has a disjoint Docker build context. In particular, `main` builds from `environment/main/`, so the agent image build context does not include `environment/runtime-control/contract.json` or any other operational-private file.
 
-The separate verifier is a Harbor `environment_mode = "separate"` verifier with a `no-network` baseline. Harbor collects `/tmp/veritas-runtime/trajectory.jsonl` directly from the runtime-control sidecar and rematerializes it at the same path in the verifier container.
+The separate verifier is a Harbor `environment_mode = "separate"` verifier with a `no-network` baseline. Harbor collects `/tmp/veritas-runtime/trajectory.jsonl` directly from the runtime-control sidecar and rematerializes it at the same path in the verifier container. That path is an ephemeral filesystem location inside the isolated runtime-control container; it is not a shared host temporary file and is not visible to the agent container.
 
 ## Public/private split
 
@@ -35,7 +35,7 @@ Agent-public generated files contain only the `PortablePublicContract`, instruct
 - `environment/runtime-control/contract.json`, whose derived image and build context are isolated from the agent network and agent image;
 - `tests/contract.json`, whose derived image is used only by Harbor's separate verifier.
 
-The MCP sidecar recompiles its tool catalog from `PortablePublicContract` using `compile_mcp_surface`. The runtime-control service also compiles the same surface and executes calls exclusively through `dispatch_mcp_tool` over `PortableOperationalRuntime`. The MCP wire response returns only the portable observation; reward, reward components, state digests, and verifier metadata are not forwarded to the evaluated agent.
+The MCP sidecar recompiles its tool catalog from `PortablePublicContract` using `compile_mcp_surface`. The runtime-control service also compiles the same surface and executes calls exclusively through `dispatch_mcp_tool` over `PortableOperationalRuntime`. The MCP wire response returns only the portable observation; reward, reward components, state digests, and verifier metadata are not forwarded to the evaluated agent. Object observations are also emitted as MCP `structuredContent`; array or scalar observations remain exact JSON text instead of being wrapped into a different schema.
 
 The current shared portable runtime requires the complete operational contract to reconstruct operational hidden state. Therefore the runtime-control sidecar necessarily receives the full contract. This is isolated evaluator infrastructure, not the Harbor `main` container or MCP container. If the portable runtime later supports a smaller execution-only private projection, this exporter should narrow the runtime-control input accordingly rather than duplicating that semantic split here.
 
@@ -70,9 +70,9 @@ Runtime-control records the deterministic reset and every successful shared-disp
 3. requires the reset result to reproduce exactly;
 4. replays every tool through `dispatch_mcp_tool` and requires each recorded result to match exactly;
 5. uses the terminal native reward if the agent submitted, otherwise calls `PortableOperationalRuntime.verify()` after replay;
-6. writes that native reward to `/logs/verifier/reward.txt` and component details to `/logs/verifier/veritas-verifier.json`.
+6. writes that native reward to `/logs/verifier/reward.txt` using a shortest round-trippable float representation, with component details in `/logs/verifier/veritas-verifier.json`.
 
-No reward formula is implemented in the Harbor exporter.
+No reward formula or exporter-side rounding is implemented in the Harbor exporter.
 
 ## Generated package layout
 
@@ -130,9 +130,10 @@ The owned tests fail if:
 - the agent image build context expands to include the private runtime-control subtree;
 - mutable container image tags are accepted;
 - `main` joins the runtime-control network or runtime-control publishes a host port;
+- the MCP bridge accepts an arbitrary runtime-control URL;
 - Harbor does not use a separate verifier;
 - the generated MCP surface identity differs from the shared compiler;
 - MCP dispatch results differ from direct portable-runtime results;
 - deterministic reset/replay evidence does not reproduce;
-- Harbor reward differs from native portable-runtime verification;
+- Harbor reward differs from native portable-runtime verification or is rounded by the exporter;
 - an existing non-empty output directory can contribute undeclared stale files.
