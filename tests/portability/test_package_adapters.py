@@ -160,14 +160,15 @@ def test_prime_package_is_deterministic_and_v1_shaped(tmp_path, monkeypatch) -> 
 
     assert first.package_id == second.package_id
     _compile_python_files(tmp_path / "first")
-    taskset_source = (tmp_path / "first" / "veritas_sre_prime" / "taskset.py").read_text()
-    legacy_source = (tmp_path / "first" / "veritas_sre_prime" / "legacy.py").read_text()
+    package_dir = tmp_path / "first" / "veritas_sre_prime"
+    taskset_source = (package_dir / "taskset.py").read_text()
+    legacy_source = (package_dir / "legacy.py").read_text()
     assert "import verifiers.v1 as vf" in taskset_source
     assert "class SRETaskset" in taskset_source
     assert "def load(self)" in taskset_source
     assert "def load_environment()" in legacy_source
     assert "compatibility-only" in legacy_source
-    manifest_text = (tmp_path / "first" / "portable_manifest.json").read_text()
+    manifest_text = (package_dir / "portable_manifest.json").read_text()
     assert "private-id" not in manifest_text
-    private_text = (tmp_path / "first" / "veritas_sre_prime" / "private_tasks.json").read_text()
+    private_text = (package_dir / "private_tasks.json").read_text()
     assert '"expected_causal_class": "capacity"' in private_text
