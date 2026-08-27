@@ -82,6 +82,8 @@ def main() -> None:
         stratum_metadata_key="causal_class",
         minimum_private_scenarios_per_stratum=5,
         minimum_train_scenarios_per_stratum=3,
+        minimum_private_scenarios_total=30,
+        minimum_dev_scenarios_total=2,
     )
     cases = [
         case.model_copy(
@@ -94,10 +96,6 @@ def main() -> None:
         for case in cases
     ]
     evaluations = execute_sre_policy_suite(cases, random_seed=args.random_seed)
-    # Four mutually exclusive SRE causal classes imply 0.25 expected uniform-random accuracy.
-    # Qualification also requires all four causal strata to be represented with material support;
-    # this prevents majority-class panels from appearing discriminative merely because a dominant
-    # label is easy to guess.
     thresholds = QualificationThresholds(
         random_chance_reward=0.25,
         maximum_random_excess_over_chance=0.10,
@@ -143,6 +141,10 @@ def main() -> None:
         "report_id": report.report_id,
         "version": args.version,
         "providers": providers,
+        "source_class_counts": {
+            provider: summary["causal_class_counts"]
+            for provider, summary in sorted(source_summary.items())
+        },
         "scenarios": len(candidate.scenarios),
         "private_test": sum(item.split.value == "private_test" for item in candidate.scenarios),
         "private_strata": dict(sorted(private_counts.items())),
