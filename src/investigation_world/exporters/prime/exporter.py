@@ -393,6 +393,10 @@ class OperationalToolset(vf.Toolset[vf.ToolsetConfig, OperationalState]):
                 # effects must survive deterministic replay.
                 self.state.requests.append(request)
                 if result.failure is not None:
+                    # Verifiers v1 normally publishes typed state after a successful tool return.
+                    # A portable rejection may still consume budget or create an event, so publish
+                    # the updated invocation log before surfacing the public tool error.
+                    await self._push_state(b"")
                     raise RuntimeError(_public_failure(result))
                 # Never expose reward, reward components, hidden state digest, or private budgets.
                 return result.observation
