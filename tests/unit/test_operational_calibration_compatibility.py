@@ -19,7 +19,7 @@ def test_compiler_rejects_incompatible_regional_profile() -> None:
         size_band=CompanySizeBand.MEDIUM,
     )
     compiler = OperationalWorldCompiler(calibration=calibration)
-    with pytest.raises(ValueError, match="calibration region"):
+    with pytest.raises(ValueError, match=r"region europe is incompatible with africa"):
         compiler.compile(
             OperationalWorldSpec(
                 seed=901,
@@ -42,4 +42,15 @@ def test_global_generic_profile_can_calibrate_matching_size_world() -> None:
             employee_count=80,
         )
     )
-    assert world.calibration.profile_id == calibration.profile_id
+
+    # The production facade scopes every supplied calibration to the generated world
+    # before compilation. The source profile remains identifiable in the deterministic
+    # generation profile ID; it is not used verbatim as the effective calibration.
+    assert world.calibration.profile_id == (
+        f"generation-{calibration.profile_id}-{CompanySizeBand.MEDIUM.value}"
+    )
+    assert world.calibration.region is RegionGroup.AFRICA
+    assert world.calibration.industry is IndustryFamily.LOGISTICS
+    assert world.calibration.size_band is CompanySizeBand.MEDIUM
+    assert world.calibration.size_scope == "exact"
+    assert world.calibration.state == "bootstrap_prior"
