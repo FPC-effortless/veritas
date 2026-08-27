@@ -39,10 +39,11 @@ jobs:
           python -m compileall -q src/investigation_world/portability
           python -m compileall -q tools/export_sre_portable_manifest.py
           python -m compileall -q tools/export_sre_portable_package.py
+          python -m compileall -q tests/portability/build_fixture_exports.py
 
   external-adapter-contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,3 +64,64 @@ jobs:
 
       - name: Load generated packages against current SDK APIs
         run: python -m pytest tests/portability/test_external_adapter_smoke.py -q
+
+      - name: Generate deterministic external fixture packages
+        run: |
+          rm -rf "$RUNNER_TEMP/veritas-portability-fixture"
+          python tests/portability/build_fixture_exports.py \
+            --output "$RUNNER_TEMP/veritas-portability-fixture"
+
+      - name: Build generated HUD image with HUD CLI
+        working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
+        run: hud build .
+
+      - name: Exercise HUD task start and grade protocol
+        working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
+        run: |
+          set -euo pipefail
+          IMAGE=$(awk '/local:/ {print $2; exit}' hud.lock.yaml)
+          test -n "$IMAGE"
+          docker run -d --name veritas-hud-portability-smoke -p 8765:8765 "$IMAGE"
+          trap 'docker rm -f veritas-hud-portability-smoke >/dev/null 2>&1 || true' EXIT
+
+          ARGS='{"prompt":"Worker demand exceeded capacity and queues accumulated.","expected_causal_class":"capacity"}'
+          START_OUTPUT=""
+          for attempt in $(seq 1 30); do
+            if START_OUTPUT=$(hud task start sre_causal_classification \
+              --url tcp://127.0.0.1:8765 --args "$ARGS" 2>&1); then
+              break
+            fi
+            sleep 1
+          done
+          printf '%s\n' "$START_OUTPUT"
+          printf '%s\n' "$START_OUTPUT" | grep -F "Worker demand exceeded capacity"
+
+          GRADE_OUTPUT=$(hud task grade sre_causal_classification \
+            --url tcp://127.0.0.1:8765 --args "$ARGS" \
+            --answer '{"causal_class":"capacity"}')
+          printf '%s\n' "$GRADE_OUTPUT"
+          printf '%s\n' "$GRADE_OUTPUT" | grep -Eq '(^|[^0-9])1(\.0+)?([^0-9]|$)'
+
+      - name: Exercise Prime v1 and legacy compatibility entrypoints
+        env:
+          PRIME_FIXTURE_ROOT: ${{ runner.temp }}/veritas-portability-fixture/prime
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["PRIME_FIXTURE_ROOT"])
+          sys.path.insert(0, str(root))
+          import verifiers.v1 as vf
+          from veritas_sre_prime import SRETaskset, load_environment
+
+          taskset = SRETaskset(vf.TasksetConfig())
+          tasks = taskset.load()
+          assert len(tasks) == 1
+          assert tasks[0].data.portable_task_id.startswith("PTASK-")
+
+          legacy = load_environment()
+          assert legacy is not None
+          print("Prime v1 taskset and compatibility-only legacy bridge loaded")
+          PY
