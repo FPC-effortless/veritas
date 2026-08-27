@@ -27,7 +27,10 @@ from investigation_world.sandbox.models import (
     SandboxResetResult,
 )
 
-LocalSandboxHandler = Callable[[SandboxExecutionRequest, "LocalSandboxContext"], "LocalSandboxHandlerResult"]
+LocalSandboxHandler = Callable[
+    [SandboxExecutionRequest, "LocalSandboxContext"],
+    "LocalSandboxHandlerResult",
+]
 
 
 def _sha256(content: bytes) -> str:
