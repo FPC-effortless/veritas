@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import urllib.request
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,11 @@ def main() -> None:
     parser.add_argument("--random-seed", type=int, default=7)
     parser.add_argument("--version", default="sre-v1")
     parser.add_argument("--providers", nargs="*", default=None)
+    parser.add_argument(
+        "--require-explicit-causal-label",
+        action="store_true",
+        help="exclude incidents whose later/private evidence lacks an explicit causal signal",
+    )
     args = parser.parse_args()
 
     providers = args.providers or list(STATUSPAGE_INCIDENT_ENDPOINTS)
@@ -52,18 +58,41 @@ def main() -> None:
         payload = _fetch_json(endpoint, args.timeout)
         snapshot = args.snapshot_dir / f"{provider}-incidents.json"
         snapshot.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
-        parsed = parse_statuspage_incidents(provider, payload, endpoint=endpoint, early_update_count=args.early_updates)
+        parsed = parse_statuspage_incidents(
+            provider,
+            payload,
+            endpoint=endpoint,
+            early_update_count=args.early_updates,
+            require_explicit_causal_label=args.require_explicit_causal_label,
+        )
         incidents.extend(parsed)
         source_summary[provider] = {
             "endpoint": endpoint,
             "raw_incidents": len(payload.get("incidents", [])),
             "eligible_incidents": len(parsed),
+            "causal_class_counts": dict(
+                sorted(Counter(item.causal_class.value for item in parsed).items())
+            ),
             "snapshot": str(snapshot),
         }
 
     candidate, cases = compile_sre_candidate(incidents, version=args.version)
-    candidate, split_map = repartition_candidate_by_near_duplicates(candidate)
-    cases = [case.model_copy(update={"scenario": case.scenario.model_copy(update={"split": split_map[case.scenario.scenario_id]})}) for case in cases]
+    candidate, split_map = repartition_candidate_by_near_duplicates(
+        candidate,
+        stratum_metadata_key="causal_class",
+        minimum_private_scenarios_per_stratum=5,
+        minimum_train_scenarios_per_stratum=3,
+    )
+    cases = [
+        case.model_copy(
+            update={
+                "scenario": case.scenario.model_copy(
+                    update={"split": split_map[case.scenario.scenario_id]}
+                )
+            }
+        )
+        for case in cases
+    ]
     evaluations = execute_sre_policy_suite(cases, random_seed=args.random_seed)
     # Four mutually exclusive SRE causal classes imply 0.25 expected uniform-random accuracy.
     # Qualification also requires all four causal strata to be represented with material support;
@@ -80,6 +109,17 @@ def main() -> None:
     report = qualify_candidate(candidate, evaluations, thresholds=thresholds)
     release = private_release_manifest(candidate, report) if report.releaseable else None
 
+    private_counts = Counter(
+        str(item.metadata.get("causal_class", "<missing>"))
+        for item in candidate.scenarios
+        if item.split.value == "private_test"
+    )
+    train_counts = Counter(
+        str(item.metadata.get("causal_class", "<missing>"))
+        for item in candidate.scenarios
+        if item.split.value == "train"
+    )
+
     output = {
         "schema_version": "0.10.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -90,6 +130,10 @@ def main() -> None:
         "qualification": report.model_dump(mode="json"),
         "qualification_thresholds": thresholds.model_dump(mode="json"),
         "private_release_manifest": release.model_dump(mode="json") if release else None,
+        "stratum_summary": {
+            "train": dict(sorted(train_counts.items())),
+            "private_test": dict(sorted(private_counts.items())),
+        },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(output, indent=2, sort_keys=True), encoding="utf-8")
@@ -101,7 +145,10 @@ def main() -> None:
         "providers": providers,
         "scenarios": len(candidate.scenarios),
         "private_test": sum(item.split.value == "private_test" for item in candidate.scenarios),
+        "private_strata": dict(sorted(private_counts.items())),
+        "train_strata": dict(sorted(train_counts.items())),
         "near_duplicate_components": candidate.metadata.get("near_duplicate_components"),
+        "split_protocol": candidate.metadata.get("split_protocol"),
         "random_chance_reward": thresholds.random_chance_reward,
         "failed_gates": [item.name for item in report.gates if not item.passed],
     }, indent=2, sort_keys=True))
