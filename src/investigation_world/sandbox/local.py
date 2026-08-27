@@ -4,7 +4,6 @@ import hashlib
 import json
 import uuid
 from collections.abc import Callable, Iterable, Mapping
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
@@ -59,6 +58,7 @@ class LocalSandboxHandlerResult:
     stderr: bytes | str = b""
     exit_code: int = 0
     artifacts: Mapping[str, bytes | str] = field(default_factory=dict)
+    duration_ms: int = 0
 
 
 class LocalSandboxContext:
@@ -99,7 +99,7 @@ class LocalSandboxContext:
 
 
 class LocalDeterministicSandboxProvider:
-    """Cheap deterministic test double with no host-filesystem or subprocess access."""
+    """Deterministic contract test double backed only by trusted registered handlers."""
 
     provider_name = "local-deterministic"
     provider_version = "1"
@@ -298,22 +298,9 @@ class LocalDeterministicSandboxSession:
             secret_refs=self._secret_refs,
             secret_values=self._secret_values,
         )
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="veritas-sandbox")
-        future = executor.submit(handler, request, context)
         try:
-            raw = future.result(timeout=self._request.resources.timeout_ms / 1000)
-        except FutureTimeoutError:
-            future.cancel()
-            executor.shutdown(wait=False, cancel_futures=True)
-            self._execution_index += 1
-            return self._failure(
-                status=SandboxExecutionStatus.TIMED_OUT,
-                origin=SandboxFailureOrigin.POLICY,
-                code=SandboxFailureCode.TIMEOUT,
-                message="sandbox execution exceeded timeout policy",
-            )
+            raw = handler(request, context)
         except Exception as exc:
-            executor.shutdown(wait=False, cancel_futures=True)
             self._execution_index += 1
             return self._failure(
                 status=SandboxExecutionStatus.INFRASTRUCTURE_ERROR,
@@ -322,8 +309,6 @@ class LocalDeterministicSandboxSession:
                 message=f"sandbox provider execution failed: {exc}",
                 retryable=True,
             )
-        else:
-            executor.shutdown(wait=True)
 
         self._execution_index += 1
         if not isinstance(raw, LocalSandboxHandlerResult):
@@ -333,6 +318,21 @@ class LocalDeterministicSandboxSession:
                 code=SandboxFailureCode.INFRASTRUCTURE_ERROR,
                 message="sandbox provider handler returned an invalid result",
                 retryable=True,
+            )
+        if raw.duration_ms < 0:
+            return self._failure(
+                status=SandboxExecutionStatus.INFRASTRUCTURE_ERROR,
+                origin=SandboxFailureOrigin.INFRASTRUCTURE,
+                code=SandboxFailureCode.INFRASTRUCTURE_ERROR,
+                message="sandbox provider handler returned a negative duration",
+                retryable=True,
+            )
+        if raw.duration_ms > self._request.resources.timeout_ms:
+            return self._failure(
+                status=SandboxExecutionStatus.TIMED_OUT,
+                origin=SandboxFailureOrigin.POLICY,
+                code=SandboxFailureCode.TIMEOUT,
+                message="sandbox execution exceeded timeout policy",
             )
 
         stdout = raw.stdout.encode() if isinstance(raw.stdout, str) else bytes(raw.stdout)
