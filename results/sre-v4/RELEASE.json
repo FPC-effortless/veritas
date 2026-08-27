@@ -1,0 +1,66 @@
+{
+  "candidate_id": "SRE-CAND-92A84929AD1E82E24357",
+  "evidence_manifest_id": "EVID-2C69B48DCDD5F2232EABDC9B",
+  "failed_gates": [],
+  "frozen_from_head": "ffecc4004ace47768b1d3355537e63a3218fb9dc",
+  "frozen_from_workflow_run": 33044205900,
+  "gates_passed": 18,
+  "near_duplicate_components": 83,
+  "panel_id": "QPANEL-AFF065BA4C2FD75BE9BB3EBE",
+  "policy_means": {
+    "competent_heuristic": 0.4,
+    "exploit": 0.0,
+    "myopic": 0.3,
+    "oracle": 1.0,
+    "random": 0.23333333333333334
+  },
+  "private_bundle_sha256": "531d1358883ec399add640c3519c31a36f6c93981796d7a3e8b37e2a7ace0d2a",
+  "private_release_manifest_id": "PRIVREL-036192DA63716D331C929C0C",
+  "private_strata": {
+    "capacity": 6,
+    "infrastructure": 6,
+    "regression": 10,
+    "transient": 8
+  },
+  "private_test_count": 30,
+  "providers": [
+    "airtable",
+    "claude",
+    "elastic",
+    "figma",
+    "grafana",
+    "hedera",
+    "hubspot",
+    "ibmcloudsecurity",
+    "instructure",
+    "newrelic",
+    "postman",
+    "reddit",
+    "render",
+    "snowflake",
+    "supabase",
+    "webflow"
+  ],
+  "public_artifact_contract": {
+    "per_scenario_policy_outcomes_included": false,
+    "private_causal_labels_included": false,
+    "raw_source_snapshots_included": false
+  },
+  "report_id": "QREPORT-C585121E94D91766BB6664E3",
+  "scenario_count": 87,
+  "schema_version": "0.10.0-frozen-public-release",
+  "split_protocol": "near-duplicate-component-disjoint-stratified-v3",
+  "status": "benchmark_candidate",
+  "storage_contract": {
+    "private_bundle_publicly_stored": false,
+    "raw_private_bundle_in_actions_artifact": false,
+    "transport_encrypted_before_artifact_upload": true
+  },
+  "train_strata": {
+    "capacity": 9,
+    "infrastructure": 7,
+    "regression": 17,
+    "transient": 10
+  },
+  "version": "sre-v4"
+}
