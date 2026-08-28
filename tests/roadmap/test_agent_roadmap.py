@@ -102,6 +102,7 @@ def status(
     linked_pr: int | None = None,
 ) -> dict:
     return {
+        "schema_version": roadmap.STATUS_SCHEMA,
         "issue_number": number,
         "work_id": work_id,
         "state": state,
@@ -228,6 +229,24 @@ def test_status_record_paginates_to_latest_trusted_status(
     assert any(url.endswith("page=2") for url in requested)
 
 
+def test_status_record_rejects_wrong_trusted_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invalid = status(7, "A", "BLOCKED")
+    invalid["schema_version"] = "other.status.v1"
+    trusted_comment = {
+        "user": {"login": "github-actions[bot]"},
+        "body": (
+            f"{roadmap.STATUS_MARKER}\n```json\n"
+            f"{json.dumps(invalid)}\n```"
+        ),
+    }
+    monkeypatch.setattr(roadmap, "request_json", lambda *_: [trusted_comment])
+
+    with pytest.raises(roadmap.RoadmapError, match="invalid trusted coordination status schema"):
+        roadmap.status_record("FPC-effortless/veritas", 7, None)
+
+
 def test_sync_uses_live_labels_and_preserves_curated_hard_edge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -301,6 +320,37 @@ def test_sync_rejects_active_issue_without_trusted_status(
     with pytest.raises(
         roadmap.RoadmapError,
         match="missing trusted coordination status",
+    ):
+        roadmap.sync(current, "FPC-effortless/veritas", None)
+
+
+def test_sync_rejects_active_status_without_holder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1, state="CLAIMED"))
+    issue_a = issue(1, "A", "CLAIMED", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(
+        roadmap,
+        "status_record",
+        lambda *_: status(1, "A", "CLAIMED"),
+    )
+
+    with pytest.raises(roadmap.RoadmapError, match="CLAIMED trusted status missing holder"):
+        roadmap.sync(current, "FPC-effortless/veritas", None)
+
+
+def test_sync_rejects_commented_blocked_without_trusted_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1, state="BLOCKED"))
+    issue_a = issue(1, "A", "BLOCKED", "none", comments=1)
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
+
+    with pytest.raises(
+        roadmap.RoadmapError,
+        match="BLOCKED with comments missing trusted coordination status",
     ):
         roadmap.sync(current, "FPC-effortless/veritas", None)
 
