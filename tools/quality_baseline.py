@@ -112,15 +112,8 @@ def _ruff_diagnostics() -> list[dict[str, str]]:
     except json.JSONDecodeError as exc:
         raise QualityBaselineError("ruff returned invalid JSON") from exc
     diagnostics: list[dict[str, str]] = []
-    debug_paths = {
-        "src/investigation_world/foundry/public_investigation_acquisition.py",
-        "tests/unit/test_public_investigation_acquisition.py",
-        "tests/unit/test_public_investigation_data.py",
-    }
     for row in rows:
         path = _relative_path(row["filename"])
-        if path in debug_paths and str(row["code"]) == "I001":
-            print("QUALITY_DEBUG " + json.dumps(row, sort_keys=True), file=sys.stderr)
         diagnostics.append(
             {
                 "tool": "ruff",
