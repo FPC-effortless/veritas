@@ -192,6 +192,10 @@ class RuntimeCompatibilityPolicy(BaseModel):
             raise ValueError("validated_commit_sha must be a lowercase 40-character commit SHA")
 
         if self.validation_state == CompatibilityValidationState.VALIDATED:
+            if evidence_gaps:
+                raise ValueError(
+                    "VALIDATED compatibility policy cannot declare evidence_gaps"
+                )
             missing: list[str] = []
             if self.adapter.content_sha256 is None:
                 missing.append("adapter.content_sha256")
@@ -298,7 +302,10 @@ def _compatibility_assessment(
         reasons.append("observed target runtime does not match policy")
         return RuntimeCompatibilityStatus.RUNTIME_MISMATCH, tuple(reasons)
 
-    if policy.validation_state != CompatibilityValidationState.VALIDATED:
+    if (
+        policy.validation_state != CompatibilityValidationState.VALIDATED
+        or policy.evidence_gaps
+    ):
         reasons.append("adapter/runtime pair has no complete validation evidence")
         return RuntimeCompatibilityStatus.UNVALIDATED, tuple(reasons)
 
@@ -308,8 +315,12 @@ def _compatibility_assessment(
         reasons.append("observed runtime version is outside the tested version set/range")
         return RuntimeCompatibilityStatus.VERSION_OUT_OF_RANGE, tuple(reasons)
 
-    if policy.tested_protocol_versions and (
-        observed.protocol_version not in policy.tested_protocol_versions
+    if (
+        observed.protocol_version is None
+        and policy.tested_protocol_versions
+    ) or (
+        observed.protocol_version is not None
+        and observed.protocol_version not in policy.tested_protocol_versions
     ):
         reasons.append("observed protocol version is outside the tested protocol set")
         return RuntimeCompatibilityStatus.PROTOCOL_MISMATCH, tuple(reasons)
