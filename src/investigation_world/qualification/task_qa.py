@@ -198,7 +198,9 @@ class TaskQAStageEvidence(BaseModel):
             TaskQAStage.DETERMINISTIC_REPLAY: {ExpertRole.VERIFIER_REVIEWER},
         }
         if self.reviewer_role not in allowed_roles[self.stage]:
-            raise ValueError(f"reviewer role is not authorized for stage {self.stage.value}")
+            raise ValueError(
+                f"reviewer role is not authorized for stage {self.stage.value}"
+            )
         return self
 
 
@@ -232,7 +234,9 @@ class TaskQAMetrics(BaseModel):
         if (self.alternative_strategies_reviewed is None) != (
             self.accepted_alternative_strategies is None
         ):
-            raise ValueError("alternative strategy reviewed/accepted counts must be supplied together")
+            raise ValueError(
+                "alternative strategy reviewed/accepted counts must be supplied together"
+            )
         if (
             self.alternative_strategies_reviewed is not None
             and self.accepted_alternative_strategies is not None
@@ -371,7 +375,9 @@ class TaskQAReport(BaseModel):
             raise ValueError("task QA stage evidence may contain each stage only once")
         panel_roles = {item.role for item in self.expert_panel.assignments}
         if any(item.reviewer_role not in panel_roles for item in stage_evidence):
-            raise ValueError("task QA stage evidence references a reviewer outside the expert panel")
+            raise ValueError(
+                "task QA stage evidence references a reviewer outside the expert panel"
+            )
         object.__setattr__(self, "stage_evidence", stage_evidence)
 
         gates = _task_qa_gates(metrics=self.metrics, stage_evidence=stage_evidence)
