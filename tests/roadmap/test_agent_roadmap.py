@@ -221,11 +221,11 @@ def test_status_record_paginates_to_latest_trusted_status(
 
     def request_json(url: str, _token: str | None) -> list[dict]:
         requested.append(url)
-        return page_one if "page=1" in url else [trusted_comment]
+        return page_one if url.endswith("page=1") else [trusted_comment]
 
     monkeypatch.setattr(roadmap, "request_json", request_json)
     assert roadmap.status_record("FPC-effortless/veritas", 7, None) == expected
-    assert any("page=2" in url for url in requested)
+    assert any(url.endswith("page=2") for url in requested)
 
 
 def test_sync_uses_live_labels_and_preserves_curated_hard_edge(
