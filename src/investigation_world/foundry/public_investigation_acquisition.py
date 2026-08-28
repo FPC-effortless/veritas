@@ -88,6 +88,14 @@ def _host(value: str) -> str:
     return (urlparse(value).hostname or "").casefold()
 
 
+def _require_https(value: str, *, artifact_id: str, context: str) -> None:
+    parsed = urlparse(value)
+    if parsed.scheme.casefold() != "https":
+        raise ValueError(
+            f"{context} for {artifact_id} must use https, got {parsed.scheme!r}"
+        )
+
+
 def _allowed_hosts(source: PublicSourceDefinition) -> set[str]:
     candidates = [source.index_url, source.bulk_url, source.media_index_url]
     allowed = {_host(str(value)) for value in candidates if value is not None}
@@ -125,6 +133,7 @@ def fetch_artifact_bytes(
     max_bytes: int,
 ) -> bytes:
     source_url = str(artifact.url)
+    _require_https(source_url, artifact_id=artifact.artifact_id, context="artifact URL")
     source_host = _host(source_url)
     if source_host not in allowed_hosts:
         raise ValueError(
@@ -134,8 +143,14 @@ def fetch_artifact_bytes(
         source_url,
         headers={"User-Agent": "VeritasPublicInvestigationDataset/1.0"},
     )
-    with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
-        final_host = _host(response.geturl())
+    # B310 is mitigated by HTTPS-only URLs plus registry host allowlisting
+    # before and after redirects.
+    with urlopen(request, timeout=timeout_seconds) as response:  # nosec B310
+        final_url = response.geturl()
+        _require_https(
+            final_url, artifact_id=artifact.artifact_id, context="artifact redirect URL"
+        )
+        final_host = _host(final_url)
         if final_host not in allowed_hosts:
             raise ValueError(
                 f"artifact redirect host {final_host!r} is not authorized for "
@@ -160,7 +175,9 @@ def _materialize_artifact(
     timeout_seconds: float,
     max_bytes: int,
 ) -> MaterializedArtifact:
-    source_host = _host(str(artifact.url))
+    source_url = str(artifact.url)
+    _require_https(source_url, artifact_id=artifact.artifact_id, context="artifact URL")
+    source_host = _host(source_url)
     if _is_reference_only(artifact):
         if source_host not in allowed_hosts | _EXTERNAL_MEDIA_HOSTS:
             raise ValueError(
