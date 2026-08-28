@@ -103,7 +103,7 @@ def test_chevron_final_conclusion_stays_in_private_oracle() -> None:
 
 
 def test_chevron_pilot_is_bound_to_gold_10_case_selection() -> None:
-    corpus = load_fusion_corpus(CORPUS_PATH, CATALOG)
+    corpus = load_fusion_corpus(CORPUS_PATH)
     case = next(item for item in corpus.cases if item.case_id == "2012-03-I-CA")
     manifest = load_manifest()
 
