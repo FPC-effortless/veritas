@@ -187,6 +187,12 @@ not erase prior status.
 This implements the maturity substrate, not the later verifier, frontier, training-value, or
 procurement qualification programs that provide transition evidence.
 
+The development line also includes the generic Verifier Qualification Suite. It requires the full
+falsifier taxonomy, repeated deterministic replays, alternative-correct-strategy acceptance, and
+separate gates for false positives/negatives, reward hacking, evidence, state, process, side effects,
+and ambiguity. This is protocol implementation only: existing domain verifiers remain at their
+previous evidence state until their own content-bound fixture manifests and replays are supplied.
+
 The repository also adopts a “Do Not Build” architecture policy. Full trainers, model serving,
 hyperscale sandbox clouds, generic expert marketplaces, benchmark aggregation, broad harness
 catalogs, generic agent frameworks, and target-runtime replacement remain presumptive non-goals.
