@@ -46,6 +46,18 @@ from investigation_world.qualification.sre_sources import (
     STATUSPAGE_INCIDENT_ENDPOINTS,
     parse_statuspage_incidents,
 )
+from investigation_world.qualification.verifier_suite import (
+    REQUIRED_VERIFIER_FIXTURE_CATEGORIES,
+    VerifierFixture,
+    VerifierFixtureCategory,
+    VerifierFixtureManifest,
+    VerifierQualificationGate,
+    VerifierQualificationReport,
+    VerifierQualificationThresholds,
+    VerifierReplay,
+    qualify_verifier,
+    verifier_maturity_evidence,
+)
 
 __all__ = [
     "DEFAULT_MATURITY_POLICY",
@@ -69,11 +81,19 @@ __all__ = [
     "QualificationScenario",
     "QualificationSplit",
     "QualificationThresholds",
+    "REQUIRED_VERIFIER_FIXTURE_CATEGORIES",
     "SRECausalClass",
     "SREIncidentSource",
     "SREQualificationCase",
     "STATUSPAGE_INCIDENT_ENDPOINTS",
     "VerifierIdentity",
+    "VerifierFixture",
+    "VerifierFixtureCategory",
+    "VerifierFixtureManifest",
+    "VerifierQualificationGate",
+    "VerifierQualificationReport",
+    "VerifierQualificationThresholds",
+    "VerifierReplay",
     "assess_environment_maturity",
     "compile_sre_candidate",
     "cross_split_near_duplicates",
@@ -84,7 +104,9 @@ __all__ = [
     "parse_statuspage_incidents",
     "private_release_manifest",
     "qualify_candidate",
+    "qualify_verifier",
     "simhash64",
     "source_group_overlap",
     "token_jaccard",
+    "verifier_maturity_evidence",
 ]
