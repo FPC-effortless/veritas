@@ -5,8 +5,15 @@ from pathlib import Path
 
 import typer
 
-from .acquisition import AcquisitionError, acquire_artifact, plan_artifact
+from .acquisition import (
+    AcquisitionError,
+    acquire_artifact,
+    plan_artifact,
+    verify_receipt,
+)
 from .catalog import catalog_digest, find_source, load_catalog
+from .models import ArtifactReceipt
+from .preparation import PreparationError, prepare_zip_artifact
 
 app = typer.Typer(help="Acquire and prepare source data for Veritas investigation environments.")
 
@@ -96,3 +103,40 @@ def acquire(
         typer.echo(f"acquisition refused: {exc}", err=True)
         raise typer.Exit(2) from exc
     typer.echo(receipt.model_dump_json(indent=2))
+
+
+@app.command("verify-receipt")
+def verify_receipt_cmd(
+    receipt: Path,
+    root: Path = Path(".veritas-data"),
+) -> None:
+    loaded = ArtifactReceipt.model_validate_json(receipt.read_text(encoding="utf-8"))
+    try:
+        valid = verify_receipt(root, loaded)
+    except AcquisitionError as exc:
+        typer.echo(f"receipt verification refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(json.dumps({"valid": valid, "sha256": loaded.sha256}, indent=2))
+    raise typer.Exit(0 if valid else 1)
+
+
+@app.command("prepare-zip")
+def prepare_zip_cmd(
+    receipt: Path,
+    acquisition_root: Path = Path(".veritas-data"),
+    output: Path = Path(".veritas-prepared"),
+    max_members: int = 100_000,
+    max_uncompressed_bytes: int = 20 * 1024 * 1024 * 1024,
+) -> None:
+    try:
+        manifest = prepare_zip_artifact(
+            receipt,
+            acquisition_root,
+            output,
+            max_members=max_members,
+            max_uncompressed_bytes=max_uncompressed_bytes,
+        )
+    except (PreparationError, AcquisitionError, ValueError) as exc:
+        typer.echo(f"preparation refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(json.dumps({"prepared": True, "manifest": str(manifest)}, indent=2))
