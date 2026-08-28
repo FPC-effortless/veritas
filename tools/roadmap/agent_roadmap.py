@@ -341,6 +341,40 @@ def status_record(
     )
 
 
+def dependency_name_map(
+    parsed: list[tuple[dict[str, Any], dict[str, Any], str]],
+) -> dict[str, str]:
+    """Map live primary Work IDs and aliases to their canonical Work ID."""
+    names: dict[str, str] = {}
+    for _issue, contract, _state in parsed:
+        primary = contract["work_id"]
+        for name in [primary, *contract["aliases"]]:
+            owner = names.get(name)
+            if owner is not None and owner != primary:
+                raise RoadmapError(f"duplicate live Work ID/alias: {name}")
+            names[name] = primary
+    return names
+
+
+def derive_dependencies(
+    contract: dict[str, Any],
+    issue_to_id: dict[int, str],
+    name_to_id: dict[str, str],
+) -> list[str]:
+    """Derive current dependency edges only from the live Work Contract."""
+    dependencies = {
+        issue_to_id[ref]
+        for ref in contract["refs"]
+        if ref in issue_to_id
+    }
+    summary = contract["dependency_summary"]
+    for name, primary in name_to_id.items():
+        pattern = rf"(?<![A-Za-z0-9_-]){re.escape(name)}(?![A-Za-z0-9_-])"
+        if re.search(pattern, summary):
+            dependencies.add(primary)
+    return sorted(dependencies)
+
+
 def sync(
     current: dict[str, Any],
     repo: str,
@@ -368,25 +402,14 @@ def sync(
         issue_to_id[number] = contract["work_id"]
         parsed.append((issue, contract, state))
 
-    known_ids = set(issue_to_id.values())
+    name_to_id = dependency_name_map(parsed)
     rows: list[dict[str, Any]] = []
     for issue, contract, state in parsed:
         number = issue["number"]
         candidate = previous.get(number, {})
         old = candidate if isinstance(candidate, dict) else {}
 
-        dependencies = [
-            issue_to_id[ref] for ref in contract["refs"] if ref in issue_to_id
-        ]
-        old_dependencies = old.get("dependencies", [])
-        if isinstance(old_dependencies, list):
-            dependencies.extend(
-                dep
-                for dep in old_dependencies
-                if isinstance(dep, str) and dep in known_ids
-            )
-        dependencies = sorted(set(dependencies))
-
+        dependencies = derive_dependencies(contract, issue_to_id, name_to_id)
         old_hard = old.get("hard_dependencies", [])
         hard_dependencies = (
             [dep for dep in old_hard if dep in dependencies]
