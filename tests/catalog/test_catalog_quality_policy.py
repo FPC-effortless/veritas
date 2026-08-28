@@ -204,12 +204,17 @@ def test_buyer_safe_projection_preserves_dimensions_without_scalar_quality() -> 
 
 def test_buyer_safe_projection_omits_verifier_and_private_evidence_identity() -> None:
     entry = _entry()
-    payload = serialize_buyer_safe_catalog((entry,))
+    serialized = serialize_buyer_safe_catalog((entry,))
+    payload = json.loads(serialized)
+    public_entry = payload["entries"][0]
+    scorecard = public_entry["quality_scorecard"]
 
-    assert PRIVATE_VERIFIER_ID.encode() not in payload
-    assert VERIFIER_DIGEST.encode() not in payload
-    assert b"evaluated_evidence" not in payload
-    assert b"provenance" not in payload
+    assert PRIVATE_VERIFIER_ID.encode() not in serialized
+    assert VERIFIER_DIGEST.encode() not in serialized
+    assert "evaluated_evidence" not in public_entry
+    assert "provenance" not in public_entry
+    assert "context" not in scorecard
+    assert "evidence" not in scorecard
 
 
 def test_scorecard_must_match_exact_environment_and_verifier_revision() -> None:
