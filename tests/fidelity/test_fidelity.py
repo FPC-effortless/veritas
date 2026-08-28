@@ -5,7 +5,6 @@ import pytest
 
 import investigation_world.fidelity as fidelity
 
-
 SHA = "a" * 64
 POLICY_SHA = "b" * 64
 
