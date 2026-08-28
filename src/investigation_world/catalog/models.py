@@ -10,14 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.evidence import EvidenceVisibility
 from investigation_world.qualification.maturity import (
-    EnvironmentMaturity,
     MATURITY_ORDER,
+    EnvironmentMaturity,
     MaturityRecord,
 )
-from investigation_world.qualification.quality_scorecard import (
-    EnvironmentQualityScorecard,
-    QualityDimensionOutcome,
-)
+from investigation_world.qualification.quality_scorecard import EnvironmentQualityScorecard
 
 CATALOG_SCHEMA_VERSION = "veritas.environment-catalog-entry.v1"
 CATALOG_PUBLIC_SCHEMA_VERSION = "veritas.environment-catalog-public.v1"
