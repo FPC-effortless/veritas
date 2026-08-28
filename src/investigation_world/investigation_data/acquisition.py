@@ -118,7 +118,9 @@ def acquire_artifact(
 
     filename = artifact.filename or Path(urlparse(artifact.url).path).name
     if not filename or not _SAFE_FILENAME.fullmatch(filename):
-        raise AcquisitionError("artifact URL does not yield a safe filename; catalog must set filename")
+        raise AcquisitionError(
+            "artifact URL does not yield a safe filename; catalog must set filename"
+        )
 
     root = destination_root.resolve()
     target_dir = (root / source.source_id / artifact.artifact_id).resolve()
@@ -207,7 +209,9 @@ def _assert_allowed_url(url: str, allowed_hosts: tuple[str, ...]) -> None:
         raise AcquisitionError(f"resolved host {host!r} is not allowlisted")
 
 
-def _stream_and_hash(response: HTTPResponse, output: BinaryIO, *, max_bytes: int) -> tuple[str, int]:
+def _stream_and_hash(
+    response: HTTPResponse, output: BinaryIO, *, max_bytes: int
+) -> tuple[str, int]:
     digest = hashlib.sha256()
     total = 0
     while True:
