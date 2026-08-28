@@ -37,6 +37,7 @@ out/
 *.sqlite3
 .veritas-data/
 .veritas-prepared/
+.veritas-fused/
 
 # OS/editor
 .DS_Store
