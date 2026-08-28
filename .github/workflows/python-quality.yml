@@ -42,5 +42,9 @@ jobs:
           python -m pip install -e .
           python -m pip install -r requirements-quality.txt
 
+      - name: Show DX-002 Ruff import fix
+        run: |
+          python -m ruff check src/investigation_world/operational/env_cli.py --select I001 --fix --diff || true
+
       - name: Enforce repository-wide Ruff/Mypy ratchet
         run: python tools/quality_baseline.py check
