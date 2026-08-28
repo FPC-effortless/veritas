@@ -61,6 +61,29 @@ def manifest(*rows: dict) -> dict:
     }
 
 
+def issue(
+    number: int,
+    work_id: str,
+    state: str,
+    dependencies: str,
+) -> dict:
+    return {
+        "number": number,
+        "title": work_id,
+        "labels": [{"name": "agent-work"}, {"name": f"work:{state.lower()}"}],
+        "body": f"""<!-- veritas-agent-work -->
+- **Work ID:** {work_id}
+- **State:** BLOCKED
+- **Dependencies:** {dependencies}
+- **Branch:** `feat/{work_id.lower()}`
+- **Positive ownership:** `src/{work_id.lower()}/**`
+- **Negative ownership:** other
+- **Claim holder:** none
+- **Linked PR:** none
+""",
+    }
+
+
 def test_checked_in_manifest_validates() -> None:
     current = roadmap.load(ROOT / ".github" / "agent-roadmap.yml")
     assert roadmap.validate(current) == []
@@ -137,7 +160,7 @@ def test_contract_parser_keeps_alias_paths_and_refs() -> None:
     assert parsed["linked_pr"] == 246
 
 
-def test_sync_uses_live_labels_and_preserves_curated_edges(
+def test_sync_uses_live_labels_and_preserves_curated_hard_edge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     current = manifest(
@@ -149,36 +172,8 @@ def test_sync_uses_live_labels_and_preserves_curated_edges(
         strategic_rank=2,
         critical_path=True,
     )
-    issue_a = {
-        "number": 1,
-        "title": "A",
-        "labels": [{"name": "agent-work"}, {"name": "work:done"}],
-        "body": """<!-- veritas-agent-work -->
-- **Work ID:** A
-- **State:** READY
-- **Dependencies:** none
-- **Branch:** `feat/a`
-- **Positive ownership:** `src/a/**`
-- **Negative ownership:** other
-- **Claim holder:** none
-- **Linked PR:** none
-""",
-    }
-    issue_b = {
-        "number": 2,
-        "title": "B",
-        "labels": [{"name": "agent-work"}, {"name": "work:ready"}],
-        "body": """<!-- veritas-agent-work -->
-- **Work ID:** B
-- **State:** BLOCKED
-- **Dependencies:** #1
-- **Branch:** `feat/b`
-- **Positive ownership:** `src/b/**`
-- **Negative ownership:** other
-- **Claim holder:** none
-- **Linked PR:** none
-""",
-    }
+    issue_a = issue(1, "A", "DONE", "none")
+    issue_b = issue(2, "B", "READY", "A")
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
 
     synced = roadmap.sync(current, "FPC-effortless/veritas", None)
@@ -187,4 +182,39 @@ def test_sync_uses_live_labels_and_preserves_curated_edges(
     assert by_id["A"]["program"] == "quality"
     assert by_id["A"]["strategic_rank"] == 2
     assert by_id["B"]["state"] == "READY"
+    assert by_id["B"]["dependencies"] == ["A"]
     assert by_id["B"]["hard_dependencies"] == ["A"]
+
+
+def test_sync_removes_dependency_deleted_from_live_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(
+        row("A", 1, state="BLOCKED"),
+        row("B", 2, state="BLOCKED", deps=["A"], hard=["A"]),
+    )
+    issue_a = issue(1, "A", "BLOCKED", "none")
+    issue_b = issue(2, "B", "READY", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+    by_id = {entry["work_id"]: entry for entry in synced["work"]}
+    assert by_id["B"]["dependencies"] == []
+    assert by_id["B"]["hard_dependencies"] == []
+    assert roadmap.validate(synced) == []
+
+
+def test_sync_resolves_dependency_alias_from_live_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(
+        row("A", 1, state="DONE", aliases=["OLD-A"]),
+        row("B", 2, state="BLOCKED"),
+    )
+    issue_a = issue(1, "A / OLD-A", "DONE", "none")
+    issue_b = issue(2, "B", "BLOCKED", "OLD-A")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+    by_id = {entry["work_id"]: entry for entry in synced["work"]}
+    assert by_id["B"]["dependencies"] == ["A"]
