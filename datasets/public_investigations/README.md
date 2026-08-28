@@ -1,0 +1,44 @@
+# Public investigation datasets
+
+This directory defines provenance-first public operational records for Veritas External Investigation worlds.
+
+The committed manifests do **not** redistribute remote source documents. They identify official public artifacts by URL, role, source, and case. A materialized dataset release should fetch approved artifacts, freeze their bytes, record SHA-256 digests, and retain the source provenance needed for audit and re-verification.
+
+## Files
+
+- `source_registry.json` — acquisition registry for public organizations with usable operational records.
+- `seeds/seed_v1.json` — four reference/training cases from NTSB and the U.S. Chemical Safety Board.
+
+The seed cases are deliberately marked `train_reference`. They are known public cases and must not be reused as sealed evaluation holdouts.
+
+## Public/private boundary
+
+Each case has two independent artifact collections:
+
+- `public_evidence` — evidence that may be exposed to the evaluated agent.
+- `verifier_references` — official findings/final reports for operator-side scoring and audit only.
+
+`PublicInvestigationCase` rejects overlap between those collections. `public_projection()` also strips verifier references and denies truth-bearing metadata keys such as `probable_cause`, `root_cause`, `official_findings`, and `recommendations`.
+
+## Prepare projections
+
+```bash
+veritas-foundry prepare-public-investigations \
+  datasets/public_investigations/seeds/seed_v1.json \
+  --public-output build/public-investigations.json \
+  --verifier-output /secure/veritas/public-investigations-verifier.json
+```
+
+The verifier output should be written outside an agent-visible package and outside any training corpus. Omit `--verifier-output` when only the public projection is required.
+
+## Release discipline
+
+A reference manifest is not a qualified benchmark. Before using a case in a sealed evaluation release:
+
+1. freeze source bytes and SHA-256 hashes;
+2. verify licensing/redistribution constraints for every artifact;
+3. freeze train/calibration/holdout membership before model exposure;
+4. keep holdout evidence and verifier material outside public training surfaces;
+5. record acquisition time, source version, transformation lineage, and parser version;
+6. run leakage and answerability audits;
+7. qualify verifier behavior separately from ingestion success.
