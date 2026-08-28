@@ -4,7 +4,6 @@ import pydantic
 
 from . import record, schema
 
-
 _LEVEL_RANK: dict[schema.FidelityLevel, int] = {
     schema.FidelityLevel.L0_ABSTRACT_STATE_MODEL: 0,
     schema.FidelityLevel.L1_STRUCTURED_SYNTHETIC_APPLICATION: 1,
