@@ -10,7 +10,7 @@
     "Do not expose the final-report PDF as time-gated evidence until its exact first-public posting time is independently established; the dated March 20, 2007 final-findings release is used instead.",
     "Exclude victim, witness, employee, and investigator names from the normalized episode actors and task state.",
     "Treat CSB conclusions as official institutional findings, not automatically as private ground truth.",
-    "Use a conservative next-day UTC availability timestamp when the source establishes a release date but not a precise public release time."
+    "For a CSB artifact with a documented publication date but no trustworthy release time, make it available at 12:00Z on the following calendar day so the gate cannot fall on the prior evening in Texas or Washington."
   ],
   "redistribution": "No source artifact bytes are checked into the repository by this review.",
   "ai_use": "Pilot exercises metadata, temporal gating, and evidence references only; source text/video is not copied into the training corpus by this review.",
