@@ -1,0 +1,187 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2018-02-I-WI-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2018-02-I-WI"
+  ],
+  "simulation_start": "2018-04-26T00:00:00Z",
+  "simulation_as_of": "2018-04-27T12:00:00Z",
+  "initial_public_state": {
+    "incident": "April 26, 2018 explosion and subsequent fires at the Husky Superior Refinery in Superior, Wisconsin",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct the transient-operation failure sequence and revise hypotheses as the CSB moves from initial deployment through factual updates, interim reconstruction, final findings, and post-final safety communication.",
+    "epistemic_rule": "Investigation-start context, ongoing factual updates, institutional reconstructions, final findings, and post-final safety communication must remain distinct in both time and evidentiary role."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "husky-superior",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "Husky Superior Refinery"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "review_video",
+    "request_document",
+    "build_timeline",
+    "assess_transient_operation",
+    "assess_safeguards",
+    "assess_evacuation_state",
+    "compare_preliminary_and_final_analysis",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "ongoing_updates_are_not_final_findings": true,
+    "approximate_event_times_are_not_exact_private_timestamps": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-husky-deployment-2018-04-26",
+      "source_id": "uscsb",
+      "source_artifact_id": "husky-deployment-2018-04-26",
+      "case_ids": [
+        "CSB-2018-02-I-WI"
+      ],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-investigators-deploying-to-incident-at-the-husky-energy-oil-refinery-in-superior-wisconsin/",
+      "content_ref": "external-document://uscsb/2018-02-I-WI/deployment-2018-04-26",
+      "available_from": "2018-04-27T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-husky-superior-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-husky-factual-update-2018-08-02",
+      "source_id": "uscsb",
+      "source_artifact_id": "husky-factual-update-2018-08-02",
+      "case_ids": [
+        "CSB-2018-02-I-WI"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-releases-factual-update-on-explosion-and-fire-at-husky-refinery-located-in-superior-wisconsin/",
+      "content_ref": "external-document://uscsb/2018-02-I-WI/factual-update-2018-08-02",
+      "available_from": "2018-08-03T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-husky-superior-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-husky-interim-animation-2018-08-02",
+      "source_id": "uscsb",
+      "source_artifact_id": "husky-interim-animation-2018-08-02",
+      "case_ids": [
+        "CSB-2018-02-I-WI"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/csb-interim-animation-on-husky-refinery-explosion-and-fire-/",
+      "content_ref": "external-page://uscsb/2018-02-I-WI/interim-animation-2018-08-02",
+      "available_from": "2018-08-03T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-husky-superior-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-husky-final-release-2022-12-29",
+      "source_id": "uscsb",
+      "source_artifact_id": "husky-final-release-2022-12-29",
+      "case_ids": [
+        "CSB-2018-02-I-WI"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/-final-report-into-2018-husky-superior-refinery-explosion-and-asphalt-fire-in-wisconsin/",
+      "content_ref": "external-document://uscsb/2018-02-I-WI/final-release-2022-12-29",
+      "available_from": "2022-12-30T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-husky-superior-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-husky-transient-hazards-2023-06-09",
+      "source_id": "uscsb",
+      "source_artifact_id": "husky-transient-hazards-2023-06-09",
+      "case_ids": [
+        "CSB-2018-02-I-WI"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/transient-hazards-explosion-at-the-husky-superior-refinery/",
+      "content_ref": "external-page://uscsb/2018-02-I-WI/transient-hazards-2023-06-09",
+      "available_from": "2023-06-10T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-husky-superior-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "husky-factual-update-to-deployment",
+      "source_fragment_id": "csb-husky-factual-update-2018-08-02",
+      "target_fragment_id": "csb-husky-deployment-2018-04-26",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "husky-animation-to-factual-update",
+      "source_fragment_id": "csb-husky-interim-animation-2018-08-02",
+      "target_fragment_id": "csb-husky-factual-update-2018-08-02",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "husky-final-to-interim",
+      "source_fragment_id": "csb-husky-final-release-2022-12-29",
+      "target_fragment_id": "csb-husky-factual-update-2018-08-02",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "husky-post-final-video-to-final",
+      "source_fragment_id": "csb-husky-transient-hazards-2023-06-09",
+      "target_fragment_id": "csb-husky-final-release-2022-12-29",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-husky-final-institutional-findings-2022",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation concluded that the FCC unit exploded during a planned shutdown after air and hydrocarbons mixed during transient operation, and identified inadequate transient-operation safeguards, process hazard analysis, operating guidance, and maintenance-related weaknesses.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-husky-final-release-2022-12-29"
+      ]
+    }
+  ],
+  "actual_timeline": [],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_transient_operation_reasoning": true,
+    "require_preliminary_vs_final_distinction": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}
