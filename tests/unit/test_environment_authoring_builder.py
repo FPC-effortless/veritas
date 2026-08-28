@@ -111,6 +111,35 @@ def test_builder_produces_valid_deterministic_operational_episode() -> None:
     assert first.task.permitted_systems == ["procurement"]
 
 
+def test_private_semantics_do_not_change_public_authoring_identity() -> None:
+    baseline = _builder()
+    private_variant = _builder().budgets(max_cost=11, max_tool_calls=8).metadata(
+        private={"PRIVATE_MARKER": "different-operator-value"}
+    )
+
+    baseline_episode = baseline.build()
+    variant_episode = private_variant.build()
+    baseline_contract = baseline.compile()
+    variant_contract = private_variant.compile()
+
+    assert variant_episode.world_id == baseline_episode.world_id
+    assert variant_episode.task.task_id == baseline_episode.task.task_id
+    assert variant_episode.episode_id == baseline_episode.episode_id
+    assert variant_contract.public.public_id == baseline_contract.public.public_id
+    assert variant_contract.contract_id != baseline_contract.contract_id
+
+
+def test_public_semantics_change_public_authoring_identity() -> None:
+    baseline_episode = _builder().build()
+    public_variant = _builder().constraint("Preserve an auditable approval trail.")
+    variant_episode = public_variant.build()
+
+    assert variant_episode.world_id != baseline_episode.world_id
+    assert variant_episode.task.task_id != baseline_episode.task.task_id
+    assert variant_episode.episode_id != baseline_episode.episode_id
+    assert public_variant.compile().public.public_id != _builder().compile().public.public_id
+
+
 def test_builder_public_payload_does_not_expose_private_metadata() -> None:
     episode = _builder().build()
     payload = episode.public_payload()
