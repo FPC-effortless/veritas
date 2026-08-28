@@ -47,10 +47,13 @@ Each work entry records:
 claimable. `wave` is currently `UNASSIGNED` unless explicitly curated; automatic
 parallel-wave construction belongs to `ROADMAP-WAVES-001` (#219).
 
-Dependency kinds are conservative until `ROADMAP-DEPS-001` (#218) lands.
-`dependencies` preserves the DAG relation; `hard_dependencies` contains only edges
-already classified strongly enough to drive the baseline readiness check. The
-synchronizer preserves that curated subset instead of guessing from prose.
+Dependency kinds are conservative until `ROADMAP-DEPS-001` (#218) lands. On every
+sync, `dependencies` is re-derived from the **current** Work Contract, using both
+`#issue` references and explicit live Work IDs/aliases. Previous general dependency
+edges are never unioned back in, so removing a dependency from the Work Contract
+removes it from the synchronized DAG. `hard_dependencies` remains a curated subset,
+but a hard edge survives synchronization only while the same edge is still present in
+the freshly derived dependency set.
 
 ## Commands
 
@@ -100,7 +103,10 @@ preserving manually curated:
 - `wave`
 - `strategic_rank`
 - `critical_path`
-- `hard_dependencies`
+
+`hard_dependencies` is preserved only as the intersection of the prior curated hard
+set and the dependencies freshly derived from the current Work Contract. This prevents
+obsolete hard edges from surviving a dependency correction.
 
 This keeps strategic planning separate from mutable GitHub execution state. Future
 policy tickets may tighten those fields without changing the manifest's role as a
