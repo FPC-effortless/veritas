@@ -2,15 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from investigation_world.fidelity.record import (
-    FidelityRecord,
-    revalidate_fidelity_record,
-)
-from investigation_world.fidelity.schema import (
-    CoverageStatus,
-    FidelityDimension,
-    FidelityLevel,
-)
+from investigation_world.fidelity.record import FidelityRecord, revalidate_fidelity_record
+from investigation_world.fidelity.schema import CoverageStatus, FidelityDimension, FidelityLevel
 
 
 _LEVEL_RANK: dict[FidelityLevel, int] = {
