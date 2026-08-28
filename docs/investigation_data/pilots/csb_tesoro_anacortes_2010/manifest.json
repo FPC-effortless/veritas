@@ -1,0 +1,152 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2010-08-I-WA-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": ["CSB-2010-08-I-WA"],
+  "simulation_start": "2010-04-02T00:00:00Z",
+  "simulation_as_of": "2010-04-03T12:00:00Z",
+  "initial_public_state": {
+    "incident": "April 2, 2010 explosion and fire at the Tesoro refinery in Anacortes, Washington",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct the heat-exchanger failure, reason about metallurgy, inspection, maintenance and startup, and revise hypotheses as CSB findings mature.",
+    "epistemic_rule": "Ongoing safety communication, draft findings, visual reconstruction, final findings, and post-final communication must remain temporally and epistemically distinct."
+  },
+  "actors": [
+    {"actor_id": "uscsb", "role": "investigator_and_publisher", "public_attributes": {"name": "U.S. Chemical Safety and Hazard Investigation Board"}},
+    {"actor_id": "tesoro-anacortes", "role": "facility_operator", "public_attributes": {"name": "Tesoro Anacortes Refinery"}}
+  ],
+  "available_actions": [
+    "inspect_evidence", "review_video", "request_document", "build_timeline",
+    "assess_metallurgy", "assess_htha", "assess_inspection_strategy", "assess_maintenance",
+    "assess_startup", "compare_draft_and_final_analysis", "reconcile_publication_dates",
+    "form_hypothesis", "revise_hypothesis", "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "draft_findings_are_not_final_findings": true,
+    "animation_release_conflict_preserved": true,
+    "public_exact_times_are_not_private_ground_truth": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-tesoro-deployment-2010-04-02",
+      "source_id": "uscsb",
+      "source_artifact_id": "tesoro-deployment-2010-04-02",
+      "case_ids": ["CSB-2010-08-I-WA"],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-investigative-team-deploying-to-fatal-tesoro-refinery-accident-in-anacortes-washington/",
+      "content_ref": "external-document://uscsb/tesoro/deployment-2010-04-02",
+      "available_from": "2010-04-03T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-tesoro-anacortes-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-tesoro-anniversary-message-2011-04-01",
+      "source_id": "uscsb",
+      "source_artifact_id": "tesoro-anniversary-message-2011-04-01",
+      "case_ids": ["CSB-2010-08-I-WA"],
+      "modality": "video",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/tesoro-anniversary-safety-message/",
+      "content_ref": "external-page://uscsb/tesoro/anniversary-message-2011-04-01",
+      "available_from": "2011-04-02T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-tesoro-anacortes-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-tesoro-draft-findings-2014-01-29",
+      "source_id": "uscsb",
+      "source_artifact_id": "tesoro-draft-findings-2014-01-29",
+      "case_ids": ["CSB-2010-08-I-WA"],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-investigation-finds-2010-tesoro-refinery-fatal-explosion-resulted-from-high-temperature-hydrogen-attack-damage-to-heat-exchanger/",
+      "content_ref": "external-document://uscsb/tesoro/draft-findings-2014-01-29",
+      "available_from": "2014-01-30T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-tesoro-anacortes-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-tesoro-animation-2014-01-30-release",
+      "source_id": "uscsb",
+      "source_artifact_id": "tesoro-animation-2014-01-30-release",
+      "case_ids": ["CSB-2010-08-I-WA"],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/animation-of-explosion-at-tesoros-anacortes-refinery-/",
+      "content_ref": "external-page://uscsb/tesoro/animation-2014-release",
+      "available_from": "2014-01-31T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-tesoro-anacortes-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-tesoro-final-approval-2014-05-01",
+      "source_id": "uscsb",
+      "source_artifact_id": "tesoro-final-approval-2014-05-01",
+      "case_ids": ["CSB-2010-08-I-WA"],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/final-tesoro-investigation-report-approved-at-public-meeting-in-anacortes-wa-on-may-1-2014-/",
+      "content_ref": "external-document://uscsb/tesoro/final-approval-2014-05-01",
+      "available_from": "2014-05-02T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-tesoro-anacortes-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-tesoro-behind-curve-2014-10-28",
+      "source_id": "uscsb",
+      "source_artifact_id": "tesoro-behind-curve-2014-10-28",
+      "case_ids": ["CSB-2010-08-I-WA"],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/behind-the-curve/",
+      "content_ref": "external-page://uscsb/tesoro/behind-curve-2014-10-28",
+      "available_from": "2014-10-29T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-tesoro-anacortes-link-only-v1"
+    }
+  ],
+  "relations": [
+    {"relation_id": "tesoro-anniversary-to-deployment", "source_fragment_id": "csb-tesoro-anniversary-message-2011-04-01", "target_fragment_id": "csb-tesoro-deployment-2010-04-02", "relation": "same_event"},
+    {"relation_id": "tesoro-draft-to-anniversary", "source_fragment_id": "csb-tesoro-draft-findings-2014-01-29", "target_fragment_id": "csb-tesoro-anniversary-message-2011-04-01", "relation": "same_event"},
+    {"relation_id": "tesoro-animation-to-draft", "source_fragment_id": "csb-tesoro-animation-2014-01-30-release", "target_fragment_id": "csb-tesoro-draft-findings-2014-01-29", "relation": "same_event"},
+    {"relation_id": "tesoro-final-to-draft", "source_fragment_id": "csb-tesoro-final-approval-2014-05-01", "target_fragment_id": "csb-tesoro-draft-findings-2014-01-29", "relation": "same_event"},
+    {"relation_id": "tesoro-post-final-to-final", "source_fragment_id": "csb-tesoro-behind-curve-2014-10-28", "target_fragment_id": "csb-tesoro-final-approval-2014-05-01", "relation": "same_event"}
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-tesoro-final-institutional-findings-2014",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation concluded that long-term high-temperature hydrogen attack weakened the carbon-steel heat exchanger until catastrophic rupture and identified failures in materials selection, hazard analysis, inspection strategy, maintenance, and refinery safety systems.",
+      "confidence": 1.0,
+      "source_evidence_ids": ["csb-tesoro-final-approval-2014-05-01"]
+    }
+  ],
+  "actual_timeline": [],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_draft_vs_final_distinction": true,
+    "require_animation_date_reconciliation": true,
+    "require_htha_metallurgy_and_inspection_reasoning": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}
