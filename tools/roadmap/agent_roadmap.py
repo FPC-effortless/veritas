@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "veritas.agent-roadmap.v1"
+STATUS_SCHEMA = "veritas.agent-work-status.v1"
 STATES = {"READY", "BLOCKED", "CLAIMED", "REVIEW", "DONE", "SUPERSEDED"}
 ACTIVE = {"READY", "CLAIMED", "REVIEW"}
 TRUSTED_STATUS_REQUIRED = {"CLAIMED", "REVIEW"}
@@ -311,19 +312,25 @@ def status_record(repo: str, number: int, token: str | None) -> dict[str, Any] |
                 continue
             match = STATUS_RE.search(body)
             if match is None:
-                continue
+                raise RoadmapError(f"issue #{number}: malformed trusted coordination status")
             try:
                 record = json.loads(match.group(1))
-            except json.JSONDecodeError:
-                continue
-            if isinstance(record, dict):
-                trusted.append(record)
+            except json.JSONDecodeError as exc:
+                raise RoadmapError(
+                    f"issue #{number}: malformed trusted coordination status"
+                ) from exc
+            if not isinstance(record, dict) or record.get("schema_version") != STATUS_SCHEMA:
+                raise RoadmapError(f"issue #{number}: invalid trusted coordination status schema")
+            sequence = record.get("transition_seq")
+            if not isinstance(sequence, int) or sequence < 0:
+                raise RoadmapError(f"issue #{number}: invalid trusted transition sequence")
+            trusted.append(record)
         if len(comments) < 100:
             break
         page += 1
     return max(
         trusted,
-        key=lambda record: int(record.get("transition_seq", -1)),
+        key=lambda record: record["transition_seq"],
         default=None,
     )
 
@@ -358,6 +365,55 @@ def derive_dependencies(
         if re.search(pattern, summary):
             dependencies.add(primary)
     return sorted(dependencies)
+
+
+def validate_live_status(
+    status: dict[str, Any],
+    *,
+    issue_number: int,
+    work_id: str,
+    state: str,
+) -> tuple[str | None, str | None, int | None]:
+    """Validate status fields that are authoritative for the live coordination state."""
+    if (
+        status.get("issue_number") != issue_number
+        or status.get("work_id") != work_id
+        or status.get("state") != state
+    ):
+        raise RoadmapError(f"issue #{issue_number}: trusted status disagrees with live issue")
+
+    agent_id = status.get("agent_id")
+    branch = status.get("branch")
+    linked_pr = status.get("linked_pr")
+    if agent_id is not None and (not isinstance(agent_id, str) or not agent_id.strip()):
+        raise RoadmapError(f"issue #{issue_number}: trusted status has invalid agent_id")
+    if branch is not None and (not isinstance(branch, str) or not branch.strip()):
+        raise RoadmapError(f"issue #{issue_number}: trusted status has invalid branch")
+    if linked_pr is not None and (
+        not isinstance(linked_pr, int) or isinstance(linked_pr, bool) or linked_pr <= 0
+    ):
+        raise RoadmapError(f"issue #{issue_number}: trusted status has invalid linked_pr")
+
+    if state in TRUSTED_STATUS_REQUIRED:
+        if agent_id is None or branch is None:
+            raise RoadmapError(f"issue #{issue_number}: {state} trusted status missing holder")
+        if state == "CLAIMED" and linked_pr is not None:
+            raise RoadmapError(f"issue #{issue_number}: CLAIMED trusted status has linked PR")
+        if state == "REVIEW" and linked_pr is None:
+            raise RoadmapError(f"issue #{issue_number}: REVIEW trusted status missing linked PR")
+
+    if state == "BLOCKED":
+        if agent_id is None:
+            if branch is not None or linked_pr is not None:
+                raise RoadmapError(
+                    f"issue #{issue_number}: unowned BLOCKED status retains active metadata"
+                )
+        elif branch is None:
+            raise RoadmapError(
+                f"issue #{issue_number}: owner-held BLOCKED status missing branch"
+            )
+
+    return agent_id, branch, linked_pr
 
 
 def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any]:
@@ -409,21 +465,20 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
             raise RoadmapError(
                 f"issue #{number}: {state} missing trusted coordination status"
             )
+        if state == "BLOCKED" and has_comments and status is None:
+            raise RoadmapError(
+                f"issue #{number}: BLOCKED with comments missing trusted coordination status"
+            )
         if status is not None:
-            if (
-                status.get("issue_number") != number
-                or status.get("work_id") != contract["work_id"]
-                or status.get("state") != state
-            ):
-                raise RoadmapError(f"issue #{number}: trusted status disagrees with live issue")
-            status_linked_pr = status.get("linked_pr")
-            if status_linked_pr is not None and not isinstance(status_linked_pr, int):
-                raise RoadmapError(f"issue #{number}: trusted status has invalid linked_pr")
+            claimant, status_branch, status_linked_pr = validate_live_status(
+                status,
+                issue_number=number,
+                work_id=contract["work_id"],
+                state=state,
+            )
             linked_pr = status_linked_pr
-            if isinstance(status.get("branch"), str) and status["branch"]:
-                branch = status["branch"]
-            if isinstance(status.get("agent_id"), str) and status["agent_id"]:
-                claimant = status["agent_id"]
+            if status_branch is not None:
+                branch = status_branch
 
         rows.append(
             {
