@@ -1,0 +1,43 @@
+name: Investigation Data Network Smoke
+
+on:
+  push:
+    branches:
+      - feat/high-stakes-investigation-data
+
+permissions:
+  contents: read
+
+jobs:
+  acquire-and-prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install Veritas
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Validate source catalog
+        run: veritas-data validate-catalog
+      - name: Acquire and prepare UCDP GED 26.1
+        run: |
+          veritas-data acquire ucdp-ged-26.1 ged-26.1-csv --output .veritas-data --max-bytes 500000000
+          UCDP_RECEIPT=.veritas-data/ucdp-ged-26.1/ged-26.1-csv/ged261-csv.zip.provenance.json
+          veritas-data verify-receipt "$UCDP_RECEIPT" --root .veritas-data
+          veritas-data prepare-zip "$UCDP_RECEIPT" --acquisition-root .veritas-data --output .veritas-prepared --max-uncompressed-bytes 2000000000
+          cat "$UCDP_RECEIPT"
+          find .veritas-prepared/ucdp-ged-26.1 -name extraction_manifest.json -print -exec cat {} \;
+      - name: Acquire and prepare NTSB aviation census
+        run: |
+          veritas-data acquire ntsb-aviation-census avall-2026-08 --output .veritas-data --max-bytes 200000000
+          NTSB_RECEIPT=.veritas-data/ntsb-aviation-census/avall-2026-08/avall.zip.provenance.json
+          veritas-data verify-receipt "$NTSB_RECEIPT" --root .veritas-data
+          veritas-data prepare-zip "$NTSB_RECEIPT" --acquisition-root .veritas-data --output .veritas-prepared --max-uncompressed-bytes 5000000000
+          cat "$NTSB_RECEIPT"
+          find .veritas-prepared/ntsb-aviation-census -name extraction_manifest.json -print -exec cat {} \;
