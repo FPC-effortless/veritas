@@ -282,10 +282,22 @@ def discover_sec_litigation_dataset(
         source_registry_id="veritas-public-operations-sources",
         cases=cases,
         notes=[
-            "SEC civil enforcement cases with pre-disposition filings separated from later court or case disposition documents.",
-            "Historical public cases are training/reference material, not contamination-resistant holdouts.",
+            (
+                "SEC civil enforcement cases with pre-disposition filings separated "
+                "from later court or case disposition documents."
+            ),
+            (
+                "Historical public cases are training/reference material, not "
+                "contamination-resistant holdouts."
+            ),
             "SEC complaints contain allegations, not adjudicated facts.",
-            "Verifier references encode legal/procedural dispositions, not ground truth about reality.",
-            "Litigation release narrative pages are not emitted into the public projection because they may summarize outcomes.",
+            (
+                "Verifier references encode legal/procedural dispositions, not ground "
+                "truth about reality."
+            ),
+            (
+                "Litigation release narrative pages are not emitted into the public "
+                "projection because they may summarize outcomes."
+            ),
         ],
     )
