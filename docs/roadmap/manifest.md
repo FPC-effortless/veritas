@@ -18,17 +18,19 @@ Execution state is synchronized from GitHub:
 3. for `CLAIMED` and `REVIEW`, the synchronizer requires the latest trusted
    `<!-- veritas-agent-work-status:v1 -->` comment authored by `github-actions[bot]`
    and requires its Work ID, issue number, and state to agree with the label;
-4. if that trusted status record is missing or unparseable for `CLAIMED`/`REVIEW`,
+4. trusted status lookup paginates the complete issue-comment history rather than
+   assuming the authoritative status is present on the first 100-comment page;
+5. if that trusted status record is missing or unparseable for `CLAIMED`/`REVIEW`,
    synchronization fails closed instead of falling back to issue-body or stale
    manifest claimant/PR metadata;
-5. `BLOCKED` may be either unowned dependency-blocked work or work still held by an
+6. `BLOCKED` may be either unowned dependency-blocked work or work still held by an
    active agent. When a blocked issue has coordination comments, the synchronizer
    checks the latest trusted bot status and preserves its holder/branch/PR only when
    that status still declares an owner. A released blocked status clears stale
-   claimant metadata;
-6. the issue Work Contract supplies Work ID, branch convention, dependency prose,
-   positive/negative ownership, and fallback PR linkage for states that do not require
-   a trusted active status record.
+   claimant and PR metadata;
+7. the issue Work Contract supplies Work ID, branch convention, dependency prose,
+   positive/negative ownership, and fallback PR linkage only where trusted live
+   status is not authoritative.
 
 This prevents stale issue-body text from overriding live coordination labels. It also
 means the checked-in file is a **snapshot**: run the explicit sync command before using
@@ -82,6 +84,8 @@ GITHUB_TOKEN=... python tools/roadmap/agent_roadmap.py sync
 A token is optional for the public repository but avoids unauthenticated API limits.
 The sync command is the only networked path. BLOCKED issues with no comments require
 no status-comment request because they cannot contain a trusted coordination status.
+When comments exist, trusted-status lookup follows all comment pages before deciding
+that no bot-authored status exists.
 
 ## Baseline validation
 
