@@ -24,7 +24,7 @@ runtime or grading shortcut.
 | `hierarchical_observation` | nested public observation fields preserved through runtime payloads |
 | `structured_grader` | targets, invariants, required action order, forbidden actions, and evidence |
 | `authority_sensitive` | delegated authority, hidden preconditions, and a forbidden bypass path |
-| `long_horizon_budgeted` | ordered multi-step work that exactly consumes a declared cost/tool-call budget |
+| `long_horizon_budgeted` | ordered multi-step work with explicit cost/tool-call budgets and headroom |
 | `sealed_private_evaluator` | caller-supplied evaluator material that remains absent from the public payload |
 | `machine_experience_ready` | a verified episode converted to canonical `TrajectoryV2` and then `MachineExperience` |
 
@@ -34,7 +34,8 @@ The templates intentionally include falsifiers rather than only happy paths. In 
 
 - the authority-sensitive task blocks `apply_change` before delegated authority and marks the
   explicit override action forbidden;
-- the budgeted task exhausts its four-action budget and rejects an additional probe;
+- the budgeted task completes its required four-stage path at half of its eight-call/eight-cost
+  allowance, then a falsifier consumes the remaining headroom and proves the next probe is rejected;
 - the sealed-evaluator task rejects a wrong choice and never checks an evaluator answer into the
   example package; and
 - the MachineExperience example emits only public action results into its trajectory and remains at
