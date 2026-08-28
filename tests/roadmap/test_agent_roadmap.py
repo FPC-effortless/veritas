@@ -228,5 +228,8 @@ def test_sync_rejects_active_issue_without_trusted_status(
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
     monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
 
-    with pytest.raises(roadmap.RoadmapError, match="missing trusted status"):
+    with pytest.raises(
+        roadmap.RoadmapError,
+        match="missing trusted coordination status",
+    ):
         roadmap.sync(current, "FPC-effortless/veritas", None)
