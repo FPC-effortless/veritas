@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from investigation_world.portable_runtime import PortableResetResult, PortableStepResult
+
 
 class SemanticSnapshot(BaseModel):
     """Normalized semantic evidence captured from one runtime execution path."""
@@ -11,6 +13,22 @@ class SemanticSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     values: dict[str, Any]
+
+
+class OperatorReplayTrace(BaseModel):
+    """Evaluator-side evidence captured while an adapter executes a canonical vector.
+
+    This model is deliberately absent from every agent-facing adapter schema.  It carries
+    budget and verifier details that are necessary for conformance, but are not public task
+    observations.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    adapter: str
+    invocations: tuple[dict[str, Any], ...]
+    reset_result: PortableResetResult
+    step_results: tuple[PortableStepResult, ...]
 
 
 class AdapterConformanceReport(BaseModel):

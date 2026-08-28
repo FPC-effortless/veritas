@@ -10,6 +10,12 @@ logic are not part of this adapter.
 The pre-existing `investigation_world.portability.prime` SRE exporter is a compatibility path.
 This lane does not import, modify, or replace it.
 
+`replay_portable_requests_for_conformance(...)` retains the complete evaluator-side result sequence
+for `AdapterConformanceReport` generation. The existing terminal `replay_portable_requests(...)`
+helper is implemented over that trace and preserves its return behavior. Complete traces remain
+operator-only and are not written into `public_tasks.json`, agent-visible Prime state, or MCP tool
+responses.
+
 ## Prime v1 mapping
 
 The generated package follows the current `verifiers.v1` decomposition:

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from typing import Any
 
+from investigation_world.conformance import OperatorReplayTrace
 from investigation_world.exporters.openenv.compat import (
     EnvironmentMetadata,
     OpenEnvEnvironmentBase,
@@ -25,6 +28,7 @@ from investigation_world.portable_contract import (
 )
 from investigation_world.portable_runtime import (
     PortableOperationalRuntime,
+    PortableResetResult,
     PortableRuntimeProtocol,
     PortableStepResult,
 )
@@ -107,6 +111,7 @@ class PortableOpenEnvEnvironment(OpenEnvEnvironmentBase):
         self._environment_name = environment_name
         self._action_type = action_type
         self._runtime = runtime
+        self._last_operator_result: PortableStepResult | None = None
         self._state = self._state_from_runtime(step_count=0, terminated=False, truncated=False)
 
     @property
@@ -125,6 +130,7 @@ class PortableOpenEnvEnvironment(OpenEnvEnvironmentBase):
                 f"unsupported reset parameters for portable runtime: {sorted(kwargs)}"
             )
         reset = self._runtime.reset(seed=seed)
+        self._last_operator_result = None
         validate_json_instance(reset.observation, self._public.state.observation_schema)
         self._state = self._state_from_runtime(
             step_count=0,
@@ -168,6 +174,7 @@ class PortableOpenEnvEnvironment(OpenEnvEnvironmentBase):
             action.tool,
             action.arguments,
         )
+        self._last_operator_result = result
 
         self._state = self._state_from_runtime(
             step_count=self._state.step_count + 1,
@@ -279,6 +286,79 @@ class OpenEnvOperationalExport:
             environment_name=self.environment_name,
             action_type=self.action_type,
             runtime=runtime,
+        )
+
+    def replay_for_conformance(
+        self,
+        invocations: Sequence[Mapping[str, Any]],
+        *,
+        seed: int = 0,
+    ) -> OperatorReplayTrace:
+        """Execute a canonical vector through OpenEnv and return operator-only evidence.
+
+        Public observations are taken from the actual OpenEnv envelopes.  Budget and verifier
+        fields are paired with those envelopes from the same server-side runtime results; they
+        are never added to ``PortableOpenEnvObservation`` or ``PortableOpenEnvState``.
+        """
+
+        environment = self.create_environment()
+        native_reset = environment.reset(seed=seed)
+        runtime = environment._runtime
+        reset = PortableResetResult(
+            observation=deepcopy(native_reset.result),
+            state_digest=native_reset.state_digest,
+            budget_status=runtime.budget_state(),
+        )
+        normalized_calls: list[dict[str, Any]] = []
+        steps: list[PortableStepResult] = []
+        for invocation in invocations:
+            call = deepcopy(dict(invocation))
+            kind = call.get("kind")
+            name = call.get("name")
+            arguments = call.get("arguments", {})
+            if kind not in {"action", "operation"} or not isinstance(name, str):
+                raise ValueError("OpenEnv conformance invocation requires kind and name")
+            if not isinstance(arguments, Mapping):
+                raise ValueError("OpenEnv conformance invocation arguments must be an object")
+            tool = next(
+                (
+                    item.transport_name
+                    for item in self.mcp_surface.catalog.provenance
+                    if getattr(item.source_kind, "value", item.source_kind) == kind
+                    and item.canonical_name == name
+                ),
+                None,
+            )
+            if tool is None:
+                raise ValueError(f"OpenEnv conformance tool is unsupported: {kind}:{name}")
+            native = environment.step(
+                self.action_type(tool=tool, arguments=deepcopy(dict(arguments)))
+            )
+            # The server-side runtime is authoritative for private verifier details, while the
+            # public projection is deliberately taken from the OpenEnv response itself.
+            operator_result = environment._last_operator_result
+            if operator_result is None:
+                raise RuntimeError("OpenEnv adapter did not retain operator execution evidence")
+            steps.append(
+                PortableStepResult(
+                    observation=deepcopy(native.result),
+                    reward=native.reward,
+                    reward_components=operator_result.reward_components,
+                    terminated=native.terminated,
+                    truncated=native.truncated,
+                    state_digest=native.state_digest,
+                    budget_status=operator_result.budget_status,
+                    failure=operator_result.failure,
+                )
+            )
+            normalized_calls.append(
+                {"kind": kind, "name": name, "arguments": deepcopy(dict(arguments))}
+            )
+        return OperatorReplayTrace(
+            adapter="openenv",
+            invocations=tuple(normalized_calls),
+            reset_result=reset,
+            step_results=tuple(steps),
         )
 
     def create_app(self, **kwargs: Any) -> Any:

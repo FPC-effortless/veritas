@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+from investigation_world.conformance import OperatorReplayTrace
 from investigation_world.portable_contract import PortableOperationalContract
 from investigation_world.portable_runtime import (
     PortableInvocationKind,
@@ -495,24 +496,53 @@ def replay_portable_requests(
 ) -> PortableStepResult | None:
     """Replay Prime adapter requests through the portable runtime without reimplementing it."""
 
-    runtime = PortableOperationalRuntime(contract)
-    runtime.reset(seed=seed)
+    trace = replay_portable_requests_for_conformance(contract, requests, seed=seed)
     reward_result: PortableStepResult | None = None
     last_result: PortableStepResult | None = None
+    for result in trace.step_results:
+        last_result = result
+        if result.reward is not None:
+            reward_result = result
+    return reward_result or last_result
+
+
+def replay_portable_requests_for_conformance(
+    contract: PortableOperationalContract,
+    requests: Iterable[PrimeReplayRequest],
+    *,
+    seed: int = 0,
+) -> OperatorReplayTrace:
+    """Replay Prime evaluator requests while retaining the complete operator trace.
+
+    Prime's public task and tool surfaces remain unchanged.  The returned budget, digest and
+    verifier fields are evaluator-side evidence used by conformance and are never written to the
+    generated public task dataset or returned by an agent-facing tool.
+    """
+
+    runtime = PortableOperationalRuntime(contract)
+    reset = runtime.reset(seed=seed)
+    invocations: list[dict[str, Any]] = []
+    results: list[PortableStepResult] = []
     for request in requests:
+        normalized = request.model_dump(mode="python")
         if request.kind == "operation" and request.name == "submit":
-            last_result = runtime.submit(request.arguments)
+            result = runtime.submit(request.arguments)
         else:
-            last_result = runtime.step(
+            result = runtime.step(
                 PortableStepRequest(
                     kind=PortableInvocationKind(request.kind),
                     name=request.name,
                     arguments=request.arguments,
                 )
             )
-        if last_result.reward is not None:
-            reward_result = last_result
-    return reward_result or last_result
+        invocations.append(normalized)
+        results.append(result)
+    return OperatorReplayTrace(
+        adapter="prime",
+        invocations=tuple(invocations),
+        reset_result=reset,
+        step_results=tuple(results),
+    )
 
 
 def _write_files(output_dir: Path, files: dict[str, str]) -> tuple[PrimePackageFile, ...]:

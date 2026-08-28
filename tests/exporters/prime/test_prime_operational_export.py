@@ -10,6 +10,7 @@ from investigation_world.exporters.prime import (
     PrimeReplayRequest,
     build_prime_operational_package,
     replay_portable_requests,
+    replay_portable_requests_for_conformance,
 )
 from investigation_world.operational.models import (
     ActionKind,
@@ -295,6 +296,38 @@ def test_replay_reward_is_exactly_portable_runtime_reward() -> None:
     assert replayed.reward_components == direct.reward_components
     assert replayed.terminated == direct.terminated
     assert replayed.truncated == direct.truncated
+
+
+def test_prime_conformance_replay_retains_each_actual_evaluator_result() -> None:
+    contract = _typed_contract()
+    requests = [
+        PrimeReplayRequest(kind="action", name="prepare_order", arguments={}),
+        PrimeReplayRequest(
+            kind="action",
+            name="approve_order",
+            arguments={"order_id": "ORDER-001"},
+        ),
+        PrimeReplayRequest(
+            kind="operation",
+            name="submit",
+            arguments={
+                "conclusion": "Order approved after preparation.",
+                "claimed_state": {"order.status": "approved"},
+                "evidence_ids": ["record-001"],
+                "confidence": 0.9,
+            },
+        ),
+    ]
+
+    trace = replay_portable_requests_for_conformance(contract, requests, seed=17)
+    terminal = replay_portable_requests(contract, requests, seed=17)
+
+    assert trace.adapter == "prime"
+    assert trace.invocations == tuple(request.model_dump(mode="python") for request in requests)
+    assert len(trace.step_results) == len(requests)
+    assert trace.step_results[-1] == terminal
+    assert trace.step_results[-1].reward_components is not None
+    assert trace.step_results[-1].reward is not None
 
 
 def test_generated_package_has_declared_remote_dependencies_and_no_local_paths(

@@ -5,11 +5,16 @@ from investigation_world.conformance.harness import (
     compare_adapter_semantics,
     compute_test_vector_hash,
 )
-from investigation_world.conformance.models import AdapterConformanceReport, SemanticSnapshot
+from investigation_world.conformance.models import (
+    AdapterConformanceReport,
+    OperatorReplayTrace,
+    SemanticSnapshot,
+)
 
 __all__ = [
     "AdapterConformanceReport",
     "EVALUATOR_PRIVATE_FIELDS",
+    "OperatorReplayTrace",
     "REQUIRED_SEMANTIC_FIELDS",
     "SemanticSnapshot",
     "build_semantic_snapshot",

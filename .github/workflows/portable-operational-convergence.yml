@@ -1,0 +1,175 @@
+name: Portable Operational Convergence
+
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/__init__.py"
+      - "src/investigation_world/portable_contract/**"
+      - "src/investigation_world/portable_runtime/**"
+      - "src/investigation_world/mcp_compiler/**"
+      - "src/investigation_world/exporters/**"
+      - "src/investigation_world/integrations/woyengi/**"
+      - "src/investigation_world/trajectory/**"
+      - "src/investigation_world/conformance/**"
+      - "src/investigation_world/sandbox/**"
+      - "src/investigation_world/observatory/trajectory_diagnostics/**"
+      - "src/investigation_world/portability/**"
+      - "src/investigation_world/world_portability.py"
+      - "tests/portable_contract/**"
+      - "tests/portable_runtime/**"
+      - "tests/mcp_compiler/**"
+      - "tests/exporters/**"
+      - "tests/integrations/woyengi/**"
+      - "tests/trajectory/**"
+      - "tests/conformance/**"
+      - "tests/sandbox/**"
+      - "tests/observatory/trajectory_diagnostics/**"
+      - "tests/tools/world_portability_test.py"
+      - "tests/portability/**"
+      - "tools/world_portability.py"
+      - "pyproject.toml"
+      - ".github/workflows/portable-operational-convergence.yml"
+      - ".github/workflows/portability-validation.yml"
+      - "README.md"
+      - "BUILD_STATUS.md"
+      - "docs/portability/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-operational-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-gates:
+    name: Portable operational semantic gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package and tests
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Compile convergence surfaces
+        run: |
+          python -m compileall -q \
+            src/investigation_world/portable_contract \
+            src/investigation_world/portable_runtime \
+            src/investigation_world/mcp_compiler \
+            src/investigation_world/exporters \
+            src/investigation_world/conformance \
+            src/investigation_world/trajectory \
+            src/investigation_world/sandbox \
+            src/investigation_world/world_portability.py \
+            tools/world_portability.py
+      - name: Run portable operational release gates
+        run: |
+          python -m pytest -q \
+            tests/portable_contract \
+            tests/portable_runtime \
+            tests/mcp_compiler \
+            tests/exporters \
+            tests/integrations/woyengi \
+            tests/trajectory \
+            tests/conformance \
+            tests/sandbox \
+            tests/observatory/trajectory_diagnostics \
+            tests/tools/world_portability_test.py \
+            tests/portability/test_operational_manifest_reference.py \
+            tests/unit/test_clean_package_import.py \
+            tests/unit/test_security_boundary.py
+      - name: Exercise installed portability CLI
+        run: veritas-portable --help
+
+  cli-quality:
+    name: Packaged portability CLI quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package and quality tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]" ruff mypy
+      - name: Lint new CLI surfaces
+        run: |
+          ruff check \
+            src/investigation_world/world_portability.py \
+            tools/world_portability.py \
+            tests/portability/test_operational_manifest_reference.py
+      - name: Type-check packaged CLI in isolation
+        run: mypy --follow-imports=skip src/investigation_world/world_portability.py
+
+  clean-external-package:
+    name: Clean external wheel install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Inspect wheel boundary
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheels = list(Path("dist").glob("*.whl"))
+          assert len(wheels) == 1, wheels
+          with ZipFile(wheels[0]) as archive:
+              names = archive.namelist()
+          assert "investigation_world/world_portability.py" in names
+          for prefix in ("tests/", "results/", "release/"):
+              assert not any(name.startswith(prefix) for name in names), prefix
+          PY
+      - name: Install wheel outside repository checkout
+        run: |
+          python -m venv "$RUNNER_TEMP/veritas-wheel"
+          "$RUNNER_TEMP/veritas-wheel/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/veritas-wheel/bin/python" -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/veritas-wheel/bin/python" - <<'PY'
+          import importlib.metadata
+          import investigation_world
+          from investigation_world import (
+              PortableOperationalContract,
+              PortableOperationalRuntime,
+              compile_operational_episode,
+          )
+          from investigation_world.portability import PortableOperationalContractReference
+
+          assert investigation_world.__version__ == importlib.metadata.version("investigation-world")
+          assert PortableOperationalContract.__name__ == "PortableOperationalContract"
+          assert PortableOperationalRuntime.__name__ == "PortableOperationalRuntime"
+          assert callable(compile_operational_episode)
+          assert PortableOperationalContractReference.__name__ == "PortableOperationalContractReference"
+          PY
+          "$RUNNER_TEMP/veritas-wheel/bin/veritas-portable" --help
+
+  required:
+    name: Portable Operational Required
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - semantic-gates
+      - cli-quality
+      - clean-external-package
+    steps:
+      - name: Verify convergence jobs passed
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: echo "$NEEDS_JSON" | jq -e 'all(.[]; .result == "success")'

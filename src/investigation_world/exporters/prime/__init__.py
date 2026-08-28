@@ -4,6 +4,7 @@ from investigation_world.exporters.prime.exporter import (
     PrimeOperationalExportError,
     build_prime_operational_package,
     replay_portable_requests,
+    replay_portable_requests_for_conformance,
 )
 from investigation_world.exporters.prime.models import (
     PrimePackageBuildResult,
@@ -20,4 +21,5 @@ __all__ = [
     "PrimeReplayRequest",
     "build_prime_operational_package",
     "replay_portable_requests",
+    "replay_portable_requests_for_conformance",
 ]
