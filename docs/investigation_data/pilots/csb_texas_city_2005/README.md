@@ -23,16 +23,18 @@ The final investigation report itself is dated March 20, 2007, but the dated CSB
 
 ## Conservative temporal policy
 
-These historical CSB pages establish publication dates but do not provide a trustworthy machine-readable public-release timestamp for every artifact. The pilot therefore makes each dated artifact available at `00:00:00Z` on the **following calendar day**.
+These historical CSB pages establish publication dates but do not provide a trustworthy machine-readable public-release timestamp for every artifact. The pilot therefore makes each date-only artifact available at `12:00:00Z` on the **following calendar day**.
 
-This intentionally biases against premature disclosure. A task evaluated at the end of the publication day may temporarily withhold evidence that was already public, but it cannot expose evidence before the documented release date.
+Using midnight UTC would not be conservative enough: in Texas or Washington, `00:00Z` can still be the preceding local evening. The noon-UTC next-day gate ensures the documented U.S. publication date has elapsed before Veritas exposes the artifact.
+
+This intentionally biases against premature disclosure. It may withhold an artifact for several hours after it was actually public, but it does not manufacture a release time that the source does not establish.
 
 The regression test evaluates four cutoffs:
 
-1. `2005-10-28T00:00:00Z`: preliminary findings only;
-2. `2006-10-31T00:00:00Z`: preliminary + organizational findings;
-3. `2007-03-21T00:00:00Z`: preliminary + organizational + dated final findings;
-4. `2008-03-22T00:00:00Z`: all dated documents + the official CSB video.
+1. `2005-10-28T12:00:00Z`: preliminary findings only;
+2. `2006-10-31T12:00:00Z`: preliminary + organizational findings;
+3. `2007-03-21T12:00:00Z`: preliminary + organizational + dated final findings;
+4. `2008-03-22T12:00:00Z`: all dated documents + the official CSB video.
 
 ## Epistemic treatment
 
@@ -56,7 +58,7 @@ The pilot fails if:
 - the final findings release appears before its documented 2007 release;
 - the final-report PDF is treated as temporally available without separately establishing its first-public posting time;
 - the 2008 video appears at any earlier cutoff;
-- the external-host video enters without the recorded review identifier;
+- an external-host video enters without the recorded review identifier;
 - the review identifier does not match the checked-in review record;
 - the final CSB conclusion is serialized into the public episode before its dated evidence is available;
 - the source catalog rejects the CSB source under its current policy.
