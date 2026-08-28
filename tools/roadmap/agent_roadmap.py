@@ -293,24 +293,34 @@ def state_from_labels(issue: dict[str, Any], number: int) -> str:
 
 
 def status_record(repo: str, number: int, token: str | None) -> dict[str, Any] | None:
-    """Return the latest trusted coordination status comment."""
-    url = f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100"
-    comments = request_json(url, token)
+    """Return the latest trusted coordination status comment across all pages."""
     trusted: list[dict[str, Any]] = []
-    for comment in comments if isinstance(comments, list) else []:
-        user = comment.get("user", {}) if isinstance(comment, dict) else {}
-        body = comment.get("body", "") if isinstance(comment, dict) else ""
-        if user.get("login") != "github-actions[bot]" or STATUS_MARKER not in body:
-            continue
-        match = STATUS_RE.search(body)
-        if match is None:
-            continue
-        try:
-            record = json.loads(match.group(1))
-        except json.JSONDecodeError:
-            continue
-        if isinstance(record, dict):
-            trusted.append(record)
+    page = 1
+    while True:
+        url = (
+            f"https://api.github.com/repos/{repo}/issues/{number}/comments"
+            f"?per_page=100&page={page}"
+        )
+        comments = request_json(url, token)
+        if not isinstance(comments, list):
+            raise RoadmapError(f"issue #{number}: comments response must be a list")
+        for comment in comments:
+            user = comment.get("user", {}) if isinstance(comment, dict) else {}
+            body = comment.get("body", "") if isinstance(comment, dict) else ""
+            if user.get("login") != "github-actions[bot]" or STATUS_MARKER not in body:
+                continue
+            match = STATUS_RE.search(body)
+            if match is None:
+                continue
+            try:
+                record = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(record, dict):
+                trusted.append(record)
+        if len(comments) < 100:
+            break
+        page += 1
     return max(
         trusted,
         key=lambda record: int(record.get("transition_seq", -1)),
@@ -406,8 +416,10 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
                 or status.get("state") != state
             ):
                 raise RoadmapError(f"issue #{number}: trusted status disagrees with live issue")
-            if isinstance(status.get("linked_pr"), int):
-                linked_pr = status["linked_pr"]
+            status_linked_pr = status.get("linked_pr")
+            if status_linked_pr is not None and not isinstance(status_linked_pr, int):
+                raise RoadmapError(f"issue #{number}: trusted status has invalid linked_pr")
+            linked_pr = status_linked_pr
             if isinstance(status.get("branch"), str) and status["branch"]:
                 branch = status["branch"]
             if isinstance(status.get("agent_id"), str) and status["agent_id"]:
