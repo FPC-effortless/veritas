@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from examples.environments import veritas_environment_examples as examples
 from examples.environments.veritas_environment_examples import (
     authority_sensitive,
     long_horizon_budgeted,
     sealed_private_evaluator,
 )
+
 from investigation_world.experience import ExperienceMaturity
 from investigation_world.operational import EpisodeSubmission, OperationalRuntime
 
@@ -53,7 +53,13 @@ def test_authority_sensitive_example_fails_closed_without_delegation() -> None:
         )
     )
 
-    assert outcome == {"action": "apply_change", "system": "CHANGE_CONTROL", "submitted": True, "accepted": False, "reason": "authority_required"}
+    assert outcome == {
+        "action": "apply_change",
+        "system": "CHANGE_CONTROL",
+        "submitted": True,
+        "accepted": False,
+        "reason": "authority_required",
+    }
     assert result.overall_reward < 1.0
 
 
@@ -71,10 +77,13 @@ def test_sealed_evaluator_material_is_runtime_supplied_and_not_public() -> None:
     )
 
     public_payload = repr(episode.public_payload())
-    assert private_choice not in public_payload
-    assert private_choice not in (EXAMPLE_ROOT / "veritas_environment_examples" / "sealed_private_evaluator.py").read_text(
-        encoding="utf-8"
+    source_path = (
+        EXAMPLE_ROOT
+        / "veritas_environment_examples"
+        / "sealed_private_evaluator.py"
     )
+    assert private_choice not in public_payload
+    assert private_choice not in source_path.read_text(encoding="utf-8")
 
     result = examples.run_sealed_private_evaluator(
         private_expected_choice=private_choice
