@@ -15,11 +15,15 @@ Execution state is synchronized from GitHub:
 
 1. the issue must carry `agent-work`;
 2. exactly one `work:ready|blocked|claimed|review|done|superseded` label is required;
-3. for `CLAIMED` and `REVIEW`, the synchronizer reads the latest trusted
+3. for `CLAIMED` and `REVIEW`, the synchronizer requires the latest trusted
    `<!-- veritas-agent-work-status:v1 -->` comment authored by `github-actions[bot]`
    and requires its Work ID, issue number, and state to agree with the label;
-4. the issue Work Contract supplies Work ID, branch convention, dependency prose,
-   positive/negative ownership, and fallback PR linkage.
+4. if that trusted status record is missing or unparseable for `CLAIMED`/`REVIEW`,
+   synchronization fails closed instead of falling back to issue-body or stale
+   manifest claimant/PR metadata;
+5. the issue Work Contract supplies Work ID, branch convention, dependency prose,
+   positive/negative ownership, and fallback PR linkage for states that do not require
+   a trusted active status record.
 
 This prevents stale issue-body text from overriding live coordination labels. It also
 means the checked-in file is a **snapshot**: run the explicit sync command before using
@@ -79,6 +83,7 @@ The sync command is the only networked path.
 - duplicate Work IDs, aliases, or issue numbers;
 - dependencies that point to missing roadmap Work IDs;
 - dependency cycles;
+- missing trusted coordination status for live `CLAIMED`/`REVIEW` work;
 - a `READY`, `CLAIMED`, or `REVIEW` item whose explicitly classified hard dependency
   is not `DONE` or `SUPERSEDED`;
 - exact duplicate exclusive-path claims among `READY`, `CLAIMED`, and `REVIEW` work;
