@@ -51,11 +51,19 @@ The builder intentionally does **not** implement:
 ## Identity
 
 When world/task/episode IDs are not supplied explicitly, the builder derives them deterministically
-from the complete authored semantic specification. Rebuilding the same specification produces the
-same identities; changing state, actions, effects, constraints, evidence, budgets, or metadata changes
-the derived identity.
+from the **public authored specification**: environment name/domain, objective, role, permitted
+systems, public action contracts, agent-visible records, public constraints/success contract, public
+task metadata, and public episode metadata.
 
-Explicit IDs remain available for externally governed environment identities.
+Evaluator-private initial state, transitions, target assertions, invariants, process requirements,
+required evidence, budgets, and private metadata do not influence those buyer-visible IDs. Changing
+only evaluator-private semantics therefore preserves the compiled `public_id`; the full
+`PortableOperationalContract.contract_id` still changes because it content-addresses both public and
+private contract sections.
+
+This mirrors the canonical portability identity boundary and prevents a public identity from becoming
+a commitment to hidden evaluator truth. Explicit IDs remain available for externally governed
+environment identities.
 
 ## Public/private authoring
 
