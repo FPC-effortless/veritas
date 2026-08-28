@@ -58,6 +58,7 @@ jobs:
           tests/unit/test_public_investigation_corpus.py
           tests/unit/test_sec_litigation_discovery.py
           tests/unit/test_uscg_cgmix_source.py
+          tests/unit/test_uscg_xml_security.py
           tests/unit/test_public_investigation_data.py
           tests/unit/test_public_investigation_acquisition.py
 
