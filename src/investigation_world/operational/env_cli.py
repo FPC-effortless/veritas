@@ -1,12 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path
-from typing import Sequence
 
 import typer
-
-from ..world_portability import main as portability_main
 
 
 env_app = typer.Typer(
@@ -23,10 +21,16 @@ class EnvironmentAdapter(StrEnum):
     HARBOR = "harbor"
 
 
+def _portability_main(arguments: Sequence[str]) -> int:
+    from ..world_portability import main
+
+    return main(tuple(arguments))
+
+
 def _run_portability(arguments: Sequence[str]) -> None:
     """Delegate to the canonical portability CLI and preserve its exit status."""
 
-    exit_code = portability_main(tuple(arguments))
+    exit_code = _portability_main(arguments)
     if exit_code:
         raise typer.Exit(exit_code)
 
