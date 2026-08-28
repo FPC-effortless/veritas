@@ -21,8 +21,14 @@ from investigation_world.trajectory import (
     WorldIdentity,
 )
 
+PUBLIC_INITIAL_STATE = {"CASE-EXP-1.decision": "unknown"}
 
-def build_environment():
+
+def build_environment(*, private_initial_marker: str | None = None):
+    initial_state: dict[str, object] = dict(PUBLIC_INITIAL_STATE)
+    if private_initial_marker is not None:
+        initial_state["EVALUATOR.private_marker"] = private_initial_marker
+
     return (
         EnvironmentBuilder(
             name="machine-experience-ready",
@@ -53,7 +59,7 @@ def build_environment():
             fields={"decision": "proceed"},
             searchable_text="verified evidence supports proceed decision",
         )
-        .initial_state(**{"CASE-EXP-1.decision": "unknown"})
+        .initial_state(**initial_state)
         .target("CASE-EXP-1", "decision", "proceed")
         .transition(
             "inspect_evidence",
@@ -71,6 +77,7 @@ def build_environment():
         .require_action("record_decision")
         .require_order("inspect_evidence", "record_decision")
         .require_evidence("experience-evidence-001")
+        .metadata(public={"public_initial_state": dict(PUBLIC_INITIAL_STATE)})
         .success("The evidence-backed decision is recorded.")
         .build()
     )
@@ -81,8 +88,15 @@ def _state_digest(state: dict[str, object]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def run_demo():
-    episode = build_environment()
+def _public_initial_state(episode) -> dict[str, object]:
+    state = episode.task.metadata.get("public_initial_state")
+    if not isinstance(state, dict):
+        raise RuntimeError("MachineExperience example requires public initial-state metadata")
+    return dict(state)
+
+
+def run_demo(*, private_initial_marker: str | None = None):
+    episode = build_environment(private_initial_marker=private_initial_marker)
     runtime = OperationalRuntime(episode)
     public_events: list[TrajectoryEvent] = []
     for step, (action_name, parameters) in enumerate(
@@ -124,7 +138,7 @@ def run_demo():
             split="example",
         ),
         verifier=verifier,
-        initial_state=StateDigest(digest=_state_digest(episode.oracle.initial_state)),
+        initial_state=StateDigest(digest=_state_digest(_public_initial_state(episode))),
         events=tuple(public_events),
         original_evaluation=EvaluationRecord(
             verifier=verifier,
