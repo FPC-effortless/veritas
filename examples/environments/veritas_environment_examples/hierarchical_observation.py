@@ -11,7 +11,9 @@ def build_environment():
         EnvironmentBuilder(
             name="hierarchical-observation",
             domain=WorldDomain.INVESTIGATION_OSINT,
-            objective="Resolve a case using nested observation fields without exposing verifier state.",
+            objective=(
+                "Resolve a case using nested observation fields without exposing verifier state."
+            ),
             role="investigator",
         )
         .system("CASEFILE")
