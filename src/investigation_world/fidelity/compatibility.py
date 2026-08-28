@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from investigation_world.fidelity.record import FidelityRecord, revalidate_fidelity_record
+from investigation_world.fidelity.record import (
+    FidelityRecord,
+    revalidate_fidelity_record,
+)
 from investigation_world.fidelity.schema import (
     CoverageStatus,
     FidelityDimension,
