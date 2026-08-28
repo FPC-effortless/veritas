@@ -9,7 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from defusedxml import ElementTree as DefusedET
+from defusedxml import ElementTree as DefusedET  # type: ignore[import-untyped]
 
 _ENDPOINT = "https://cgmix.uscg.mil/xml/IIRData.asmx"
 _HOST = "cgmix.uscg.mil"
