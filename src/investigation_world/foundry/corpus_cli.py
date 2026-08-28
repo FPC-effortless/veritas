@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 
 from investigation_world.foundry.public_investigation_corpus import (
+    StructuredCorpusWriteResult,
     compile_structured_investigation_corpus,
     load_structured_source_profile,
     write_structured_investigation_corpus,
@@ -31,6 +32,17 @@ def _resolve_date(value: str | None) -> date:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise typer.BadParameter("date values must use YYYY-MM-DD") from exc
+
+
+def _public_structured_result(result: StructuredCorpusWriteResult) -> dict[str, object]:
+    return {
+        "dataset_id": result.dataset_id,
+        "cases": result.cases,
+        "public_output": result.public_output,
+        "manifest_output": result.manifest_output,
+        "public_hash": result.public_hash,
+        "sealed_materialized": True,
+    }
 
 
 @app.command("compile-structured")
@@ -59,7 +71,7 @@ def compile_structured_cmd(
         verifier_output=output_root / "sealed" / "verifier.jsonl",
         manifest_output=output_root / "manifest.json",
     )
-    typer.echo(json.dumps(result.model_dump(mode="json"), indent=2))
+    typer.echo(json.dumps(_public_structured_result(result), indent=2))
 
 
 @app.command("acquire-cdc-nors")
@@ -102,7 +114,7 @@ def acquire_cdc_nors_cmd(
     typer.echo(
         json.dumps(
             {
-                **result.model_dump(mode="json"),
+                **_public_structured_result(result),
                 "source_byte_count": source_result["byte_count"],
                 "source_sha256": source_result["sha256"],
                 "raw_source_retained": False,
@@ -135,7 +147,17 @@ def discover_sec_litigation_cmd(
         public_output=public_output,
         verifier_output=verifier_output,
     )
-    typer.echo(json.dumps(result, indent=2))
+    typer.echo(
+        json.dumps(
+            {
+                "dataset_id": result["dataset_id"],
+                "public_output": result["public_output"],
+                "public_hash": result["public_hash"],
+                "sealed_materialized": result["verifier_output"] is not None,
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
