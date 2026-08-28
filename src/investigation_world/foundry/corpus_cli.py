@@ -16,6 +16,10 @@ from investigation_world.foundry.public_investigation_corpus import (
 from investigation_world.foundry.public_investigation_data import write_dataset_projections
 from investigation_world.foundry.public_investigation_sources import fetch_cdc_nors_csv
 from investigation_world.foundry.sec_litigation_discovery import discover_sec_litigation_dataset
+from investigation_world.foundry.uscg_cgmix_source import (
+    discover_uscg_iir_records,
+    write_uscg_iir_staging,
+)
 
 app = typer.Typer(
     help=(
@@ -118,6 +122,67 @@ def acquire_cdc_nors_cmd(
                 "source_byte_count": source_result["byte_count"],
                 "source_sha256": source_result["sha256"],
                 "raw_source_retained": False,
+            },
+            indent=2,
+        )
+    )
+
+
+@app.command("acquire-uscg-iir")
+def acquire_uscg_iir_cmd(
+    profile: Path = Path("datasets/public_investigations/profiles/uscg_cgmix_iir_v1.json"),
+    as_of: str | None = None,
+    output_root: Path = Path("investigation_corpus/uscg_cgmix"),
+    activity_id: int = 0,
+    vessel_service: str = "",
+    vessel_name: str = "",
+    organization_name: str = "",
+    involved_facility: str = "",
+    keyword: str = "",
+    maximum_cases: int = 25,
+    timeout_seconds: float = 30.0,
+) -> None:
+    """Build a scoped, evidence-rich USCG IIR corpus through the sealed field policy."""
+
+    resolved_date = _resolve_date(as_of)
+    source_profile = load_structured_source_profile(profile)
+    if source_profile.source_id != "uscg_cgmix":
+        raise typer.BadParameter("profile must target source_id=uscg_cgmix")
+
+    records = discover_uscg_iir_records(
+        activity_id=activity_id,
+        vessel_service=vessel_service,
+        vessel_name=vessel_name,
+        organization_name=organization_name,
+        involved_facility=involved_facility,
+        keyword=keyword,
+        maximum_cases=maximum_cases,
+        timeout_seconds=timeout_seconds,
+    )
+    with tempfile.TemporaryDirectory(prefix="veritas-uscg-") as temporary_directory:
+        raw_path = Path(temporary_directory) / "uscg.json"
+        write_uscg_iir_staging(records, raw_path)
+        corpus = compile_structured_investigation_corpus(
+            source_profile,
+            raw_path,
+            dataset_id=f"uscg-cgmix-{resolved_date.isoformat()}",
+            version=resolved_date.strftime("%Y.%m.%d"),
+            as_of=resolved_date,
+        )
+        result = write_structured_investigation_corpus(
+            corpus,
+            source_profile,
+            public_output=output_root / "public.jsonl",
+            verifier_output=output_root / "sealed" / "verifier.jsonl",
+            manifest_output=output_root / "manifest.json",
+        )
+
+    typer.echo(
+        json.dumps(
+            {
+                **_public_structured_result(result),
+                "raw_source_retained": False,
+                "source": "USCG CGMIX IIR XML web service",
             },
             indent=2,
         )
