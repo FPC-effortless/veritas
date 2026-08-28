@@ -70,6 +70,8 @@ The dedicated `Portable Operational Convergence` workflow runs the merged portab
 - installed CLI behavior;
 - clean wheel build/install outside the repository checkout.
 
+The workflow also runs Ruff plus an isolated Mypy check over the newly packaged operational CLI surface. Repository-wide Ruff/Mypy runs were used diagnostically during convergence, but they expose pre-existing repository debt and are not substituted for the repository's existing functional release gates or reported as passing evidence.
+
 The existing `Portability Validation` workflow remains authoritative for the frozen SRE HUD and Prime compatibility smoke paths. The ordinary repository `CI` workflow remains authoritative for the full repository pytest/compile/build/production/frontend/container ladder. Sealed production validation remains separately controlled and must not be inferred from ordinary implementation tests.
 
 ## Release rule
