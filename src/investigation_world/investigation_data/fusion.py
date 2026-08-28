@@ -6,10 +6,13 @@ from collections import Counter
 from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, model_validator
 
 from .models import (
+    AIUsePolicy,
+    AcquisitionPolicy,
     Actor,
     EvidenceItem,
     EvidenceProvenance,
@@ -18,13 +21,15 @@ from .models import (
     PrivateInvestigationOracle,
     PublicInvestigationEpisode,
     Sensitivity,
+    SourceCatalog,
+    SourceSpec,
     StrictModel,
     TruthClaim,
 )
 
 
 class FusionError(ValueError):
-    """Raised when evidence cannot be fused without weakening provenance or sealing."""
+    """Raised when evidence cannot be fused without weakening policy or provenance."""
 
 
 class EvidenceModality(str, Enum):
@@ -61,6 +66,26 @@ def _require_aware(value: datetime | None, *, field_name: str) -> None:
         raise ValueError(f"{field_name} must include a timezone offset")
 
 
+def _stable_hash(value: Any) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _host_allowed(host: str, allowed_hosts: tuple[str, ...]) -> bool:
+    normalized = host.rstrip(".").lower()
+    return any(
+        normalized == allowed.rstrip(".").lower()
+        or normalized.endswith(f".{allowed.rstrip('.').lower()}")
+        for allowed in allowed_hosts
+    )
+
+
 class EvidenceFragment(StrictModel):
     """A provenance-bearing, temporally gated unit of multimodal evidence."""
 
@@ -85,6 +110,7 @@ class EvidenceFragment(StrictModel):
     supports_claim_ids: tuple[str, ...] = ()
     contradicts_claim_ids: tuple[str, ...] = ()
     transform_notes: str = ""
+    rights_review_id: str | None = None
 
     @model_validator(mode="after")
     def validate_fragment(self) -> "EvidenceFragment":
@@ -120,10 +146,18 @@ class EvidenceFragment(StrictModel):
         if self.epistemic_role is EpistemicRole.PRIVATE_TRUTH:
             if self.sensitivity is not Sensitivity.SEALED:
                 raise ValueError("private truth must be sealed")
-        if self.epistemic_role is EpistemicRole.DERIVED and self.derivation is DerivationKind.ORIGINAL:
+        if (
+            self.epistemic_role is EpistemicRole.DERIVED
+            and self.derivation is DerivationKind.ORIGINAL
+        ):
             raise ValueError("derived epistemic role cannot use original derivation")
-        if self.epistemic_role is EpistemicRole.SYNTHETIC and self.derivation is not DerivationKind.SYNTHETIC:
+        if (
+            self.epistemic_role is EpistemicRole.SYNTHETIC
+            and self.derivation is not DerivationKind.SYNTHETIC
+        ):
             raise ValueError("synthetic epistemic role requires synthetic derivation")
+        if self.rights_review_id is not None and not self.rights_review_id.strip():
+            raise ValueError("rights_review_id must be non-empty when supplied")
         return self
 
 
@@ -187,6 +221,7 @@ class FusionManifest(StrictModel):
                     f"fragment {item.fragment_id!r} has missing parents: "
                     f"{sorted(missing_parents)}"
                 )
+
         by_id = {item.fragment_id: item for item in self.fragments}
         for item in self.fragments:
             for parent_id in item.parent_fragment_ids:
@@ -242,9 +277,11 @@ class FusionReport(StrictModel):
     episode_id: str
     simulation_as_of: datetime
     manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    catalog_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     public_fragment_ids: tuple[str, ...]
     withheld_future_fragment_ids: tuple[str, ...]
     sealed_fragment_ids: tuple[str, ...]
+    reviewed_fragment_ids: tuple[str, ...]
     modalities: dict[str, int]
     source_ids: tuple[str, ...]
     relation_count: int = Field(ge=0)
@@ -256,20 +293,75 @@ class FusionResult(StrictModel):
 
 
 def manifest_digest(manifest: FusionManifest) -> str:
-    payload = manifest.model_dump(mode="json")
-    encoded = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return _stable_hash(manifest.model_dump(mode="json"))
 
 
-def fuse_manifest(manifest: FusionManifest) -> FusionResult:
+def catalog_digest(catalog: SourceCatalog) -> str:
+    return _stable_hash(catalog.model_dump(mode="json"))
+
+
+def _validate_source_policy(
+    fragment: EvidenceFragment,
+    source: SourceSpec,
+) -> None:
+    if source.rights.acquisition is AcquisitionPolicy.BLOCKED:
+        raise FusionError(f"source {source.source_id!r} is blocked for acquisition")
+    if source.rights.ai_use is AIUsePolicy.BLOCKED:
+        raise FusionError(f"source {source.source_id!r} is blocked for AI use")
+
+    requires_review = (
+        source.rights.acquisition is AcquisitionPolicy.REVIEW_REQUIRED
+        or source.rights.ai_use is AIUsePolicy.REVIEW_REQUIRED
+    )
+    if requires_review and fragment.rights_review_id is None:
+        raise FusionError(
+            f"fragment {fragment.fragment_id!r} requires a rights_review_id for "
+            f"source {source.source_id!r}"
+        )
+
+    parsed = urlparse(fragment.locator)
+    if parsed.scheme == "http":
+        raise FusionError(
+            f"fragment {fragment.fragment_id!r} uses an insecure HTTP locator"
+        )
+    if parsed.scheme == "https":
+        host = (parsed.hostname or "").lower()
+        if not host:
+            raise FusionError(
+                f"fragment {fragment.fragment_id!r} has an invalid HTTPS locator"
+            )
+        if not _host_allowed(host, source.allowed_hosts):
+            if fragment.rights_review_id is None:
+                raise FusionError(
+                    f"fragment {fragment.fragment_id!r} uses external host {host!r}; "
+                    "a rights_review_id is required"
+                )
+
+
+def validate_fusion_sources(
+    manifest: FusionManifest,
+    catalog: SourceCatalog,
+) -> None:
+    """Fail closed when a fusion input is absent from or disallowed by the catalog."""
+
+    sources = {source.source_id: source for source in catalog.sources}
+    for fragment in manifest.fragments:
+        source = sources.get(fragment.source_id)
+        if source is None:
+            raise FusionError(
+                f"fragment {fragment.fragment_id!r} references unknown source "
+                f"{fragment.source_id!r}"
+            )
+        _validate_source_policy(fragment, source)
+
+
+def fuse_manifest(
+    manifest: FusionManifest,
+    catalog: SourceCatalog,
+) -> FusionResult:
     """Compile one temporally correct multimodal manifest into public + sealed artifacts."""
 
+    validate_fusion_sources(manifest, catalog)
     public_fragments: list[EvidenceFragment] = []
     withheld: list[str] = []
     sealed: list[str] = []
@@ -310,9 +402,15 @@ def fuse_manifest(manifest: FusionManifest) -> FusionResult:
         episode_id=manifest.episode_id,
         simulation_as_of=manifest.simulation_as_of,
         manifest_sha256=manifest_digest(manifest),
+        catalog_sha256=catalog_digest(catalog),
         public_fragment_ids=tuple(item.fragment_id for item in public_fragments),
         withheld_future_fragment_ids=tuple(withheld),
         sealed_fragment_ids=tuple(sealed),
+        reviewed_fragment_ids=tuple(
+            item.fragment_id
+            for item in manifest.fragments
+            if item.rights_review_id is not None
+        ),
         modalities=dict(sorted(counts.items())),
         source_ids=tuple(sorted({item.source_id for item in manifest.fragments})),
         relation_count=len(manifest.relations),
