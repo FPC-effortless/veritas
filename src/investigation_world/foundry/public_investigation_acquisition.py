@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import collections.abc
 import hashlib
 import json
 import re
-from collections.abc import Callable
+import urllib.parse
+import urllib.request
 from pathlib import Path
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,7 +66,7 @@ class DatasetMaterializationResult(BaseModel):
     reference_only_artifacts: int = Field(default=0, ge=0)
 
 
-ArtifactFetcher = Callable[[SourceArtifact, set[str], float, int], bytes]
+ArtifactFetcher = collections.abc.Callable[[SourceArtifact, set[str], float, int], bytes]
 
 
 def validate_dataset_registry(
@@ -85,11 +85,11 @@ def validate_dataset_registry(
 
 
 def _host(value: str) -> str:
-    return (urlparse(value).hostname or "").casefold()
+    return (urllib.parse.urlparse(value).hostname or "").casefold()
 
 
 def _require_https(value: str, *, artifact_id: str, context: str) -> None:
-    parsed = urlparse(value)
+    parsed = urllib.parse.urlparse(value)
     if parsed.scheme.casefold() != "https":
         raise ValueError(
             f"{context} for {artifact_id} must use https, got {parsed.scheme!r}"
@@ -120,7 +120,7 @@ def _suffix_for(artifact: SourceArtifact) -> str:
     suffix = _MEDIA_SUFFIXES.get(artifact.media_type.casefold())
     if suffix:
         return suffix
-    path_suffix = Path(urlparse(str(artifact.url)).path).suffix
+    path_suffix = Path(urllib.parse.urlparse(str(artifact.url)).path).suffix
     if path_suffix and len(path_suffix) <= 10:
         return path_suffix.casefold()
     return ".bin"
@@ -139,13 +139,13 @@ def fetch_artifact_bytes(
         raise ValueError(
             f"artifact host {source_host!r} is not authorized for {artifact.artifact_id}"
         )
-    request = Request(
+    request = urllib.request.Request(
         source_url,
         headers={"User-Agent": "VeritasPublicInvestigationDataset/1.0"},
     )
     # B310 is mitigated by HTTPS-only URLs plus registry host allowlisting
     # before and after redirects.
-    with urlopen(request, timeout=timeout_seconds) as response:  # nosec B310
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:  # nosec B310
         final_url = response.geturl()
         _require_https(
             final_url, artifact_id=artifact.artifact_id, context="artifact redirect URL"
