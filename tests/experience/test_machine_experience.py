@@ -136,7 +136,9 @@ def test_machine_experience_revalidates_copied_readiness_assessments() -> None:
     stale_pass = ReadinessAssessment().model_copy(
         update={"status": ReadinessStatus.PASS}
     )
-    weakened_readiness = ExperienceReadiness(reverification_ready=stale_pass)
+    weakened_readiness = ExperienceReadiness().model_copy(
+        update={"reverification_ready": stale_pass}
+    )
 
     with pytest.raises(ValidationError, match="PASS readiness requires"):
         MachineExperience(
