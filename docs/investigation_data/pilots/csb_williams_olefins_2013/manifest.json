@@ -1,0 +1,147 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2013-03-I-LA-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2013-03-I-LA",
+    "CSB-2013-3-I-LA"
+  ],
+  "simulation_start": "2013-06-14T00:00:00Z",
+  "simulation_as_of": "2013-06-15T12:00:00Z",
+  "initial_public_state": {
+    "incident": "June 13, 2013 explosion and fire at the Williams Olefins plant in Geismar, Louisiana",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct the non-routine operation and overpressure failure while distinguishing sparse early public evidence from final and post-final institutional analysis.",
+    "epistemic_rule": "Absence of a public pre-final factual release is not permission to synthesize one; deployment, final findings, and post-final communication remain distinct."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "williams-geismar",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "Williams Olefins Geismar Plant"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "review_video",
+    "request_document",
+    "build_timeline",
+    "assess_overpressure",
+    "assess_equipment_isolation",
+    "assess_nonroutine_operation",
+    "assess_process_safety_management",
+    "reconcile_source_identifiers",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "do_not_invent_missing_pre_final_evidence": true,
+    "source_identifier_aliases_are_preserved": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-williams-deployment-2013-06-14",
+      "source_id": "uscsb",
+      "source_artifact_id": "williams-deployment-2013-06-14",
+      "case_ids": [
+        "CSB-2013-03-I-LA",
+        "CSB-2013-3-I-LA"
+      ],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/chemical-safety-board-deploying-to-accident-at-williams-olefins-plant-in-geismar-louisiana/",
+      "content_ref": "external-document://uscsb/williams/deployment-2013-06-14",
+      "available_from": "2013-06-15T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-williams-olefins-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-williams-final-release-2016-10-19",
+      "source_id": "uscsb",
+      "source_artifact_id": "williams-final-release-2016-10-19",
+      "case_ids": [
+        "CSB-2013-03-I-LA",
+        "CSB-2013-3-I-LA"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-releases-final-case-study-into-2013-explosion-and-fire-at-williams-olefins-plant-in-geismar-louisiana/",
+      "content_ref": "external-document://uscsb/williams/final-release-2016-10-19",
+      "available_from": "2016-10-20T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-williams-olefins-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-williams-blocked-in-2017-01-25",
+      "source_id": "uscsb",
+      "source_artifact_id": "williams-blocked-in-2017-01-25",
+      "case_ids": [
+        "CSB-2013-03-I-LA",
+        "CSB-2013-3-I-LA"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/blocked-in/",
+      "content_ref": "external-page://uscsb/williams/blocked-in-2017-01-25",
+      "available_from": "2017-01-26T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-williams-olefins-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "williams-final-to-deployment",
+      "source_fragment_id": "csb-williams-final-release-2016-10-19",
+      "target_fragment_id": "csb-williams-deployment-2013-06-14",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "williams-post-final-video-to-final",
+      "source_fragment_id": "csb-williams-blocked-in-2017-01-25",
+      "target_fragment_id": "csb-williams-final-release-2016-10-19",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-williams-final-institutional-findings-2016",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final case study concluded that process safety management deficiencies left an offline reboiler vulnerable to overpressure during non-routine operations after it was isolated from its pressure relief device.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-williams-final-release-2016-10-19"
+      ]
+    }
+  ],
+  "actual_timeline": [],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "sparse_staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_identifier_alias_reconciliation": true,
+    "require_overpressure_and_isolation_reasoning": true,
+    "require_sparse_history_honesty": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}
