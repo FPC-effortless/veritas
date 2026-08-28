@@ -1,0 +1,22 @@
+{
+  "review_id": "review-csb-chevron-richmond-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2012-03-I-CA",
+  "scope": [
+    "Reference CSB-authored public investigation, news, and video landing pages by external locator only.",
+    "Do not resolve, bulk-download, redistribute, or extract embedded third-party video media in this pilot.",
+    "Do not copy the final-report PDF into the repository; the dated January 30, 2015 CSB approval release is the final institutional finding surface used for temporal gating.",
+    "Exclude worker, resident, investigator, and other individual names from the normalized episode actors and task state.",
+    "Treat surveillance video as primary evidence and CSB interim/final analysis as institutional findings or reconstructions, not private ground truth.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises metadata, evidence-role semantics, temporal gating, hypothesis revision, and external evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Embedded video hosting, transcript extraction, frame extraction, local media acquisition, redistribution, or training use requires a separate artifact-level review.",
+    "The final CSB report is authoritative institutional evidence but is not promoted to omniscient causal ground truth."
+  ]
+}
