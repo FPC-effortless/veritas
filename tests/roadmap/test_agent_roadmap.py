@@ -84,6 +84,26 @@ def issue(
     }
 
 
+def status(
+    number: int,
+    work_id: str,
+    state: str,
+    *,
+    agent: str | None = None,
+    branch: str | None = None,
+    linked_pr: int | None = None,
+) -> dict:
+    return {
+        "issue_number": number,
+        "work_id": work_id,
+        "state": state,
+        "agent_id": agent,
+        "branch": branch,
+        "linked_pr": linked_pr,
+        "transition_seq": 1,
+    }
+
+
 def test_checked_in_manifest_validates() -> None:
     current = roadmap.load(ROOT / ".github" / "agent-roadmap.yml")
     assert roadmap.validate(current) == []
@@ -114,6 +134,13 @@ def test_direct_active_path_collision_fails_closed() -> None:
             row("B", 2, state="CLAIMED", path="src/x/**"),
         )
     )
+    assert "direct ownership collision on src/x/**: A and B" in errors
+
+
+def test_owned_blocked_path_collision_fails_closed() -> None:
+    blocked = row("A", 1, state="BLOCKED", path="src/x/**")
+    blocked["claimant"] = "agent-a"
+    errors = roadmap.validate(manifest(blocked, row("B", 2, path="src/x/**")))
     assert "direct ownership collision on src/x/**: A and B" in errors
 
 
@@ -196,6 +223,7 @@ def test_sync_removes_dependency_deleted_from_live_contract(
     issue_a = issue(1, "A", "BLOCKED", "none")
     issue_b = issue(2, "B", "READY", "none")
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
 
     synced = roadmap.sync(current, "FPC-effortless/veritas", None)
     by_id = {entry["work_id"]: entry for entry in synced["work"]}
@@ -214,6 +242,7 @@ def test_sync_resolves_dependency_alias_from_live_contract(
     issue_a = issue(1, "A / OLD-A", "DONE", "none")
     issue_b = issue(2, "B", "BLOCKED", "OLD-A")
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
 
     synced = roadmap.sync(current, "FPC-effortless/veritas", None)
     by_id = {entry["work_id"]: entry for entry in synced["work"]}
@@ -233,3 +262,46 @@ def test_sync_rejects_active_issue_without_trusted_status(
         match="missing trusted coordination status",
     ):
         roadmap.sync(current, "FPC-effortless/veritas", None)
+
+
+def test_sync_owned_blocked_status_preserves_holder_and_reserves_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocked = row("A", 1, state="CLAIMED", path="src/x/**")
+    ready = row("B", 2, path="src/x/**")
+    current = manifest(blocked, ready)
+    issue_a = issue(1, "A", "BLOCKED", "none")
+    issue_b = issue(2, "B", "READY", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
+
+    def status_record(_repo: str, number: int, _token: str | None) -> dict | None:
+        if number == 1:
+            return status(1, "A", "BLOCKED", agent="agent-a", branch="feat/a")
+        return None
+
+    monkeypatch.setattr(roadmap, "status_record", status_record)
+    with pytest.raises(roadmap.RoadmapError, match="direct ownership collision"):
+        roadmap.sync(current, "FPC-effortless/veritas", None)
+
+
+def test_sync_released_blocked_status_clears_stale_holder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    blocked = row("A", 1, state="BLOCKED")
+    blocked["claimant"] = "agent-a"
+    blocked["branch"] = "feat/stale-a"
+    blocked["linked_pr"] = 99
+    current = manifest(blocked)
+    issue_a = issue(1, "A", "BLOCKED", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(
+        roadmap,
+        "status_record",
+        lambda *_: status(1, "A", "BLOCKED"),
+    )
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+    entry = synced["work"][0]
+    assert entry["claimant"] is None
+    assert entry["branch"] == "feat/a"
+    assert entry["linked_pr"] is None
