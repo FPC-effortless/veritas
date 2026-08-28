@@ -49,10 +49,13 @@ The full `PortableOperationalContract.contract_id` is intentionally not part of 
 | NeMo Gym | native reset/step adapter over shared runtime | supported | NeMo function tools have no native output-schema slot; exact output schema is retained in Veritas extension metadata |
 | HUD | protocol-first adapter over shared runtime/MCP surface | supported | runtime-specific session/prompt fields are generated transport fields |
 | Harbor | environment + MCP runtime + separated verifier packaging | supported | container/service configuration is deployment metadata, not portable semantics |
-| OpenEnv | adapter delegates through shared MCP/runtime | **not available through the stable public trace API** | stable public API does not expose the complete operator trace required by `AdapterConformanceReport`; implementation parity is instead covered by exporter/direct-runtime tests |
-| Prime Verifiers v1 | generated package delegates to shared runtime | **not available through the stable public replay API** | stable public replay exposes only terminal result; FastMCP lacks an arbitrary-public-JSON-Schema registration primitive and a public commit-state-then-tool-error primitive, so the exporter uses documented compatibility shims |
+| OpenEnv | adapter delegates through shared MCP/runtime | supported through operator replay | operator replay pairs actual public OpenEnv envelopes with server-side budget/verifier evidence without changing agent-facing state or observation schemas |
+| Prime Verifiers v1 | generated package delegates to shared runtime | supported through evaluator replay | evaluator replay retains every portable result for conformance; FastMCP schema-registration and commit-state-then-tool-error compatibility shims remain unchanged |
 
-`AdapterConformanceReport.passed` is true only when `semantic_losses == []`. Missing conformance evidence is not converted into a semantic PASS. In particular, OpenEnv and Prime remain explicitly unsupported for full CLI conformance replay until their stable public interfaces expose the required trace fields.
+`AdapterConformanceReport.passed` is true only when `semantic_losses == []`. Missing conformance
+evidence is never converted into a semantic PASS. OpenEnv and Prime now supply complete evidence
+through evaluator/operator-only replay capabilities rather than widening their agent-facing public
+interfaces.
 
 ## Verification gates
 

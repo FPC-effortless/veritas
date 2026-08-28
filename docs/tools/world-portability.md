@@ -224,14 +224,15 @@ Stable public trace surfaces currently permit full operator-side conformance exe
 
 - NeMo;
 - HUD;
-- Harbor.
+- Harbor;
+- OpenEnv; and
+- Prime Verifiers v1.
 
-The CLI intentionally returns `CONFORMANCE_UNAVAILABLE` for OpenEnv and Prime rather than fabricating evidence:
-
-- OpenEnv's stable public environment API does not expose the operator budget/reward-component trace required by `build_semantic_snapshot`;
-- Prime's stable public replay helper exposes the terminal result, not every intermediate operator result required for full semantic comparison.
-
-The repository's dedicated conformance test suite can use test-only instrumentation for those adapters. This standalone CLI does not depend on exporter internals or test monkeypatches.
+OpenEnv and Prime use explicit evaluator/operator-side replay extensions. OpenEnv evidence pairs the
+actual public reset/step envelopes with private budget and verifier fields from the same server-side
+runtime results. Prime evidence retains every result produced by its evaluator replay path rather
+than only the terminal reward result. Neither extension adds private fields to agent-facing state,
+observations, task rows, MCP tool returns, or generated public task data.
 
 Conformance stdout includes the durable report fields:
 
@@ -277,4 +278,5 @@ Default reverification output reports only success and replay count. A trusted o
 
 ## Root CLI integration
 
-This branch deliberately does not edit `src/investigation_world/cli.py`, `pyproject.toml`, exporter packages, or shared `__init__.py` files. F1/root integration can later wrap or register this standalone tool without changing its semantics.
+The installed `veritas-portable` entry point and `tools/world_portability.py` compatibility launcher
+execute the same implementation.

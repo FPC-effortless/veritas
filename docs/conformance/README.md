@@ -53,6 +53,12 @@ transport envelopes are normalized, while evaluator-private semantics are read o
 adapter's operator/runtime path. This distinction is intentional: private semantics must be absent
 from the evaluated agent's surface but still preserved by the adapter for execution and scoring.
 
+OpenEnv's operator replay takes observations, rewards, termination, truncation and state digests
+from the actual OpenEnv envelopes, then attaches budget/verifier fields from the same server-side
+results. Prime's evaluator replay returns the complete ordered result trace used by its terminal
+reward helper. These are production adapter capabilities; the conformance suite no longer replaces
+either runtime with a recording test double.
+
 ## Private-field accounting
 
 `excluded_private_fields` means "intentionally excluded from the agent-facing surface", not
