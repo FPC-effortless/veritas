@@ -11,15 +11,26 @@ on:
         options:
           - cdc_nors
           - sec_litigation
+          - uscg_cgmix
       include_verifier:
         description: Upload verifier projection as a separate artifact
         required: true
         default: false
         type: boolean
       maximum_cases:
-        description: Maximum SEC paired cases; ignored for CDC NORS
+        description: Maximum cases for scoped SEC or USCG acquisition
         required: true
-        default: "2000"
+        default: "25"
+        type: string
+      uscg_activity_id:
+        description: USCG Activity ID; use 0 only when a keyword is supplied
+        required: true
+        default: "0"
+        type: string
+      uscg_keyword:
+        description: Optional USCG IIR keyword used to scope search
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -46,6 +57,7 @@ jobs:
           python -m pytest -q
           tests/unit/test_public_investigation_corpus.py
           tests/unit/test_sec_litigation_discovery.py
+          tests/unit/test_uscg_cgmix_source.py
           tests/unit/test_public_investigation_data.py
           tests/unit/test_public_investigation_acquisition.py
 
@@ -54,6 +66,8 @@ jobs:
           SOURCE: ${{ inputs.source }}
           MAXIMUM_CASES: ${{ inputs.maximum_cases }}
           INCLUDE_VERIFIER: ${{ inputs.include_verifier }}
+          USCG_ACTIVITY_ID: ${{ inputs.uscg_activity_id }}
+          USCG_KEYWORD: ${{ inputs.uscg_keyword }}
         run: |
           set -euo pipefail
           as_of="$(date -u +%F)"
@@ -76,6 +90,20 @@ jobs:
               --maximum-cases "${MAXIMUM_CASES}" \
               --public-output out/sec_litigation/public.json \
               "${verifier_args[@]}"
+          elif [[ "${SOURCE}" == "uscg_cgmix" ]]; then
+            if [[ "${USCG_ACTIVITY_ID}" == "0" && -z "${USCG_KEYWORD}" ]]; then
+              echo "USCG builds require an activity ID or keyword scope" >&2
+              exit 2
+            fi
+            veritas-corpus acquire-uscg-iir \
+              --as-of "${as_of}" \
+              --activity-id "${USCG_ACTIVITY_ID}" \
+              --keyword "${USCG_KEYWORD}" \
+              --maximum-cases "${MAXIMUM_CASES}" \
+              --output-root out/uscg_cgmix
+            if [[ "${INCLUDE_VERIFIER}" != "true" ]]; then
+              rm -rf out/uscg_cgmix/sealed
+            fi
           else
             echo "Unsupported source: ${SOURCE}" >&2
             exit 2
