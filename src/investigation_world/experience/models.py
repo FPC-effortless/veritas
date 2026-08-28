@@ -12,8 +12,12 @@ from investigation_world.trajectory import (
     canonical_hash,
 )
 
-MACHINE_EXPERIENCE_SCHEMA = "veritas.machine-experience.v1"
-EXPERIENCE_SEQUENCE_SCHEMA = "veritas.experience-sequence.v1"
+MACHINE_EXPERIENCE_SCHEMA: Literal["veritas.machine-experience.v1"] = (
+    "veritas.machine-experience.v1"
+)
+EXPERIENCE_SEQUENCE_SCHEMA: Literal["veritas.experience-sequence.v1"] = (
+    "veritas.experience-sequence.v1"
+)
 
 
 class CanonicalModel(BaseModel):
@@ -253,17 +257,20 @@ _REQUIRED_READINESS_BY_MATURITY: dict[ExperienceMaturity, tuple[str, ...]] = {
         "reverification_ready",
         "failure_analysis_ready",
         "counterfactual_ready",
+        "causal_analysis_ready",
     ),
     ExperienceMaturity.E4_CURRICULUM_READY: (
         "reverification_ready",
         "failure_analysis_ready",
         "counterfactual_ready",
+        "causal_analysis_ready",
         "curriculum_ready",
     ),
     ExperienceMaturity.E5_PROCEDURE_READY: (
         "reverification_ready",
         "failure_analysis_ready",
         "counterfactual_ready",
+        "causal_analysis_ready",
         "curriculum_ready",
         "procedure_induction_ready",
     ),
@@ -271,6 +278,7 @@ _REQUIRED_READINESS_BY_MATURITY: dict[ExperienceMaturity, tuple[str, ...]] = {
         "reverification_ready",
         "failure_analysis_ready",
         "counterfactual_ready",
+        "causal_analysis_ready",
         "curriculum_ready",
         "procedure_induction_ready",
         "abstraction_induction_ready",
@@ -279,6 +287,7 @@ _REQUIRED_READINESS_BY_MATURITY: dict[ExperienceMaturity, tuple[str, ...]] = {
         "reverification_ready",
         "failure_analysis_ready",
         "counterfactual_ready",
+        "causal_analysis_ready",
         "curriculum_ready",
         "procedure_induction_ready",
         "abstraction_induction_ready",
@@ -286,6 +295,18 @@ _REQUIRED_READINESS_BY_MATURITY: dict[ExperienceMaturity, tuple[str, ...]] = {
         "continual_learning_ready",
     ),
 }
+
+
+def _validation_payload(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return _validation_payload(value.model_dump(mode="python"))
+    if isinstance(value, tuple):
+        return tuple(_validation_payload(item) for item in value)
+    if isinstance(value, list):
+        return [_validation_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _validation_payload(child) for key, child in value.items()}
+    return value
 
 
 class MachineExperience(CanonicalModel):
@@ -307,6 +328,33 @@ class MachineExperience(CanonicalModel):
     public_metadata: dict[str, Any] = Field(default_factory=dict)
     private_metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @model_validator(mode="before")
+    @classmethod
+    def revalidate_nested_inputs(cls, value: Any) -> Any:
+        if isinstance(value, BaseModel):
+            value = value.model_dump(mode="python")
+        if not isinstance(value, dict):
+            return value
+
+        payload: dict[str, Any] = value.copy()
+        if "trajectory" in payload:
+            trajectory_input = payload["trajectory"]
+            validated_trajectory = TrajectoryV2.model_validate(
+                _validation_payload(trajectory_input)
+            )
+            if not isinstance(trajectory_input, TrajectoryV2):
+                payload["trajectory"] = validated_trajectory
+
+        if "readiness" in payload:
+            readiness_input = payload["readiness"]
+            validated_readiness = ExperienceReadiness.model_validate(
+                _validation_payload(readiness_input)
+            )
+            if not isinstance(readiness_input, ExperienceReadiness):
+                payload["readiness"] = validated_readiness
+
+        return payload
+
     @model_validator(mode="after")
     def validate_experience(self) -> "MachineExperience":
         required = _REQUIRED_READINESS_BY_MATURITY[self.maturity]
@@ -326,7 +374,11 @@ class MachineExperience(CanonicalModel):
         self._validate_spans(max_step)
         self._validate_unique_annotation_ids()
 
-        expected = f"EXP-{canonical_hash({'schema_version': self.schema_version, 'trajectory_id': self.trajectory.trajectory_id})[:32].upper()}"
+        identity_payload = {
+            "schema_version": self.schema_version,
+            "trajectory_id": self.trajectory.trajectory_id,
+        }
+        expected = f"EXP-{canonical_hash(identity_payload)[:32].upper()}"
         if self.experience_id and self.experience_id != expected:
             raise ValueError("experience_id does not match trajectory identity")
         object.__setattr__(self, "experience_id", expected)
@@ -364,11 +416,13 @@ class MachineExperience(CanonicalModel):
         for span in self.spans:
             seen: set[str] = set()
             current = span
-            while current.parent_span_id is not None:
+            parent_span_id = current.parent_span_id
+            while parent_span_id is not None:
                 if current.span_id in seen:
                     raise ValueError("experience span parent cycle detected")
                 seen.add(current.span_id)
-                current = by_id[current.parent_span_id]
+                current = by_id[parent_span_id]
+                parent_span_id = current.parent_span_id
 
     def _validate_unique_annotation_ids(self) -> None:
         groups = {
@@ -516,30 +570,30 @@ def _safe_payload(
         if not root and isinstance(visibility, VisibilityClass):
             if _VISIBILITY_RANK[visibility] > _VISIBILITY_RANK[maximum]:
                 return _DROP
-        result: dict[str, Any] = {}
+        model_result: dict[str, Any] = {}
         for name in type(value).model_fields:
             if name in _PRIVATE_BUCKETS:
                 continue
             child = _safe_payload(getattr(value, name), maximum)
             if child is not _DROP:
-                result[name] = child
-        return result
+                model_result[name] = child
+        return model_result
     if isinstance(value, StrEnum):
         return value.value
-    if isinstance(value, tuple | list):
-        result = []
+    if isinstance(value, (tuple, list)):
+        sequence_result: list[Any] = []
         for item in value:
             child = _safe_payload(item, maximum)
             if child is not _DROP:
-                result.append(child)
-        return result
+                sequence_result.append(child)
+        return sequence_result
     if isinstance(value, dict):
-        result = {}
+        mapping_result: dict[str, Any] = {}
         for key, child_value in value.items():
             if str(key) in _PRIVATE_BUCKETS:
                 continue
             child = _safe_payload(child_value, maximum)
             if child is not _DROP:
-                result[str(key)] = child
-        return result
+                mapping_result[str(key)] = child
+        return mapping_result
     return value
