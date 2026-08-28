@@ -43,8 +43,15 @@ def safe_extract_zip(
             )
 
         total_declared = 0
+        normalized_members: set[str] = set()
         for info in members:
             relative = _safe_member_path(info.filename)
+            collision_key = relative.as_posix().casefold()
+            if collision_key in normalized_members:
+                raise PreparationError(
+                    f"duplicate normalized ZIP member path is not allowed: {info.filename}"
+                )
+            normalized_members.add(collision_key)
             if info.flag_bits & 0x1:
                 raise PreparationError(f"encrypted ZIP member is not allowed: {info.filename}")
             if _is_symlink(info):
@@ -193,7 +200,8 @@ def prepare_zip_artifact(
     from .acquisition import verify_receipt
     from .models import ArtifactReceipt
 
-    receipt = ArtifactReceipt.model_validate_json(receipt_path.read_text(encoding="utf-8"))
+    receipt_bytes = receipt_path.read_bytes()
+    receipt = ArtifactReceipt.model_validate_json(receipt_bytes)
     if not verify_receipt(acquisition_root, receipt):
         raise PreparationError("acquired artifact does not match its provenance receipt")
 
@@ -218,7 +226,7 @@ def prepare_zip_artifact(
         "artifact_id": receipt.artifact_id,
         "artifact_sha256": receipt.sha256,
         "catalog_sha256": receipt.catalog_sha256,
-        "receipt_path": str(receipt_path),
+        "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
         "members": [
             {
                 "path": member.path,
