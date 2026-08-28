@@ -1,46 +1,21 @@
 {
   "registry_id": "veritas-public-operations-sources",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "as_of": "2026-08-28",
   "sources": [
     {
       "source_id": "ntsb",
       "organization": "National Transportation Safety Board",
       "jurisdiction": "United States",
-      "domains": [
-        "aviation",
-        "rail",
-        "marine",
-        "highway",
-        "pipeline",
-        "hazardous_materials"
-      ],
-      "access_methods": [
-        "api",
-        "bulk_download",
-        "docket"
-      ],
+      "domains": ["aviation", "rail", "marine", "highway", "pipeline", "hazardous_materials"],
+      "access_methods": ["api", "bulk_download", "docket"],
       "index_url": "https://www.ntsb.gov/safety/data/Pages/Data_Stats.aspx",
       "bulk_url": "https://data.ntsb.gov/avdata",
       "case_url_template": "https://www.ntsb.gov/investigations/Pages/{case_id}.aspx",
       "docket_url_template": "https://data.ntsb.gov/Docket/?NTSBNumber={case_id}",
       "media_index_url": "https://www.ntsb.gov/news/events/Pages/default.aspx",
-      "evidence_types": [
-        "preliminary reports",
-        "factual reports",
-        "interviews",
-        "transcripts",
-        "recorder data",
-        "photographs",
-        "video",
-        "party submissions"
-      ],
-      "truth_products": [
-        "final investigation reports",
-        "probable cause",
-        "findings",
-        "recommendations"
-      ],
+      "evidence_types": ["preliminary reports", "factual reports", "interviews", "transcripts", "recorder data", "photographs", "video", "party submissions"],
+      "truth_products": ["final investigation reports", "probable cause", "findings", "recommendations"],
       "acquisition_notes": [
         "Prefer factual docket artifacts for agent evidence. Keep final reports and completed-case finding pages in verifier projection.",
         "NTSB announced GetCasesByDateRangeV2 as the future bulk interface; downloadable aviation data remains available during the transition."
@@ -50,265 +25,204 @@
       "source_id": "csb",
       "organization": "U.S. Chemical Safety and Hazard Investigation Board",
       "jurisdiction": "United States",
-      "domains": [
-        "chemical_process_safety",
-        "industrial_accidents"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["chemical_process_safety", "industrial_accidents"],
+      "access_methods": ["case_index"],
       "index_url": "https://www.csb.gov/investigations/",
       "media_index_url": "https://www.csb.gov/videos/",
-      "evidence_types": [
-        "investigative updates",
-        "preliminary findings",
-        "public meeting transcripts",
-        "photographs",
-        "animations",
-        "supporting documents"
-      ],
-      "truth_products": [
-        "final investigation reports",
-        "causal findings",
-        "recommendations"
-      ],
-      "acquisition_notes": [
-        "Case pages mix evidence and final findings; adapters must classify links before packaging."
-      ]
+      "evidence_types": ["investigative updates", "preliminary findings", "public meeting transcripts", "photographs", "animations", "supporting documents"],
+      "truth_products": ["final investigation reports", "causal findings", "recommendations"],
+      "acquisition_notes": ["Case pages mix evidence and final findings; adapters must classify links before packaging."]
     },
     {
       "source_id": "uscg_cgmix",
       "organization": "United States Coast Guard",
       "jurisdiction": "United States",
-      "domains": [
-        "marine_casualty"
-      ],
-      "access_methods": [
-        "search_export"
-      ],
+      "domains": ["marine_casualty"],
+      "access_methods": ["api", "search_export"],
       "index_url": "https://cgmix.uscg.mil/IIR/IIRSearch.aspx",
       "bulk_url": "https://cgmix.uscg.mil/XML/IIRExportSearch.aspx",
-      "evidence_types": [
-        "incident records",
-        "timeline/detail records"
-      ],
-      "truth_products": [
-        "closed investigation findings",
-        "conclusions",
-        "recommendations"
-      ],
+      "evidence_types": ["incident records", "timeline/detail records"],
+      "truth_products": ["closed investigation findings", "conclusions", "recommendations"],
       "acquisition_notes": [
-        "CGMIX exports closed reportable marine casualty investigations from October 2002 onward."
+        "CGMIX exports closed reportable marine casualty investigations from October 2002 onward.",
+        "The IIRData XML service exposes incident search, brief, title, vessel and other structured endpoints."
       ]
     },
     {
       "source_id": "tsb_ca",
       "organization": "Transportation Safety Board of Canada",
       "jurisdiction": "Canada",
-      "domains": [
-        "aviation",
-        "rail",
-        "marine",
-        "pipeline"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["aviation", "rail", "marine", "pipeline"],
+      "access_methods": ["case_index"],
       "index_url": "https://www.tsb.gc.ca/eng/enquetes-investigations/index.html",
-      "evidence_types": [
-        "investigation reports",
-        "supporting technical information",
-        "media",
-        "safety advisories"
-      ],
-      "truth_products": [
-        "findings as to causes and contributing factors",
-        "recommendations"
-      ],
-      "acquisition_notes": [
-        "Use cross-jurisdiction holdouts to test transfer beyond U.S. reporting conventions."
-      ]
+      "evidence_types": ["investigation reports", "supporting technical information", "media", "safety advisories"],
+      "truth_products": ["findings as to causes and contributing factors", "recommendations"],
+      "acquisition_notes": ["Use cross-jurisdiction holdouts to test transfer beyond U.S. reporting conventions."]
     },
     {
       "source_id": "atsb",
       "organization": "Australian Transport Safety Bureau",
       "jurisdiction": "Australia",
-      "domains": [
-        "aviation",
-        "rail",
-        "marine"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["aviation", "rail", "marine"],
+      "access_methods": ["case_index"],
       "index_url": "https://www.atsb.gov.au/investigations",
-      "evidence_types": [
-        "occurrence data",
-        "factual material",
-        "recorded data",
-        "photos",
-        "video",
-        "simulations"
-      ],
-      "truth_products": [
-        "final reports",
-        "findings",
-        "safety issues"
-      ],
-      "acquisition_notes": [
-        "ATSB investigation methodology explicitly separates evidence collection, analysis, findings and safety action."
-      ]
+      "evidence_types": ["occurrence data", "factual material", "recorded data", "photos", "video", "simulations"],
+      "truth_products": ["final reports", "findings", "safety issues"],
+      "acquisition_notes": ["ATSB investigation methodology explicitly separates evidence collection, analysis, findings and safety action."]
     },
     {
       "source_id": "aaib_uk",
       "organization": "Air Accidents Investigation Branch",
       "jurisdiction": "United Kingdom",
-      "domains": [
-        "aviation"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["aviation"],
+      "access_methods": ["case_index"],
       "index_url": "https://www.gov.uk/aaib-reports",
-      "evidence_types": [
-        "special bulletins",
-        "field investigation reports",
-        "attachments"
-      ],
-      "truth_products": [
-        "final reports",
-        "causal factors",
-        "safety recommendations"
-      ],
-      "acquisition_notes": [
-        "Large aviation report archive suitable for jurisdictional OOD splits."
-      ]
+      "evidence_types": ["special bulletins", "field investigation reports", "attachments"],
+      "truth_products": ["final reports", "causal factors", "safety recommendations"],
+      "acquisition_notes": ["Large aviation report archive suitable for jurisdictional OOD splits."]
     },
     {
       "source_id": "raib_uk",
       "organization": "Rail Accident Investigation Branch",
       "jurisdiction": "United Kingdom",
-      "domains": [
-        "rail"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["rail"],
+      "access_methods": ["case_index"],
       "index_url": "https://www.gov.uk/raib-reports",
-      "evidence_types": [
-        "investigation reports",
-        "urgent safety advice",
-        "safety digests"
-      ],
-      "truth_products": [
-        "causal factors",
-        "recommendations"
-      ],
-      "acquisition_notes": [
-        "Useful for rail OOD and shorter safety-digest episodes."
-      ]
+      "evidence_types": ["investigation reports", "urgent safety advice", "safety digests"],
+      "truth_products": ["causal factors", "recommendations"],
+      "acquisition_notes": ["Useful for rail OOD and shorter safety-digest episodes."]
     },
     {
       "source_id": "maib_uk",
       "organization": "Marine Accident Investigation Branch",
       "jurisdiction": "United Kingdom",
-      "domains": [
-        "marine"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["marine"],
+      "access_methods": ["case_index"],
       "index_url": "https://www.gov.uk/maib-reports",
-      "evidence_types": [
-        "investigation reports",
-        "safety digests",
-        "annexes"
-      ],
-      "truth_products": [
-        "causal findings",
-        "recommendations"
-      ],
-      "acquisition_notes": [
-        "Pair with NTSB/USCG marine cases for cross-regime evaluation."
-      ]
+      "evidence_types": ["investigation reports", "safety digests", "annexes"],
+      "truth_products": ["causal findings", "recommendations"],
+      "acquisition_notes": ["Pair with NTSB/USCG marine cases for cross-regime evaluation."]
     },
     {
       "source_id": "nasa_asrs",
       "organization": "NASA Aviation Safety Reporting System",
       "jurisdiction": "United States",
-      "domains": [
-        "aviation_safety",
-        "human_factors"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["aviation_safety", "human_factors"],
+      "access_methods": ["case_index"],
       "index_url": "https://asrs.arc.nasa.gov/search/database.html",
-      "evidence_types": [
-        "deidentified incident narratives",
-        "expert coding"
-      ],
-      "truth_products": [
-        "coded classifications",
-        "known incident outcomes where reported"
-      ],
-      "acquisition_notes": [
-        "High-volume short episodes; not equivalent to formal accident investigation ground truth."
-      ]
+      "evidence_types": ["deidentified incident narratives", "expert coding"],
+      "truth_products": ["coded classifications", "known incident outcomes where reported"],
+      "acquisition_notes": ["High-volume short episodes; not equivalent to formal accident investigation ground truth."]
     },
     {
       "source_id": "niosh_fffipp",
       "organization": "NIOSH Fire Fighter Fatality Investigation and Prevention Program",
       "jurisdiction": "United States",
-      "domains": [
-        "fireground_operations",
-        "occupational_safety"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["fireground_operations", "occupational_safety"],
+      "access_methods": ["case_index"],
       "index_url": "https://www.cdc.gov/niosh/firefighters/fffipp/",
-      "evidence_types": [
-        "incident reports",
-        "SOP references",
-        "dispatch records",
-        "building information",
-        "photographs"
-      ],
-      "truth_products": [
-        "contributing factors",
-        "recommendations"
-      ],
-      "acquisition_notes": [
-        "Supports incident-command and tactical-risk environment families."
-      ]
+      "evidence_types": ["incident reports", "SOP references", "dispatch records", "building information", "photographs"],
+      "truth_products": ["contributing factors", "recommendations"],
+      "acquisition_notes": ["Supports incident-command and tactical-risk environment families."]
     },
     {
       "source_id": "fema_emi",
       "organization": "FEMA Emergency Management Institute",
       "jurisdiction": "United States",
-      "domains": [
-        "incident_command",
-        "emergency_management"
-      ],
-      "access_methods": [
-        "case_index"
-      ],
+      "domains": ["incident_command", "emergency_management"],
+      "access_methods": ["case_index"],
       "index_url": "https://training.fema.gov/emiweb/is/icsresource/",
-      "evidence_types": [
-        "ICS doctrine",
-        "forms",
-        "position task books",
-        "job aids",
-        "training materials"
-      ],
-      "truth_products": [
-        "procedural requirements",
-        "role/authority constraints"
-      ],
+      "evidence_types": ["ICS doctrine", "forms", "position task books", "job aids", "training materials"],
+      "truth_products": ["procedural requirements", "role/authority constraints"],
+      "acquisition_notes": ["Primarily a procedural augmentation source rather than historical incident truth."]
+    },
+    {
+      "source_id": "cdc_nors",
+      "organization": "Centers for Disease Control and Prevention National Outbreak Reporting System",
+      "jurisdiction": "United States",
+      "domains": ["public_health_outbreak", "foodborne_disease", "waterborne_disease", "enteric_disease"],
+      "access_methods": ["api", "bulk_download"],
+      "index_url": "https://www.cdc.gov/nors/data/",
+      "bulk_url": "https://data.cdc.gov/Foodborne-Waterborne-and-Related-Diseases/NORS/5xkq-dg7x",
+      "evidence_types": ["outbreak timing", "location", "transmission mode", "setting", "illness counts", "hospitalizations", "deaths", "exposure context"],
+      "truth_products": ["reported etiology", "etiology confirmation status", "serotype or genotype", "implicated food", "contaminated ingredient", "IFSAC category"],
       "acquisition_notes": [
-        "Primarily a procedural augmentation source rather than historical incident truth."
+        "Use the explicit CDC NORS field-separation profile before producing agent-visible records.",
+        "NORS reports can be revised after close-out and reporting is voluntary; treat labels as surveillance findings rather than infallible ground truth."
       ]
+    },
+    {
+      "source_id": "sec_litigation",
+      "organization": "U.S. Securities and Exchange Commission",
+      "jurisdiction": "United States",
+      "domains": ["financial_misconduct", "securities_enforcement", "civil_litigation"],
+      "access_methods": ["case_index"],
+      "index_url": "https://www.sec.gov/enforcement-litigation/litigation-releases",
+      "evidence_types": ["complaints", "applications", "memoranda", "declarations", "subpoena filings", "pre-disposition motions"],
+      "truth_products": ["judgments", "dismissals", "settlements", "consents", "stipulations", "court opinions"],
+      "acquisition_notes": [
+        "SEC complaints are allegations, not adjudicated facts.",
+        "Use later court or case dispositions as verifier targets for legal-process tasks, not as ground truth about underlying reality.",
+        "Do not expose litigation-release narrative pages by default because later releases can summarize outcomes."
+      ]
+    },
+    {
+      "source_id": "fbi_vault",
+      "organization": "Federal Bureau of Investigation",
+      "jurisdiction": "United States",
+      "domains": ["criminal_investigation", "counterintelligence", "public_corruption", "organized_crime", "violent_crime", "historical_investigation"],
+      "access_methods": ["case_index"],
+      "index_url": "https://vault.fbi.gov/all-files",
+      "evidence_types": ["FOIA-released investigative files", "memoranda", "interviews", "field records", "correspondence", "declassified records"],
+      "truth_products": ["no intrinsic factual ground-truth label; external adjudicative or historical outcome linkage required"],
+      "acquisition_notes": [
+        "The Vault is valuable for document-rich investigative reasoning but should remain reference/training material unless independently linked to a qualified verifier.",
+        "Redactions and historical investigative assertions must not be treated as verified facts."
+      ]
+    },
+    {
+      "source_id": "cisa_csrb",
+      "organization": "Cyber Safety Review Board",
+      "jurisdiction": "United States",
+      "domains": ["cyber_incident", "cloud_security", "software_supply_chain", "threat_actor_operations"],
+      "access_methods": ["case_index"],
+      "index_url": "https://www.cisa.gov/resources-tools/groups/cyber-safety-review-board-csrb",
+      "evidence_types": ["incident timelines", "technical evidence", "public testimony", "affected-system context", "response actions"],
+      "truth_products": ["board findings", "root causes", "contributing factors", "recommendations"],
+      "acquisition_notes": ["CSRB reports mix evidence and findings in the same documents; full reports are reference-only until section-level evidence/truth extraction is performed."]
+    },
+    {
+      "source_id": "nist_dfs",
+      "organization": "National Institute of Standards and Technology Disaster and Failure Studies Program",
+      "jurisdiction": "United States",
+      "domains": ["structural_failure", "disaster_response", "fire", "windstorm", "infrastructure_failure"],
+      "access_methods": ["case_index"],
+      "index_url": "https://www.nist.gov/disaster-and-failure-studies",
+      "evidence_types": ["site evidence", "records", "materials testing", "technical data", "emergency response evidence", "public updates"],
+      "truth_products": ["technical findings", "failure mechanisms", "recommendations"],
+      "acquisition_notes": ["NIST does not determine legal fault, responsibility or negligence; verifier semantics must remain technical rather than legal."]
+    },
+    {
+      "source_id": "usaf_aib",
+      "organization": "United States Air Force Accident Investigation Board",
+      "jurisdiction": "United States",
+      "domains": ["military_aviation", "ground_mishap", "operational_safety"],
+      "access_methods": ["case_index"],
+      "index_url": "https://www.afjag.af.mil/AIB-Reports/",
+      "evidence_types": ["accident investigation reports", "press releases", "witness and technical material where publicly included"],
+      "truth_products": ["board cause findings", "substantially contributing factors"],
+      "acquisition_notes": ["AIB reports are document-rich military accident cases; report sections must be separated before using causal findings as verifier labels."]
+    },
+    {
+      "source_id": "dodig_reports",
+      "organization": "U.S. Department of Defense Office of Inspector General",
+      "jurisdiction": "United States",
+      "domains": ["military_oversight", "administrative_investigation", "procurement", "whistleblower_reprisal", "criminal_investigation_oversight"],
+      "access_methods": ["case_index"],
+      "index_url": "https://www.dodig.mil/reports.html/",
+      "evidence_types": ["project announcements", "allegations", "audit evidence", "evaluation evidence", "investigative record summaries"],
+      "truth_products": ["substantiated or unsubstantiated findings", "management conclusions", "recommendations"],
+      "acquisition_notes": ["Public reports can contain redactions and combined evidence/findings; use as reference material until document sections are explicitly classified."]
     }
   ]
 }

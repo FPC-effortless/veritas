@@ -1,0 +1,136 @@
+{
+  "profile_id": "cdc-nors-streamlined-v1",
+  "version": "1.0.0",
+  "source_id": "cdc_nors",
+  "input_format": "csv",
+  "source_url": "https://data.cdc.gov/Foodborne-Waterborne-and-Related-Diseases/NORS/5xkq-dg7x",
+  "domain": "public_health_outbreak",
+  "objective": "Infer the most strongly supported outbreak etiology and implicated exposure source from the epidemiologic context without access to CDC's reported etiology or implicated-food labels.",
+  "split": "train_reference",
+  "title_fields": [
+    "State",
+    "Primary Mode",
+    "Setting"
+  ],
+  "location_fields": [
+    "State"
+  ],
+  "event_year_field": "Year",
+  "event_month_field": "Month",
+  "field_rules": [
+    {
+      "source_field": "Year",
+      "exposure": "public",
+      "target_field": "year",
+      "required": true
+    },
+    {
+      "source_field": "Month",
+      "exposure": "public",
+      "target_field": "month",
+      "required": false
+    },
+    {
+      "source_field": "State",
+      "exposure": "public",
+      "target_field": "state",
+      "required": true
+    },
+    {
+      "source_field": "Primary Mode",
+      "exposure": "public",
+      "target_field": "primary_mode",
+      "required": true
+    },
+    {
+      "source_field": "Etiology",
+      "exposure": "verifier",
+      "target_field": "etiology",
+      "required": false
+    },
+    {
+      "source_field": "Serotype or Genotype",
+      "exposure": "verifier",
+      "target_field": "serotype_or_genotype",
+      "required": false
+    },
+    {
+      "source_field": "Etiology Status",
+      "exposure": "verifier",
+      "target_field": "etiology_status",
+      "required": false
+    },
+    {
+      "source_field": "Setting",
+      "exposure": "public",
+      "target_field": "setting",
+      "required": false
+    },
+    {
+      "source_field": "Illnesses",
+      "exposure": "public",
+      "target_field": "illnesses",
+      "required": false
+    },
+    {
+      "source_field": "Hospitalizations",
+      "exposure": "public",
+      "target_field": "hospitalizations",
+      "required": false
+    },
+    {
+      "source_field": "Info On Hospitalizations",
+      "exposure": "public",
+      "target_field": "hospitalization_denominator",
+      "required": false
+    },
+    {
+      "source_field": "Deaths",
+      "exposure": "public",
+      "target_field": "deaths",
+      "required": false
+    },
+    {
+      "source_field": "Info On Deaths",
+      "exposure": "public",
+      "target_field": "death_denominator",
+      "required": false
+    },
+    {
+      "source_field": "Food Vehicle",
+      "exposure": "verifier",
+      "target_field": "food_vehicle",
+      "required": false
+    },
+    {
+      "source_field": "Food Contaminated Ingredient",
+      "exposure": "verifier",
+      "target_field": "food_contaminated_ingredient",
+      "required": false
+    },
+    {
+      "source_field": "IFSAC Category",
+      "exposure": "verifier",
+      "target_field": "ifsac_category",
+      "required": false
+    },
+    {
+      "source_field": "Water Exposure",
+      "exposure": "public",
+      "target_field": "water_exposure",
+      "required": false
+    },
+    {
+      "source_field": "Water Type",
+      "exposure": "public",
+      "target_field": "water_type",
+      "required": false
+    },
+    {
+      "source_field": "Animal Type",
+      "exposure": "public",
+      "target_field": "animal_type",
+      "required": false
+    }
+  ]
+}

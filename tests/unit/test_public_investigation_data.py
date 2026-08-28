@@ -22,7 +22,7 @@ def test_seed_registry_and_dataset_validate() -> None:
     registry = load_source_registry(REGISTRY_PATH)
     dataset = load_public_investigation_dataset(SEED_PATH)
 
-    assert len(registry.sources) == 11
+    assert len(registry.sources) == 18
     assert len(dataset.cases) == 4
     assert {case.source_id for case in dataset.cases} <= {
         source.source_id for source in registry.sources

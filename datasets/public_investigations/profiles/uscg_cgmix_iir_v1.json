@@ -1,0 +1,98 @@
+{
+  "profile_id": "uscg-cgmix-iir-v1",
+  "version": "1.0.0",
+  "source_id": "uscg_cgmix",
+  "input_format": "json",
+  "source_url": "https://cgmix.uscg.mil/xml/IIRData.asmx",
+  "domain": "marine_casualty",
+  "objective": "Infer the Coast Guard incident classification and likely enforcement consequences from the supplied incident facts without access to classification or enforcement fields.",
+  "split": "train_reference",
+  "title_fields": [
+    "Title"
+  ],
+  "location_fields": [],
+  "event_date_field": "StartDtTm",
+  "event_date_formats": [
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S"
+  ],
+  "field_rules": [
+    {
+      "source_field": "ActivityId",
+      "exposure": "verifier",
+      "target_field": "source_activity_id",
+      "required": true
+    },
+    {
+      "source_field": "CasesId",
+      "exposure": "verifier",
+      "target_field": "source_case_id"
+    },
+    {
+      "source_field": "Title",
+      "exposure": "public",
+      "target_field": "title",
+      "required": true
+    },
+    {
+      "source_field": "StartDtTm",
+      "exposure": "public",
+      "target_field": "investigation_opened",
+      "required": true
+    },
+    {
+      "source_field": "CloseDtTm",
+      "exposure": "ignore"
+    },
+    {
+      "source_field": "IncidentBrief",
+      "exposure": "public",
+      "target_field": "incident_brief"
+    },
+    {
+      "source_field": "InvolvedVessels",
+      "exposure": "public",
+      "target_field": "involved_vessels"
+    },
+    {
+      "source_field": "InvolvedFacilities",
+      "exposure": "public",
+      "target_field": "involved_facilities"
+    },
+    {
+      "source_field": "PersonalCasualties",
+      "exposure": "public",
+      "target_field": "personal_casualties"
+    },
+    {
+      "source_field": "VesselDamage",
+      "exposure": "public",
+      "target_field": "vessel_damage"
+    },
+    {
+      "source_field": "Waterways",
+      "exposure": "public",
+      "target_field": "waterways"
+    },
+    {
+      "source_field": "ResponseResources",
+      "exposure": "public",
+      "target_field": "response_resources"
+    },
+    {
+      "source_field": "IncidentSummary",
+      "exposure": "verifier",
+      "target_field": "incident_summary"
+    },
+    {
+      "source_field": "EnforcementReferrals",
+      "exposure": "verifier",
+      "target_field": "enforcement_referrals"
+    },
+    {
+      "source_field": "EnforcementActions",
+      "exposure": "verifier",
+      "target_field": "enforcement_actions"
+    }
+  ]
+}
