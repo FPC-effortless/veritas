@@ -33,6 +33,9 @@ def test_nors_profile_separates_public_evidence_from_verifier(tmp_path: Path) ->
     verifier = corpus.cases[0].verifier_projection()
     assert public["evidence"]["state"] == "Wisconsin"
     assert "etiology" not in public["evidence"]
+    assert "row_number" not in public
+    assert "source_url" not in public
+    assert verifier["row_number"] == 1
     assert verifier["verifier"]["etiology"] == "Norovirus"
     assert verifier["verifier"]["food_contaminated_ingredient"] == "Lettuce"
 
@@ -47,6 +50,8 @@ def test_nors_profile_separates_public_evidence_from_verifier(tmp_path: Path) ->
     verifier_text = (tmp_path / "sealed/verifier.jsonl").read_text(encoding="utf-8")
     assert "Norovirus" not in public_text
     assert "Lettuce" not in public_text
+    assert "data.cdc.gov" not in public_text
+    assert "row_number" not in public_text
     assert "Norovirus" in verifier_text
     assert result.public_hash == corpus.public_hash()
     assert result.verifier_hash == corpus.verifier_hash()
@@ -101,7 +106,7 @@ def test_structured_case_identity_does_not_depend_on_hidden_label(tmp_path: Path
     assert original.verifier_hash() != changed.verifier_hash()
 
 
-def test_written_public_manifest_contains_no_verifier_values(tmp_path: Path) -> None:
+def test_written_public_manifest_contains_no_verifier_values_or_hash(tmp_path: Path) -> None:
     profile = load_structured_source_profile(PROFILE_PATH)
     corpus = compile_structured_investigation_corpus(
         profile,
@@ -119,6 +124,11 @@ def test_written_public_manifest_contains_no_verifier_values(tmp_path: Path) -> 
     )
 
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    serialized = json.dumps(manifest, sort_keys=True)
     assert manifest["audit"]["passed"] is True
     assert manifest["audit"]["duplicate_case_ids"] == 0
-    assert "Norovirus" not in json.dumps(manifest, sort_keys=True)
+    assert manifest["audit"]["raw_source_url_exposed"] is False
+    assert manifest["audit"]["row_number_exposed"] is False
+    assert "verifier_hash" not in serialized
+    assert "Norovirus" not in serialized
+    assert "data.cdc.gov" not in serialized
