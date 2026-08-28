@@ -236,7 +236,9 @@ def conformance_evidence_record(
     outcome = EvidenceOutcome(certificate.status.value)
     claims = {
         ConformanceCertificateStatus.PASS: "Adapter preserves the certified portable semantics.",
-        ConformanceCertificateStatus.FAIL: "Adapter does not preserve the certified portable semantics.",
+        ConformanceCertificateStatus.FAIL: (
+            "Adapter does not preserve the certified portable semantics."
+        ),
         ConformanceCertificateStatus.UNKNOWN: "Adapter conformance remains unresolved.",
     }
     return EvidenceRecord(
