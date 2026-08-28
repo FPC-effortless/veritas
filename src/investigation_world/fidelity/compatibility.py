@@ -1,40 +1,39 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+import pydantic
 
-from investigation_world.fidelity.record import FidelityRecord, revalidate_fidelity_record
-from investigation_world.fidelity.schema import CoverageStatus, FidelityDimension, FidelityLevel
+from . import record, schema
 
 
-_LEVEL_RANK: dict[FidelityLevel, int] = {
-    FidelityLevel.L0_ABSTRACT_STATE_MODEL: 0,
-    FidelityLevel.L1_STRUCTURED_SYNTHETIC_APPLICATION: 1,
-    FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION: 2,
-    FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA: 3,
-    FidelityLevel.L4_CONTROLLED_REAL_SYSTEM_INTEGRATION: 4,
+_LEVEL_RANK: dict[schema.FidelityLevel, int] = {
+    schema.FidelityLevel.L0_ABSTRACT_STATE_MODEL: 0,
+    schema.FidelityLevel.L1_STRUCTURED_SYNTHETIC_APPLICATION: 1,
+    schema.FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION: 2,
+    schema.FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA: 3,
+    schema.FidelityLevel.L4_CONTROLLED_REAL_SYSTEM_INTEGRATION: 4,
 }
 
 
-class FidelityClaimRequirement(BaseModel):
+class FidelityClaimRequirement(pydantic.BaseModel):
     """A qualification hook describing the realism required to make one claim."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = pydantic.ConfigDict(extra="forbid", frozen=True)
 
-    claim_id: str = Field(min_length=1)
-    minimum_level: FidelityLevel
-    required_dimensions: tuple[FidelityDimension, ...] = ()
+    claim_id: str = pydantic.Field(min_length=1)
+    minimum_level: schema.FidelityLevel
+    required_dimensions: tuple[schema.FidelityDimension, ...] = ()
     require_full_coverage: bool = False
 
 
-class FidelityCompatibilityResult(BaseModel):
+class FidelityCompatibilityResult(pydantic.BaseModel):
     """Deterministic result of checking one fidelity disclosure against one claim."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = pydantic.ConfigDict(extra="forbid", frozen=True)
 
     compatible: bool
     claim_id: str
-    actual_level: FidelityLevel
-    minimum_level: FidelityLevel
+    actual_level: schema.FidelityLevel
+    minimum_level: schema.FidelityLevel
     failures: tuple[str, ...]
 
 
@@ -43,10 +42,10 @@ class FidelityCompatibilityError(ValueError):
 
 
 def evaluate_fidelity_compatibility(
-    record: FidelityRecord,
+    fidelity_record: record.FidelityRecord,
     requirement: FidelityClaimRequirement,
 ) -> FidelityCompatibilityResult:
-    validated_record = revalidate_fidelity_record(record)
+    validated_record = record.revalidate_fidelity_record(fidelity_record)
     failures: list[str] = []
     actual_level = validated_record.declaration.level
     if _LEVEL_RANK[actual_level] < _LEVEL_RANK[requirement.minimum_level]:
@@ -58,10 +57,10 @@ def evaluate_fidelity_compatibility(
     coverage = {item.dimension: item for item in validated_record.declaration.coverage}
     for dimension in requirement.required_dimensions:
         item = coverage.get(dimension)
-        if item is None or item.status == CoverageStatus.OMITTED:
+        if item is None or item.status == schema.CoverageStatus.OMITTED:
             failures.append(f"required fidelity dimension is not implemented: {dimension.value}")
             continue
-        if requirement.require_full_coverage and item.status != CoverageStatus.FULL:
+        if requirement.require_full_coverage and item.status != schema.CoverageStatus.FULL:
             failures.append(f"required fidelity dimension is not full: {dimension.value}")
 
     return FidelityCompatibilityResult(
@@ -74,10 +73,10 @@ def evaluate_fidelity_compatibility(
 
 
 def require_fidelity_compatibility(
-    record: FidelityRecord,
+    fidelity_record: record.FidelityRecord,
     requirement: FidelityClaimRequirement,
 ) -> None:
-    result = evaluate_fidelity_compatibility(record, requirement)
+    result = evaluate_fidelity_compatibility(fidelity_record, requirement)
     if not result.compatible:
         detail = "; ".join(result.failures)
         raise FidelityCompatibilityError(
