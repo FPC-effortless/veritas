@@ -3,7 +3,12 @@ from __future__ import annotations
 import hashlib
 
 from investigation_world.authoring import EnvironmentBuilder
-from investigation_world.operational import ActionKind, EpisodeSubmission, OperationalRuntime, WorldDomain
+from investigation_world.operational import (
+    ActionKind,
+    EpisodeSubmission,
+    OperationalRuntime,
+    WorldDomain,
+)
 
 from ._common import require_perfect
 
