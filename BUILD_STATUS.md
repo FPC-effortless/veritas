@@ -174,3 +174,21 @@ does not convert outstanding lint/type debt into a clean full-repository PASS.
 ## Next release: 0.12
 
 0.12 is the next industrial-fidelity and procurement-hardening line. Candidate integrations include live Kubernetes/container/network execution, Terraform/cloud control planes, broader Excel calculation semantics, deeper enterprise replicas, browser/OCR investigation surfaces, raster/PostGIS GIS execution, deeper cross-domain causal propagation, stronger supply-chain attestations, and additional commercially qualified environment SKUs.
+
+### Post-0.11 quality foundation
+
+The development line now includes the v1 Veritas Environment Maturity Model. Its canonical states
+are `DRAFT`, `EXECUTABLE`, `VERIFIER_VALIDATED`, `SCIENTIFICALLY_QUALIFIED`,
+`FRONTIER_QUALIFIED`, `TRAINING_VALIDATED`, and `COMMERCIAL_RELEASE`. Promotion is sequential,
+content/version bound, and fail-closed: missing evidence remains `UNKNOWN`. Deterministic
+qualification identities are distinct from timestamped historical records, so requalification does
+not erase prior status.
+
+This implements the maturity substrate, not the later verifier, frontier, training-value, or
+procurement qualification programs that provide transition evidence.
+
+The repository also adopts a “Do Not Build” architecture policy. Full trainers, model serving,
+hyperscale sandbox clouds, generic expert marketplaces, benchmark aggregation, broad harness
+catalogs, generic agent frameworks, and target-runtime replacement remain presumptive non-goals.
+Proposals entering those areas must document why integration is insufficient and how the smallest
+owned boundary strengthens Veritas assurance.

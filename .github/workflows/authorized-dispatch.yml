@@ -1,0 +1,85 @@
+name: Authorized GitHub Dispatch
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      workflow:
+        description: Allow-listed validation workflow
+        required: true
+        type: choice
+        options:
+          - ci
+          - security
+          - python-quality
+          - portability-convergence
+          - portability-validation
+          - projectworld-qualification
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+jobs:
+  dispatch:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request == null &&
+       github.event.issue.title == 'Veritas automation control' &&
+       startsWith(github.event.comment.body, '/veritas-dispatch ') &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'),
+                github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Parse allow-listed command
+        id: command
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          MANUAL_WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            alias="$MANUAL_WORKFLOW"
+          else
+            first_line="$(printf '%s\n' "$COMMENT_BODY" | sed -n '1{s/\r$//;p;q;}')"
+            read -r command alias extra <<< "$first_line"
+            test "$command" = "/veritas-dispatch"
+            test -n "${alias:-}"
+            test -z "${extra:-}"
+          fi
+
+          case "$alias" in
+            ci) workflow="ci.yml" ;;
+            security) workflow="security.yml" ;;
+            python-quality) workflow="python-quality.yml" ;;
+            portability-convergence) workflow="portable-operational-convergence.yml" ;;
+            portability-validation) workflow="portability-validation.yml" ;;
+            projectworld-qualification) workflow="projectworld-v2-qualification.yml" ;;
+            *) echo "Workflow alias is not allow-listed" >&2; exit 2 ;;
+          esac
+
+          echo "alias=$alias" >> "$GITHUB_OUTPUT"
+          echo "workflow=$workflow" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch exact main workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_WORKFLOW: ${{ steps.command.outputs.workflow }}
+        run: gh workflow run "$TARGET_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main
+
+      - name: Record issue acknowledgement
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          WORKFLOW_ALIAS: ${{ steps.command.outputs.alias }}
+        run: >-
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY"
+          --body "Accepted authorized dispatch for \`$WORKFLOW_ALIAS\` on \`main\`.
+          Inspect the target Actions run for its exact commit and result; this acknowledgement is
+          not qualification evidence."
