@@ -5,8 +5,9 @@
   "source_id": "uscsb",
   "case_id": "CSB-2005-04-I-TX",
   "scope": [
-    "Reference CSB-authored public web pages and the public final-report PDF by external locator only.",
+    "Reference dated CSB-authored public web pages by external locator only.",
     "Reference the CSB-published Anatomy of a Disaster YouTube embed by external locator only; do not bulk-download, redistribute, or extract captions in this pilot.",
+    "Do not expose the final-report PDF as time-gated evidence until its exact first-public posting time is independently established; the dated March 20, 2007 final-findings release is used instead.",
     "Exclude victim, witness, employee, and investigator names from the normalized episode actors and task state.",
     "Treat CSB conclusions as official institutional findings, not automatically as private ground truth.",
     "Use a conservative next-day UTC availability timestamp when the source establishes a release date but not a precise public release time."
@@ -15,6 +16,6 @@
   "ai_use": "Pilot exercises metadata, temporal gating, and evidence references only; source text/video is not copied into the training corpus by this review.",
   "limitations": [
     "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
-    "Any future transcript, frame extraction, local media acquisition, redistribution, or model-training use requires a separate artifact-level review."
+    "Any future report acquisition, transcript extraction, frame extraction, local media acquisition, redistribution, or model-training use requires a separate artifact-level review."
   ]
 }
