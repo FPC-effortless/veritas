@@ -21,7 +21,7 @@ def test_compile_delegates_exactly_to_portability_cli(monkeypatch) -> None:
         captured.append(tuple(arguments))
         return 0
 
-    monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
+    monkeypatch.setattr("investigation_world.operational.env_cli._portability_main", fake_main)
 
     compile_environment_cmd(
         episode=Path("episode.json"),
@@ -49,7 +49,7 @@ def test_export_delegates_adapter_and_optional_runtime_fields(monkeypatch) -> No
         captured.append(tuple(arguments))
         return 0
 
-    monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
+    monkeypatch.setattr("investigation_world.operational.env_cli._portability_main", fake_main)
 
     export_environment_cmd(
         adapter=EnvironmentAdapter.HARBOR,
@@ -91,7 +91,7 @@ def test_reverify_uses_existing_trajectory_replay_command(monkeypatch) -> None:
         captured.append(tuple(arguments))
         return 0
 
-    monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
+    monkeypatch.setattr("investigation_world.operational.env_cli._portability_main", fake_main)
 
     reverify_environment_cmd(
         trajectory=Path("trace.jsonl"),
@@ -118,7 +118,7 @@ def test_nonzero_portability_exit_is_preserved(monkeypatch) -> None:
         assert tuple(arguments) == ("validate-partition", "--contract", "bad.json")
         return 2
 
-    monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
+    monkeypatch.setattr("investigation_world.operational.env_cli._portability_main", fake_main)
 
     with pytest.raises(BaseException) as exc_info:
         validate_environment_cmd(contract=Path("bad.json"))
