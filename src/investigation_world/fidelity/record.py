@@ -58,7 +58,14 @@ class FidelityRecord(BaseModel):
         return self
 
 
-def serialize_fidelity_record(record: FidelityRecord) -> bytes:
-    """Serialize a fidelity record deterministically for audit or artifact attachment."""
+def revalidate_fidelity_record(record: FidelityRecord) -> FidelityRecord:
+    """Reconstruct a record so copied or nested stale state fails closed."""
 
-    return _canonical_bytes(record.model_dump(mode="json"))
+    return FidelityRecord.model_validate(record.model_dump(mode="python"))
+
+
+def serialize_fidelity_record(record: FidelityRecord) -> bytes:
+    """Serialize a revalidated fidelity record deterministically."""
+
+    validated_record = revalidate_fidelity_record(record)
+    return _canonical_bytes(validated_record.model_dump(mode="json"))
