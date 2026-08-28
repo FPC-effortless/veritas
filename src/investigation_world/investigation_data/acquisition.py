@@ -7,7 +7,7 @@ import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Protocol
+from typing import BinaryIO, Protocol, cast
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -164,7 +164,8 @@ def acquire_artifact(
                 mode="wb", dir=target_dir, prefix=f".{filename}.", suffix=".part", delete=False
             ) as tmp:
                 temp_name = tmp.name
-                digest, byte_count = _stream_and_hash(response, tmp.file, max_bytes=max_bytes)
+                output = cast(BinaryIO, tmp.file)
+                digest, byte_count = _stream_and_hash(response, output, max_bytes=max_bytes)
 
             if artifact.expected_sha256 and digest != artifact.expected_sha256:
                 raise AcquisitionError(
