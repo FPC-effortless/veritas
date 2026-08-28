@@ -1,11 +1,17 @@
 from __future__ import annotations
 
-from typer.testing import CliRunner
+from pathlib import Path
 
-from investigation_world.operational.env_cli import env_app
+import pytest
 
-
-runner = CliRunner()
+from investigation_world.operational.env_cli import (
+    EnvironmentAdapter,
+    compile_environment_cmd,
+    env_app,
+    export_environment_cmd,
+    reverify_environment_cmd,
+    validate_environment_cmd,
+)
 
 
 def test_compile_delegates_exactly_to_portability_cli(monkeypatch) -> None:
@@ -17,20 +23,12 @@ def test_compile_delegates_exactly_to_portability_cli(monkeypatch) -> None:
 
     monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
 
-    result = runner.invoke(
-        env_app,
-        [
-            "compile",
-            "--episode",
-            "episode.json",
-            "--output",
-            "contract.json",
-            "--public-output",
-            "public.json",
-        ],
+    compile_environment_cmd(
+        episode=Path("episode.json"),
+        output=Path("contract.json"),
+        public_output=Path("public.json"),
     )
 
-    assert result.exit_code == 0
     assert captured == [
         (
             "compile",
@@ -53,28 +51,18 @@ def test_export_delegates_adapter_and_optional_runtime_fields(monkeypatch) -> No
 
     monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
 
-    result = runner.invoke(
-        env_app,
-        [
-            "export",
-            "--adapter",
-            "harbor",
-            "--contract",
-            "contract.json",
-            "--output",
-            "harbor-package",
-            "--seed",
-            "17",
-            "--task-name",
-            "supplier-approval",
-            "--runtime-image",
-            "runtime:sha256",
-            "--verifier-image",
-            "verifier:sha256",
-        ],
+    export_environment_cmd(
+        adapter=EnvironmentAdapter.HARBOR,
+        contract=Path("contract.json"),
+        output=Path("harbor-package"),
+        seed=17,
+        veritas_requirement=None,
+        task_name="supplier-approval",
+        agent_image=None,
+        runtime_image="runtime:sha256",
+        verifier_image="verifier:sha256",
     )
 
-    assert result.exit_code == 0
     assert captured == [
         (
             "export",
@@ -105,19 +93,13 @@ def test_reverify_uses_existing_trajectory_replay_command(monkeypatch) -> None:
 
     monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
 
-    result = runner.invoke(
-        env_app,
-        [
-            "reverify",
-            "--trajectory",
-            "trace.jsonl",
-            "--contract",
-            "contract.json",
-            "--include-operator-metadata",
-        ],
+    reverify_environment_cmd(
+        trajectory=Path("trace.jsonl"),
+        contract=Path("contract.json"),
+        include_private_identities=False,
+        include_operator_metadata=True,
     )
 
-    assert result.exit_code == 0
     assert captured == [
         (
             "trajectory",
@@ -138,16 +120,16 @@ def test_nonzero_portability_exit_is_preserved(monkeypatch) -> None:
 
     monkeypatch.setattr("investigation_world.operational.env_cli.portability_main", fake_main)
 
-    result = runner.invoke(env_app, ["validate", "--contract", "bad.json"])
+    with pytest.raises(BaseException) as exc_info:
+        validate_environment_cmd(contract=Path("bad.json"))
 
-    assert result.exit_code == 2
+    assert getattr(exc_info.value, "exit_code", None) == 2
 
 
-def test_help_exposes_only_supported_unified_environment_commands() -> None:
-    result = runner.invoke(env_app, ["--help"])
+def test_command_registry_exposes_only_supported_unified_environment_commands() -> None:
+    commands = {command.name for command in env_app.registered_commands}
 
-    assert result.exit_code == 0
-    for command in (
+    assert commands == {
         "compile",
         "inspect",
         "validate",
@@ -155,5 +137,4 @@ def test_help_exposes_only_supported_unified_environment_commands() -> None:
         "export",
         "conformance",
         "reverify",
-    ):
-        assert command in result.stdout
+    }
