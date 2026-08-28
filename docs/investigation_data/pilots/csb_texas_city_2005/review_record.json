@@ -1,0 +1,20 @@
+{
+  "review_id": "review-csb-texas-city-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2005-04-I-TX",
+  "scope": [
+    "Reference CSB-authored public web pages and the public final-report PDF by external locator only.",
+    "Reference the CSB-published Anatomy of a Disaster YouTube embed by external locator only; do not bulk-download, redistribute, or extract captions in this pilot.",
+    "Exclude victim, witness, employee, and investigator names from the normalized episode actors and task state.",
+    "Treat CSB conclusions as official institutional findings, not automatically as private ground truth.",
+    "Use a conservative next-day UTC availability timestamp when the source establishes a release date but not a precise public release time."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises metadata, temporal gating, and evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Any future transcript, frame extraction, local media acquisition, redistribution, or model-training use requires a separate artifact-level review."
+  ]
+}
