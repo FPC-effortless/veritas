@@ -17,7 +17,6 @@ from investigation_world.foundry.public_investigation_data import (
     SourceArtifact,
 )
 
-
 _EXTERNAL_MEDIA_HOSTS = {"youtube.com", "www.youtube.com", "youtu.be"}
 _SAFE_COMPONENT = re.compile(r"[^A-Za-z0-9._-]+")
 _MEDIA_SUFFIXES = {
