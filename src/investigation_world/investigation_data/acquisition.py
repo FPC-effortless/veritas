@@ -164,7 +164,7 @@ def acquire_artifact(
                 mode="wb", dir=target_dir, prefix=f".{filename}.", suffix=".part", delete=False
             ) as tmp:
                 temp_name = tmp.name
-                digest, byte_count = _stream_and_hash(response, tmp, max_bytes=max_bytes)
+                digest, byte_count = _stream_and_hash(response, tmp.file, max_bytes=max_bytes)
 
             if artifact.expected_sha256 and digest != artifact.expected_sha256:
                 raise AcquisitionError(
