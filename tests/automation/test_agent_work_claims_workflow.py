@@ -57,7 +57,17 @@ def test_handoff_and_done_validate_pull_request_evidence() -> None:
     assert "prBody.includes(`#${issueNumber}`)" in text
     assert "prBody.includes(primaryWorkId)" in text
     assert "!pr.merged_at" in text
-    assert "done requires REVIEW state" in text
+    assert "done requires the current REVIEW holder" in text
+
+
+def test_partial_transition_failures_stay_non_claimable() -> None:
+    text = _workflow()
+
+    assert "parseStatusComment(comment, issue.number)" in text
+    assert "labeledStates.length === 1 ? labeledStates[0] : contract.initialState" in text
+    assert text.index("await writeStatus(issue, current, status);") < text.index(
+        "await setStateLabels(issue, status.state);"
+    )
 
 
 def test_untrusted_comment_text_is_not_sent_to_a_shell() -> None:
