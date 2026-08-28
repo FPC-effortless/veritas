@@ -22,7 +22,8 @@ class EnvironmentAdapter(enum.StrEnum):
 
 def _portability_main(arguments: list[str] | tuple[str, ...]) -> int:
     module = __import__("investigation_world.world_portability", fromlist=("main",))
-    return int(module.main(tuple(arguments)))
+    entrypoint = getattr(module, "main")
+    return int(entrypoint(tuple(arguments)))
 
 
 def _run_portability(arguments: list[str] | tuple[str, ...]) -> None:
