@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Protocol
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .catalog import catalog_digest, find_source
 from .models import (
@@ -42,9 +42,24 @@ class HTTPTransport(Protocol):
     def open(self, request: Request, timeout: float) -> HTTPResponse: ...
 
 
+class _AllowlistedRedirectHandler(HTTPRedirectHandler):
+    def __init__(self, allowed_hosts: tuple[str, ...]):
+        super().__init__()
+        self.allowed_hosts = allowed_hosts
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _assert_allowed_url(newurl, self.allowed_hosts)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class UrllibTransport:
+    def __init__(self, allowed_hosts: tuple[str, ...]):
+        self.allowed_hosts = allowed_hosts
+        self.opener = build_opener(_AllowlistedRedirectHandler(allowed_hosts))
+
     def open(self, request: Request, timeout: float) -> HTTPResponse:
-        return urlopen(request, timeout=timeout)  # type: ignore[return-value]
+        _assert_allowed_url(request.full_url, self.allowed_hosts)
+        return self.opener.open(request, timeout=timeout)  # type: ignore[return-value]
 
 
 @dataclass(frozen=True)
@@ -116,6 +131,7 @@ def acquire_artifact(
     if source.requires_identified_user_agent and not identified_user_agent:
         raise AcquisitionError("source requires an identified user agent")
 
+    _assert_allowed_url(artifact.url, source.allowed_hosts)
     filename = artifact.filename or Path(urlparse(artifact.url).path).name
     if not filename or not _SAFE_FILENAME.fullmatch(filename):
         raise AcquisitionError(
@@ -132,7 +148,7 @@ def acquire_artifact(
 
     headers = {"User-Agent": identified_user_agent or "Veritas-Investigation-Data/1.0"}
     request = Request(artifact.url, headers=headers)
-    client = transport or UrllibTransport()
+    client = transport or UrllibTransport(source.allowed_hosts)
 
     temp_name: str | None = None
     try:
