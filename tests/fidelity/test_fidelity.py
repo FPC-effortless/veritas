@@ -212,3 +212,25 @@ def test_copied_evidence_content_invalidates_stale_record_identity() -> None:
 
     with pytest.raises(pydantic.ValidationError, match="content digest"):
         fidelity.serialize_fidelity_record(stale_record)
+
+
+def test_weakened_copied_claim_requirement_is_rejected_at_policy_boundaries() -> None:
+    strict_requirement = fidelity.FidelityClaimRequirement(
+        claim_id="faithful-service-policy",
+        minimum_level=fidelity.FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA,
+        required_dimensions=(fidelity.FidelityDimension.SERVICE_TOPOLOGY,),
+        require_full_coverage=True,
+    )
+    assert len(strict_requirement.content_sha256) == 64
+    weakened_requirement = strict_requirement.model_copy(
+        update={
+            "minimum_level": fidelity.FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION,
+            "required_dimensions": (),
+            "require_full_coverage": False,
+        }
+    )
+
+    with pytest.raises(pydantic.ValidationError, match="claim requirement content digest"):
+        fidelity.evaluate_fidelity_compatibility(_record(), weakened_requirement)
+    with pytest.raises(pydantic.ValidationError, match="claim requirement content digest"):
+        fidelity.require_fidelity_compatibility(_record(), weakened_requirement)
