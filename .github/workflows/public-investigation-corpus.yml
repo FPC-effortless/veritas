@@ -1,0 +1,109 @@
+name: Public Investigation Corpus
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Corpus source to build
+        required: true
+        default: cdc_nors
+        type: choice
+        options:
+          - cdc_nors
+          - sec_litigation
+      include_verifier:
+        description: Upload verifier projection as a separate artifact
+        required: true
+        default: false
+        type: boolean
+      maximum_cases:
+        description: Maximum SEC paired cases; ignored for CDC NORS
+        required: true
+        default: "2000"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Veritas
+        run: python -m pip install -e .
+
+      - name: Run corpus boundary tests
+        run: >-
+          python -m pytest -q
+          tests/unit/test_public_investigation_corpus.py
+          tests/unit/test_sec_litigation_discovery.py
+          tests/unit/test_public_investigation_data.py
+          tests/unit/test_public_investigation_acquisition.py
+
+      - name: Build selected corpus
+        env:
+          SOURCE: ${{ inputs.source }}
+          MAXIMUM_CASES: ${{ inputs.maximum_cases }}
+          INCLUDE_VERIFIER: ${{ inputs.include_verifier }}
+        run: |
+          set -euo pipefail
+          as_of="$(date -u +%F)"
+          mkdir -p out
+          if [[ "${SOURCE}" == "cdc_nors" ]]; then
+            veritas-corpus acquire-cdc-nors \
+              --as-of "${as_of}" \
+              --output-root out/cdc_nors
+            if [[ "${INCLUDE_VERIFIER}" != "true" ]]; then
+              rm -rf out/cdc_nors/sealed
+            fi
+          elif [[ "${SOURCE}" == "sec_litigation" ]]; then
+            mkdir -p out/sec_litigation
+            verifier_args=()
+            if [[ "${INCLUDE_VERIFIER}" == "true" ]]; then
+              verifier_args=(--verifier-output out/sec_litigation/sealed/verifier.json)
+            fi
+            veritas-corpus discover-sec-litigation \
+              --as-of "${as_of}" \
+              --maximum-cases "${MAXIMUM_CASES}" \
+              --public-output out/sec_litigation/public.json \
+              "${verifier_args[@]}"
+          else
+            echo "Unsupported source: ${SOURCE}" >&2
+            exit 2
+          fi
+
+      - name: Verify public artifact contains no sealed directory
+        run: |
+          set -euo pipefail
+          mkdir -p public-artifact
+          find out -type f ! -path '*/sealed/*' -exec cp --parents '{}' public-artifact/ \;
+          if find public-artifact -type f -path '*/sealed/*' | grep -q .; then
+            echo "sealed material entered public artifact staging" >&2
+            exit 1
+          fi
+
+      - name: Upload public corpus
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-${{ inputs.source }}-public
+          path: public-artifact/out
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload verifier corpus
+        if: ${{ inputs.include_verifier }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-${{ inputs.source }}-verifier
+          path: out/${{ inputs.source }}/sealed
+          if-no-files-found: error
+          retention-days: 7
