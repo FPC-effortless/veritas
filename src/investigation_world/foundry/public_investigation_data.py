@@ -143,7 +143,7 @@ class PublicInvestigationCase(BaseModel):
             "split": self.split.value,
             "objective": self.objective,
             "public_evidence": [
-                artifact.model_dump(mode="json") for artifact in self.public_evidence
+                _public_artifact_projection(artifact) for artifact in self.public_evidence
             ],
             "metadata": _sanitize_public_metadata(self.metadata),
         }
@@ -184,7 +184,6 @@ class PublicInvestigationDataset(BaseModel):
             "as_of": self.as_of.isoformat(),
             "source_registry_id": self.source_registry_id,
             "cases": cases,
-            "notes": self.notes,
         }
         payload["content_hash"] = stable_hash(payload)
         return payload
@@ -197,6 +196,7 @@ class PublicInvestigationDataset(BaseModel):
             "as_of": self.as_of.isoformat(),
             "source_registry_id": self.source_registry_id,
             "cases": cases,
+            "notes": self.notes,
         }
         payload["content_hash"] = stable_hash(payload)
         return payload
@@ -231,6 +231,12 @@ def _sanitize_public_metadata(value: dict[str, Any]) -> dict[str, Any]:
         else:
             output[key] = item
     return output
+
+
+def _public_artifact_projection(artifact: SourceArtifact) -> dict[str, Any]:
+    payload = artifact.model_dump(mode="json")
+    payload["metadata"] = _sanitize_public_metadata(artifact.metadata)
+    return payload
 
 
 def load_source_registry(path: Path) -> PublicSourceRegistry:
