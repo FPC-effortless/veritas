@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from enum import StrEnum
+from importlib import import_module
 from pathlib import Path
 
 import typer
@@ -22,9 +23,8 @@ class EnvironmentAdapter(StrEnum):
 
 
 def _portability_main(arguments: Sequence[str]) -> int:
-    from ..world_portability import main
-
-    return main(tuple(arguments))
+    module = import_module("investigation_world.world_portability")
+    return int(module.main(tuple(arguments)))
 
 
 def _run_portability(arguments: Sequence[str]) -> None:
