@@ -1,6 +1,6 @@
 """Deterministic semantic annotations over canonical MachineExperience trajectories."""
 
-from .compiler import (
+from .binding import (
     SemanticAnnotationError,
     apply_semantic_annotations,
     compile_semantic_annotations,
