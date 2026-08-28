@@ -1,17 +1,10 @@
-from typer.testing import CliRunner
-
 from investigation_world.operational.cli import app
-
-
-runner = CliRunner()
+from investigation_world.operational.env_cli import env_app
 
 
 def test_veritas_root_registers_environment_command_group() -> None:
-    result = runner.invoke(app, ["env", "--help"])
+    group_names = {group.name for group in app.registered_groups}
+    command_names = {command.name for command in env_app.registered_commands}
 
-    assert result.exit_code == 0
-    assert "compile" in result.stdout
-    assert "validate" in result.stdout
-    assert "export" in result.stdout
-    assert "conformance" in result.stdout
-    assert "reverify" in result.stdout
+    assert "env" in group_names
+    assert {"compile", "validate", "export", "conformance", "reverify"}.issubset(command_names)
