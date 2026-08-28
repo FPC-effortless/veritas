@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import pytest
 from pydantic import ValidationError
+import pytest
 
 from investigation_world.fidelity import (
     CoverageStatus,
@@ -19,6 +19,7 @@ from investigation_world.fidelity import (
     ResetMode,
     evaluate_fidelity_compatibility,
     require_fidelity_compatibility,
+    serialize_fidelity_record,
 )
 
 
@@ -189,3 +190,43 @@ def test_claim_policy_fails_closed_for_higher_fidelity_claim() -> None:
     assert len(result.failures) == 2
     with pytest.raises(FidelityCompatibilityError, match="faithful-service-replica"):
         require_fidelity_compatibility(_record(), requirement)
+
+
+def test_copied_level_upgrade_is_rejected_at_external_boundaries() -> None:
+    declaration = _l2_declaration().model_copy(
+        update={"level": FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA}
+    )
+    stale_record = _record().model_copy(update={"declaration": declaration})
+    requirement = FidelityClaimRequirement(
+        claim_id="stale-upgrade",
+        minimum_level=FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA,
+    )
+
+    with pytest.raises(ValidationError, match="service_replica evidence"):
+        serialize_fidelity_record(stale_record)
+    with pytest.raises(ValidationError, match="service_replica evidence"):
+        evaluate_fidelity_compatibility(stale_record, requirement)
+
+
+def test_copied_environment_version_is_rejected_at_serialization() -> None:
+    declaration = _l2_declaration().model_copy(
+        update={"environment_version": "2.0.0"}
+    )
+    stale_record = _record().model_copy(update={"declaration": declaration})
+
+    with pytest.raises(ValidationError, match="bind the declared environment version"):
+        serialize_fidelity_record(stale_record)
+
+
+def test_copied_evidence_content_invalidates_stale_record_identity() -> None:
+    declaration = _l2_declaration()
+    changed_evidence = declaration.evidence[0].model_copy(
+        update={"content_sha256": "c" * 64}
+    )
+    changed_declaration = declaration.model_copy(
+        update={"evidence": (changed_evidence, *declaration.evidence[1:])}
+    )
+    stale_record = _record().model_copy(update={"declaration": changed_declaration})
+
+    with pytest.raises(ValidationError, match="content digest"):
+        serialize_fidelity_record(stale_record)
