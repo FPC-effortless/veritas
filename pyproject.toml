@@ -31,6 +31,7 @@ veritas-observe = "investigation_world.observatory.cli:app"
 veritas-foundry = "investigation_world.foundry.cli:app"
 veritas-corpus = "investigation_world.foundry.corpus_cli:app"
 veritas-portable = "investigation_world.world_portability:main"
+veritas-data = "investigation_world.investigation_data.cli:app"
 
 [build-system]
 requires = ["hatchling"]

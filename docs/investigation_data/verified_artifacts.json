@@ -1,0 +1,45 @@
+{
+  "artifacts": [
+    {
+      "artifact_id": "ged-26.1-csv",
+      "byte_count": 39122522,
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "content_type": "application/x-zip-compressed",
+      "members": [
+        {
+          "byte_count": 273992720,
+          "path": "GEDEvent_v26_1.csv",
+          "sha256": "61c3bf0a86374778343ba30c28a18b1fe739e2c33a76055504427eded4f8be27"
+        }
+      ],
+      "receipt_sha256": "15abb9933896a8b40615f3200be174d34574e8b377e1685d9431e018a5ce48e6",
+      "resolved_url": "https://ucdp.uu.se/downloads/ged/ged261-csv.zip",
+      "retrieved_at": "2026-08-28T05:20:15.295760Z",
+      "sha256": "8c941d84954e555ee2e54f40fa04d9203bf1e2f962203d0a9930966c4947c667",
+      "source_id": "ucdp-ged-26.1",
+      "source_url": "https://ucdp.uu.se/downloads/ged/ged261-csv.zip"
+    },
+    {
+      "artifact_id": "avall-2026-08",
+      "byte_count": 95636276,
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "content_type": "application/octet-stream",
+      "members": [
+        {
+          "byte_count": 555745280,
+          "path": "avall.mdb",
+          "sha256": "3cadd8c166f56ea1a1a885eb4fbad2feb8decc14493aff9af881666e6dd08780"
+        }
+      ],
+      "receipt_sha256": "19bcf80d7685d978c2f3430778e22029646426a1593feb54626bf2d75529444e",
+      "resolved_url": "https://data.ntsb.gov/avdata/FileDirectory/DownloadFile?fileID=C%3A%5Cavdata%5Cavall.zip",
+      "retrieved_at": "2026-08-28T05:20:20.596954Z",
+      "sha256": "0cf30a610d18eb109035b83106c227b248f27c6cff794ce622548f44c455238a",
+      "source_id": "ntsb-aviation-census",
+      "source_url": "https://data.ntsb.gov/avdata/FileDirectory/DownloadFile?fileID=C%3A%5Cavdata%5Cavall.zip"
+    }
+  ],
+  "purpose": "Real network acquisition and safe-extraction evidence; raw third-party archives are not committed.",
+  "schema_version": "1.0",
+  "verification_date": "2026-08-28"
+}
