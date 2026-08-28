@@ -536,10 +536,13 @@ def evaluate_compatibility_matrix(
 
 def require_tested_interface_match(report: RuntimeCompatibilityReport) -> None:
     validated = RuntimeCompatibilityReport.model_validate(report.model_dump(mode="python"))
-    if not validated.interface_matches_tested_support:
-        reason = "; ".join(validated.reasons) or validated.status.value
+    status = validated.status
+    if status is None:
+        raise RuntimeCompatibilityError("runtime compatibility report is missing derived status")
+    if status != RuntimeCompatibilityStatus.TESTED_INTERFACE_MATCH:
+        reason = "; ".join(validated.reasons) or status.value
         raise RuntimeCompatibilityError(
-            f"runtime compatibility gate failed with {validated.status.value}: {reason}"
+            f"runtime compatibility gate failed with {status.value}: {reason}"
         )
 
 
