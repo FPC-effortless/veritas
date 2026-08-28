@@ -1,0 +1,267 @@
+{
+  "schema_version": "1.0",
+  "corpus_id": "csb-gold-10",
+  "source_id": "uscsb",
+  "reviewed_on": "2026-08-28",
+  "target_cases": 10,
+  "date_only_availability_policy": "next_day_12z",
+  "selection_policy": "Select completed CSB investigations with strong public evidence, dated visual material, distinct causal mechanisms, and enough temporal structure to support hindsight-controlled investigation episodes. Source pages are candidate provenance surfaces, not automatically historical snapshots or private truth.",
+  "cases": [
+    {
+      "case_id": "2005-04-I-TX",
+      "slug": "bp-texas-city-2005",
+      "title": "BP America Texas City Refinery Explosion",
+      "location": "Texas City, TX",
+      "accident_date": "2005-03-23",
+      "final_report_date": "2007-03-20",
+      "investigation_url": "https://www.csb.gov/bp-america-texas-city-refinery-explosion/",
+      "capability_tags": ["startup", "process-safety", "management-systems", "causal-reconstruction"],
+      "evidence_releases": [
+        {
+          "release_id": "texas-city-anatomy-2008",
+          "title": "Anatomy of a Disaster",
+          "release_date": "2008-03-21",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/anatomy-of-a-disaster/"
+        }
+      ],
+      "notes": "First production pilot. Its detailed manifest intentionally uses a dated final-findings release rather than guessing the first-public timestamp of the final-report PDF."
+    },
+    {
+      "case_id": "2008-03-I-FL",
+      "slug": "t2-laboratories-2007",
+      "title": "T2 Laboratories Inc. Reactive Chemical Explosion",
+      "location": "Jacksonville, FL",
+      "accident_date": "2007-12-19",
+      "final_report_date": "2009-09-15",
+      "investigation_url": "https://www.csb.gov/t2-laboratories-inc-reactive-chemical-explosion/",
+      "capability_tags": ["reactive-chemistry", "thermal-runaway", "hazard-recognition", "process-design"],
+      "evidence_releases": [
+        {
+          "release_id": "t2-runaway-2009",
+          "title": "Runaway: Explosion at T2 Laboratories",
+          "release_date": "2009-09-22",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/runaway-explosion-at-t2-laboratories/"
+        }
+      ],
+      "notes": "Strong compact case for thermal runaway, cooling-system failure, and failure to recognize reactive hazards."
+    },
+    {
+      "case_id": "2008-05-I-GA",
+      "slug": "imperial-sugar-2008",
+      "title": "Imperial Sugar Company Dust Explosion and Fire",
+      "location": "Port Wentworth, GA",
+      "accident_date": "2008-02-07",
+      "final_report_date": "2009-09-24",
+      "investigation_url": "https://www.csb.gov/imperial-sugar-company-dust-explosion-and-fire/",
+      "capability_tags": ["combustible-dust", "housekeeping", "equipment-design", "secondary-explosions"],
+      "evidence_releases": [
+        {
+          "release_id": "imperial-inferno-2009",
+          "title": "Inferno: Dust Explosion at Imperial Sugar",
+          "release_date": "2009-10-06",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/inferno-dust-explosion-at-imperial-sugar/"
+        }
+      ],
+      "notes": "Distinct propagation problem: primary ignition followed by catastrophic secondary dust explosions."
+    },
+    {
+      "case_id": "2010-08-I-WA",
+      "slug": "tesoro-anacortes-2010",
+      "title": "Tesoro Anacortes Refinery Fatal Explosion and Fire",
+      "location": "Anacortes, WA",
+      "accident_date": "2010-04-02",
+      "final_report_date": "2014-05-01",
+      "investigation_url": "https://www.csb.gov/tesoro-anacortes-refinery-fatal-explosion-and-fire-/",
+      "capability_tags": ["metallurgy", "high-temperature-hydrogen-attack", "maintenance", "startup"],
+      "evidence_releases": [
+        {
+          "release_id": "tesoro-behind-curve-2014",
+          "title": "Behind the Curve",
+          "release_date": "2014-10-28",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/behind-the-curve/"
+        }
+      ],
+      "notes": "Useful for materials degradation, inspection assumptions, aging equipment, and startup/maintenance transitions."
+    },
+    {
+      "case_id": "2012-03-I-CA",
+      "slug": "chevron-richmond-2012",
+      "title": "Chevron Richmond Refinery Fire",
+      "location": "Richmond, CA",
+      "accident_date": "2012-08-06",
+      "final_report_date": "2015-01-28",
+      "investigation_url": "https://www.csb.gov/chevron-richmond-refinery-fire/",
+      "capability_tags": ["corrosion", "materials-selection", "leak-response", "worker-participation"],
+      "evidence_releases": [
+        {
+          "release_id": "chevron-surveillance-2012",
+          "title": "Surveillance Video from the August 6 Accident",
+          "release_date": "2012-09-11",
+          "modality": "video",
+          "phase": "pre_final",
+          "role": "surveillance",
+          "url": "https://www.csb.gov/videos/surveillance-video-from-the-august-6-accident-at-the-chevron-refinery-in-richmond-ca/"
+        },
+        {
+          "release_id": "chevron-animation-2013",
+          "title": "Chevron Richmond Refinery Fire Animation",
+          "release_date": "2013-04-19",
+          "modality": "video",
+          "phase": "pre_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/chevron-richmond-refinery-fire-animation/"
+        }
+      ],
+      "notes": "Provides unusually useful pre-final visual evidence for testing hypothesis revision before the final investigation."
+    },
+    {
+      "case_id": "2013-02-I-TX",
+      "slug": "west-fertilizer-2013",
+      "title": "West Fertilizer Explosion and Fire",
+      "location": "West, TX",
+      "accident_date": "2013-04-17",
+      "final_report_date": "2016-01-28",
+      "investigation_url": "https://www.csb.gov/west-fertilizer-explosion-and-fire-/",
+      "capability_tags": ["ammonium-nitrate", "emergency-response", "community-risk", "land-use"],
+      "evidence_releases": [
+        {
+          "release_id": "west-blast-damage-2013",
+          "title": "CSB Video Documenting the Blast Damage in West, Texas",
+          "release_date": "2013-05-10",
+          "modality": "video",
+          "phase": "pre_final",
+          "role": "damage_documentation",
+          "url": "https://www.csb.gov/videos/csb-video-documenting-the-blast-damage-in-west-texas/"
+        },
+        {
+          "release_id": "west-dangerously-close-2016",
+          "title": "Dangerously Close: Explosion in West, Texas",
+          "release_date": "2016-01-29",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/dangerously-close-explosion-in-west-texas/"
+        }
+      ],
+      "notes": "Adds emergency-response, responder risk, offsite consequences, and land-use/regulatory reasoning."
+    },
+    {
+      "case_id": "2013-03-I-LA",
+      "slug": "williams-olefins-2013",
+      "title": "Williams Olefins Plant Explosion and Fire",
+      "location": "Geismar, LA",
+      "accident_date": "2013-06-13",
+      "final_report_date": "2016-10-19",
+      "investigation_url": "https://www.csb.gov/williams-olefins-plant-explosion-and-fire-/",
+      "capability_tags": ["overpressure", "equipment-isolation", "nonroutine-operations", "process-safety-management"],
+      "evidence_releases": [
+        {
+          "release_id": "williams-blocked-in-2017",
+          "title": "Blocked In",
+          "release_date": "2017-01-25",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/blocked-in/"
+        }
+      ],
+      "notes": "Strong case for reasoning about isolated pressure vessels, dormant equipment, and non-routine operations."
+    },
+    {
+      "case_id": "2017-08-I-TX",
+      "slug": "arkema-crosby-2017",
+      "title": "Arkema Inc. Chemical Plant Fire",
+      "location": "Crosby, TX",
+      "accident_date": "2017-08-29",
+      "final_report_date": "2018-05-24",
+      "investigation_url": "https://www.csb.gov/arkema-inc-chemical-plant-fire-/",
+      "capability_tags": ["extreme-weather", "flooding", "refrigeration-loss", "resilience"],
+      "evidence_releases": [
+        {
+          "release_id": "arkema-preliminary-animation-2017",
+          "title": "Preliminary 2D Animation of Events Leading to 2017 Fire at Arkema Chemical Plant",
+          "release_date": "2017-11-15",
+          "modality": "video",
+          "phase": "pre_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/preliminary-2d-animation-of-events-leading-to-2017-fire-at-arkema-chemical-plant-in-crosby-texas/"
+        }
+      ],
+      "notes": "Adds natural-hazard coupling, degraded safeguards, evacuation, and infrastructure resilience."
+    },
+    {
+      "case_id": "2018-02-I-WI",
+      "slug": "husky-superior-2018",
+      "title": "Husky Energy Superior Refinery Explosion and Fire",
+      "location": "Superior, WI",
+      "accident_date": "2018-04-26",
+      "final_report_date": "2022-12-29",
+      "investigation_url": "https://www.csb.gov/husky-energy-superior-refinery-explosion-and-fire/",
+      "capability_tags": ["turnaround", "transient-operations", "fcc", "evacuation", "brittle-fracture"],
+      "evidence_releases": [
+        {
+          "release_id": "husky-interim-animation-2018",
+          "title": "CSB Interim Animation on Husky Refinery Explosion and Fire",
+          "release_date": "2018-08-02",
+          "modality": "video",
+          "phase": "pre_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/csb-interim-animation-on-husky-refinery-explosion-and-fire-/"
+        },
+        {
+          "release_id": "husky-transient-hazards-2023",
+          "title": "Transient Hazards: Explosion at the Husky Superior Refinery",
+          "release_date": "2023-06-09",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/transient-hazards-explosion-at-the-husky-superior-refinery/"
+        }
+      ],
+      "notes": "Long investigation horizon with both early and post-final visualizations, suitable for staged evidence tasks."
+    },
+    {
+      "case_id": "2019-04-I-PA",
+      "slug": "pes-philadelphia-2019",
+      "title": "Philadelphia Energy Solutions Refinery Fire and Explosions",
+      "location": "Philadelphia, PA",
+      "accident_date": "2019-06-21",
+      "final_report_date": "2022-10-11",
+      "investigation_url": "https://www.csb.gov/philadelphia-energy-solutions-pes-refinery-fire-and-explosions-/",
+      "capability_tags": ["hydrofluoric-acid", "corrosion", "safeguards", "offsite-consequence", "inherently-safer-design"],
+      "evidence_releases": [
+        {
+          "release_id": "pes-preliminary-animation-2019",
+          "title": "Preliminary Animation of Philadelphia Energy Solutions Refinery Fire and Explosions",
+          "release_date": "2019-10-16",
+          "modality": "video",
+          "phase": "pre_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/preliminary-animation-of-philadelphia-energy-solutions-refinery-fire-and-explosions/"
+        },
+        {
+          "release_id": "pes-wake-up-call-2022",
+          "title": "Wake Up Call: Refinery Disaster in Philadelphia",
+          "release_date": "2022-10-27",
+          "modality": "video",
+          "phase": "post_final",
+          "role": "visual_reconstruction",
+          "url": "https://www.csb.gov/videos/wake-up-call-refinery-disaster-in-philadelphia/"
+        }
+      ],
+      "notes": "Combines corrosion, toxic HF release, fire/explosion escalation, projectile risk, safeguards, and safer-technology reasoning."
+    }
+  ]
+}
