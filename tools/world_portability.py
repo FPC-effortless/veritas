@@ -88,16 +88,13 @@ def _safe_validation_error(exc: ValidationError) -> str:
 
 
 def _safe_exception_message(exc: Exception) -> str:
+    """Return diagnostic identity without forwarding arbitrary evaluator-bearing text."""
+
     if isinstance(exc, ValidationError):
         return _safe_validation_error(exc)
     code = getattr(exc, "code", None)
-    detail = getattr(exc, "detail", None)
-    if isinstance(code, str):
-        if isinstance(detail, str) and detail:
-            return f"{code}: {detail}"
+    if isinstance(code, str) and code:
         return code
-    if isinstance(exc, (TypeError, ValueError, RuntimeError)):
-        return str(exc)
     return type(exc).__name__
 
 
@@ -125,9 +122,16 @@ def _load_contract(path: Path) -> PortableOperationalContract:
         ) from exc
 
 
+def _require_new_paths(*paths: Path | None) -> None:
+    selected = [path.resolve() for path in paths if path is not None]
+    if len(selected) != len(set(selected)):
+        raise WorldPortabilityCLIError("OUTPUT_PATH_COLLISION", "output paths must be distinct")
+    for path in selected:
+        if path.exists():
+            raise WorldPortabilityCLIError("OUTPUT_EXISTS", str(path))
+
+
 def _write_new_file(path: Path, payload: bytes) -> None:
-    if path.exists():
-        raise WorldPortabilityCLIError("OUTPUT_EXISTS", str(path))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload)
 
@@ -138,6 +142,17 @@ def _require_empty_directory(path: Path) -> Path:
         raise WorldPortabilityCLIError("OUTPUT_NOT_EMPTY", str(root))
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def _preflight_executable(contract: PortableOperationalContract) -> None:
+    try:
+        PortableOperationalRuntime(contract)
+        compile_mcp_surface(contract.public)
+    except Exception as exc:
+        raise WorldPortabilityCLIError(
+            "PORTABLE_RUNTIME_UNSUPPORTED_SEMANTICS",
+            _safe_exception_message(exc),
+        ) from exc
 
 
 def _public_contract_summary(contract: PortableOperationalContract) -> dict[str, Any]:
@@ -227,10 +242,8 @@ def _public_failure(result: Any) -> dict[str, Any] | None:
     failure = getattr(result, "failure", None)
     if failure is None:
         return None
-    code = getattr(failure.code, "value", failure.code)
     return {
-        "code": code,
-        "message": failure.message,
+        "code": getattr(failure.code, "value", failure.code),
         "retryable": failure.retryable,
     }
 
@@ -396,6 +409,8 @@ def _nemo_snapshot(contract: PortableOperationalContract, vector: Mapping[str, A
     reset_observation, reset_info = asyncio.run(
         adapter.reset({"veritas": row["veritas"]}, "world-portability-cli")
     )
+    if reset_observation is None:
+        raise WorldPortabilityCLIError("CONFORMANCE_EXECUTION_FAILED", "nemo reset observation")
     reset = {
         "observation": json.loads(reset_observation),
         "state_digest": reset_info["veritas"]["state_digest"],
@@ -461,12 +476,12 @@ def _adapter_snapshot(
     if adapter == "openenv":
         raise WorldPortabilityCLIError(
             "CONFORMANCE_UNAVAILABLE",
-            "openenv stable public API does not expose operator budget/reward-component trace data",
+            "openenv stable public API does not expose complete operator trace fields",
         )
     if adapter == "prime":
         raise WorldPortabilityCLIError(
             "CONFORMANCE_UNAVAILABLE",
-            "prime stable public replay API exposes only the terminal result, not the full operator trace",
+            "prime stable public replay API exposes only the terminal result",
         )
     raise WorldPortabilityCLIError("ADAPTER_UNSUPPORTED", adapter)
 
@@ -493,6 +508,7 @@ def _read_trajectory(path: Path) -> list[dict[str, Any]]:
 
 
 def _command_compile(args: argparse.Namespace) -> int:
+    _require_new_paths(args.output, args.public_output)
     episode = _load_episode(args.episode)
     try:
         contract = compile_operational_episode(episode)
@@ -501,16 +517,18 @@ def _command_compile(args: argparse.Namespace) -> int:
             "COMPILE_UNSUPPORTED_SEMANTICS",
             _safe_exception_message(exc),
         ) from exc
+    _preflight_executable(contract)
     _write_new_file(args.output, serialize_portable_contract(contract) + b"\n")
     if args.public_output is not None:
         _write_new_file(args.public_output, serialize_public_contract(contract) + b"\n")
-    payload = {
-        "compiled": True,
-        "output": str(args.output),
-        "public_output": str(args.public_output) if args.public_output is not None else None,
-        **_public_contract_summary(contract),
-    }
-    _print_json(payload)
+    _print_json(
+        {
+            "compiled": True,
+            "output": str(args.output),
+            "public_output": str(args.public_output) if args.public_output is not None else None,
+            **_public_contract_summary(contract),
+        }
+    )
     return 0
 
 
@@ -572,6 +590,7 @@ def _command_run(args: argparse.Namespace) -> int:
 
 def _command_export(args: argparse.Namespace) -> int:
     contract = _load_contract(args.contract)
+    _preflight_executable(contract)
     output = args.output
     try:
         if args.adapter == "nemo":
@@ -667,6 +686,8 @@ def _command_export(args: argparse.Namespace) -> int:
 
 
 def _command_conformance(args: argparse.Namespace) -> int:
+    if args.adapter in {"openenv", "prime"}:
+        _adapter_snapshot(args.adapter, _load_contract(args.contract), {"seed": 0, "actions": []})
     contract = _load_contract(args.contract)
     vector = _load_vector(args.vector)
     try:
