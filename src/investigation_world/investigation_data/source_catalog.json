@@ -1,0 +1,402 @@
+{
+  "schema_version": "1.0",
+  "reviewed_at": "2026-08-28",
+  "sources": [
+    {
+      "source_id": "nist-cfreds",
+      "name": "Computer Forensic Reference Data Sets (CFReDS)",
+      "publisher": "National Institute of Standards and Technology",
+      "domains": ["digital_forensics", "criminal_investigation"],
+      "homepage": "https://www.nist.gov/itl/csd/secure-systems-and-applications/computer-forensics-tool-testing-program-cftt/cfreds",
+      "allowed_hosts": ["nist.gov", "cfreds.nist.gov"],
+      "rights": {
+        "acquisition": "review_required",
+        "redistribution": "review_required",
+        "ai_use": "review_required",
+        "license_expression": "case-specific; NIST and contributed datasets coexist",
+        "terms_url": "https://www.nist.gov/itl/csd/secure-systems-and-applications/computer-forensics-tool-testing-program-cftt/cfreds",
+        "attribution_required": true,
+        "review_notes": "Only acquire a selected CFReDS case after confirming that case's producer and terms; the portal includes both NIST-produced and contributed images."
+      },
+      "truth": {
+        "strength": "controlled",
+        "basis": "Documented simulated digital evidence with known artifact placement for qualifying reference sets.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "private_truth",
+        "limitations": ["Truth strength and rights can vary for contributed datasets."]
+      },
+      "artifacts": [],
+      "seed_selections": [
+        {
+          "selection_id": "cfreds-gold",
+          "label": "NIST-authored investigation-style reference sets",
+          "target_episodes": 6,
+          "selection_method": "Manual rights-qualified selection of documented simulated evidence sets with explicit planted artifacts and investigative questions.",
+          "selectors": ["Data Leakage Case", "Rhino Hunt", "Hacking Case", "Russian Tea Room"],
+          "strata": ["data leakage", "intrusion", "artifact search", "multimodal/device evidence"],
+          "notes": "Do not infer that every portal item is NIST-authored or redistributable."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": false,
+      "requires_redaction_review": false
+    },
+    {
+      "source_id": "digital-corpora",
+      "name": "Digital Corpora forensic scenarios",
+      "publisher": "Digital Corpora",
+      "domains": ["digital_forensics", "criminal_investigation", "cyber_investigation"],
+      "homepage": "https://digitalcorpora.org/",
+      "allowed_hosts": ["digitalcorpora.org"],
+      "rights": {
+        "acquisition": "review_required",
+        "redistribution": "review_required",
+        "ai_use": "review_required",
+        "license_expression": "CC0 for original metadata/scenario material; embedded third-party content excluded",
+        "terms_url": "https://digitalcorpora.org/about-digitalcorpora/terms-of-use/",
+        "attribution_required": false,
+        "review_notes": "Original scenario data and metadata are generally CC0, but disk images, packet dumps and other artifacts can contain copyrighted third-party material. Preserve artifact-level rights metadata."
+      },
+      "truth": {
+        "strength": "controlled",
+        "basis": "Synthetic or staged forensic scenarios with creator-known activity and evidence.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "private_truth",
+        "limitations": ["Scenario documentation quality varies by corpus."]
+      },
+      "artifacts": [],
+      "seed_selections": [
+        {
+          "selection_id": "digital-corpora-gold",
+          "label": "Evidence-rich staged forensic investigations",
+          "target_episodes": 10,
+          "selection_method": "Select complete staged scenarios with warrants/reports plus multiple forensic modalities; rights-review each binary artifact separately.",
+          "selectors": ["M57 Patents", "2019 Narcos", "2019 Tuck", "Lone Wolf"],
+          "strata": ["insider", "narcotics", "device forensics", "network evidence"],
+          "notes": "Scenario metadata may be redistributed separately from restricted embedded content."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": false,
+      "requires_redaction_review": false
+    },
+    {
+      "source_id": "ntsb-aviation-census",
+      "name": "NTSB downloadable aviation accident census",
+      "publisher": "National Transportation Safety Board",
+      "domains": ["accident_investigation", "aviation"],
+      "homepage": "https://www.ntsb.gov/safety/data/Pages/Data_Stats.aspx",
+      "allowed_hosts": ["ntsb.gov", "data.ntsb.gov"],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "review_required",
+        "ai_use": "allowed_with_conditions",
+        "license_expression": "U.S. government public-use dataset; docket attachments require separate rights review",
+        "terms_url": "https://www.ntsb.gov/safety/data/Pages/Data_Stats.aspx",
+        "attribution_required": true,
+        "review_notes": "The structured census is published for public use. Treat third-party material in accident dockets separately and preserve NTSB attribution."
+      },
+      "truth": {
+        "strength": "strong",
+        "basis": "Structured investigation records plus final factual findings and probable-cause determinations for closed cases.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "evidence_reference",
+        "limitations": ["Probable-cause findings are authoritative investigative conclusions, not metaphysical ground truth."]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "avall-2026-08",
+          "label": "Aviation census, 1982-present, August 2026 release",
+          "method": "http_file",
+          "url": "https://data.ntsb.gov/avdata/avall.zip",
+          "artifact_class": "data",
+          "filename": "avall.zip",
+          "expected_sha256": null,
+          "notes": "Pin the receipt hash at acquisition time. NTSB plans to transition bulk retrieval to its Enterprise API in April 2027."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "ntsb-gold-20",
+          "label": "Closed evidence-rich aviation investigations",
+          "target_episodes": 20,
+          "selection_method": "From the pinned census snapshot, filter to closed 2010-2024 investigations with a final probable cause and sufficient docket evidence; stratify by operation/event/cause; select deterministically by SHA-256(case_id + catalog_version).",
+          "selectors": ["status=closed", "event_year=2010..2024", "probable_cause_present=true"],
+          "strata": ["human factors", "maintenance", "weather", "mechanical/system", "organizational"],
+          "notes": "Docket evidence acquisition is a second gate because attachments may have separate rights and privacy considerations."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": true,
+      "requires_redaction_review": true
+    },
+    {
+      "source_id": "sec-edgar-aaer",
+      "name": "SEC EDGAR filings and Accounting and Auditing Enforcement Releases",
+      "publisher": "U.S. Securities and Exchange Commission",
+      "domains": ["financial_investigation", "accounting_fraud"],
+      "homepage": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+      "allowed_hosts": ["sec.gov", "data.sec.gov"],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "review_required",
+        "ai_use": "allowed_with_conditions",
+        "license_expression": "U.S. government public records with possible third-party exhibits/content",
+        "terms_url": "https://www.sec.gov/search-filings/edgar-application-programming-interfaces",
+        "attribution_required": true,
+        "review_notes": "Acquire through SEC-supported APIs and respect fair-access/user-agent requirements. Review third-party exhibits before redistribution."
+      },
+      "truth": {
+        "strength": "strong",
+        "basis": "Time-ordered company filings can be paired with later complaints, orders, settlements and adjudicated enforcement findings.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "evidence_reference",
+        "limitations": ["Allegations and settlements must not be relabeled as proven ground truth."]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "edgar-api",
+          "label": "EDGAR submissions/XBRL REST API",
+          "method": "api",
+          "url": "https://data.sec.gov/",
+          "artifact_class": "metadata",
+          "filename": null,
+          "expected_sha256": null,
+          "notes": "Use source-specific API ingestion; no authentication key is required."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "sec-aaer-gold-20",
+          "label": "Closed accounting/enforcement investigations with pre-enforcement filings",
+          "target_episodes": 20,
+          "selection_method": "Select closed AAER matters across 2010-2025 where pre-enforcement EDGAR filings provide at least four chronological evidence points; stratify by accounting issue and outcome; deterministic hash selection within strata.",
+          "selectors": ["AAER", "closed/final matter", "pre-enforcement EDGAR history >= 4 filings"],
+          "strata": ["revenue recognition", "asset valuation", "disclosure", "controls", "misstatement/restatement"],
+          "notes": "Keep allegations, admitted facts, judicial findings and settlements as distinct finding types."
+        }
+      ],
+      "requires_identified_user_agent": true,
+      "contains_personal_data": true,
+      "requires_redaction_review": true
+    },
+    {
+      "source_id": "ucdp-ged-26.1",
+      "name": "UCDP Georeferenced Event Dataset Global 26.1",
+      "publisher": "Uppsala Conflict Data Program",
+      "domains": ["war", "conflict", "intelligence_analysis"],
+      "homepage": "https://ucdp.uu.se/downloads/",
+      "allowed_hosts": ["ucdp.uu.se"],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "attribution_required",
+        "ai_use": "allowed_with_conditions",
+        "license_expression": "CC BY 4.0",
+        "terms_url": "https://ucdp.uu.se/downloads/",
+        "attribution_required": true,
+        "review_notes": "Retain dataset version and required citations in every derived episode manifest."
+      },
+      "truth": {
+        "strength": "moderate",
+        "basis": "Systematically coded conflict events with source-evaluation methodology; useful as observed world-state evidence rather than hidden causal truth.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "context_only",
+        "limitations": ["Event coding is evidence, not a complete account of intent, attribution or causality."]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "ged-26.1-csv",
+          "label": "GED Global 26.1 CSV archive",
+          "method": "http_file",
+          "url": "https://ucdp.uu.se/downloads/ged/ged261-csv.zip",
+          "artifact_class": "data",
+          "filename": "ged261-csv.zip",
+          "expected_sha256": null,
+          "notes": "Pin the downloaded archive hash and codebook version."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "ucdp-context",
+          "label": "Conflict event context for retrospective crisis episodes",
+          "target_episodes": 10,
+          "selection_method": "Use UCDP as an event/context layer for post-1989 retrospective crisis episodes; do not use UCDP-coded events as sole verifier truth.",
+          "selectors": ["post-1989", "multi-actor", "documentary evidence overlap"],
+          "strata": ["interstate", "intrastate", "one-sided violence", "non-state"],
+          "notes": "Pair with declassified/official documentary sources where available."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": false,
+      "requires_redaction_review": false
+    },
+    {
+      "source_id": "frus",
+      "name": "Foreign Relations of the United States (FRUS) ebook catalog",
+      "publisher": "U.S. Department of State, Office of the Historian",
+      "domains": ["intelligence_analysis", "diplomacy", "war", "crisis_decision"],
+      "homepage": "https://history.state.gov/historicaldocuments",
+      "allowed_hosts": ["history.state.gov"],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "review_required",
+        "ai_use": "allowed_with_conditions",
+        "license_expression": "official U.S. government documentary series; preserve document-level provenance",
+        "terms_url": "https://history.state.gov/developer/catalog",
+        "attribution_required": true,
+        "review_notes": "The public API exposes free ebook catalog/download links. Preserve document provenance and review any document-specific third-party rights if encountered."
+      },
+      "truth": {
+        "strength": "strong",
+        "basis": "Declassified primary-source diplomatic records published as the official documentary history of major U.S. foreign-policy decisions.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "evidence_reference",
+        "limitations": ["Documentary record is selective and may reflect institutional perspective; later documents can leak outcomes into earlier decision points."]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "catalog-api",
+          "label": "FRUS OPDS catalog API",
+          "method": "api",
+          "url": "https://history.state.gov/api/v1/catalog",
+          "artifact_class": "metadata",
+          "filename": null,
+          "expected_sha256": null,
+          "notes": "Ingest catalog metadata first, then pin selected volumes/documents."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "frus-crisis-gold-10",
+          "label": "Retrospective high-stakes diplomatic and military crises",
+          "target_episodes": 10,
+          "selection_method": "Select crises with dense pre-decision primary sources and later documentary resolution. Cut each episode at a historical decision timestamp and seal all later documents from the public state.",
+          "selectors": ["Berlin Crisis", "Cuban Missile Crisis", "Vietnam escalation", "October 1973 Middle East war", "Iran hostage crisis", "Soviet-Afghan crisis", "Gulf crisis"],
+          "strata": ["escalation", "deception/uncertainty", "alliance", "military intelligence", "diplomatic negotiation"],
+          "notes": "Later documentary evidence may support the private evaluator but must never appear in the agent-visible package before its simulated availability time."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": true,
+      "requires_redaction_review": true
+    },
+    {
+      "source_id": "lanl-cyber1",
+      "name": "LANL Comprehensive Multi-Source Cyber-Security Events",
+      "publisher": "Los Alamos National Laboratory",
+      "domains": ["cyber_investigation", "incident_response"],
+      "homepage": "https://csr.lanl.gov/data/cyber1/",
+      "allowed_hosts": ["csr.lanl.gov"],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "allowed",
+        "ai_use": "allowed",
+        "license_expression": "copyright and related rights waived to the extent possible under law",
+        "terms_url": "https://csr.lanl.gov/data/cyber1/",
+        "attribution_required": true,
+        "review_notes": "Dataset is de-identified and public-release approved; retain required citation and source version. Download is form-mediated."
+      },
+      "truth": {
+        "strength": "controlled",
+        "basis": "58 days of multi-source enterprise telemetry with explicit red-team compromise events supplied as bad-behavior ground truth.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "private_truth",
+        "limitations": ["Red-team event list is ground truth for known injected activity, not necessarily an exhaustive label for every anomalous event."]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "redteam",
+          "label": "Known red-team events",
+          "method": "form",
+          "url": "https://csr.lanl.gov/data/cyber1/",
+          "artifact_class": "data",
+          "filename": "redteam.txt.gz",
+          "expected_sha256": null,
+          "notes": "Acquire through LANL's usage form. Small ground-truth file can be acquired before the multi-gigabyte telemetry."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "lanl-redteam-episodes",
+          "label": "Red-team-centered incident investigations",
+          "target_episodes": 20,
+          "selection_method": "Center bounded temporal windows around known red-team events, then include only telemetry available by each simulated step. Create hard negatives from matched windows without listed red-team events while retaining UNKNOWN for unlabeled malicious activity.",
+          "selectors": ["redteam.txt.gz", "auth", "process", "DNS", "flow"],
+          "strata": ["credential movement", "host compromise", "lateral movement", "network correlation"],
+          "notes": "Acquire the 4.8K red-team truth file first; stream or remotely slice larger telemetry instead of copying all 12 GB into the repository."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": false,
+      "requires_redaction_review": false
+    },
+    {
+      "source_id": "uscsb",
+      "name": "U.S. Chemical Safety Board investigations",
+      "publisher": "U.S. Chemical Safety and Hazard Investigation Board",
+      "domains": ["industrial_accident", "root_cause_investigation"],
+      "homepage": "https://www.csb.gov/",
+      "allowed_hosts": ["csb.gov"],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "review_required",
+        "ai_use": "allowed_with_conditions",
+        "license_expression": "U.S. government investigation materials; review embedded third-party media separately",
+        "terms_url": "https://www.csb.gov/",
+        "attribution_required": true,
+        "review_notes": "Prefer final reports and public factual materials. Review photographs/video/attachments for third-party rights before redistribution."
+      },
+      "truth": {
+        "strength": "strong",
+        "basis": "Independent federal root-cause investigations with evidence, findings and safety recommendations.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "evidence_reference",
+        "limitations": ["Root-cause findings remain investigative conclusions and should be represented separately from directly established facts."]
+      },
+      "artifacts": [],
+      "seed_selections": [
+        {
+          "selection_id": "csb-gold-10",
+          "label": "Completed industrial root-cause investigations",
+          "target_episodes": 10,
+          "selection_method": "Select completed investigations with final reports, rich timelines, multiple causal contributors and sufficient public evidence; stratify by failure mechanism.",
+          "selectors": ["completed investigation", "final report available"],
+          "strata": ["process safety", "maintenance", "design", "management systems", "natural-hazard interaction"],
+          "notes": "Use videos as augmentation only after report-grounded episode construction."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": true,
+      "requires_redaction_review": true
+    },
+    {
+      "source_id": "acled",
+      "name": "Armed Conflict Location & Event Data (ACLED)",
+      "publisher": "ACLED Analysis, Inc.",
+      "domains": ["war", "conflict"],
+      "homepage": "https://acleddata.com/",
+      "allowed_hosts": ["acleddata.com"],
+      "rights": {
+        "acquisition": "blocked",
+        "redistribution": "blocked",
+        "ai_use": "blocked",
+        "license_expression": "ACLED EULA; corporate license required for commercial entities and AI/ML use is restricted",
+        "terms_url": "https://acleddata.com/eula",
+        "attribution_required": true,
+        "review_notes": "Do not acquire or use for Veritas training/evaluation without a separately reviewed license that expressly permits the intended AI and commercial use. Use UCDP for the default open conflict-data lane."
+      },
+      "truth": {
+        "strength": "moderate",
+        "basis": "Conflict event coding; cataloged only to record a deliberate exclusion decision.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "context_only",
+        "limitations": ["Blocked by source-use policy for this project."]
+      },
+      "artifacts": [],
+      "seed_selections": [],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": false,
+      "requires_redaction_review": false
+    }
+  ]
+}
