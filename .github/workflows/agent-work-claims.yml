@@ -1,0 +1,453 @@
+name: Agent Work Claims
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: agent-work-coordination
+  cancel-in-progress: false
+
+jobs:
+  coordinate:
+    if: >-
+      github.event.issue.pull_request == null &&
+      (startsWith(github.event.comment.body, '/claim ') ||
+       startsWith(github.event.comment.body, '/heartbeat ') ||
+       startsWith(github.event.comment.body, '/release ') ||
+       startsWith(github.event.comment.body, '/blocked ') ||
+       startsWith(github.event.comment.body, '/handoff ') ||
+       startsWith(github.event.comment.body, '/done ') ||
+       github.event.comment.body == '/roadmap-bootstrap')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Apply agent-work transition
+        uses: actions/github-script@v7
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = context.issue.number;
+            const actor = context.actor;
+            const body = process.env.COMMENT_BODY || '';
+            const association = process.env.AUTHOR_ASSOCIATION || '';
+            const commentId = Number(process.env.COMMENT_ID || '0');
+            const allowedAssociations = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+            const marker = '<!-- veritas-agent-work -->';
+            const statusMarker = '<!-- veritas-agent-work-status:v1 -->';
+            const stateLabels = new Set([
+              'work:ready',
+              'work:claimed',
+              'work:blocked',
+              'work:review',
+              'work:done',
+              'work:superseded',
+            ]);
+            const labelDefinitions = {
+              'agent-work': ['5319e7', 'Roadmap work managed by agent coordination automation'],
+              'work:ready': ['1f883d', 'Available for an authorized agent to claim'],
+              'work:claimed': ['fbca04', 'Actively owned by an agent'],
+              'work:blocked': ['d93f0b', 'Blocked by a dependency or explicit blocker'],
+              'work:review': ['0969da', 'Implementation handed off for review or merge'],
+              'work:done': ['8250df', 'Work contract completion condition satisfied'],
+              'work:superseded': ['cfd3d7', 'Replaced by another canonical work item'],
+            };
+
+            function parseContract(issueBody) {
+              const text = issueBody || '';
+              const value = (field) => {
+                const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const match = text.match(new RegExp(`^- \\*\\*${escaped}:\\*\\*\\s*(.+)$`, 'mi'));
+                return match ? match[1].trim().replace(/^`|`$/g, '') : null;
+              };
+              const rawState = (value('State') || 'BLOCKED').toUpperCase();
+              const normalizedState = ['READY', 'CLAIMED', 'BLOCKED', 'REVIEW', 'DONE', 'SUPERSEDED'].includes(rawState)
+                ? rawState
+                : 'BLOCKED';
+              return {
+                enrolled: text.includes(marker),
+                workId: value('Work ID') || `ISSUE-${issueNumber}`,
+                initialState: normalizedState,
+                declaredBranch: value('Branch'),
+                declaredHolder: value('Claim holder'),
+                declaredPr: value('Linked PR'),
+              };
+            }
+
+            function labelForState(state) {
+              return `work:${state.toLowerCase()}`;
+            }
+
+            function renderStatus(status) {
+              return `${statusMarker}\n**Agent work status**\n\n\`\`\`json\n${JSON.stringify(status, null, 2)}\n\`\`\``;
+            }
+
+            function parseStatusComment(comment) {
+              if (!comment?.body?.includes(statusMarker)) return null;
+              if (comment.user?.login !== 'github-actions[bot]') return null;
+              const match = comment.body.match(/```json\s*([\s\S]*?)```/);
+              if (!match) return null;
+              try {
+                const parsed = JSON.parse(match[1]);
+                if (parsed.schema_version !== 'veritas.agent-work-status.v1') return null;
+                if (parsed.issue_number !== issueNumber) return null;
+                return { commentId: comment.id, status: parsed };
+              } catch {
+                return null;
+              }
+            }
+
+            async function ensureLabels() {
+              const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
+                owner,
+                repo,
+                per_page: 100,
+              });
+              const names = new Set(existing.map((item) => item.name));
+              for (const [name, [color, description]] of Object.entries(labelDefinitions)) {
+                if (names.has(name)) continue;
+                try {
+                  await github.rest.issues.createLabel({ owner, repo, name, color, description });
+                } catch (error) {
+                  if (error.status !== 422) throw error;
+                }
+              }
+            }
+
+            async function setStateLabels(number, state, knownLabels = null) {
+              const issue = knownLabels
+                ? { labels: knownLabels }
+                : (await github.rest.issues.get({ owner, repo, issue_number: number })).data;
+              const existing = new Set((issue.labels || []).map((item) => typeof item === 'string' ? item : item.name));
+              for (const name of stateLabels) {
+                if (!existing.has(name)) continue;
+                try {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name });
+                } catch (error) {
+                  if (error.status !== 404) throw error;
+                }
+              }
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: number,
+                labels: ['agent-work', labelForState(state)],
+              });
+            }
+
+            async function getCanonicalStatus(issue, contract) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: issue.number,
+                per_page: 100,
+              });
+              for (const comment of comments.slice().reverse()) {
+                const parsed = parseStatusComment(comment);
+                if (parsed) return parsed;
+              }
+              const now = new Date().toISOString();
+              let state = contract.initialState;
+              const declaredHolder = contract.declaredHolder && !/^none$/i.test(contract.declaredHolder)
+                ? contract.declaredHolder
+                : null;
+              if (state === 'READY' && declaredHolder) state = 'CLAIMED';
+              const declaredPr = contract.declaredPr && !/^none$/i.test(contract.declaredPr)
+                ? Number(String(contract.declaredPr).replace(/^#/, '')) || null
+                : null;
+              return {
+                commentId: null,
+                status: {
+                  schema_version: 'veritas.agent-work-status.v1',
+                  work_id: contract.workId,
+                  issue_number: issue.number,
+                  state,
+                  github_actor: declaredHolder ? 'bootstrap' : null,
+                  agent_id: declaredHolder,
+                  branch: declaredHolder ? contract.declaredBranch : null,
+                  claimed_at: declaredHolder ? now : null,
+                  heartbeat_at: declaredHolder ? now : null,
+                  linked_pr: declaredPr,
+                  linked_pr_head: null,
+                  blocker: null,
+                  released_reason: null,
+                  transition_seq: 0,
+                  last_command_comment_id: null,
+                  updated_at: now,
+                },
+              };
+            }
+
+            async function writeStatus(current, status) {
+              const statusBody = renderStatus(status);
+              if (current.commentId) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: current.commentId,
+                  body: statusBody,
+                });
+                return current.commentId;
+              }
+              const created = await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: statusBody,
+              });
+              return created.data.id;
+            }
+
+            async function audit(message, number = issueNumber) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: number, body: message });
+            }
+
+            function authorized() {
+              return allowedAssociations.has(association);
+            }
+
+            function parseCommand(text) {
+              if (text.includes('\n') || text.includes('\r')) return null;
+              let match;
+              if ((match = text.match(/^\/claim ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127})$/))) {
+                return { kind: 'claim', agent: match[1], branch: match[2] };
+              }
+              if ((match = text.match(/^\/heartbeat ([A-Za-z0-9][A-Za-z0-9._-]{0,63})(?: ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}))?$/))) {
+                return { kind: 'heartbeat', agent: match[1], branch: match[2] || null };
+              }
+              if ((match = text.match(/^\/release ([A-Za-z0-9][A-Za-z0-9._-]{0,63})(?: (.{1,500}))?$/))) {
+                return { kind: 'release', agent: match[1], reason: match[2] || null };
+              }
+              if ((match = text.match(/^\/blocked ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) {
+                return { kind: 'blocked', agent: match[1], reason: match[2] };
+              }
+              if ((match = text.match(/^\/handoff ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) {
+                return { kind: 'handoff', agent: match[1], pr: Number(match[2]) };
+              }
+              if ((match = text.match(/^\/done ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) {
+                return { kind: 'done', agent: match[1], pr: Number(match[2]) };
+              }
+              if (text === '/roadmap-bootstrap') return { kind: 'bootstrap' };
+              return null;
+            }
+
+            async function bootstrapRoadmap() {
+              if (issueNumber !== 150) {
+                await audit('Rejected `/roadmap-bootstrap`: bootstrap is accepted only on coordination root #150.');
+                return;
+              }
+              if (!authorized()) {
+                await audit(`Rejected roadmap bootstrap from unauthorized actor @${actor} (${association || 'NONE'}).`);
+                return;
+              }
+              await ensureLabels();
+              const issues = await github.paginate(github.rest.issues.listForRepo, {
+                owner,
+                repo,
+                state: 'open',
+                per_page: 100,
+              });
+              let initialized = 0;
+              const counts = {};
+              for (const issue of issues) {
+                if (issue.pull_request || !(issue.body || '').includes(marker)) continue;
+                const contract = parseContract(issue.body || '');
+                const current = await getCanonicalStatus(issue, contract);
+                const state = current.status.state;
+                await setStateLabels(issue.number, state, issue.labels || []);
+                if (!current.commentId && ['CLAIMED', 'REVIEW'].includes(state)) {
+                  const status = {
+                    ...current.status,
+                    updated_at: new Date().toISOString(),
+                  };
+                  const statusBody = renderStatus(status);
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    body: statusBody,
+                  });
+                }
+                initialized += 1;
+                counts[state] = (counts[state] || 0) + 1;
+              }
+              await audit(
+                `Roadmap bootstrap complete: initialized ${initialized} agent-work issues. ` +
+                `State counts: ${Object.entries(counts).sort().map(([key, value]) => `${key}=${value}`).join(', ')}. ` +
+                'This synchronization changes coordination metadata only; it does not alter qualification state.'
+              );
+            }
+
+            const command = parseCommand(body);
+            if (!command) {
+              await audit('Rejected malformed agent-work command. Commands must be one exact single line; quoted or multiline command text is not executed.');
+              return;
+            }
+            if (command.kind === 'bootstrap') {
+              await bootstrapRoadmap();
+              return;
+            }
+            if (!authorized()) {
+              await audit(`Rejected agent-work command from unauthorized actor @${actor} (${association || 'NONE'}).`);
+              return;
+            }
+
+            const issue = (await github.rest.issues.get({ owner, repo, issue_number: issueNumber })).data;
+            const contract = parseContract(issue.body || '');
+            if (!contract.enrolled) {
+              await audit('Rejected agent-work command: this issue is not enrolled with the `veritas-agent-work` marker.');
+              return;
+            }
+
+            await ensureLabels();
+            const current = await getCanonicalStatus(issue, contract);
+            const status = { ...current.status };
+            if (status.last_command_comment_id === commentId) return;
+            const now = new Date().toISOString();
+
+            function requireHolder(agent) {
+              if (!status.agent_id || status.agent_id !== agent || (status.github_actor && status.github_actor !== actor && status.github_actor !== 'bootstrap')) {
+                throw new Error(`agent ${agent} is not the current holder`);
+              }
+            }
+
+            async function reject(message) {
+              await audit(`Rejected \`${command.kind}\`: ${message}`);
+            }
+
+            if (command.kind === 'claim') {
+              if (status.state !== 'READY') {
+                await reject(`work is ${status.state}; current holder is ${status.agent_id || 'none'}.`);
+                return;
+              }
+              Object.assign(status, {
+                state: 'CLAIMED',
+                github_actor: actor,
+                agent_id: command.agent,
+                branch: command.branch,
+                claimed_at: now,
+                heartbeat_at: now,
+                linked_pr: null,
+                linked_pr_head: null,
+                blocker: null,
+                released_reason: null,
+              });
+            } else if (command.kind === 'heartbeat') {
+              if (!['CLAIMED', 'BLOCKED', 'REVIEW'].includes(status.state)) {
+                await reject(`heartbeat is valid only for active work, not ${status.state}.`);
+                return;
+              }
+              try { requireHolder(command.agent); } catch (error) { await reject(error.message); return; }
+              if (command.branch && status.branch && command.branch !== status.branch) {
+                await reject(`branch mismatch; recorded branch is ${status.branch}.`);
+                return;
+              }
+              status.heartbeat_at = now;
+            } else if (command.kind === 'release') {
+              if (!['CLAIMED', 'BLOCKED', 'REVIEW'].includes(status.state)) {
+                await reject(`release is invalid from ${status.state}.`);
+                return;
+              }
+              try { requireHolder(command.agent); } catch (error) { await reject(error.message); return; }
+              const target = contract.initialState === 'BLOCKED' ? 'BLOCKED' : 'READY';
+              Object.assign(status, {
+                state: target,
+                github_actor: null,
+                agent_id: null,
+                branch: null,
+                claimed_at: null,
+                heartbeat_at: null,
+                linked_pr: null,
+                linked_pr_head: null,
+                blocker: target === 'BLOCKED' ? status.blocker : null,
+                released_reason: command.reason,
+              });
+            } else if (command.kind === 'blocked') {
+              if (!['CLAIMED', 'REVIEW'].includes(status.state)) {
+                await reject(`blocked transition is valid only from CLAIMED/REVIEW, not ${status.state}.`);
+                return;
+              }
+              try { requireHolder(command.agent); } catch (error) { await reject(error.message); return; }
+              status.state = 'BLOCKED';
+              status.blocker = command.reason;
+              status.heartbeat_at = now;
+            } else if (command.kind === 'handoff') {
+              if (status.state !== 'CLAIMED') {
+                await reject(`handoff requires CLAIMED state, not ${status.state}.`);
+                return;
+              }
+              try { requireHolder(command.agent); } catch (error) { await reject(error.message); return; }
+              let pr;
+              try {
+                pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
+              } catch (error) {
+                await reject(`PR #${command.pr} could not be resolved in this repository.`);
+                return;
+              }
+              if (pr.state !== 'open') {
+                await reject(`PR #${command.pr} is not open.`);
+                return;
+              }
+              if (status.branch && pr.head.ref !== status.branch) {
+                await reject(`PR #${command.pr} head ${pr.head.ref} does not match claimed branch ${status.branch}.`);
+                return;
+              }
+              const prBody = pr.body || '';
+              const primaryWorkId = String(contract.workId).split('/')[0].trim();
+              if (!prBody.includes(`#${issueNumber}`) || !prBody.includes(primaryWorkId)) {
+                await reject(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}.`);
+                return;
+              }
+              status.state = 'REVIEW';
+              status.linked_pr = command.pr;
+              status.linked_pr_head = pr.head.sha;
+              status.heartbeat_at = now;
+            } else if (command.kind === 'done') {
+              if (status.state !== 'REVIEW') {
+                await reject(`done requires REVIEW state, not ${status.state}.`);
+                return;
+              }
+              try { requireHolder(command.agent); } catch (error) { await reject(error.message); return; }
+              if (status.linked_pr && status.linked_pr !== command.pr) {
+                await reject(`PR mismatch; handoff recorded PR #${status.linked_pr}.`);
+                return;
+              }
+              let pr;
+              try {
+                pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
+              } catch (error) {
+                await reject(`PR #${command.pr} could not be resolved in this repository.`);
+                return;
+              }
+              if (!pr.merged_at) {
+                await reject(`PR #${command.pr} is not merged; implementation work remains in REVIEW.`);
+                return;
+              }
+              status.state = 'DONE';
+              status.linked_pr = command.pr;
+              status.linked_pr_head = pr.merge_commit_sha || pr.head.sha;
+              status.heartbeat_at = now;
+            }
+
+            status.transition_seq = Number(status.transition_seq || 0) + 1;
+            status.last_command_comment_id = commentId;
+            status.updated_at = now;
+            await setStateLabels(issueNumber, status.state);
+            await writeStatus(current, status);
+
+            const ownership = status.agent_id ? ` owner=${status.agent_id} (@${status.github_actor})` : '';
+            const prText = status.linked_pr ? ` PR=#${status.linked_pr}` : '';
+            await audit(
+              `Agent-work transition accepted: **${contract.workId}** → **${status.state}**.${ownership}${prText} ` +
+              `Transition #${status.transition_seq}. This is coordination state only and grants no merge, release, sealed, paid-compute, or qualification authority.`
+            );
