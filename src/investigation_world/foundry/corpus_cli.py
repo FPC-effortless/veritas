@@ -7,6 +7,10 @@ from pathlib import Path
 
 import typer
 
+from investigation_world.foundry.document_depth_corpus import (
+    load_document_depth_plan,
+    materialize_document_depth_case,
+)
 from investigation_world.foundry.public_investigation_corpus import (
     StructuredCorpusWriteResult,
     compile_structured_investigation_corpus,
@@ -76,6 +80,43 @@ def compile_structured_cmd(
         manifest_output=output_root / "manifest.json",
     )
     typer.echo(json.dumps(_public_structured_result(result), indent=2))
+
+
+@app.command("materialize-document-depth")
+def materialize_document_depth_cmd(
+    plan: Path,
+    source_pdf: Path,
+    public_root: Path = Path("investigation_corpus/document/public"),
+    verifier_root: Path | None = None,
+    max_bytes: int = 256 * 1024 * 1024,
+    max_pages: int = 1000,
+) -> None:
+    """Physically split one approved investigation PDF into public and sealed page sets."""
+
+    depth_plan = load_document_depth_plan(plan)
+    result = materialize_document_depth_case(
+        depth_plan,
+        source_pdf,
+        public_root=public_root,
+        verifier_root=verifier_root,
+        max_bytes=max_bytes,
+        max_pages=max_pages,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "plan_id": result.plan_id,
+                "case_id": result.public_case_id,
+                "source_id": result.source_id,
+                "source_page_count": result.source_page_count,
+                "public_slices": len(result.public_slices),
+                "ignored_page_count": result.ignored_page_count,
+                "public_manifest": result.public_manifest,
+                "sealed_materialized": verifier_root is not None,
+            },
+            indent=2,
+        )
+    )
 
 
 @app.command("acquire-cdc-nors")
