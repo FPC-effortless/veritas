@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from investigation_world.fidelity import (
     CoverageStatus,
     DimensionCoverage,
-    evaluate_fidelity_compatibility,
     FidelityClaimRequirement,
     FidelityCompatibilityError,
     FidelityDeclaration,
@@ -17,8 +16,9 @@ from investigation_world.fidelity import (
     FidelityPolicyRef,
     FidelityRecord,
     ReproducibilityProfile,
-    require_fidelity_compatibility,
     ResetMode,
+    evaluate_fidelity_compatibility,
+    require_fidelity_compatibility,
     serialize_fidelity_record,
 )
 
