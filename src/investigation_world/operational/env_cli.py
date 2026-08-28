@@ -6,7 +6,7 @@ from typing import Sequence
 
 import typer
 
-from investigation_world.world_portability import main as portability_main
+from ..world_portability import main as portability_main
 
 
 env_app = typer.Typer(
