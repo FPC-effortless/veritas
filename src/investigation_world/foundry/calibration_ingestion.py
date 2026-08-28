@@ -325,8 +325,8 @@ def _fit_distribution_target(
             }.get(rule.statistic)
             if rule.statistic == CalibrationStatistic.QUANTILE:
                 assert rule.quantile is not None
-                query = (  # nosec B608
-                    f"SELECT QUANTILE_CONT({identifier}, {float(rule.quantile)}) "
+                query = (
+                    f"SELECT QUANTILE_CONT({identifier}, {float(rule.quantile)}) "  # nosec B608
                     f"FROM {reader}{where}"
                 )
             elif aggregate is not None:
