@@ -4,6 +4,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from datetime import date, datetime
 from html.parser import HTMLParser
 from typing import Any
@@ -128,7 +129,7 @@ def _parse_date(text: str) -> date:
     match = _DATE_PATTERN.search(text)
     if match is None:
         raise ValueError(f"SEC row is missing a publication date: {text[:120]}")
-    value = match.group(0)
+    value = match.group(0).replace("Sept.", "Sep.")
     for format_string in ("%b. %d, %Y", "%B %d, %Y"):
         try:
             return datetime.strptime(value, format_string).date()
@@ -172,14 +173,13 @@ def parse_sec_litigation_page(
             continue
         case_id = f"LR-{release_match.group(1)}"
         event_date = _parse_date(row_text)
-        title = anchors[0]["text"].strip() or case_id
         release_url = urllib.parse.urljoin(page_url, anchors[0]["href"])
         if _host(release_url) not in _SEC_HOSTS:
             continue
 
         public_artifacts: list[SourceArtifact] = []
         verifier_artifacts: list[SourceArtifact] = []
-        unclassified: list[dict[str, str]] = []
+        unclassified_count = 0
         for index, anchor in enumerate(anchors[1:], start=1):
             link_title = anchor["text"].strip()
             link_url = urllib.parse.urljoin(page_url, anchor["href"])
@@ -187,7 +187,7 @@ def parse_sec_litigation_page(
                 continue
             kind = _artifact_kind(link_title)
             if kind is None:
-                unclassified.append({"title": link_title, "url": link_url})
+                unclassified_count += 1
                 continue
             artifact = SourceArtifact(
                 artifact_id=_artifact_id(case_id, link_title, index),
@@ -203,7 +203,7 @@ def parse_sec_litigation_page(
                     if urllib.parse.urlparse(link_url).path.casefold().endswith(".pdf")
                     else "text/html"
                 ),
-                published_date=event_date,
+                source_published_date=event_date,
                 metadata={"sec_release": case_id, "classification": kind},
             )
             if kind == "verifier":
@@ -219,9 +219,9 @@ def parse_sec_litigation_page(
             PublicInvestigationCase(
                 case_id=case_id,
                 source_id="sec_litigation",
-                title=title,
-                domain="financial_misconduct",
+                title=f"SEC litigation case {case_id}",
                 jurisdiction="United States",
+                domain="financial_misconduct",
                 event_date=event_date,
                 status=InvestigationStatus.COMPLETED,
                 split=DatasetSplit.TRAIN_REFERENCE,
@@ -233,9 +233,8 @@ def parse_sec_litigation_page(
                 public_evidence=public_artifacts,
                 verifier_references=verifier_artifacts,
                 metadata={
-                    "release_url": release_url,
                     "release_number": case_id,
-                    "unclassified_links": unclassified,
+                    "unclassified_link_count": unclassified_count,
                     "label_semantics": "court_or_case_disposition_not_factual_ground_truth",
                 },
             )
@@ -249,7 +248,7 @@ def discover_sec_litigation_dataset(
     max_pages: int = 200,
     maximum_cases: int | None = None,
     delay_seconds: float = 0.15,
-    fetcher: Any = fetch_sec_page,
+    fetcher: Callable[[str], str] = fetch_sec_page,
 ) -> PublicInvestigationDataset:
     if max_pages < 1:
         raise ValueError("max_pages must be positive")
@@ -279,16 +278,14 @@ def discover_sec_litigation_dataset(
     return PublicInvestigationDataset(
         dataset_id=f"sec-litigation-paired-{as_of.isoformat()}",
         version=as_of.strftime("%Y.%m.%d"),
-        created_date=as_of,
+        as_of=as_of,
         source_registry_id="veritas-public-operations-sources",
-        description=(
-            "SEC civil enforcement cases with pre-disposition filings separated from "
-            "later court or case disposition documents. Historical public cases are "
-            "training/reference material, not contamination-resistant holdouts."
-        ),
         cases=cases,
         notes=[
+            "SEC civil enforcement cases with pre-disposition filings separated from later court or case disposition documents.",
+            "Historical public cases are training/reference material, not contamination-resistant holdouts.",
             "SEC complaints contain allegations, not adjudicated facts.",
             "Verifier references encode legal/procedural dispositions, not ground truth about reality.",
+            "Litigation release narrative pages are not emitted into the public projection because they may summarize outcomes.",
         ],
     )
