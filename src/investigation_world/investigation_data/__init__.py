@@ -7,11 +7,13 @@ from .fusion import (
     EvidenceFragment,
     EvidenceModality,
     EvidenceRelation,
+    FusionError,
     FusionManifest,
     FusionReport,
     FusionResult,
     fuse_manifest,
     manifest_digest,
+    validate_fusion_sources,
 )
 from .models import (
     InvestigationEpisodeBundle,
@@ -28,6 +30,7 @@ __all__ = [
     "EvidenceFragment",
     "EvidenceModality",
     "EvidenceRelation",
+    "FusionError",
     "FusionManifest",
     "FusionReport",
     "FusionResult",
@@ -41,5 +44,6 @@ __all__ = [
     "fuse_manifest",
     "load_catalog",
     "manifest_digest",
+    "validate_fusion_sources",
     "write_episode_bundle",
 ]
