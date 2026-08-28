@@ -24,13 +24,13 @@ from investigation_world.experience import (
 from investigation_world.trajectory import (
     EvaluationRecord,
     StateDigest,
+    TaskIdentity,
     TrajectoryEvent,
     TrajectoryReference,
     TrajectoryV2,
     VerifierIdentity,
     VisibilityClass,
     WorldIdentity,
-    TaskIdentity,
 )
 
 
@@ -130,6 +130,44 @@ def test_experience_maturity_fails_closed_on_unknown_readiness() -> None:
         ),
     )
     assert experience.maturity is ExperienceMaturity.E2_DIAGNOSTIC
+
+
+def test_machine_experience_revalidates_copied_readiness_assessments() -> None:
+    stale_pass = ReadinessAssessment().model_copy(
+        update={"status": ReadinessStatus.PASS}
+    )
+    weakened_readiness = ExperienceReadiness(reverification_ready=stale_pass)
+
+    with pytest.raises(ValidationError, match="PASS readiness requires"):
+        MachineExperience(
+            trajectory=_trajectory(),
+            maturity=ExperienceMaturity.E1_REVERIFIABLE,
+            readiness=weakened_readiness,
+        )
+
+
+def test_machine_experience_revalidates_copied_trajectory_identity() -> None:
+    trajectory = _trajectory()
+    stale_task = trajectory.task.model_copy(update={"task_id": "task:mutated"})
+    stale_trajectory = trajectory.model_copy(update={"task": stale_task})
+
+    with pytest.raises(ValidationError, match="trajectory_id does not match"):
+        MachineExperience(trajectory=stale_trajectory)
+
+
+def test_counterfactual_maturity_requires_causal_analysis_readiness() -> None:
+    readiness = ExperienceReadiness(
+        reverification_ready=_pass_assessment("reverification-evidence"),
+        failure_analysis_ready=_pass_assessment("failure-analysis-evidence"),
+        counterfactual_ready=_pass_assessment("counterfactual-evidence"),
+    )
+
+    with pytest.raises(ValidationError, match="causal_analysis_ready"):
+        MachineExperience(
+            trajectory=_trajectory(),
+            maturity=ExperienceMaturity.E3_COUNTERFACTUAL,
+            readiness=readiness,
+        )
 
 
 def test_experience_identity_is_stable_across_diagnostic_annotations() -> None:
