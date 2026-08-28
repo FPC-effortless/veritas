@@ -1,0 +1,23 @@
+{
+  "review_id": "review-csb-imperial-sugar-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2008-05-I-GA",
+  "scope": [
+    "Reference CSB-authored public news, testimony, and video landing pages by external locator only.",
+    "Treat February 8 deployment and February 17 investigation update as context, not completed causal findings.",
+    "Treat March 12 testimony as preliminary institutional findings: secondary dust propagation was supported while the initiating primary event remained unresolved.",
+    "Treat September 24, 2009 findings as final institutional findings and the October 6 Inferno video as post-final communication.",
+    "Do not copy final-report PDFs, transcripts, testimony downloads, source text, media bytes, captions, frames, photographs, or named-person records into the repository.",
+    "Do not promote CSB preliminary or final findings into private ground truth automatically.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises temporal gating, primary-event uncertainty, secondary-explosion reasoning, hypothesis revision, and external evidence references only.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Artifact acquisition, extraction, redistribution, or training use requires a separate artifact-level review.",
+    "Institutional findings remain distinct from omniscient causal truth."
+  ]
+}
