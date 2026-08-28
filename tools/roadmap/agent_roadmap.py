@@ -41,6 +41,19 @@ def load(path: Path) -> dict[str, Any]:
     return value
 
 
+def reserves_exclusive_paths(row: dict[str, Any]) -> bool:
+    """Return whether a row still reserves its declared exclusive paths."""
+    state = row.get("state")
+    if state in ACTIVE:
+        return True
+    claimant = row.get("claimant")
+    return (
+        state == "BLOCKED"
+        and isinstance(claimant, str)
+        and bool(claimant.strip())
+    )
+
+
 def validate(data: dict[str, Any]) -> list[str]:
     """Return deterministic validation errors."""
     errors: list[str] = []
@@ -159,17 +172,19 @@ def validate(data: dict[str, Any]) -> list[str]:
 
     path_owner: dict[str, str] = {}
     for work_id, row in sorted(by_id.items()):
+        if reserves_exclusive_paths(row):
+            ownership = row.get("ownership", {})
+            paths = ownership.get("exclusive_paths", []) if isinstance(ownership, dict) else []
+            for path in paths:
+                if path in path_owner and path_owner[path] != work_id:
+                    errors.append(
+                        f"direct ownership collision on {path}: {path_owner[path]} and {work_id}"
+                    )
+                else:
+                    path_owner[path] = work_id
+
         if row.get("state") not in ACTIVE:
             continue
-        ownership = row.get("ownership", {})
-        paths = ownership.get("exclusive_paths", []) if isinstance(ownership, dict) else []
-        for path in paths:
-            if path in path_owner and path_owner[path] != work_id:
-                errors.append(
-                    f"direct ownership collision on {path}: {path_owner[path]} and {work_id}"
-                )
-            else:
-                path_owner[path] = work_id
         hard_dependencies = row.get("hard_dependencies", [])
         if not isinstance(hard_dependencies, list):
             continue
@@ -373,8 +388,13 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
 
         linked_pr = contract["linked_pr"]
         branch = contract["branch"]
-        claimant = old.get("claimant")
-        status = status_record(repo, number, token) if state in TRUSTED_STATUS_REQUIRED else None
+        claimant: str | None = None
+        comment_count = issue.get("comments", 0)
+        has_comments = isinstance(comment_count, int) and comment_count > 0
+        needs_status_lookup = state in TRUSTED_STATUS_REQUIRED or (
+            state == "BLOCKED" and has_comments
+        )
+        status = status_record(repo, number, token) if needs_status_lookup else None
         if state in TRUSTED_STATUS_REQUIRED and status is None:
             raise RoadmapError(
                 f"issue #{number}: {state} missing trusted coordination status"
