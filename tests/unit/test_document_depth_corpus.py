@@ -19,9 +19,8 @@ from investigation_world.foundry.document_depth_corpus import (
 
 def _make_pdf(path: Path, pages: int = 6) -> None:
     writer = PdfWriter()
-    for index in range(pages):
-        page = writer.add_blank_page(width=612, height=792)
-        page["/VeritasPageMarker"] = str(index + 1)
+    for _ in range(pages):
+        writer.add_blank_page(width=612, height=792)
     with path.open("wb") as handle:
         writer.write(handle)
 
