@@ -1,0 +1,110 @@
+{
+  "plan_id": "usaf-aib-kc46-fairbanks-2025-v1",
+  "version": "1.0.0",
+  "source_id": "usaf_aib",
+  "source_case_id": "KC-46A-TN-18-6054-2025-07-16",
+  "public_title": "Air Force aircraft maintenance mishap investigation",
+  "jurisdiction": "United States",
+  "domain": "military_aviation_operational_safety",
+  "event_date": "2025-07-16",
+  "objective": "Determine the best-supported causal mechanism and substantially contributing factor from the approved factual record without access to the executive conclusion, answer-bearing factual page, or board president's statement of opinion.",
+  "source_url": "https://www.afjag.af.mil/LinkClick.aspx?fileticket=nDggM1_F7Vw%3D&portalid=77",
+  "expected_page_count": 27,
+  "forbidden_public_patterns": [
+    "STATEMENT\\s+OF\\s+OPINION",
+    "\\bOPINION\\s+SUMMARY\\b",
+    "\\bI\\s+find,?\\s+by\\s+a\\s+preponderance\\b",
+    "\\bmishap\\s+was\\s+caused\\b",
+    "Ultimately,\\s+due\\s+to\\s+consistent\\s+heat\\s+and\\s+exhaust\\s+velocity"
+  ],
+  "slices": [
+    {
+      "slice_id": "cover-and-administration",
+      "title": "Cover and administrative front matter",
+      "exposure": "ignore",
+      "page_ranges": [
+        {
+          "start_page": 1,
+          "end_page": 2
+        }
+      ]
+    },
+    {
+      "slice_id": "executive-summary",
+      "title": "Executive summary",
+      "exposure": "verifier",
+      "page_ranges": [
+        {
+          "start_page": 3,
+          "end_page": 3
+        }
+      ]
+    },
+    {
+      "slice_id": "contents-and-acronyms",
+      "title": "Contents and acronyms",
+      "exposure": "ignore",
+      "page_ranges": [
+        {
+          "start_page": 4,
+          "end_page": 6
+        }
+      ]
+    },
+    {
+      "slice_id": "approved-factual-record-a",
+      "title": "Approved factual record part A",
+      "exposure": "public",
+      "page_ranges": [
+        {
+          "start_page": 7,
+          "end_page": 16
+        }
+      ]
+    },
+    {
+      "slice_id": "answer-bearing-factual-page",
+      "title": "Factual page containing explicit causal mechanism",
+      "exposure": "verifier",
+      "page_ranges": [
+        {
+          "start_page": 17,
+          "end_page": 17
+        }
+      ]
+    },
+    {
+      "slice_id": "approved-factual-record-b",
+      "title": "Approved factual record part B",
+      "exposure": "public",
+      "page_ranges": [
+        {
+          "start_page": 18,
+          "end_page": 23
+        }
+      ]
+    },
+    {
+      "slice_id": "statement-of-opinion",
+      "title": "Statement of opinion, cause, and contributing factor",
+      "exposure": "verifier",
+      "page_ranges": [
+        {
+          "start_page": 24,
+          "end_page": 25
+        }
+      ]
+    },
+    {
+      "slice_id": "tab-index",
+      "title": "Index of tabs",
+      "exposure": "ignore",
+      "page_ranges": [
+        {
+          "start_page": 26,
+          "end_page": 27
+        }
+      ]
+    }
+  ]
+}
