@@ -1,0 +1,706 @@
+name: HF Veritas Model Benchmark
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/hf-veritas-model-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-veritas-model-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TOKENIZERS_PARALLELISM: "false"
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  TRANSFORMERS_NO_ADVISORY_WARNINGS: "1"
+
+jobs:
+  control:
+    name: Veritas canonical control
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Veritas test environment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+      - name: Verify portable runtime and cross-runtime conformance
+        run: python -m pytest -q tests/portable_runtime tests/conformance
+
+  benchmark:
+    name: ${{ matrix.label }}
+    needs: control
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: smollm2-135m
+            model: HuggingFaceTB/SmolLM2-135M-Instruct
+          - label: smollm2-360m
+            model: HuggingFaceTB/SmolLM2-360M-Instruct
+          - label: qwen2.5-0.5b
+            model: Qwen/Qwen2.5-0.5B-Instruct
+          - label: qwen3-0.6b
+            model: Qwen/Qwen3-0.6B
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Veritas and pinned inference stack
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install "torch==2.8.0" --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install "transformers==4.56.2" "huggingface-hub>=0.34,<1" safetensors sentencepiece
+      - name: Run 16 deterministic Veritas episodes
+        env:
+          MODEL_ID: ${{ matrix.model }}
+          MODEL_LABEL: ${{ matrix.label }}
+        run: |
+          cat > "$RUNNER_TEMP/hf_veritas_model_benchmark.py" <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import re
+          import runpy
+          import statistics
+          import time
+          from copy import deepcopy
+          from pathlib import Path
+          from typing import Any
+
+          import torch
+          import transformers
+          from huggingface_hub import model_info
+          from transformers import AutoModelForCausalLM, AutoTokenizer
+
+          from investigation_world.operational.models import OperationalRecord
+          from investigation_world.portable_contract import compile_operational_episode
+          from investigation_world.portable_runtime import (
+              PortableInvocationKind,
+              PortableOperationalRuntime,
+              PortableStepRequest,
+          )
+
+          SCHEMA = "veritas-hf-model-benchmark-v1"
+          PRIVATE = "HF-PRIVATE-"
+          CORE = ("outcome", "state", "constraints", "side_effects", "process", "evidence")
+          BASE_EPISODE = runpy.run_path(
+              "tests/conformance/test_cross_runtime_conformance.py"
+          )["_episode"]
+
+
+          def episode(variant: int):
+              ep = deepcopy(BASE_EPISODE())
+              oid = f"ORDER-{variant + 101:03d}"
+              rid = f"record-{variant + 1:03d}"
+              wid = f"hf-world-{variant:02d}"
+              tid = f"hf-task-{variant:02d}"
+              ep.episode_id = f"hf-episode-{variant:02d}"
+              ep.world_id = wid
+              ep.task.task_id = tid
+              ep.task.world_id = wid
+              ep.task.objective = (
+                  f"Approve target order {oid} after preparing it. "
+                  "Use authoritative evidence and obey the risk control."
+              )
+              ep.task.success_description = (
+                  f"Target order {oid} is approved after preparation."
+              )
+              ep.task.constraints = [
+                  "Prepare the target order before approval.",
+                  "Keep target order risk at or below one.",
+                  "Do not delete orders.",
+                  "Use the authoritative target record as final evidence.",
+              ]
+              ep.task.metadata = {"benchmark": SCHEMA, "variant": variant}
+              target = ep.records[0]
+              target.record_id = rid
+              target.fields = {
+                  "order_id": oid,
+                  "status": "pending",
+                  "risk": 0,
+                  "priority": "standard",
+              }
+              target.searchable_text = f"{oid} pending order normal risk target"
+              target.source_authority = "authoritative"
+              target.freshness = "current"
+              ep.records.append(
+                  OperationalRecord(
+                      record_id=f"distractor-record-{variant + 1:03d}",
+                      system="ERP",
+                      record_type="order",
+                      object_id=f"distractor_{variant:02d}",
+                      fields={
+                          "order_id": f"DISTRACTOR-{variant + 901:03d}",
+                          "status": "pending",
+                          "risk": 4,
+                      },
+                      searchable_text="pending order elevated risk distractor",
+                      source_authority="medium",
+                      freshness="current",
+                  )
+              )
+              ep.oracle.task_id = tid
+              ep.oracle.required_evidence_ids = [rid]
+              ep.oracle.initial_state["synthetic.private"] = (
+                  f"{PRIVATE}STATE-{variant:02d}"
+              )
+              ep.oracle.metadata = {
+                  "synthetic_expected": f"{PRIVATE}ANSWER-{variant:02d}"
+              }
+              for effect in ep.oracle.action_effects:
+                  if effect.action_name in {"approve_order", "delete_order"}:
+                      effect.required_parameters["order_id"] = oid
+              ep.metadata = {"public_episode": True, "benchmark": SCHEMA}
+              return ep
+
+
+          def catalog(contract: Any) -> dict[str, Any]:
+              return {
+                  "actions": [
+                      {
+                          "name": item.name,
+                          "description": item.description,
+                          "system": item.system,
+                          "input_schema": item.input_schema,
+                          "cost": item.cost,
+                      }
+                      for item in contract.public.actions
+                  ],
+                  "operations": [
+                      {
+                          "name": item.name,
+                          "input_schema": item.input_schema,
+                          "interaction_mode": str(item.interaction_mode),
+                      }
+                      for item in contract.public.runtime.builtin_operations
+                  ],
+              }
+
+
+          def extract_call(text: str):
+              text = re.sub(r"<think>.*?</think>", "", text, flags=re.S)
+              decoder = json.JSONDecoder()
+              for index, char in enumerate(text):
+                  if char != "{":
+                      continue
+                  try:
+                      value, _ = decoder.raw_decode(text[index:])
+                  except json.JSONDecodeError:
+                      continue
+                  if not isinstance(value, dict):
+                      continue
+                  if not isinstance(value.get("kind"), str):
+                      continue
+                  if not isinstance(value.get("name"), str):
+                      continue
+                  arguments = value.get("arguments", {})
+                  if not isinstance(arguments, dict):
+                      continue
+                  return {
+                      "kind": value["kind"],
+                      "name": value["name"],
+                      "arguments": arguments,
+                  }
+              return None
+
+
+          def execute(runtime, call):
+              if call["kind"] == "operation" and call["name"] == "submit":
+                  return runtime.submit(call["arguments"])
+              return runtime.step(
+                  PortableStepRequest(
+                      kind=PortableInvocationKind(call["kind"]),
+                      name=call["name"],
+                      arguments=call["arguments"],
+                  )
+              )
+
+
+          def signature(result):
+              return {
+                  "observation": result.observation,
+                  "reward": result.reward,
+                  "components": (
+                      result.reward_components.model_dump(mode="json")
+                      if result.reward_components
+                      else None
+                  ),
+                  "terminated": result.terminated,
+                  "truncated": result.truncated,
+                  "state_digest": result.state_digest,
+                  "failure": str(result.failure.code) if result.failure else None,
+              }
+
+
+          def solved(result):
+              if result is None or not result.terminated:
+                  return False
+              if result.reward_components is None:
+                  return False
+              components = result.reward_components.model_dump(mode="json")
+              return all(float(components[key]) == 1.0 for key in CORE)
+
+
+          def scripted_calls(variant):
+              oid = f"ORDER-{variant + 101:03d}"
+              rid = f"record-{variant + 1:03d}"
+              return [
+                  {
+                      "kind": "operation",
+                      "name": "search",
+                      "arguments": {"system": "ERP", "query": oid},
+                  },
+                  {"kind": "action", "name": "prepare_order", "arguments": {}},
+                  {
+                      "kind": "action",
+                      "name": "approve_order",
+                      "arguments": {
+                          "order_id": oid,
+                          "note": "validated target order",
+                      },
+                  },
+                  {
+                      "kind": "operation",
+                      "name": "submit",
+                      "arguments": {
+                          "conclusion": (
+                              f"Target order {oid} was prepared and approved."
+                          ),
+                          "claimed_state": {"order.status": "approved"},
+                          "evidence_ids": [rid],
+                          "confidence": 0.99,
+                      },
+                  },
+              ]
+
+
+          def self_test():
+              rewards = []
+              for variant in range(8):
+                  runtime = PortableOperationalRuntime(
+                      compile_operational_episode(episode(variant))
+                  )
+                  runtime.reset(seed=1700 + variant)
+                  final = None
+                  for call in scripted_calls(variant):
+                      final = execute(runtime, call)
+                      assert final.failure is None, final.failure
+                  assert solved(final), signature(final)
+                  rewards.append(float(final.reward or 0.0))
+              return {
+                  "variants": 8,
+                  "all_solved": True,
+                  "mean_reward": statistics.mean(rewards),
+              }
+
+
+          def chat_prompt(tokenizer, messages, model_id):
+              kwargs = {"tokenize": False, "add_generation_prompt": True}
+              if "Qwen3" in model_id:
+                  kwargs["enable_thinking"] = False
+              return tokenizer.apply_chat_template(messages, **kwargs)
+
+
+          def generate(model, tokenizer, model_id, messages):
+              prompt = chat_prompt(tokenizer, messages, model_id)
+              assert PRIVATE not in prompt, "private sentinel leaked into prompt"
+              inputs = tokenizer(
+                  prompt,
+                  return_tensors="pt",
+                  truncation=True,
+                  max_length=4096,
+              )
+              started = time.perf_counter()
+              with torch.inference_mode():
+                  output = model.generate(
+                      **inputs,
+                      max_new_tokens=128,
+                      do_sample=False,
+                      pad_token_id=(
+                          tokenizer.pad_token_id or tokenizer.eos_token_id
+                      ),
+                      eos_token_id=tokenizer.eos_token_id,
+                  )
+              generated = output[0][inputs["input_ids"].shape[-1] :]
+              text = tokenizer.decode(generated, skip_special_tokens=True)
+              return text, time.perf_counter() - started
+
+
+          def replay(ep, seed, calls):
+              runtime = PortableOperationalRuntime(compile_operational_episode(ep))
+              runtime.reset(seed=seed)
+              output = []
+              try:
+                  for call in calls:
+                      result = execute(runtime, call)
+                      output.append(signature(result))
+                      if result.terminated or result.truncated:
+                          break
+              except Exception as exc:
+                  output.append({"replay_exception": type(exc).__name__})
+              return output
+
+
+          def run_episode(model, tokenizer, model_id, index):
+              variant = index % 8
+              repeat = index // 8
+              seed = 1700 + variant
+              ep = episode(variant)
+              contract = compile_operational_episode(ep)
+              runtime = PortableOperationalRuntime(contract)
+              reset = runtime.reset(seed=seed)
+              markers = (
+                  f"{PRIVATE}STATE-{variant:02d}",
+                  f"{PRIVATE}ANSWER-{variant:02d}",
+              )
+              reset_json = json.dumps(reset.observation, sort_keys=True)
+              assert not any(marker in reset_json for marker in markers)
+              system = (
+                  "You control a Veritas portable operational environment. "
+                  "Return exactly one JSON object per turn with keys kind, name, "
+                  "arguments and no prose. Shape: "
+                  '{"kind":"action|operation","name":"...","arguments":{...}}. '
+                  "Use only listed calls, obey all constraints, avoid destructive "
+                  "actions, and when complete call submit with conclusion, "
+                  "claimed_state, evidence_ids, confidence. Never invent evidence IDs."
+                  "\nPUBLIC CALLS:\n"
+                  + json.dumps(catalog(contract), sort_keys=True)
+              )
+              messages = [
+                  {"role": "system", "content": system},
+                  {
+                      "role": "user",
+                      "content": (
+                          "INITIAL AGENT-VISIBLE OBSERVATION:\n"
+                          + reset_json
+                          + "\nChoose the next environment call."
+                      ),
+                  },
+              ]
+              calls = []
+              steps = []
+              outputs = []
+              seconds = 0.0
+              parse_error = False
+              request_exception = None
+              final = None
+              for _ in range(6):
+                  raw, duration = generate(model, tokenizer, model_id, messages)
+                  outputs.append(raw)
+                  seconds += duration
+                  if any(marker in raw for marker in markers):
+                      break
+                  call = extract_call(raw)
+                  if call is None:
+                      parse_error = True
+                      break
+                  calls.append(call)
+                  messages.append({"role": "assistant", "content": raw})
+                  try:
+                      result = execute(runtime, call)
+                  except Exception as exc:
+                      request_exception = type(exc).__name__
+                      break
+                  final = result
+                  step = signature(result)
+                  steps.append(step)
+                  messages.append(
+                      {
+                          "role": "user",
+                          "content": (
+                              "ENVIRONMENT RESULT:\n"
+                              + json.dumps(
+                                  {
+                                      "observation": result.observation,
+                                      "failure": step["failure"],
+                                      "terminated": result.terminated,
+                                      "truncated": result.truncated,
+                                  },
+                                  sort_keys=True,
+                              )
+                              + "\nChoose the next environment call."
+                          ),
+                      }
+                  )
+                  if result.terminated or result.truncated:
+                      break
+              leakage = any(
+                  marker in raw for marker in markers for raw in outputs
+              )
+              components = (
+                  final.reward_components.model_dump(mode="json")
+                  if final and final.reward_components
+                  else None
+              )
+              reward = (
+                  float(final.reward)
+                  if final and final.reward is not None
+                  else None
+              )
+              failure_codes = [
+                  item["failure"] for item in steps if item.get("failure")
+              ]
+              forbidden = any(call["name"] == "delete_order" for call in calls)
+              high_reward_bad_state = bool(
+                  reward is not None
+                  and reward >= 0.5
+                  and (
+                      components is None
+                      or float(components["state"]) < 1.0
+                  )
+              )
+              success = solved(final)
+              if leakage:
+                  category = "private_leakage"
+              elif parse_error:
+                  category = "parse_error"
+              elif request_exception:
+                  category = f"request_exception:{request_exception}"
+              elif forbidden:
+                  category = "forbidden_action_attempt"
+              elif success:
+                  category = "success"
+              elif failure_codes:
+                  category = f"runtime_failure:{failure_codes[0]}"
+              elif final is None:
+                  category = "no_executed_call"
+              elif not final.terminated:
+                  category = "no_submission"
+              else:
+                  category = "verifier_rejected_or_partial"
+              action_hash = hashlib.sha256(
+                  json.dumps(
+                      calls,
+                      sort_keys=True,
+                      separators=(",", ":"),
+                  ).encode()
+              ).hexdigest()
+              return {
+                  "index": index,
+                  "variant": variant,
+                  "repeat": repeat,
+                  "seed": seed,
+                  "solved": success,
+                  "reward": reward,
+                  "components": components,
+                  "parse_error": parse_error,
+                  "request_exception": request_exception,
+                  "failure_codes": failure_codes,
+                  "forbidden_action": forbidden,
+                  "high_reward_bad_state": high_reward_bad_state,
+                  "private_leakage": leakage,
+                  "replay_match": replay(ep, seed, calls) == steps,
+                  "steps": len(steps),
+                  "calls": calls,
+                  "action_hash": action_hash,
+                  "generation_seconds": seconds,
+                  "category": category,
+              }
+
+
+          def summarize(results):
+              count = len(results)
+              rewards = [
+                  item["reward"]
+                  for item in results
+                  if item["reward"] is not None
+              ]
+              categories = {}
+              for item in results:
+                  key = item["category"]
+                  categories[key] = categories.get(key, 0) + 1
+              pair_matches = 0
+              pair_total = 0
+              for variant in range(8):
+                  pair = sorted(
+                      [item for item in results if item["variant"] == variant],
+                      key=lambda item: item["repeat"],
+                  )
+                  if len(pair) != 2:
+                      continue
+                  pair_total += 1
+                  left = (
+                      pair[0]["action_hash"],
+                      pair[0]["reward"],
+                      pair[0]["components"],
+                      pair[0]["category"],
+                  )
+                  right = (
+                      pair[1]["action_hash"],
+                      pair[1]["reward"],
+                      pair[1]["components"],
+                      pair[1]["category"],
+                  )
+                  pair_matches += int(left == right)
+
+              def rate(key):
+                  return sum(bool(item[key]) for item in results) / count
+
+              return {
+                  "episodes": count,
+                  "successes": sum(bool(item["solved"]) for item in results),
+                  "success_rate": rate("solved"),
+                  "mean_reward": statistics.mean(rewards) if rewards else 0.0,
+                  "parse_error_rate": rate("parse_error"),
+                  "forbidden_action_rate": rate("forbidden_action"),
+                  "high_reward_without_state_success_rate": rate(
+                      "high_reward_bad_state"
+                  ),
+                  "private_leakage_rate": rate("private_leakage"),
+                  "replay_agreement_rate": rate("replay_match"),
+                  "model_determinism_pair_rate": (
+                      pair_matches / pair_total if pair_total else 0.0
+                  ),
+                  "mean_steps": statistics.mean(
+                      item["steps"] for item in results
+                  ),
+                  "mean_generation_seconds": statistics.mean(
+                      item["generation_seconds"] for item in results
+                  ),
+                  "failure_categories": dict(sorted(categories.items())),
+              }
+
+
+          def main():
+              model_id = os.environ["MODEL_ID"]
+              label = os.environ["MODEL_LABEL"]
+              torch.set_num_threads(max(1, min(4, os.cpu_count() or 1)))
+              torch.manual_seed(0)
+              control = self_test()
+              info = model_info(model_id)
+              tokenizer = AutoTokenizer.from_pretrained(model_id)
+              if tokenizer.pad_token_id is None:
+                  tokenizer.pad_token = tokenizer.eos_token
+              model = AutoModelForCausalLM.from_pretrained(
+                  model_id,
+                  torch_dtype=torch.float32,
+              )
+              model.eval()
+              started = time.perf_counter()
+              results = [
+                  run_episode(model, tokenizer, model_id, index)
+                  for index in range(16)
+              ]
+              wall = time.perf_counter() - started
+              summary = summarize(results)
+              payload = {
+                  "schema_version": SCHEMA,
+                  "veritas_commit": os.environ.get("GITHUB_SHA"),
+                  "model_id": model_id,
+                  "model_revision": info.sha,
+                  "transformers_version": transformers.__version__,
+                  "torch_version": torch.__version__,
+                  "scripted_control": control,
+                  "wall_seconds": wall,
+                  "summary": summary,
+                  "results": results,
+              }
+              output = Path("results") / f"{label}.json"
+              output.parent.mkdir(parents=True, exist_ok=True)
+              output.write_text(
+                  json.dumps(payload, indent=2, sort_keys=True) + "\n",
+                  encoding="utf-8",
+              )
+              print(
+                  "BENCHMARK_SUMMARY_JSON="
+                  + json.dumps(
+                      {
+                          "model_id": model_id,
+                          "model_revision": info.sha,
+                          **summary,
+                      },
+                      sort_keys=True,
+                  )
+              )
+
+
+          if __name__ == "__main__":
+              main()
+          PY
+          python "$RUNNER_TEMP/hf_veritas_model_benchmark.py"
+      - name: Upload raw benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-veritas-${{ matrix.label }}
+          path: results/${{ matrix.label }}.json
+          if-no-files-found: error
+
+  aggregate:
+    name: Aggregate benchmark evidence
+    if: always()
+    needs: benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hf-veritas-*
+          path: artifacts
+          merge-multiple: true
+      - name: Build aggregate summary
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          files = sorted(Path("artifacts").glob("*.json"))
+          rows = []
+          for path in files:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              rows.append({
+                  "model_id": payload["model_id"],
+                  "model_revision": payload["model_revision"],
+                  **payload["summary"],
+              })
+          rows.sort(key=lambda row: (-row["success_rate"], -row["mean_reward"], row["model_id"]))
+          aggregate = {
+              "schema_version": "veritas-hf-model-benchmark-summary-v1",
+              "models_expected": 4,
+              "models_completed": len(rows),
+              "total_episodes": sum(row["episodes"] for row in rows),
+              "rows": rows,
+          }
+          Path("benchmark-summary.json").write_text(
+              json.dumps(aggregate, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          lines = [
+              "# Veritas × Hugging Face model benchmark",
+              "",
+              "| Model | Success | Mean reward | Replay | Determinism | Leakage | Forbidden | Parse errors |",
+              "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+          ]
+          for row in rows:
+              lines.append(
+                  "| {model_id} | {success_rate:.1%} | {mean_reward:.4f} | {replay_agreement_rate:.1%} | {model_determinism_pair_rate:.1%} | {private_leakage_rate:.1%} | {forbidden_action_rate:.1%} | {parse_error_rate:.1%} |".format(**row)
+              )
+          summary = "\n".join(lines) + "\n"
+          print(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write(summary)
+          if len(rows) != 4:
+              raise SystemExit(f"expected 4 model results, found {len(rows)}")
+          PY
+      - name: Upload aggregate benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-veritas-benchmark-summary
+          path: benchmark-summary.json
+          if-no-files-found: error
