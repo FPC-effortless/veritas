@@ -1,0 +1,161 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2005-04-I-TX-temporal-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2005-04-I-TX"
+  ],
+  "simulation_start": "2005-03-23T19:20:00Z",
+  "simulation_as_of": "2005-10-28T00:00:00Z",
+  "initial_public_state": {
+    "incident": "March 23, 2005 explosion and fire at the BP Texas City refinery",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct the causal sequence and identify justified contributing factors using only evidence released by the simulated cutoff.",
+    "epistemic_rule": "Institutional findings are evidence about what the institution concluded; they are not automatically private ground truth."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "bp-texas-city",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "BP Texas City Refinery"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "build_timeline",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "request_document",
+    "review_video",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-preliminary-findings-2005-10-27",
+      "source_id": "uscsb",
+      "source_artifact_id": "preliminary-findings-2005-10-27",
+      "case_ids": [
+        "CSB-2005-04-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-issues-preliminary-findings-in-bp-texas-city-refinery-accident-investigators-present-data-in-public-meeting/",
+      "content_ref": "external-document://uscsb/2005-04-I-TX/preliminary-2005-10-27",
+      "available_from": "2005-10-28T00:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-texas-city-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-organizational-findings-2006-10-30",
+      "source_id": "uscsb",
+      "source_artifact_id": "organizational-findings-2006-10-30",
+      "case_ids": [
+        "CSB-2005-04-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-investigation-of-bp-texas-city-refinery-disaster-continues-as-organizational-issues-are-probed/",
+      "content_ref": "external-document://uscsb/2005-04-I-TX/organizational-2006-10-30",
+      "available_from": "2006-10-31T00:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-texas-city-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-final-report-2007-03-20",
+      "source_id": "uscsb",
+      "source_artifact_id": "final-report-2005-04-I-TX",
+      "case_ids": [
+        "CSB-2005-04-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/assets/1/20/csbfinalreportbp.pdf",
+      "content_ref": "external-document://uscsb/2005-04-I-TX/final-report",
+      "available_from": "2007-03-21T00:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-texas-city-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-anatomy-of-a-disaster-2008-03-21",
+      "source_id": "uscsb",
+      "source_artifact_id": "anatomy-of-a-disaster-2008-03-21",
+      "case_ids": [
+        "CSB-2005-04-I-TX"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.youtube.com/watch?v=XuJtdQOU_Z4",
+      "content_ref": "external-media://youtube/XuJtdQOU_Z4",
+      "available_from": "2008-03-22T00:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-texas-city-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "texas-city-preliminary-to-organizational",
+      "source_fragment_id": "csb-organizational-findings-2006-10-30",
+      "target_fragment_id": "csb-preliminary-findings-2005-10-27",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "texas-city-final-to-preliminary",
+      "source_fragment_id": "csb-final-report-2007-03-20",
+      "target_fragment_id": "csb-preliminary-findings-2005-10-27",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "texas-city-video-to-final",
+      "source_fragment_id": "csb-anatomy-of-a-disaster-2008-03-21",
+      "target_fragment_id": "csb-final-report-2007-03-20",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-final-organizational-cause-2007",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final report concluded that organizational and safety deficiencies at multiple levels of BP contributed causally to the Texas City disaster.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-final-report-2007-03-20"
+      ]
+    }
+  ],
+  "actual_timeline": [
+    {
+      "at": "2005-03-23T19:20:00Z",
+      "event": "Explosion and fire at the BP Texas City refinery"
+    }
+  ],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "evidence_grounded_institutional_findings",
+    "require_temporal_justification": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}
