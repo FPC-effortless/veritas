@@ -12,6 +12,11 @@ from .acquisition import (
     verify_receipt,
 )
 from .catalog import catalog_digest, find_source, load_catalog
+from .corpus import (
+    corpus_digest,
+    load_fusion_corpus,
+    validate_fusion_corpus_sources,
+)
 from .fusion import FusionManifest, fuse_manifest, manifest_digest
 from .models import ArtifactReceipt, DocumentPreparationPlan
 from .preparation import (
@@ -185,6 +190,45 @@ def prepare_document_cmd(
                 "public_slices": len(result.public_slices),
                 "oracle_materialized": result.oracle_manifest is not None,
                 "ignored_page_count": result.ignored_page_count,
+            },
+            indent=2,
+        )
+    )
+
+
+@app.command("validate-fusion-corpus")
+def validate_fusion_corpus(
+    index: Path,
+    catalog: Path | None = None,
+) -> None:
+    try:
+        loaded = load_fusion_corpus(index)
+        validate_fusion_corpus_sources(loaded, load_catalog(catalog))
+    except (OSError, ValueError, KeyError) as exc:
+        typer.echo(f"fusion corpus validation refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    phases = {
+        phase: sum(
+            release.phase == phase
+            for case in loaded.cases
+            for release in case.evidence_releases
+        )
+        for phase in ("pre_final", "final", "post_final")
+    }
+    typer.echo(
+        json.dumps(
+            {
+                "valid": True,
+                "corpus_id": loaded.corpus_id,
+                "source_id": loaded.source_id,
+                "cases": len(loaded.cases),
+                "evidence_releases": sum(
+                    len(case.evidence_releases) for case in loaded.cases
+                ),
+                "phases": phases,
+                "date_only_availability_policy": loaded.date_only_availability_policy,
+                "sha256": corpus_digest(loaded),
             },
             indent=2,
         )
