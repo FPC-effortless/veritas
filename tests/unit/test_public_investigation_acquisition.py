@@ -107,3 +107,21 @@ def test_materializer_rejects_unregistered_download_host(tmp_path: Path) -> None
             public_root=tmp_path / "public",
             fetcher=_fake_fetcher,
         )
+
+
+def test_materializer_rejects_non_https_artifact_url(tmp_path: Path) -> None:
+    registry = load_source_registry(REGISTRY_PATH)
+    dataset = load_public_investigation_dataset(SEED_PATH)
+    payload = dataset.model_dump(mode="json")
+    payload["cases"][0]["public_evidence"][0]["url"] = (
+        "http://data.ntsb.gov/evidence.pdf"
+    )
+    modified = PublicInvestigationDataset.model_validate(payload)
+
+    with pytest.raises(ValueError, match="must use https"):
+        materialize_public_investigation_dataset(
+            modified,
+            registry,
+            public_root=tmp_path / "public",
+            fetcher=_fake_fetcher,
+        )
