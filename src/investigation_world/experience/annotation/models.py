@@ -191,8 +191,10 @@ class SemanticAnnotationBundle(AnnotationModel):
         payload = _safe_payload(validated, maximum, root=True)
         if not isinstance(payload, dict):
             raise ValueError("semantic annotation bundle could not be projected")
-        # The full contract identity and evaluator binding commit to private semantics.
-        # Public/buyer-safe consumers receive the independently content-bound public ID instead.
+        # These identities commit to evaluator-private semantics. Safe projections
+        # expose only the independently content-bound public contract identity and
+        # visibility-filtered semantic facts, never a fingerprint of the private bundle.
+        payload.pop("bundle_id", None)
         payload.pop("contract_id", None)
         payload.pop("evaluator_semantics_id", None)
         return payload
