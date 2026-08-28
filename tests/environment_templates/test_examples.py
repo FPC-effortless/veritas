@@ -109,6 +109,25 @@ def test_machine_experience_example_uses_merged_canonical_adapter_without_overcl
     assert "HiddenOracle" not in repr(first.public_payload())
 
 
+def test_machine_experience_public_identity_ignores_private_initial_state() -> None:
+    first_marker = "private-evaluator-marker-alpha"
+    second_marker = "private-evaluator-marker-beta"
+    first = examples.run_machine_experience_ready(
+        private_initial_marker=first_marker
+    )
+    second = examples.run_machine_experience_ready(
+        private_initial_marker=second_marker
+    )
+
+    assert first.trajectory.initial_state == second.trajectory.initial_state
+    assert first.trajectory.trajectory_id == second.trajectory.trajectory_id
+    assert first.experience_id == second.experience_id
+    first_public = repr(first.public_payload())
+    second_public = repr(second.public_payload())
+    assert first_marker not in first_public
+    assert second_marker not in second_public
+
+
 def test_examples_package_has_installable_metadata_and_complete_template_docs() -> None:
     pyproject = (EXAMPLE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     readme = (EXAMPLE_ROOT / "README.md").read_text(encoding="utf-8")
