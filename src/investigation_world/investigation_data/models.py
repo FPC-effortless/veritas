@@ -167,6 +167,102 @@ class SourceCatalog(StrictModel):
         return self
 
 
+class DocumentPageExposure(str, Enum):
+    PUBLIC = "public"
+    ORACLE = "oracle"
+    IGNORE = "ignore"
+
+
+class PageRange(StrictModel):
+    start_page: int = Field(ge=1)
+    end_page: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def validate_order(self) -> "PageRange":
+        if self.end_page < self.start_page:
+            raise ValueError("end_page must be greater than or equal to start_page")
+        return self
+
+
+class DocumentSliceSpec(StrictModel):
+    slice_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    title: str = Field(min_length=1)
+    exposure: DocumentPageExposure
+    page_ranges: tuple[PageRange, ...] = Field(min_length=1)
+
+
+class DocumentPreparationPlan(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    plan_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    version: str = Field(min_length=1)
+    source_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    artifact_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    source_case_id: str = Field(min_length=1)
+    public_title: str = Field(min_length=1)
+    domain: str = Field(min_length=1)
+    event_date: date
+    objective: str = Field(min_length=1)
+    expected_page_count: int = Field(ge=1)
+    expected_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    slices: tuple[DocumentSliceSpec, ...] = Field(min_length=1)
+    forbidden_public_patterns: tuple[str, ...] = ()
+    text_scan_required: bool = True
+
+    @model_validator(mode="after")
+    def validate_page_partition(self) -> "DocumentPreparationPlan":
+        slice_ids = [item.slice_id for item in self.slices]
+        if len(slice_ids) != len(set(slice_ids)):
+            raise ValueError("document slice IDs must be unique")
+
+        assigned: dict[int, str] = {}
+        exposures: set[DocumentPageExposure] = set()
+        for item in self.slices:
+            exposures.add(item.exposure)
+            for page_range in item.page_ranges:
+                if page_range.end_page > self.expected_page_count:
+                    raise ValueError(
+                        f"slice {item.slice_id!r} exceeds expected_page_count="
+                        f"{self.expected_page_count}"
+                    )
+                for page in range(page_range.start_page, page_range.end_page + 1):
+                    previous = assigned.get(page)
+                    if previous is not None:
+                        raise ValueError(
+                            f"page {page} is assigned to both {previous!r} and {item.slice_id!r}"
+                        )
+                    assigned[page] = item.slice_id
+
+        missing = [page for page in range(1, self.expected_page_count + 1) if page not in assigned]
+        if missing:
+            raise ValueError(f"document plan leaves pages unclassified: {missing}")
+        if DocumentPageExposure.PUBLIC not in exposures:
+            raise ValueError("document plan must contain at least one public slice")
+        if DocumentPageExposure.ORACLE not in exposures:
+            raise ValueError("document plan must contain at least one oracle slice")
+        if any(not pattern.strip() for pattern in self.forbidden_public_patterns):
+            raise ValueError("forbidden_public_patterns may not contain blank patterns")
+        return self
+
+
+class PreparedDocumentSlice(StrictModel):
+    slice_id: str
+    title: str
+    exposure: DocumentPageExposure
+    page_count: int = Field(ge=1)
+    local_path: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DocumentPreparationResult(StrictModel):
+    plan_id: str
+    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    public_slices: tuple[PreparedDocumentSlice, ...]
+    oracle_slices: tuple[PreparedDocumentSlice, ...]
+    ignored_page_count: int = Field(ge=0)
+    public_manifest: str
+    oracle_manifest: str | None = None
+
+
 class Sensitivity(str, Enum):
     PUBLIC = "public"
     RESTRICTED = "restricted"
