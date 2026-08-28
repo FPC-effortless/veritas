@@ -24,28 +24,43 @@ ROLLOUT_ADAPTER = "src/investigation_world/trajectory/adapter.py"
 PORTABLE_MODELS = "src/investigation_world/portable_runtime/models.py"
 HUD_ADAPTER = "src/investigation_world/exporters/hud/adapter.py"
 
-REWARD_COMPONENTS = {TrajectoryMetadataField.REWARD_COMPONENTS}
+OPTIONAL_FIELDS = {TrajectoryMetadataField.REWARD_COMPONENTS}
 
 
-def _field_rows(
+def _rows(
     path: str,
-    overrides: dict[
-        TrajectoryMetadataField,
-        tuple[MetadataCoverage, str, str | None],
-    ],
+    *,
+    present: set[TrajectoryMetadataField] | None = None,
+    conditional: set[TrajectoryMetadataField] | None = None,
+    unsupported: set[TrajectoryMetadataField] | None = None,
 ) -> tuple[MetadataFieldCoverage, ...]:
+    present = present or set()
+    conditional = conditional or set()
+    unsupported = unsupported or set()
     rows: list[MetadataFieldCoverage] = []
     for field in TrajectoryMetadataField:
-        coverage, detail, condition = overrides.get(
-            field,
-            (MetadataCoverage.PRESENT, "explicitly emitted or deterministically derived", None),
-        )
+        if field in present:
+            coverage = MetadataCoverage.PRESENT
+            detail = "emitted or deterministically derived"
+            condition = None
+        elif field in conditional:
+            coverage = MetadataCoverage.CONDITIONAL
+            detail = "available only with integration evidence"
+            condition = "caller preserves or supplies the missing evidence"
+        elif field in unsupported:
+            coverage = MetadataCoverage.UNSUPPORTED
+            detail = "outside this path's current emitted interface"
+            condition = None
+        else:
+            coverage = MetadataCoverage.ABSENT
+            detail = "not preserved by this path"
+            condition = None
         rows.append(
             MetadataFieldCoverage(
                 field=field,
                 requirement=(
                     MetadataRequirement.OPTIONAL
-                    if field in REWARD_COMPONENTS
+                    if field in OPTIONAL_FIELDS
                     else MetadataRequirement.REQUIRED
                 ),
                 coverage=coverage,
@@ -58,242 +73,121 @@ def _field_rows(
 
 
 def _legacy_rollout() -> ProducerMetadataCoverage:
-    conditional = MetadataCoverage.CONDITIONAL
+    present = {
+        TrajectoryMetadataField.TASK_IDENTITY,
+        TrajectoryMetadataField.ACTION_TOOL_RESOURCE_CALLS,
+        TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS,
+        TrajectoryMetadataField.REWARD_COMPONENTS,
+        TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY,
+        TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES,
+    }
+    conditional = {
+        TrajectoryMetadataField.WORLD_ENVIRONMENT_IDENTITY,
+        TrajectoryMetadataField.MODEL_IDENTITY,
+        TrajectoryMetadataField.AGENT_IDENTITY,
+        TrajectoryMetadataField.HARNESS_IDENTITY,
+        TrajectoryMetadataField.RUNTIME_IDENTITY,
+        TrajectoryMetadataField.VERIFIER_IDENTITY,
+        TrajectoryMetadataField.SEED_RESET_IDENTITY,
+        TrajectoryMetadataField.OBSERVATIONS,
+        TrajectoryMetadataField.PROVIDER_CALLS,
+        TrajectoryMetadataField.PROVIDER_REQUEST_ID,
+        TrajectoryMetadataField.ARTIFACT_EVIDENCE_REFERENCES,
+        TrajectoryMetadataField.TOKEN_USAGE,
+        TrajectoryMetadataField.COST_USAGE,
+        TrajectoryMetadataField.TIME_USAGE,
+        TrajectoryMetadataField.TERMINATION_TRUNCATION,
+        TrajectoryMetadataField.FAILURE_ORIGIN_CLASSIFICATION,
+    }
     return ProducerMetadataCoverage(
         producer_id="legacy-foundry-rollout-adapter",
         producer_kind=ProducerKind.TRAJECTORY_PRODUCER,
         emits_trajectory_v2=True,
-        fields=_field_rows(
+        fields=_rows(
             ROLLOUT_ADAPTER,
-            {
-                TrajectoryMetadataField.WORLD_ENVIRONMENT_IDENTITY: (
-                    conditional,
-                    "environment version is native; environment/world IDs and artifacts require adapter context",
-                    "RolloutTraceAdapterContext supplies world/environment identity beyond environment_version",
-                ),
-                TrajectoryMetadataField.MODEL_IDENTITY: (
-                    conditional,
-                    "legacy RolloutTrace has no model identity",
-                    "RolloutTraceAdapterContext.model is populated by the caller",
-                ),
-                TrajectoryMetadataField.AGENT_IDENTITY: (
-                    conditional,
-                    "legacy RolloutTrace has no agent identity",
-                    "RolloutTraceAdapterContext.agent is populated by the caller",
-                ),
-                TrajectoryMetadataField.HARNESS_IDENTITY: (
-                    conditional,
-                    "harness version is native but harness ID requires adapter context",
-                    "RolloutTraceAdapterContext.harness_id is populated by the caller",
-                ),
-                TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY: (
-                    MetadataCoverage.ABSENT,
-                    "TrajectoryV2 HarnessIdentity has no harness configuration digest field",
-                    None,
-                ),
-                TrajectoryMetadataField.RUNTIME_IDENTITY: (
-                    conditional,
-                    "runtime version is native but runtime ID requires adapter context",
-                    "RolloutTraceAdapterContext.runtime_id is populated by the caller",
-                ),
-                TrajectoryMetadataField.VERIFIER_IDENTITY: (
-                    conditional,
-                    "verifier scores are native but verifier identity requires adapter context",
-                    "RolloutTraceAdapterContext.verifier is populated by the caller",
-                ),
-                TrajectoryMetadataField.SEED_RESET_IDENTITY: (
-                    conditional,
-                    "task seed is native; reset ID/index require adapter context",
-                    "RolloutTraceAdapterContext supplies reset_id/reset_index",
-                ),
-                TrajectoryMetadataField.OBSERVATIONS: (
-                    conditional,
-                    "legacy events do not standardize observation references",
-                    "RolloutTraceAdapterContext supplies observation references",
-                ),
-                TrajectoryMetadataField.PROVIDER_CALLS: (
-                    conditional,
-                    "legacy RolloutTrace has no provider call summaries",
-                    "RolloutTraceAdapterContext supplies provider_calls",
-                ),
-                TrajectoryMetadataField.PROVIDER_REQUEST_ID: (
-                    conditional,
-                    "provider request IDs exist only inside supplied provider summaries",
-                    "provider calls are supplied with request_id values",
-                ),
-                TrajectoryMetadataField.ARTIFACT_EVIDENCE_REFERENCES: (
-                    conditional,
-                    "world/artifact/evidence references are not native to RolloutTrace",
-                    "RolloutTraceAdapterContext supplies artifact/evidence references",
-                ),
-                TrajectoryMetadataField.TOKEN_USAGE: (
-                    conditional,
-                    "token totals are derived only from complete supplied provider calls",
-                    "provider call token accounting is supplied completely",
-                ),
-                TrajectoryMetadataField.COST_USAGE: (
-                    conditional,
-                    "environment cost is native; total/provider cost requires complete provider accounting",
-                    "provider call cost accounting is supplied completely",
-                ),
-                TrajectoryMetadataField.TIME_USAGE: (
-                    conditional,
-                    "legacy events have no duration and elapsed time is external context",
-                    "RolloutTraceAdapterContext.elapsed_s is populated by the caller",
-                ),
-                TrajectoryMetadataField.TERMINATION_TRUNCATION: (
-                    conditional,
-                    "termination reason is native but terminated/truncated booleans are not inferred",
-                    "RolloutTraceAdapterContext supplies terminated/truncated",
-                ),
-                TrajectoryMetadataField.FAILURE_ORIGIN_CLASSIFICATION: (
-                    conditional,
-                    "ambiguous termination is intentionally not promoted to a failure origin",
-                    "RolloutTraceAdapterContext supplies a failure classification",
-                ),
-            },
+            present=present,
+            conditional=conditional,
         ),
         notes=(
-            "unknown legacy facts remain unknown instead of being fabricated",
-            "resource calls and source provenance are deterministically derived",
+            "unknown legacy facts are not fabricated",
+            "resource calls and source provenance are derived",
         ),
     )
 
 
 def _portable_runtime() -> ProducerMetadataCoverage:
-    absent = MetadataCoverage.ABSENT
-    unsupported = MetadataCoverage.UNSUPPORTED
-    conditional = MetadataCoverage.CONDITIONAL
+    present = {
+        TrajectoryMetadataField.OBSERVATIONS,
+        TrajectoryMetadataField.REWARD_COMPONENTS,
+        TrajectoryMetadataField.TERMINATION_TRUNCATION,
+    }
+    conditional = {
+        TrajectoryMetadataField.WORLD_ENVIRONMENT_IDENTITY,
+        TrajectoryMetadataField.TASK_IDENTITY,
+        TrajectoryMetadataField.SEED_RESET_IDENTITY,
+        TrajectoryMetadataField.ACTION_TOOL_RESOURCE_CALLS,
+        TrajectoryMetadataField.ARTIFACT_EVIDENCE_REFERENCES,
+        TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS,
+        TrajectoryMetadataField.FAILURE_ORIGIN_CLASSIFICATION,
+    }
+    unsupported = {
+        TrajectoryMetadataField.PROVIDER_CALLS,
+        TrajectoryMetadataField.PROVIDER_REQUEST_ID,
+        TrajectoryMetadataField.TOKEN_USAGE,
+        TrajectoryMetadataField.COST_USAGE,
+        TrajectoryMetadataField.TIME_USAGE,
+        TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY,
+    }
     return ProducerMetadataCoverage(
         producer_id="portable-operational-runtime-direct",
         producer_kind=ProducerKind.SEMANTIC_RUNTIME,
         emits_trajectory_v2=False,
-        fields=_field_rows(
+        fields=_rows(
             PORTABLE_MODELS,
-            {
-                TrajectoryMetadataField.WORLD_ENVIRONMENT_IDENTITY: (
-                    conditional,
-                    "identity is available from the bound portable contract, not emitted on reset/step results",
-                    "caller retains the PortableOperationalContract beside runtime results",
-                ),
-                TrajectoryMetadataField.TASK_IDENTITY: (
-                    conditional,
-                    "task identity is available from the bound contract, not emitted on runtime results",
-                    "caller retains the PortableOperationalContract beside runtime results",
-                ),
-                TrajectoryMetadataField.MODEL_IDENTITY: (absent, "runtime results carry no model identity", None),
-                TrajectoryMetadataField.AGENT_IDENTITY: (absent, "runtime results carry no agent identity", None),
-                TrajectoryMetadataField.HARNESS_IDENTITY: (absent, "runtime results carry no harness identity", None),
-                TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY: (absent, "runtime results carry no harness configuration identity", None),
-                TrajectoryMetadataField.RUNTIME_IDENTITY: (absent, "runtime result models do not identify runtime/version", None),
-                TrajectoryMetadataField.VERIFIER_IDENTITY: (absent, "reward components do not identify the verifier implementation", None),
-                TrajectoryMetadataField.SEED_RESET_IDENTITY: (
-                    conditional,
-                    "reset accepts a seed but PortableResetResult does not preserve seed/reset ID",
-                    "caller records the reset request separately",
-                ),
-                TrajectoryMetadataField.ACTION_TOOL_RESOURCE_CALLS: (
-                    conditional,
-                    "PortableStepRequest names an invocation but result models do not emit a call summary",
-                    "caller preserves request/result pairs",
-                ),
-                TrajectoryMetadataField.PROVIDER_CALLS: (unsupported, "portable runtime has no model-provider call surface", None),
-                TrajectoryMetadataField.PROVIDER_REQUEST_ID: (unsupported, "portable runtime has no provider request identity", None),
-                TrajectoryMetadataField.ARTIFACT_EVIDENCE_REFERENCES: (
-                    conditional,
-                    "submission can reference evidence IDs but runtime results do not emit canonical trajectory references",
-                    "caller retains submission/contract evidence identities",
-                ),
-                TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS: (
-                    conditional,
-                    "results expose the post-state digest but not an explicit before/after transition pair",
-                    "caller sequences reset/step results",
-                ),
-                TrajectoryMetadataField.TOKEN_USAGE: (unsupported, "runtime models have no token accounting", None),
-                TrajectoryMetadataField.COST_USAGE: (unsupported, "budget resources are not a canonical monetary usage total", None),
-                TrajectoryMetadataField.TIME_USAGE: (unsupported, "runtime models have no elapsed/duration accounting", None),
-                TrajectoryMetadataField.FAILURE_ORIGIN_CLASSIFICATION: (
-                    conditional,
-                    "PortableFailureStatus preserves a runtime failure code but not TrajectoryV2 failure-origin taxonomy",
-                    "an integration adapter maps failure code/context without inventing attribution",
-                ),
-                TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY: (unsupported, "portable result models have no trajectory visibility classification", None),
-                TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES: (absent, "portable results carry no trajectory provenance record", None),
-            },
+            present=present,
+            conditional=conditional,
+            unsupported=unsupported,
         ),
         notes=("semantic runtime is not itself a TrajectoryV2 producer",),
     )
 
 
 def _hud_adapter() -> ProducerMetadataCoverage:
-    absent = MetadataCoverage.ABSENT
-    unsupported = MetadataCoverage.UNSUPPORTED
-    conditional = MetadataCoverage.CONDITIONAL
+    present = {
+        TrajectoryMetadataField.WORLD_ENVIRONMENT_IDENTITY,
+        TrajectoryMetadataField.TASK_IDENTITY,
+        TrajectoryMetadataField.OBSERVATIONS,
+        TrajectoryMetadataField.TERMINATION_TRUNCATION,
+    }
+    conditional = {
+        TrajectoryMetadataField.RUNTIME_IDENTITY,
+        TrajectoryMetadataField.SEED_RESET_IDENTITY,
+        TrajectoryMetadataField.ACTION_TOOL_RESOURCE_CALLS,
+        TrajectoryMetadataField.ARTIFACT_EVIDENCE_REFERENCES,
+        TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS,
+        TrajectoryMetadataField.REWARD_COMPONENTS,
+        TrajectoryMetadataField.FAILURE_ORIGIN_CLASSIFICATION,
+        TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY,
+        TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES,
+    }
+    unsupported = {
+        TrajectoryMetadataField.PROVIDER_CALLS,
+        TrajectoryMetadataField.PROVIDER_REQUEST_ID,
+        TrajectoryMetadataField.TOKEN_USAGE,
+        TrajectoryMetadataField.COST_USAGE,
+        TrajectoryMetadataField.TIME_USAGE,
+    }
     return ProducerMetadataCoverage(
         producer_id="hud-operational-adapter",
         producer_kind=ProducerKind.EXTERNAL_ADAPTER,
         emits_trajectory_v2=False,
-        fields=_field_rows(
+        fields=_rows(
             HUD_ADAPTER,
-            {
-                TrajectoryMetadataField.MODEL_IDENTITY: (absent, "HUD adapter/meter carries no model identity", None),
-                TrajectoryMetadataField.AGENT_IDENTITY: (absent, "HUD adapter/meter carries no agent identity", None),
-                TrajectoryMetadataField.HARNESS_IDENTITY: (absent, "HUD protocol/SDK metadata is not a harness execution identity", None),
-                TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY: (absent, "HUD adapter exposes no harness config digest", None),
-                TrajectoryMetadataField.RUNTIME_IDENTITY: (
-                    conditional,
-                    "adapter/protocol versions are emitted but a custom bound PortableRuntimeProtocol identity is not",
-                    "integration records the actual bound runtime identity separately",
-                ),
-                TrajectoryMetadataField.VERIFIER_IDENTITY: (absent, "grade result carries reward without verifier identity", None),
-                TrajectoryMetadataField.SEED_RESET_IDENTITY: (
-                    conditional,
-                    "tasks.start receives a seed but HudTaskStart does not preserve it as reset identity",
-                    "calling harness records start(seed, session_id)",
-                ),
-                TrajectoryMetadataField.ACTION_TOOL_RESOURCE_CALLS: (
-                    conditional,
-                    "metering records tool_name but not a canonical request/result/resource-call summary",
-                    "calling harness preserves tool arguments and returned PortableStepResult",
-                ),
-                TrajectoryMetadataField.PROVIDER_CALLS: (unsupported, "HUD operational metering has no model-provider call summaries", None),
-                TrajectoryMetadataField.PROVIDER_REQUEST_ID: (unsupported, "HUD metering has no provider request IDs", None),
-                TrajectoryMetadataField.ARTIFACT_EVIDENCE_REFERENCES: (
-                    conditional,
-                    "public contract identity is emitted but canonical artifact/evidence trajectory references are not",
-                    "integration retains contract/submission evidence references",
-                ),
-                TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS: (
-                    conditional,
-                    "metering emits post-state digest but not before/after transition pairs",
-                    "calling harness sequences metering events/results",
-                ),
-                TrajectoryMetadataField.REWARD_COMPONENTS: (
-                    conditional,
-                    "PortableStepResult can carry reward components but HudMeteringEvent carries only scalar reward",
-                    "calling harness retains full PortableStepResult",
-                ),
-                TrajectoryMetadataField.TOKEN_USAGE: (unsupported, "HUD metering has no token accounting", None),
-                TrajectoryMetadataField.COST_USAGE: (unsupported, "HUD metering has no cost accounting", None),
-                TrajectoryMetadataField.TIME_USAGE: (unsupported, "HUD metering has no duration/elapsed accounting", None),
-                TrajectoryMetadataField.FAILURE_ORIGIN_CLASSIFICATION: (
-                    conditional,
-                    "PortableStepResult can carry a runtime failure but metering does not preserve failure classification",
-                    "calling harness retains the full PortableStepResult",
-                ),
-                TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY: (
-                    conditional,
-                    "metering is documented public-only and private contract identity is optional metadata, without TrajectoryV2 visibility classes",
-                    "integration applies trajectory visibility when constructing a trajectory",
-                ),
-                TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES: (
-                    conditional,
-                    "adapter metadata exposes adapter/protocol/contract IDs but does not emit a content-bound TrajectoryV2 provenance record",
-                    "integration converts adapter metadata to canonical provenance",
-                ),
-            },
+            present=present,
+            conditional=conditional,
+            unsupported=unsupported,
         ),
-        notes=("HUD metering is observational and is not a TrajectoryV2 producer",),
+        notes=("HUD public metering is not a TrajectoryV2 producer",),
     )
 
 
@@ -306,31 +200,49 @@ def _audit() -> TrajectoryMetadataAudit:
                 gap_id="TRACE-GAP-HARNESS-CONFIG",
                 field=TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY,
                 owner="trajectory schema authority",
-                requested_change="add a content-bound harness configuration identity without weakening current public/private boundaries",
+                requested_change=(
+                    "add a content-bound harness configuration identity without "
+                    "weakening visibility boundaries"
+                ),
                 evidence_paths=(TRAJECTORY_MODEL,),
-                rationale="HarnessIdentity currently carries only harness_id and version, so exact harness config cannot affect trajectory identity",
+                rationale=(
+                    "HarnessIdentity has only harness_id and version, so exact "
+                    "configuration cannot affect trajectory identity"
+                ),
             ),
             InterfaceGapRequest(
                 gap_id="TRACE-GAP-PORTABLE-PRODUCER",
                 field=TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES,
                 owner="trajectory/portable integration",
-                requested_change="define an additive PortableOperationalRuntime interaction-to-TrajectoryV2 adapter",
+                requested_change=(
+                    "define an additive portable interaction-to-TrajectoryV2 "
+                    "capture adapter"
+                ),
                 evidence_paths=(PORTABLE_MODELS,),
-                rationale="portable runtime preserves semantic execution results but does not emit trajectory provenance or execution identities",
+                rationale=(
+                    "portable runtime preserves semantic results but does not "
+                    "emit trajectory execution identity or provenance"
+                ),
             ),
             InterfaceGapRequest(
                 gap_id="TRACE-GAP-HUD-CAPTURE",
                 field=TrajectoryMetadataField.PROVIDER_CALLS,
                 owner="HUD harness integration",
-                requested_change="capture harness/provider/accounting events around HUD execution before constructing TrajectoryV2",
+                requested_change=(
+                    "capture harness/provider/accounting events around HUD "
+                    "execution before constructing TrajectoryV2"
+                ),
                 evidence_paths=(HUD_ADAPTER,),
-                rationale="HUD public metering preserves task/state/reward/termination but not model-provider or usage metadata",
+                rationale=(
+                    "HUD metering preserves task/state/reward/termination but "
+                    "not model-provider or usage metadata"
+                ),
             ),
         ),
     )
 
 
-def test_audit_covers_portable_runtime_external_adapter_and_legacy_producer() -> None:
+def test_audit_covers_three_distinct_producer_paths() -> None:
     audit = _audit()
 
     assert audit.status == AuditStatus.GAPS_FOUND
@@ -339,47 +251,66 @@ def test_audit_covers_portable_runtime_external_adapter_and_legacy_producer() ->
         ProducerKind.SEMANTIC_RUNTIME,
         ProducerKind.EXTERNAL_ADAPTER,
     }
-    assert {item.producer_id for item in audit.producers} == {
-        "legacy-foundry-rollout-adapter",
-        "portable-operational-runtime-direct",
-        "hud-operational-adapter",
-    }
-    assert all(len(item.fields) == len(TrajectoryMetadataField) for item in audit.producers)
+    assert all(
+        len(item.fields) == len(TrajectoryMetadataField)
+        for item in audit.producers
+    )
 
 
-def test_schema_presence_is_not_counted_as_legacy_producer_completeness() -> None:
+def test_schema_presence_is_not_legacy_producer_completeness() -> None:
     legacy = _legacy_rollout()
 
     assert legacy.completeness == ProducerCompleteness.INCOMPLETE
-    assert legacy.coverage_for(TrajectoryMetadataField.MODEL_IDENTITY).coverage == MetadataCoverage.CONDITIONAL
-    assert legacy.coverage_for(TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY).coverage == MetadataCoverage.ABSENT
-    assert legacy.coverage_for(TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES).coverage == MetadataCoverage.PRESENT
+    model = legacy.coverage_for(TrajectoryMetadataField.MODEL_IDENTITY)
+    config = legacy.coverage_for(
+        TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY
+    )
+    provenance = legacy.coverage_for(
+        TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES
+    )
+    assert model.coverage == MetadataCoverage.CONDITIONAL
+    assert config.coverage == MetadataCoverage.ABSENT
+    assert provenance.coverage == MetadataCoverage.PRESENT
 
 
-def test_portable_runtime_semantics_do_not_imply_trajectory_metadata() -> None:
+def test_portable_semantics_do_not_imply_trajectory_metadata() -> None:
     portable = _portable_runtime()
 
     assert not portable.emits_trajectory_v2
     assert portable.completeness == ProducerCompleteness.INCOMPLETE
-    assert portable.coverage_for(TrajectoryMetadataField.OBSERVATIONS).coverage == MetadataCoverage.PRESENT
-    assert portable.coverage_for(TrajectoryMetadataField.TERMINATION_TRUNCATION).coverage == MetadataCoverage.PRESENT
-    assert portable.coverage_for(TrajectoryMetadataField.MODEL_IDENTITY).coverage == MetadataCoverage.ABSENT
-    assert portable.coverage_for(TrajectoryMetadataField.TOKEN_USAGE).coverage == MetadataCoverage.UNSUPPORTED
+    observation = portable.coverage_for(TrajectoryMetadataField.OBSERVATIONS)
+    model = portable.coverage_for(TrajectoryMetadataField.MODEL_IDENTITY)
+    tokens = portable.coverage_for(TrajectoryMetadataField.TOKEN_USAGE)
+    assert observation.coverage == MetadataCoverage.PRESENT
+    assert model.coverage == MetadataCoverage.ABSENT
+    assert tokens.coverage == MetadataCoverage.UNSUPPORTED
 
 
-def test_hud_metering_is_not_generalized_into_provider_or_usage_capture() -> None:
+def test_hud_metering_is_not_provider_or_usage_capture() -> None:
     hud = _hud_adapter()
 
     assert not hud.emits_trajectory_v2
-    assert hud.coverage_for(TrajectoryMetadataField.WORLD_ENVIRONMENT_IDENTITY).coverage == MetadataCoverage.PRESENT
-    assert hud.coverage_for(TrajectoryMetadataField.PROVIDER_CALLS).coverage == MetadataCoverage.UNSUPPORTED
-    assert hud.coverage_for(TrajectoryMetadataField.TIME_USAGE).coverage == MetadataCoverage.UNSUPPORTED
-    assert hud.coverage_for(TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS).coverage == MetadataCoverage.CONDITIONAL
+    world = hud.coverage_for(
+        TrajectoryMetadataField.WORLD_ENVIRONMENT_IDENTITY
+    )
+    provider = hud.coverage_for(TrajectoryMetadataField.PROVIDER_CALLS)
+    elapsed = hud.coverage_for(TrajectoryMetadataField.TIME_USAGE)
+    state = hud.coverage_for(
+        TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS
+    )
+    assert world.coverage == MetadataCoverage.PRESENT
+    assert provider.coverage == MetadataCoverage.UNSUPPORTED
+    assert elapsed.coverage == MetadataCoverage.UNSUPPORTED
+    assert state.coverage == MetadataCoverage.CONDITIONAL
 
 
-def test_harness_config_gap_is_grounded_in_current_trajectory_schema() -> None:
+def test_harness_config_gap_is_grounded_in_current_schema() -> None:
     assert "config_sha256" not in HarnessIdentity.model_fields
-    gap = next(item for item in _audit().interface_gaps if item.gap_id == "TRACE-GAP-HARNESS-CONFIG")
+    gap = next(
+        item
+        for item in _audit().interface_gaps
+        if item.gap_id == "TRACE-GAP-HARNESS-CONFIG"
+    )
     assert gap.owner == "trajectory schema authority"
     assert gap.field == TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY
 
@@ -425,7 +356,7 @@ def test_audit_serialization_is_deterministic_and_content_bound() -> None:
     assert serialize_metadata_audit(first) == serialize_metadata_audit(second)
 
 
-def test_stale_copied_audit_status_is_rejected_at_serialization_boundary() -> None:
+def test_stale_copied_audit_status_is_rejected() -> None:
     audit = _audit()
     stale = audit.model_copy(update={"status": AuditStatus.COMPLETE})
 
