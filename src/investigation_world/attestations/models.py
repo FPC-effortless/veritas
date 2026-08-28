@@ -6,7 +6,7 @@ from enum import StrEnum
 from re import fullmatch
 from typing import Any, Iterable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from investigation_world.qualification.maturity import (
     EnvironmentIdentity,
@@ -233,9 +233,13 @@ class AttestationSignature(BaseModel):
         return self
 
     def binds(self, attestation: EnvironmentAttestation) -> bool:
+        try:
+            validated = _validated_attestation(attestation)
+        except ValidationError:
+            return False
         return (
-            self.attestation_id == attestation.attestation_id
-            and self.attestation_content_sha256 == attestation.content_sha256
+            self.attestation_id == validated.attestation_id
+            and self.attestation_content_sha256 == validated.content_sha256
         )
 
 
@@ -256,12 +260,19 @@ def _sorted_unique_identities(
     return sorted_identities
 
 
+def _validated_attestation(attestation: EnvironmentAttestation) -> EnvironmentAttestation:
+    """Re-run every attestation invariant instead of trusting an existing model instance."""
+    return EnvironmentAttestation.model_validate(attestation.model_dump(mode="python"))
+
+
 def serialize_attestation(attestation: EnvironmentAttestation) -> bytes:
-    return _canonical_bytes(attestation.model_dump(mode="json"))
+    validated = _validated_attestation(attestation)
+    return _canonical_bytes(validated.model_dump(mode="json"))
 
 
 def serialize_public_attestation(attestation: EnvironmentAttestation) -> bytes:
-    """Serialize only an attestation explicitly authorized for public disclosure."""
-    if attestation.visibility != AttestationVisibility.PUBLIC:
+    """Serialize only a semantically valid attestation authorized for public disclosure."""
+    validated = _validated_attestation(attestation)
+    if validated.visibility != AttestationVisibility.PUBLIC:
         raise ValueError("only PUBLIC attestations may be serialized for public disclosure")
-    return serialize_attestation(attestation)
+    return _canonical_bytes(validated.model_dump(mode="json"))
