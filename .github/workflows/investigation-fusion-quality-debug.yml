@@ -6,7 +6,7 @@ on:
       - feat/investigation-evidence-fusion
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   debug:
@@ -24,10 +24,21 @@ jobs:
         run: |
           python -m pip install -e .
           python -m pip install -r requirements-quality.txt
-      - name: Focused Ruff
+      - name: Format focused fusion files
         run: |
+          ruff check --fix src/investigation_world/investigation_data/fusion.py src/investigation_world/investigation_data/cli.py src/investigation_world/investigation_data/__init__.py tests/investigation_data/test_fusion.py
           ruff check src/investigation_world/investigation_data/fusion.py src/investigation_world/investigation_data/cli.py src/investigation_world/investigation_data/__init__.py tests/investigation_data/test_fusion.py
       - name: Focused Mypy
-        if: always()
         run: |
           mypy src/investigation_world/investigation_data/fusion.py src/investigation_world/investigation_data/cli.py src/investigation_world/investigation_data/__init__.py
+      - name: Commit formatting if needed
+        run: |
+          git config user.name "Veritas Automation"
+          git config user.email "actions@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No formatting changes"
+          else
+            git add src/investigation_world/investigation_data/fusion.py src/investigation_world/investigation_data/cli.py src/investigation_world/investigation_data/__init__.py tests/investigation_data/test_fusion.py
+            git commit -m "style(data): normalize fusion imports"
+            git push origin HEAD:feat/investigation-evidence-fusion
+          fi
