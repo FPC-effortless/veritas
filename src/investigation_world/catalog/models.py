@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.evidence import EvidenceVisibility
 from investigation_world.qualification.maturity import (
-    MATURITY_ORDER,
     EnvironmentMaturity,
+    MATURITY_ORDER,
     MaturityRecord,
 )
 from investigation_world.qualification.quality_scorecard import (
@@ -242,13 +242,17 @@ class CatalogEntry(BaseModel):
             raise ValueError("catalog presentation class does not match canonical maturity")
         expected_facets = _expected_facets(maturity)
         if self.qualification_facets and self.qualification_facets != expected_facets:
-            raise ValueError("catalog qualification facets do not match canonical maturity evidence")
+            raise ValueError(
+                "catalog qualification facets do not match canonical maturity evidence"
+            )
 
         if self.experience_maturity is not None and (
             self.experience_maturity.reference.kind != BuyerSafeReferenceKind.EXPERIENCE
         ):
             raise ValueError("experience maturity must use an experience reference")
-        if self.fidelity is not None and self.fidelity.reference.kind != BuyerSafeReferenceKind.FIDELITY:
+        if self.fidelity is not None and (
+            self.fidelity.reference.kind != BuyerSafeReferenceKind.FIDELITY
+        ):
             raise ValueError("fidelity must use a fidelity reference")
 
         limitations = tuple(sorted(item.strip() for item in self.limitations if item.strip()))
@@ -374,6 +378,9 @@ def _public_entry(entry: CatalogEntry) -> dict[str, Any]:
     maturity = entry.maturity_record
     scorecard = entry.quality_scorecard
     environment = maturity.environment_identity
+    presentation = entry.presentation_class
+    if presentation is None:
+        raise ValueError("validated catalog entry is missing a presentation class")
     return {
         "catalog_entry_id": entry.catalog_entry_id,
         "catalog_content_sha256": entry.catalog_content_sha256,
@@ -382,7 +389,7 @@ def _public_entry(entry: CatalogEntry) -> dict[str, Any]:
         "maturity": maturity.status.value,
         "maturity_record_id": maturity.record_id,
         "qualification_identity": maturity.qualification_identity,
-        "presentation_class": entry.presentation_class.value,
+        "presentation_class": presentation.value,
         "qualification_facets": {
             item.facet.value: item.state.value for item in entry.qualification_facets
         },
