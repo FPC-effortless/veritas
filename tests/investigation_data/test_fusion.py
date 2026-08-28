@@ -253,6 +253,19 @@ def test_review_required_source_requires_review_id() -> None:
     assert fuse(reviewed).report.reviewed_fragment_ids == ("cfreds",)
 
 
+def test_redaction_review_source_requires_review_id() -> None:
+    csb = fragment(
+        "csb-report",
+        source_id="uscsb",
+        locator="https://www.csb.gov/example-case/report",
+    )
+    with pytest.raises(FusionError, match="requires a rights_review_id"):
+        fuse(csb)
+
+    reviewed = csb.model_copy(update={"rights_review_id": "redaction-review-csb-1"})
+    assert fuse(reviewed).report.reviewed_fragment_ids == ("csb-report",)
+
+
 def test_external_https_host_requires_explicit_review() -> None:
     external = fragment(
         "external",

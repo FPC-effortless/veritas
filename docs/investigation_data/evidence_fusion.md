@@ -30,6 +30,7 @@ Veritas rejects:
 - sources blocked for acquisition;
 - sources blocked for AI use;
 - review-required sources without a `rights_review_id`;
+- sources marked `requires_redaction_review` without a `rights_review_id`;
 - insecure `http://` locators;
 - externally hosted HTTPS evidence outside the source's approved host set unless an explicit `rights_review_id` is supplied.
 

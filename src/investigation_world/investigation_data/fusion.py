@@ -312,6 +312,7 @@ def _validate_source_policy(
     requires_review = (
         source.rights.acquisition is AcquisitionPolicy.REVIEW_REQUIRED
         or source.rights.ai_use is AIUsePolicy.REVIEW_REQUIRED
+        or source.requires_redaction_review
     )
     if requires_review and fragment.rights_review_id is None:
         raise FusionError(
