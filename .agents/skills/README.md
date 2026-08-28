@@ -1,5 +1,9 @@
-# Universal adapted skill pack
+# Universal fused skill pack
 
-These retain the 25 published Matt Pocock skill names while routing through `.agents/universal/CONTRACT.md` and any repository overlay. They are adapted for tool/mode independence and may be used from ordinary Chat, Work, or repository coding agents.
+This pack retains the 25 published Matt Pocock skill names and adds six Ponytail compatibility skills, all routed through `.agents/universal/CONTRACT.md` and the active repository overlay.
 
-Do not invoke a skill in isolation from the repository's `AGENTS.md` authority order.
+Ponytail is fused rather than bolted on: its minimality ladder is part of the universal contract, so every existing skill inherits YAGNI/reuse/stdlib/native/dependency/minimum-code selection after understanding the repository. Specialist skills add direct integrations for implementation, debugging, TDD, review, architecture, planning, prototyping, setup, handoff, and guided admin work.
+
+Compatibility aliases: `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`.
+
+Provenance and the no-information-loss map are in `.agents/universal/PONYTAIL-FUSION.md`. Preserve both upstream MIT notices. Do not invoke a skill in isolation from the repository's `AGENTS.md` authority order.
