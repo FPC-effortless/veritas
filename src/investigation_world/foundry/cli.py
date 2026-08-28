@@ -22,6 +22,10 @@ from investigation_world.foundry.external_distribution import (
     write_external_investigation_distribution,
 )
 from investigation_world.foundry.models import stable_hash
+from investigation_world.foundry.public_investigation_data import (
+    load_public_investigation_dataset,
+    write_dataset_projections,
+)
 from investigation_world.foundry.training_adapters import trainer_adapter_for
 from investigation_world.foundry.training_corpus import (
     generate_training_demonstration_set,
@@ -101,6 +105,22 @@ def fit_calibration_cmd(
             indent=2,
         )
     )
+
+
+@app.command("prepare-public-investigations")
+def prepare_public_investigations_cmd(
+    manifest: Path,
+    public_output: Path = Path("public_investigations.json"),
+    verifier_output: Path | None = None,
+):
+    """Validate a public-investigation manifest and emit separated projections."""
+    dataset = load_public_investigation_dataset(manifest)
+    result = write_dataset_projections(
+        dataset,
+        public_output=public_output,
+        verifier_output=verifier_output,
+    )
+    typer.echo(json.dumps(result, indent=2))
 
 
 @app.command("compile-external-foundry")
