@@ -63,6 +63,17 @@ def _numeric_components(verification: Any) -> dict[str, float]:
     return result
 
 
+def _overall_reward(verification: Any) -> float:
+    payload = _dump(verification)
+    if isinstance(payload, dict):
+        for key in ("overall_reward", "outcome", "reward"):
+            value = payload.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+    value = getattr(verification, "overall_reward", 0.0)
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
+
+
 class TracingRuntimeProxy:
     """Record public runtime operations without changing wrapped runtime semantics."""
 
@@ -132,6 +143,24 @@ class TracingRuntimeProxy:
         )
         return result
 
+    def web_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("web_search", *args, **kwargs)
+
+    def document_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("document_search", *args, **kwargs)
+
+    def registry_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("registry_search", *args, **kwargs)
+
+    def filing_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("filing_search", *args, **kwargs)
+
+    def archive_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("archive_search", *args, **kwargs)
+
+    def open_document(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("open_document", *args, **kwargs)
+
     def search_system(self, *args: Any, **kwargs: Any) -> Any:
         return self._record_call("search_system", *args, **kwargs)
 
@@ -163,7 +192,7 @@ class TracingRuntimeProxy:
 
     def trace(self, *, termination_reason: str = "submitted") -> RolloutTrace:
         final_payload = _state_payload(self.runtime)
-        reward = float(getattr(self.verification, "overall_reward", 0.0)) if self.verification is not None else 0.0
+        reward = _overall_reward(self.verification) if self.verification is not None else 0.0
         return RolloutTrace(
             trace_id=self.trace_id,
             environment_version=self.environment_version,

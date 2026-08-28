@@ -4,22 +4,23 @@ import os
 from dataclasses import dataclass, field
 from secrets import compare_digest
 from threading import Lock
-from typing import Annotated, Any
+from typing import Annotated, Any, Callable
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from investigation_world.core.models import CanonicalWorld, InvestigationResult, PublicDocument, SourceType
-from investigation_world.search.index import FrozenSearchIndex
+from investigation_world.core.models import (
+    CanonicalWorld,
+    InvestigationResult,
+)
 from investigation_world.tasks.spec import TaskOracle, TaskSpec, generate_task_bundle
-from investigation_world.tools.budget import BudgetManager
+from investigation_world.tools.runtime import InvestigationEpisode, InvestigationRuntime
 from investigation_world.trajectories.recorder import TrajectoryRecorder
 from investigation_world.trajectories.schema import Trajectory
-from investigation_world.verifier.aggregate import verify
 
 
-app = FastAPI(title="Investigation World", version="0.4.0")
+app = FastAPI(title="Investigation World", version="0.5.0")
 
 
 class EpisodeCreateRequest(BaseModel):
@@ -38,14 +39,9 @@ class EpisodeCreateRequest(BaseModel):
 @dataclass
 class EpisodeSession:
     episode_id: str
-    world: CanonicalWorld
-    search_index: FrozenSearchIndex
-    budget: BudgetManager
-    task: TaskSpec
-    oracle: TaskOracle
+    runtime: InvestigationRuntime
     recorder: TrajectoryRecorder
     trajectory: Trajectory | None = None
-    closed: bool = False
     lock: Any = field(default_factory=Lock, repr=False)
 
 
@@ -62,8 +58,14 @@ def _require_admin(
 ) -> None:
     expected = os.getenv("VERITAS_ADMIN_TOKEN")
     if not expected:
-        raise HTTPException(503, "admin API disabled: VERITAS_ADMIN_TOKEN is not configured")
-    if x_veritas_admin_token is None or not compare_digest(x_veritas_admin_token, expected):
+        raise HTTPException(
+            503,
+            "admin API disabled: VERITAS_ADMIN_TOKEN is not configured",
+        )
+    if x_veritas_admin_token is None or not compare_digest(
+        x_veritas_admin_token,
+        expected,
+    ):
         raise HTTPException(401, "invalid admin token")
 
 
@@ -74,43 +76,31 @@ def _episode(episode_id: str) -> EpisodeSession:
     return session
 
 
-def _ensure_open(session: EpisodeSession) -> None:
-    if session.closed:
-        raise HTTPException(409, "episode already submitted")
-
-
-def _charge(session: EpisodeSession, tool: str) -> None:
+def _run_tool(
+    session: EpisodeSession,
+    recorder_tool: str,
+    function: Callable[..., Any],
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
     with session.lock:
-        _ensure_open(session)
         try:
-            session.budget.charge(tool)
+            result = function(*args, **kwargs)
+        except KeyError as error:
+            raise HTTPException(404, str(error)) from error
         except ValueError as error:
-            raise HTTPException(429, str(error)) from error
-
-
-def _record_tool(session: EpisodeSession, tool: str, **observation) -> None:
-    with session.lock:
-        _ensure_open(session)
-        session.recorder.tool_call(tool, observation)
-
-
-def _public_document(session: EpisodeSession, document_id: str) -> PublicDocument:
-    document = next(
-        (candidate for candidate in session.world.documents if candidate.document_id == document_id),
-        None,
-    )
-    if document is None:
-        raise HTTPException(404, "document not found")
-    source_types = {source.source_id: source.source_type for source in session.world.sources}
-    return PublicDocument(
-        document_id=document.document_id,
-        title=document.title,
-        body=document.body,
-        published_at=document.published_at,
-        source_type=source_types.get(document.source_id, SourceType.DIRECTORY),
-        url=document.url,
-        cites_document_ids=document.cites_document_ids,
-    )
+            message = str(error)
+            status = 429 if "budget exhausted" in message else 409
+            raise HTTPException(status, message) from error
+        session.recorder.tool_call(
+            recorder_tool,
+            {
+                "args": list(args),
+                "kwargs": kwargs,
+                "result": result,
+            },
+        )
+        return result
 
 
 @app.post("/admin/episodes")
@@ -140,29 +130,30 @@ def create_episode(
         raise HTTPException(400, "task/oracle mismatch")
 
     episode_id = uuid4().hex
-    search_index = FrozenSearchIndex()
-    search_index.build(request.world)
+    runtime = InvestigationEpisode(
+        world=request.world,
+        task=task,
+        oracle=oracle,
+        total_cost=request.total_cost,
+        max_tool_calls=request.max_tool_calls,
+    ).runtime()
     recorder = TrajectoryRecorder(
         run_id=episode_id,
         task_id=task.task_id,
         world_id=request.world.world_id,
         world_seed=request.world.seed,
         objective=task.objective,
-        agent_metadata={"api_version": "0.4.0"},
+        agent_metadata={"api_version": "0.5.0"},
     )
     _EPISODES[episode_id] = EpisodeSession(
         episode_id=episode_id,
-        world=request.world,
-        search_index=search_index,
-        budget=BudgetManager(
-            total_cost=request.total_cost,
-            max_tool_calls=request.max_tool_calls,
-        ),
-        task=task,
-        oracle=oracle,
+        runtime=runtime,
         recorder=recorder,
     )
-    return {"episode_id": episode_id, "task": task.model_dump(mode="json")}
+    return {
+        "episode_id": episode_id,
+        "task": task.model_dump(mode="json"),
+    }
 
 
 @app.delete("/admin/episodes/{episode_id}")
@@ -174,8 +165,7 @@ def delete_episode(
     if session is None:
         raise HTTPException(404, "episode not found")
     with session.lock:
-        session.closed = True
-        session.search_index.db.close()
+        session.runtime.close()
     return {"deleted": True}
 
 
@@ -192,87 +182,96 @@ def get_trajectory(
 
 @app.get("/episodes/{episode_id}/task")
 def get_task(episode_id: str):
-    return _episode(episode_id).task.model_dump(mode="json")
+    return _episode(episode_id).runtime.task.model_dump(mode="json")
 
 
 @app.post("/episodes/{episode_id}/search/web")
 def web_search(episode_id: str, query: str, limit: int = 10):
     session = _episode(episode_id)
-    _charge(session, "web_search")
-    results = session.search_index.search(
+    return _run_tool(
+        session,
+        "web_search",
+        session.runtime.web_search,
         query,
-        limit,
-        source_types=[SourceType.NEWS, SourceType.COMPANY_SITE, SourceType.DIRECTORY],
+        limit=limit,
     )
-    _record_tool(session, "web_search", query=query, limit=limit, results=results)
-    return results
 
 
 @app.post("/episodes/{episode_id}/search/documents")
 def document_search(episode_id: str, query: str, limit: int = 10):
     session = _episode(episode_id)
-    _charge(session, "document_search")
-    results = session.search_index.search(query, limit)
-    _record_tool(session, "document_search", query=query, limit=limit, results=results)
-    return results
+    return _run_tool(
+        session,
+        "document_search",
+        session.runtime.document_search,
+        query,
+        limit=limit,
+    )
 
 
 @app.post("/episodes/{episode_id}/registry/search")
 def registry_search(episode_id: str, query: str, limit: int = 10):
     session = _episode(episode_id)
-    _charge(session, "registry_search")
-    results = session.search_index.search(query, limit, source_types=[SourceType.REGISTRY])
-    _record_tool(session, "registry_search", query=query, limit=limit, results=results)
-    return results
+    return _run_tool(
+        session,
+        "registry_search",
+        session.runtime.registry_search,
+        query,
+        limit=limit,
+    )
 
 
 @app.post("/episodes/{episode_id}/filings/search")
 def filing_search(episode_id: str, query: str, limit: int = 10):
     session = _episode(episode_id)
-    _charge(session, "filing_search")
-    results = session.search_index.search(query, limit, source_types=[SourceType.FILING])
-    _record_tool(session, "filing_search", query=query, limit=limit, results=results)
-    return results
+    return _run_tool(
+        session,
+        "filing_search",
+        session.runtime.filing_search,
+        query,
+        limit=limit,
+    )
 
 
 @app.post("/episodes/{episode_id}/archive/search")
 def archive_search(episode_id: str, query: str, limit: int = 10):
     session = _episode(episode_id)
-    _charge(session, "archive_lookup")
-    results = session.search_index.search(query, limit, source_types=[SourceType.ARCHIVE])
-    _record_tool(session, "archive_lookup", query=query, limit=limit, results=results)
-    return results
+    return _run_tool(
+        session,
+        "archive_lookup",
+        session.runtime.archive_search,
+        query,
+        limit=limit,
+    )
 
 
 @app.get("/episodes/{episode_id}/documents/{document_id}")
 def get_document(episode_id: str, document_id: str):
     session = _episode(episode_id)
-    _charge(session, "open_page")
-    document = _public_document(session, document_id).model_dump(mode="json")
-    _record_tool(session, "open_page", document_id=document_id, document=document)
-    return document
+    return _run_tool(
+        session,
+        "open_page",
+        session.runtime.open_document,
+        document_id,
+    )
 
 
 @app.get("/episodes/{episode_id}/budget")
 def get_budget(episode_id: str):
     session = _episode(episode_id)
     with session.lock:
-        return session.budget.snapshot()
+        return session.runtime.budget_snapshot()
 
 
 @app.post("/episodes/{episode_id}/submit")
 def submit(episode_id: str, result: InvestigationResult):
     session = _episode(episode_id)
     with session.lock:
-        _ensure_open(session)
-        verification = verify(
-            result,
-            session.world,
-            task=session.task,
-            oracle=session.oracle,
-            budget_spent=session.budget.budget.spent,
-            budget_total=session.budget.budget.total_cost,
-        )
+        try:
+            verification = session.runtime.submit(result)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
+        payload = verification.model_dump(mode="json")
         session.recorder.action(
             {
                 "action_type": "submit",
@@ -281,8 +280,7 @@ def submit(episode_id: str, result: InvestigationResult):
         )
         session.trajectory = session.recorder.finish(
             findings=result.model_dump(mode="json"),
-            verifier_result=verification,
-            budget=session.budget.snapshot(),
+            verifier_result=payload,
+            budget=session.runtime.budget_snapshot(),
         )
-        session.closed = True
-        return verification
+        return payload
