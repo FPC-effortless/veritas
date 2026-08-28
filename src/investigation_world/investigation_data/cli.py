@@ -145,8 +145,16 @@ def prepare_zip_cmd(
 
 
 @app.command("validate-fusion")
-def validate_fusion(manifest: Path) -> None:
-    loaded = FusionManifest.model_validate_json(manifest.read_text(encoding="utf-8"))
+def validate_fusion(
+    manifest: Path,
+    catalog: Path | None = None,
+) -> None:
+    try:
+        loaded = FusionManifest.model_validate_json(manifest.read_text(encoding="utf-8"))
+        result = fuse_manifest(loaded, load_catalog(catalog))
+    except (OSError, ValueError) as exc:
+        typer.echo(f"fusion validation refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
     typer.echo(
         json.dumps(
             {
@@ -154,7 +162,8 @@ def validate_fusion(manifest: Path) -> None:
                 "episode_id": loaded.episode_id,
                 "fragments": len(loaded.fragments),
                 "relations": len(loaded.relations),
-                "sha256": manifest_digest(loaded),
+                "manifest_sha256": manifest_digest(loaded),
+                "catalog_sha256": result.report.catalog_sha256,
             },
             indent=2,
         )
@@ -165,10 +174,11 @@ def validate_fusion(manifest: Path) -> None:
 def fuse(
     manifest: Path,
     output: Path = Path(".veritas-fused"),
+    catalog: Path | None = None,
 ) -> None:
     try:
         loaded = FusionManifest.model_validate_json(manifest.read_text(encoding="utf-8"))
-        result = fuse_manifest(loaded)
+        result = fuse_manifest(loaded, load_catalog(catalog))
         episode_dir = output / loaded.episode_id
         public_path = episode_dir / "public.json"
         oracle_path = episode_dir / "oracle.json"
