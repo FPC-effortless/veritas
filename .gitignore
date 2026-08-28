@@ -35,6 +35,7 @@ out/
 # Local databases and generated artifacts
 *.sqlite
 *.sqlite3
+.veritas-data/
 
 # OS/editor
 .DS_Store
