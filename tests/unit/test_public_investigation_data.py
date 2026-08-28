@@ -13,7 +13,6 @@ from investigation_world.foundry.public_investigation_data import (
     write_dataset_projections,
 )
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = REPO_ROOT / "datasets/public_investigations/source_registry.json"
 SEED_PATH = REPO_ROOT / "datasets/public_investigations/seeds/seed_v1.json"
