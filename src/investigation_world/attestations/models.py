@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from enum import StrEnum
 from re import fullmatch
 from typing import Any, Iterable
 
@@ -16,6 +17,12 @@ from investigation_world.qualification.maturity import (
 
 ATTESTATION_SCHEMA_VERSION = "veritas.environment-attestation.v1"
 SIGNATURE_SCHEMA_VERSION = "veritas.environment-attestation-signature.v1"
+
+
+class AttestationVisibility(StrEnum):
+    PUBLIC = "public"
+    OPERATOR_PRIVATE = "operator_private"
+    SEALED = "sealed"
 
 
 def _validate_sha256(value: str, *, field_name: str) -> None:
@@ -127,6 +134,7 @@ class EnvironmentAttestation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: str = ATTESTATION_SCHEMA_VERSION
+    visibility: AttestationVisibility = AttestationVisibility.OPERATOR_PRIVATE
     attestation_id: str = ""
     content_sha256: str = ""
     environment: EnvironmentIdentity
@@ -177,6 +185,7 @@ class EnvironmentAttestation(BaseModel):
 
         payload = {
             "schema_version": self.schema_version,
+            "visibility": self.visibility.value,
             "environment": self.environment.model_dump(mode="json"),
             "artifacts": [item.model_dump(mode="json") for item in artifacts],
             "source": self.source.model_dump(mode="json"),
@@ -249,3 +258,10 @@ def _sorted_unique_identities(
 
 def serialize_attestation(attestation: EnvironmentAttestation) -> bytes:
     return _canonical_bytes(attestation.model_dump(mode="json"))
+
+
+def serialize_public_attestation(attestation: EnvironmentAttestation) -> bytes:
+    """Serialize only an attestation explicitly authorized for public disclosure."""
+    if attestation.visibility != AttestationVisibility.PUBLIC:
+        raise ValueError("only PUBLIC attestations may be serialized for public disclosure")
+    return serialize_attestation(attestation)
