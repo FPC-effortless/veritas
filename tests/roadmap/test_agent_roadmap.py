@@ -66,10 +66,13 @@ def issue(
     work_id: str,
     state: str,
     dependencies: str,
+    *,
+    comments: int = 0,
 ) -> dict:
     return {
         "number": number,
         "title": work_id,
+        "comments": comments,
         "labels": [{"name": "agent-work"}, {"name": f"work:{state.lower()}"}],
         "body": f"""<!-- veritas-agent-work -->
 - **Work ID:** {work_id}
@@ -270,7 +273,7 @@ def test_sync_owned_blocked_status_preserves_holder_and_reserves_path(
     blocked = row("A", 1, state="CLAIMED", path="src/x/**")
     ready = row("B", 2, path="src/x/**")
     current = manifest(blocked, ready)
-    issue_a = issue(1, "A", "BLOCKED", "none")
+    issue_a = issue(1, "A", "BLOCKED", "none", comments=1)
     issue_b = issue(2, "B", "READY", "none")
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
 
@@ -292,7 +295,7 @@ def test_sync_released_blocked_status_clears_stale_holder(
     blocked["branch"] = "feat/stale-a"
     blocked["linked_pr"] = 99
     current = manifest(blocked)
-    issue_a = issue(1, "A", "BLOCKED", "none")
+    issue_a = issue(1, "A", "BLOCKED", "none", comments=1)
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
     monkeypatch.setattr(
         roadmap,
