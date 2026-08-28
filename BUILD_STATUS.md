@@ -155,6 +155,8 @@ Any release that promotes the generic portable operational program must addition
 - deterministic reset;
 - native operational verifier/reward parity;
 - cross-runtime semantic conformance with no semantic loss promoted over missing evidence;
+- full OpenEnv and Prime `AdapterConformanceReport` replay from evaluator/operator-side evidence,
+  without widening either agent-facing contract;
 - clean external wheel/package installation;
 - existing SRE HUD smoke;
 - existing SRE Prime smoke;
@@ -164,6 +166,10 @@ Any release that promotes the generic portable operational program must addition
 - explicit documentation of unsupported external-runtime semantics.
 
 The `Portable Operational Convergence` workflow supplies the generic implementation/package gates. Existing `Portability Validation` supplies the frozen SRE HUD/Prime compatibility gates. Ordinary repository `CI` remains required for the full repository verification ladder. A missing, skipped, unavailable, or stale gate is **UNVERIFIED**, not PASS.
+
+Repository-wide Python quality uses pinned Ruff/Mypy versions and a fail-closed ratcheted baseline.
+The ratchet prevents new diagnostic fingerprints while package owners remove pre-existing debt; it
+does not convert outstanding lint/type debt into a clean full-repository PASS.
 
 ## Next release: 0.12
 

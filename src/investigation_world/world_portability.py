@@ -34,7 +34,9 @@ from investigation_world.exporters.nemo import (
 from investigation_world.exporters.openenv import compile_openenv_export
 from investigation_world.exporters.prime import (
     DEFAULT_VERITAS_REQUIREMENT,
+    PrimeReplayRequest,
     build_prime_operational_package,
+    replay_portable_requests_for_conformance,
 )
 from investigation_world.mcp_compiler import compile_mcp_surface
 from investigation_world.operational import OperationalEpisode
@@ -462,6 +464,32 @@ def _nemo_snapshot(contract: PortableOperationalContract, vector: Mapping[str, A
     return build_semantic_snapshot(contract, vector["actions"], reset, results)
 
 
+def _openenv_snapshot(contract: PortableOperationalContract, vector: Mapping[str, Any]):
+    export = compile_openenv_export(contract)
+    trace = export.replay_for_conformance(vector["actions"], seed=vector["seed"])
+    return build_semantic_snapshot(
+        contract,
+        trace.invocations,
+        trace.reset_result,
+        trace.step_results,
+    )
+
+
+def _prime_snapshot(contract: PortableOperationalContract, vector: Mapping[str, Any]):
+    requests = [PrimeReplayRequest.model_validate(call) for call in vector["actions"]]
+    trace = replay_portable_requests_for_conformance(
+        contract,
+        requests,
+        seed=vector["seed"],
+    )
+    return build_semantic_snapshot(
+        contract,
+        trace.invocations,
+        trace.reset_result,
+        trace.step_results,
+    )
+
+
 def _adapter_snapshot(
     adapter: str,
     contract: PortableOperationalContract,
@@ -474,15 +502,9 @@ def _adapter_snapshot(
     if adapter == "nemo":
         return _nemo_snapshot(contract, vector), ("environment_id", "task_identity")
     if adapter == "openenv":
-        raise WorldPortabilityCLIError(
-            "CONFORMANCE_UNAVAILABLE",
-            "openenv stable public API does not expose complete operator trace fields",
-        )
+        return _openenv_snapshot(contract, vector), ("done", "step_count")
     if adapter == "prime":
-        raise WorldPortabilityCLIError(
-            "CONFORMANCE_UNAVAILABLE",
-            "prime stable public replay API exposes only the terminal result",
-        )
+        return _prime_snapshot(contract, vector), ("package_id", "portable_public_id")
     raise WorldPortabilityCLIError("ADAPTER_UNSUPPORTED", adapter)
 
 
@@ -686,8 +708,6 @@ def _command_export(args: argparse.Namespace) -> int:
 
 
 def _command_conformance(args: argparse.Namespace) -> int:
-    if args.adapter in {"openenv", "prime"}:
-        _adapter_snapshot(args.adapter, _load_contract(args.contract), {"seed": 0, "actions": []})
     contract = _load_contract(args.contract)
     vector = _load_vector(args.vector)
     try:

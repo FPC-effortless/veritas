@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
-from typing import Any
-
-import pytest
 
 from investigation_world.conformance import (
     EVALUATOR_PRIVATE_FIELDS,
@@ -22,8 +19,10 @@ from investigation_world.exporters.nemo import (
     compile_nemo_task_row,
 )
 from investigation_world.exporters.openenv import compile_openenv_export
-from investigation_world.exporters.prime import PrimeReplayRequest, build_prime_operational_package
-import investigation_world.exporters.prime.exporter as prime_exporter
+from investigation_world.exporters.prime import (
+    PrimeReplayRequest,
+    replay_portable_requests_for_conformance,
+)
 from investigation_world.operational.models import (
     ActionKind,
     AssertionComparison,
@@ -46,7 +45,6 @@ from investigation_world.portable_runtime import (
     PortableOperationalRuntime,
     PortableStepRequest,
 )
-
 
 VECTOR_PATH = Path(__file__).parent / "fixtures" / "canonical_vector.json"
 VECTOR = json.loads(VECTOR_PATH.read_text(encoding="utf-8"))
@@ -307,58 +305,15 @@ def _nemo_snapshot(contract: PortableOperationalContract):
     return build_semantic_snapshot(runtime._contract, VECTOR["actions"], reset, results)
 
 
-class _RecordingRuntime(PortableOperationalRuntime):
-    def __init__(self, contract: PortableOperationalContract):
-        self.recorded_reset = None
-        self.recorded_results = []
-        super().__init__(contract)
-
-    def reset(self, *, seed: int = 0):
-        result = super().reset(seed=seed)
-        self.recorded_reset = result
-        self.recorded_results.clear()
-        return result
-
-    def step(self, request, arguments=None):
-        result = super().step(request, arguments)
-        self.recorded_results.append(result)
-        return result
-
-    def submit(self, submission=None):
-        result = super().submit(submission)
-        self.recorded_results.append(result)
-        return result
-
-
 def _openenv_snapshot(contract: PortableOperationalContract):
     export = compile_openenv_export(contract)
-    env = export.create_environment()
-    recording = _RecordingRuntime(contract)
-    env._runtime = recording
-    native_reset = env.reset(seed=VECTOR["seed"])
-    assert recording.recorded_reset is not None
-    reset = {
-        "observation": native_reset.result,
-        "state_digest": native_reset.state_digest,
-        "budget_status": recording.recorded_reset.budget_status,
-    }
-    results = []
-    for call in VECTOR["actions"]:
-        tool = _transport_name(export.mcp_surface, call["kind"], call["name"])
-        native = env.step(export.action_type(tool=tool, arguments=deepcopy(call["arguments"])))
-        operator_result = recording.recorded_results[-1]
-        results.append(
-            {
-                "observation": native.result,
-                "reward": native.reward,
-                "reward_components": operator_result.reward_components,
-                "terminated": native.terminated,
-                "truncated": native.truncated,
-                "state_digest": native.state_digest,
-                "budget_status": operator_result.budget_status,
-            }
-        )
-    return build_semantic_snapshot(recording._contract, VECTOR["actions"], reset, results)
+    trace = export.replay_for_conformance(VECTOR["actions"], seed=VECTOR["seed"])
+    return build_semantic_snapshot(
+        contract,
+        trace.invocations,
+        trace.reset_result,
+        trace.step_results,
+    )
 
 
 def _hud_snapshot(contract: PortableOperationalContract):
@@ -390,49 +345,22 @@ def _harbor_snapshot(contract: PortableOperationalContract):
 
 def _prime_snapshot(
     contract: PortableOperationalContract,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
-    package_dir = tmp_path / "prime"
-    build_prime_operational_package(package_dir, contracts=[contract])
-    private_payload = json.loads(
-        (package_dir / "veritas_prime_operational" / "private_contracts.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    packaged_contract = PortableOperationalContract.model_validate(
-        private_payload[contract.public.public_id]
-    )
-
-    captured: dict[str, _RecordingRuntime] = {}
-
-    class PrimeRecordingRuntime(_RecordingRuntime):
-        def __init__(self, candidate_contract):
-            super().__init__(candidate_contract)
-            captured["runtime"] = self
-
-    monkeypatch.setattr(prime_exporter, "PortableOperationalRuntime", PrimeRecordingRuntime)
     requests = [PrimeReplayRequest(**call) for call in VECTOR["actions"]]
-    terminal = prime_exporter.replay_portable_requests(
-        packaged_contract,
+    trace = replay_portable_requests_for_conformance(
+        contract,
         requests,
         seed=VECTOR["seed"],
     )
-    runtime = captured["runtime"]
-    assert runtime.recorded_reset is not None
-    assert terminal == runtime.recorded_results[-1]
     return build_semantic_snapshot(
-        runtime._contract,
-        VECTOR["actions"],
-        runtime.recorded_reset,
-        runtime.recorded_results,
+        contract,
+        trace.invocations,
+        trace.reset_result,
+        trace.step_results,
     )
 
 
-def test_all_c_wave_runtime_adapters_preserve_one_canonical_semantics(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_all_c_wave_runtime_adapters_preserve_one_canonical_semantics() -> None:
     contract = _contract()
     expected = _run_portable(PortableOperationalRuntime(contract), contract)
 
@@ -442,7 +370,7 @@ def test_all_c_wave_runtime_adapters_preserve_one_canonical_semantics(
         "hud": (_hud_snapshot(contract), ("session_id", "prompt")),
         "harbor": (_harbor_snapshot(contract), ("trajectory_record", "mcp_surface_id")),
         "prime": (
-            _prime_snapshot(contract, tmp_path, monkeypatch),
+            _prime_snapshot(contract),
             ("package_id", "portable_public_id"),
         ),
     }

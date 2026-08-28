@@ -1,0 +1,46 @@
+name: Python Quality Ratchet
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/python-quality.yml"
+      - "pyproject.toml"
+      - "requirements-quality.txt"
+      - "quality/**"
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "tools/**/*.py"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-python-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-quality.txt
+
+      - name: Install package and pinned quality tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install -r requirements-quality.txt
+
+      - name: Enforce repository-wide Ruff/Mypy ratchet
+        run: python tools/quality_baseline.py check

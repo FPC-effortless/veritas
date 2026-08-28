@@ -12,6 +12,11 @@ The exporter has three layers:
 
 OpenEnv remains optional at the Veritas package level. The exporter models and local environment wrapper are importable without OpenEnv installed; `create_app()` requires OpenEnv at deployment time.
 
+`OpenEnvOperationalExport.replay_for_conformance(...)` is an operator-side extension for full
+`AdapterConformanceReport` evidence. It executes the ordinary OpenEnv reset/step path and does not
+add budget, verifier components, private contract material, or hidden state to the public OpenEnv
+observation/state models.
+
 ## Identity
 
 A compiled export exposes deterministic identifiers derived from public portable material:

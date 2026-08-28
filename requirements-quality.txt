@@ -1,0 +1,3 @@
+# Repository quality-gate toolchain. Update this file and the committed baselines together.
+ruff==0.16.5
+mypy==2.3.1

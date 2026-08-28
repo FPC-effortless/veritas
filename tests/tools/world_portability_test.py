@@ -21,7 +21,6 @@ from investigation_world.operational.models import (
 from investigation_world.portable_contract import compile_operational_episode
 from tools import world_portability
 
-
 PRIVATE_SECRET = "WORLD-CLI-PRIVATE-OMEGA"
 PRIVATE_ANSWER = "WORLD-CLI-PRIVATE-ANSWER"
 
@@ -270,7 +269,9 @@ def test_harbor_conformance_passes_without_printing_private_truth(
     assert set(payload["preserved_fields"]) == set(world_portability.REQUIRED_SEMANTIC_FIELDS)
 
 
-def test_conformance_unavailable_fails_closed_instead_of_fabricating_trace(
+@pytest.mark.parametrize("adapter", ["openenv", "prime"])
+def test_full_operator_conformance_passes_without_exposing_private_truth(
+    adapter: str,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -278,17 +279,22 @@ def test_conformance_unavailable_fails_closed_instead_of_fabricating_trace(
         [
             "conformance",
             "--adapter",
-            "prime",
+            adapter,
             "--contract",
             str(_contract_path(tmp_path)),
             "--vector",
             str(_vector_path(tmp_path)),
         ]
     )
-    assert code == 2
-    _, err = _assert_no_private_output(capsys)
-    assert "CONFORMANCE_UNAVAILABLE" in err
-    assert "terminal result" in err
+    assert code == 0
+    output, err = _assert_no_private_output(capsys)
+    assert err == ""
+    payload = json.loads(output)
+    assert payload["adapter"] == adapter
+    assert payload["passed"] is True
+    assert payload["semantic_losses"] == []
+    assert payload["unsupported_fields"] == []
+    assert set(payload["preserved_fields"]) == set(world_portability.REQUIRED_SEMANTIC_FIELDS)
 
 
 def test_trajectory_identity_and_reverification_inspection_is_private_safe_by_default(

@@ -25,7 +25,6 @@ from investigation_world.portable_contract import (
 )
 from investigation_world.portable_runtime import PortableOperationalRuntime
 
-
 PRIVATE_MARKERS = (
     "PRIVATE-RUNTIME-OMEGA",
     "PRIVATE-ANSWER-OMEGA",
@@ -336,6 +335,39 @@ def test_openenv_execution_matches_direct_portable_runtime_and_reward() -> None:
     assert terminal_openenv.reward == terminal_portable.reward
     assert terminal_openenv.terminated is True
     assert terminal_openenv.truncated is False
+
+
+def test_openenv_operator_replay_retains_full_trace_off_public_models() -> None:
+    contract = _contract()
+    export = compile_openenv_export(contract)
+    invocations = [
+        {"kind": "action", "name": "prepare_order", "arguments": {}},
+        {
+            "kind": "operation",
+            "name": "submit",
+            "arguments": {"conclusion": "not yet complete", "confidence": 0.2},
+        },
+    ]
+
+    trace = export.replay_for_conformance(invocations, seed=29)
+
+    assert trace.adapter == "openenv"
+    assert trace.invocations == tuple(invocations)
+    assert len(trace.step_results) == 2
+    assert trace.step_results[-1].reward_components is not None
+    assert trace.step_results[-1].reward is not None
+    public_schema = json.dumps(
+        {
+            "observation": export.observation_type.model_json_schema(),
+            "state": export.state_type.model_json_schema(),
+        },
+        sort_keys=True,
+    )
+    assert "budget_status" not in public_schema
+    assert "reward_components" not in public_schema
+    assert "target_assertions" not in public_schema
+    for marker in PRIVATE_MARKERS:
+        assert marker not in public_schema
 
 
 def test_openenv_preserves_truncated_distinct_from_terminated() -> None:
