@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -69,8 +70,10 @@ def issue(
     *,
     comments: int = 0,
     path: str | None = None,
+    linked_pr: int | None = None,
 ) -> dict:
     ownership_path = path or f"src/{work_id.lower()}/**"
+    linked_pr_text = f"#{linked_pr}" if linked_pr is not None else "none"
     return {
         "number": number,
         "title": work_id,
@@ -84,7 +87,7 @@ def issue(
 - **Positive ownership:** `{ownership_path}`
 - **Negative ownership:** other
 - **Claim holder:** none
-- **Linked PR:** none
+- **Linked PR:** {linked_pr_text}
 """,
     }
 
@@ -192,6 +195,39 @@ def test_contract_parser_keeps_alias_paths_and_refs() -> None:
     assert parsed["linked_pr"] == 246
 
 
+def test_status_record_paginates_to_latest_trusted_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page_one = [
+        {"user": {"login": "someone"}, "body": "ordinary comment"}
+        for _ in range(100)
+    ]
+    expected = status(
+        7,
+        "A",
+        "BLOCKED",
+        agent="agent-a",
+        branch="feat/a",
+    )
+    expected["transition_seq"] = 9
+    trusted_comment = {
+        "user": {"login": "github-actions[bot]"},
+        "body": (
+            f"{roadmap.STATUS_MARKER}\n```json\n"
+            f"{json.dumps(expected)}\n```"
+        ),
+    }
+    requested: list[str] = []
+
+    def request_json(url: str, _token: str | None) -> list[dict]:
+        requested.append(url)
+        return page_one if "page=1" in url else [trusted_comment]
+
+    monkeypatch.setattr(roadmap, "request_json", request_json)
+    assert roadmap.status_record("FPC-effortless/veritas", 7, None) == expected
+    assert any("page=2" in url for url in requested)
+
+
 def test_sync_uses_live_labels_and_preserves_curated_hard_edge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -297,7 +333,7 @@ def test_sync_released_blocked_status_clears_stale_holder(
     blocked["branch"] = "feat/stale-a"
     blocked["linked_pr"] = 99
     current = manifest(blocked)
-    issue_a = issue(1, "A", "BLOCKED", "none", comments=1)
+    issue_a = issue(1, "A", "BLOCKED", "none", comments=1, linked_pr=42)
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
     monkeypatch.setattr(
         roadmap,
