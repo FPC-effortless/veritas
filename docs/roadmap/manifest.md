@@ -21,7 +21,12 @@ Execution state is synchronized from GitHub:
 4. if that trusted status record is missing or unparseable for `CLAIMED`/`REVIEW`,
    synchronization fails closed instead of falling back to issue-body or stale
    manifest claimant/PR metadata;
-5. the issue Work Contract supplies Work ID, branch convention, dependency prose,
+5. `BLOCKED` may be either unowned dependency-blocked work or work still held by an
+   active agent. When a blocked issue has coordination comments, the synchronizer
+   checks the latest trusted bot status and preserves its holder/branch/PR only when
+   that status still declares an owner. A released blocked status clears stale
+   claimant metadata;
+6. the issue Work Contract supplies Work ID, branch convention, dependency prose,
    positive/negative ownership, and fallback PR linkage for states that do not require
    a trusted active status record.
 
@@ -43,6 +48,7 @@ Each work entry records:
 - dependency Work IDs and external issue references;
 - a separately classified `hard_dependencies` subset;
 - branch and linked PR;
+- active claimant when trusted coordination status establishes one;
 - positive/negative ownership summaries;
 - machine-checkable exact exclusive paths when the issue contract exposes them;
 - program, wave, strategic rank, and critical-path metadata.
@@ -74,7 +80,8 @@ GITHUB_TOKEN=... python tools/roadmap/agent_roadmap.py sync
 ```
 
 A token is optional for the public repository but avoids unauthenticated API limits.
-The sync command is the only networked path.
+The sync command is the only networked path. BLOCKED issues with no comments require
+no status-comment request because they cannot contain a trusted coordination status.
 
 ## Baseline validation
 
@@ -86,8 +93,14 @@ The sync command is the only networked path.
 - missing trusted coordination status for live `CLAIMED`/`REVIEW` work;
 - a `READY`, `CLAIMED`, or `REVIEW` item whose explicitly classified hard dependency
   is not `DONE` or `SUPERSEDED`;
-- exact duplicate exclusive-path claims among `READY`, `CLAIMED`, and `REVIEW` work;
+- exact duplicate exclusive-path claims among `READY`, `CLAIMED`, `REVIEW`, and
+  owner-held `BLOCKED` work;
 - malformed state, ownership, branch, program, wave, or PR metadata.
+
+A dependency-blocked item with no holder does not reserve an implementation path merely
+because its state is `BLOCKED`. By contrast, a lane transitioned to `BLOCKED` by its
+current holder remains reserved until the coordination workflow records an explicit
+release.
 
 Historical `DONE` work remains valid even if later roadmap reconstruction reveals an
 old dependency that is no longer satisfied; validation does not reopen completed
