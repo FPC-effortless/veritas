@@ -34,17 +34,17 @@ def test_texas_city_pilot_enforces_historical_release_cutoffs() -> None:
     final_findings = "csb-final-findings-release-2007-03-20"
     video = "csb-anatomy-of-a-disaster-2008-03-21"
 
-    assert public_ids(datetime(2005, 10, 28, tzinfo=UTC)) == (preliminary,)
-    assert public_ids(datetime(2006, 10, 31, tzinfo=UTC)) == (
+    assert public_ids(datetime(2005, 10, 28, 12, tzinfo=UTC)) == (preliminary,)
+    assert public_ids(datetime(2006, 10, 31, 12, tzinfo=UTC)) == (
         preliminary,
         organizational,
     )
-    assert public_ids(datetime(2007, 3, 21, tzinfo=UTC)) == (
+    assert public_ids(datetime(2007, 3, 21, 12, tzinfo=UTC)) == (
         preliminary,
         organizational,
         final_findings,
     )
-    assert public_ids(datetime(2008, 3, 22, tzinfo=UTC)) == (
+    assert public_ids(datetime(2008, 3, 22, 12, tzinfo=UTC)) == (
         preliminary,
         organizational,
         final_findings,
@@ -54,7 +54,7 @@ def test_texas_city_pilot_enforces_historical_release_cutoffs() -> None:
 
 def test_texas_city_video_is_multimodal_and_reviewed() -> None:
     result = fuse_manifest(
-        load_manifest(as_of=datetime(2008, 3, 22, tzinfo=UTC)),
+        load_manifest(as_of=datetime(2008, 3, 22, 12, tzinfo=UTC)),
         CATALOG,
     )
     by_id = {item.evidence_id: item for item in result.bundle.public.evidence}
