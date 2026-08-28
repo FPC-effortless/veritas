@@ -18,7 +18,7 @@ Each case has two independent artifact collections:
 - `public_evidence` — evidence that may be exposed to the evaluated agent.
 - `verifier_references` — official findings/final reports for operator-side scoring and audit only.
 
-`PublicInvestigationCase` rejects overlap between those collections. `public_projection()` also strips verifier references and denies truth-bearing metadata keys such as `probable_cause`, `root_cause`, `official_findings`, and `recommendations`.
+`PublicInvestigationCase` rejects overlap between those collections. Public projections strip verifier references, omit operator notes, and deny truth-bearing metadata keys such as `probable_cause`, `root_cause`, `official_findings`, and `recommendations`, including inside artifact metadata.
 
 ## Prepare projections
 
@@ -30,6 +30,28 @@ veritas-foundry prepare-public-investigations \
 ```
 
 The verifier output should be written outside an agent-visible package and outside any training corpus. Omit `--verifier-output` when only the public projection is required.
+
+## Materialize source artifacts
+
+```bash
+veritas-foundry materialize-public-investigations \
+  datasets/public_investigations/seeds/seed_v1.json \
+  --registry datasets/public_investigations/source_registry.json \
+  --public-root /datasets/veritas/public
+```
+
+This downloads approved document/web artifacts, records byte counts and SHA-256 hashes, and writes a public `materialization.json` inventory. YouTube artifacts are retained as reference-only links rather than being misidentified as downloaded video bytes.
+
+Verifier material is **not downloaded by default**. When an operator explicitly supplies a separate verifier root, verifier bytes and their inventory are written only there:
+
+```bash
+veritas-foundry materialize-public-investigations \
+  datasets/public_investigations/seeds/seed_v1.json \
+  --public-root /datasets/veritas/public \
+  --verifier-root /secure/veritas/verifier
+```
+
+The materializer validates the dataset against the source registry and rejects ordinary downloads from unregistered hosts. Redirects are checked again after resolution.
 
 ## Release discipline
 
