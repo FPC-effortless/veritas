@@ -51,6 +51,9 @@ contains fabricated deltas.
 
 `BatchReverificationReport.buyer_safe_summary()` creates a separate content-addressed summary. It:
 
+- revalidates the full dumped report and every nested content-derived identity before consulting
+  visibility, so Pydantic `model_copy(update=...)` cannot carry a stale ID across the disclosure
+  boundary;
 - includes individual status entries only for public or buyer-safe trajectories;
 - aggregates internal, evaluator-private, and sealed trajectories without their trajectory, record,
   verifier, evidence, report, or batch identities;
@@ -58,6 +61,10 @@ contains fabricated deltas.
 
 The buyer-safe summary has its own identity derived only from its sanitized contents, so a private
 batch identity cannot become a digest side channel.
+
+`compare_reverification_versions(...)` likewise revalidates the dumped trajectory before using its
+identity or evaluation history. A copied trajectory whose semantic fields changed under an old
+`trajectory_id` fails closed rather than producing a comparison.
 
 ## Evidence boundary
 

@@ -113,6 +113,7 @@ def compare_reverification_versions(
     candidate_record_id: str | None = None,
 ) -> ReverificationComparison:
     """Compare two exact verifier identities without inventing absent component scores."""
+    trajectory = TrajectoryV2.model_validate(trajectory.model_dump(mode="python"))
     baseline, baseline_error = _snapshot_for_verifier(
         trajectory,
         baseline_verifier,
