@@ -22,8 +22,12 @@ from investigation_world.foundry.external_distribution import (
     write_external_investigation_distribution,
 )
 from investigation_world.foundry.models import stable_hash
+from investigation_world.foundry.public_investigation_acquisition import (
+    materialize_public_investigation_dataset,
+)
 from investigation_world.foundry.public_investigation_data import (
     load_public_investigation_dataset,
+    load_source_registry,
     write_dataset_projections,
 )
 from investigation_world.foundry.training_adapters import trainer_adapter_for
@@ -121,6 +125,41 @@ def prepare_public_investigations_cmd(
         verifier_output=verifier_output,
     )
     typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("materialize-public-investigations")
+def materialize_public_investigations_cmd(
+    manifest: Path,
+    registry: Path = Path("datasets/public_investigations/source_registry.json"),
+    public_root: Path = Path("public_investigation_data"),
+    verifier_root: Path | None = None,
+    timeout_seconds: float = 30.0,
+    max_bytes: int = 256 * 1024 * 1024,
+):
+    """Fetch approved artifacts into isolated public and optional verifier roots."""
+    dataset = load_public_investigation_dataset(manifest)
+    source_registry = load_source_registry(registry)
+    result = materialize_public_investigation_dataset(
+        dataset,
+        source_registry,
+        public_root=public_root,
+        verifier_root=verifier_root,
+        timeout_seconds=timeout_seconds,
+        max_bytes=max_bytes,
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "dataset_id": result.dataset_id,
+                "public_artifacts_downloaded": result.public_artifacts_downloaded,
+                "verifier_artifacts_downloaded": result.verifier_artifacts_downloaded,
+                "reference_only_artifacts": result.reference_only_artifacts,
+                "public_root": str(public_root),
+                "verifier_root": None if verifier_root is None else str(verifier_root),
+            },
+            indent=2,
+        )
+    )
 
 
 @app.command("compile-external-foundry")
