@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.evidence import (
     EvidenceArtifactRef,
+    EvidenceDependencyRef,
     EvidenceOutcome,
     EvidencePolicyRef,
     EvidenceProducerRef,
@@ -178,18 +179,12 @@ class TaskQAStageEvidence(BaseModel):
 
     stage: TaskQAStage
     outcome: GateOutcome
-    evidence: Any
+    evidence: EvidenceDependencyRef
     reviewer_role: ExpertRole
     detail: str = ""
 
     @model_validator(mode="after")
-    def validate_evidence_ref(self) -> "TaskQAStageEvidence":
-        # Pydantic Any is used here only to avoid a circular serializer edge in older package builds;
-        # enforce the exact shared dependency model at runtime.
-        from investigation_world.evidence import EvidenceDependencyRef
-
-        if not isinstance(self.evidence, EvidenceDependencyRef):
-            raise ValueError("task QA stage evidence must use EvidenceDependencyRef")
+    def validate_reviewer_role(self) -> "TaskQAStageEvidence":
         allowed_roles = {
             TaskQAStage.AUTHORING_REVIEW: {ExpertRole.AUTHOR},
             TaskQAStage.BLIND_EXECUTION: {ExpertRole.BLIND_EXECUTOR},
@@ -255,61 +250,6 @@ class TaskQAGate(BaseModel):
     detail: str = ""
 
 
-class TaskQAReport(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    report_id: str = ""
-    report_content_sha256: str = ""
-    protocol_version: str = TASK_QA_PROTOCOL_VERSION
-    task_identity: QATaskIdentity
-    environment_identity: EnvironmentIdentity
-    verifier_identity: VerifierIdentity
-    expert_panel: ExpertPanel
-    metrics: TaskQAMetrics
-    stage_evidence: tuple[TaskQAStageEvidence, ...]
-    gates: tuple[TaskQAGate, ...]
-    status: GateOutcome
-
-    @model_validator(mode="after")
-    def validate_report(self) -> "TaskQAReport":
-        if self.protocol_version != TASK_QA_PROTOCOL_VERSION:
-            raise ValueError("unsupported task QA protocol version")
-        stage_evidence = tuple(sorted(self.stage_evidence, key=lambda item: item.stage.value))
-        if len(stage_evidence) != len({item.stage for item in stage_evidence}):
-            raise ValueError("task QA stage evidence may contain each stage only once")
-        panel_roles = {item.role for item in self.expert_panel.assignments}
-        if any(item.reviewer_role not in panel_roles for item in stage_evidence):
-            raise ValueError("task QA stage evidence references a reviewer outside the expert panel")
-        object.__setattr__(self, "stage_evidence", stage_evidence)
-
-        expected_status = (
-            GateOutcome.FAIL
-            if any(gate.outcome == GateOutcome.FAIL for gate in self.gates)
-            else GateOutcome.UNKNOWN
-            if any(gate.outcome == GateOutcome.UNKNOWN for gate in self.gates)
-            else GateOutcome.PASS
-        )
-        if self.status != expected_status:
-            raise ValueError("task QA status does not match gate outcomes")
-
-        payload = self.model_dump(
-            mode="json", exclude={"report_id", "report_content_sha256"}
-        )
-        content_sha256 = _stable_hash(payload)
-        report_id = f"QAREPORT-{content_sha256[:24].upper()}"
-        if self.report_content_sha256 and self.report_content_sha256 != content_sha256:
-            raise ValueError("task QA report content digest does not match immutable contents")
-        if self.report_id and self.report_id != report_id:
-            raise ValueError("task QA report ID does not match immutable contents")
-        object.__setattr__(self, "report_content_sha256", content_sha256)
-        object.__setattr__(self, "report_id", report_id)
-        return self
-
-    @property
-    def qualified(self) -> bool:
-        return self.status == GateOutcome.PASS
-
-
 def _gate(name: str, outcome: GateOutcome, detail: str = "") -> TaskQAGate:
     return TaskQAGate(name=name, outcome=outcome, detail=detail)
 
@@ -324,25 +264,12 @@ def _resolved_gate(
     return _gate(name, GateOutcome.PASS)
 
 
-def qualify_task_qa(
-    *,
-    task_identity: QATaskIdentity,
-    environment_identity: EnvironmentIdentity,
-    verifier_identity: VerifierIdentity,
-    expert_panel: ExpertPanel,
-    metrics: TaskQAMetrics,
-    stage_evidence: tuple[TaskQAStageEvidence, ...] | list[TaskQAStageEvidence],
-) -> TaskQAReport:
-    by_stage: dict[TaskQAStage, TaskQAStageEvidence] = {}
-    for item in stage_evidence:
-        if item.stage in by_stage:
-            raise ValueError(f"duplicate task QA stage: {item.stage.value}")
-        by_stage[item.stage] = item
-
+def _task_qa_gates(
+    *, metrics: TaskQAMetrics, stage_evidence: tuple[TaskQAStageEvidence, ...]
+) -> tuple[TaskQAGate, ...]:
+    by_stage = {item.stage: item for item in stage_evidence}
     missing_stages = set(REQUIRED_TASK_QA_STAGES) - set(by_stage)
-    stage_coverage = (
-        GateOutcome.UNKNOWN if missing_stages else GateOutcome.PASS
-    )
+    stage_coverage = GateOutcome.UNKNOWN if missing_stages else GateOutcome.PASS
     stage_failures = [
         item.stage.value for item in by_stage.values() if item.outcome == GateOutcome.FAIL
     ]
@@ -356,7 +283,6 @@ def qualify_task_qa(
         if missing_stages or stage_unknowns
         else GateOutcome.PASS
     )
-
     blind_outcome = (
         GateOutcome.UNKNOWN
         if metrics.blind_execution_success is None
@@ -378,8 +304,7 @@ def qualify_task_qa(
         if metrics.deterministic_replay_match
         else GateOutcome.FAIL
     )
-
-    gates = (
+    return (
         _gate("expert_panel_independence", GateOutcome.PASS),
         _gate(
             "required_stage_coverage",
@@ -420,13 +345,78 @@ def qualify_task_qa(
         ),
         _gate("deterministic_replay", replay_outcome),
     )
-    status = (
-        GateOutcome.FAIL
-        if any(gate.outcome == GateOutcome.FAIL for gate in gates)
-        else GateOutcome.UNKNOWN
-        if any(gate.outcome == GateOutcome.UNKNOWN for gate in gates)
-        else GateOutcome.PASS
-    )
+
+
+class TaskQAReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    report_id: str = ""
+    report_content_sha256: str = ""
+    protocol_version: str = TASK_QA_PROTOCOL_VERSION
+    task_identity: QATaskIdentity
+    environment_identity: EnvironmentIdentity
+    verifier_identity: VerifierIdentity
+    expert_panel: ExpertPanel
+    metrics: TaskQAMetrics
+    stage_evidence: tuple[TaskQAStageEvidence, ...]
+    gates: tuple[TaskQAGate, ...] = ()
+    status: GateOutcome = GateOutcome.UNKNOWN
+
+    @model_validator(mode="after")
+    def validate_report(self) -> "TaskQAReport":
+        if self.protocol_version != TASK_QA_PROTOCOL_VERSION:
+            raise ValueError("unsupported task QA protocol version")
+        stage_evidence = tuple(sorted(self.stage_evidence, key=lambda item: item.stage.value))
+        if len(stage_evidence) != len({item.stage for item in stage_evidence}):
+            raise ValueError("task QA stage evidence may contain each stage only once")
+        panel_roles = {item.role for item in self.expert_panel.assignments}
+        if any(item.reviewer_role not in panel_roles for item in stage_evidence):
+            raise ValueError("task QA stage evidence references a reviewer outside the expert panel")
+        object.__setattr__(self, "stage_evidence", stage_evidence)
+
+        gates = _task_qa_gates(metrics=self.metrics, stage_evidence=stage_evidence)
+        status = (
+            GateOutcome.FAIL
+            if any(gate.outcome == GateOutcome.FAIL for gate in gates)
+            else GateOutcome.UNKNOWN
+            if any(gate.outcome == GateOutcome.UNKNOWN for gate in gates)
+            else GateOutcome.PASS
+        )
+        object.__setattr__(self, "gates", gates)
+        object.__setattr__(self, "status", status)
+
+        payload = self.model_dump(
+            mode="json", exclude={"report_id", "report_content_sha256"}
+        )
+        content_sha256 = _stable_hash(payload)
+        report_id = f"QAREPORT-{content_sha256[:24].upper()}"
+        if self.report_content_sha256 and self.report_content_sha256 != content_sha256:
+            raise ValueError("task QA report content digest does not match immutable contents")
+        if self.report_id and self.report_id != report_id:
+            raise ValueError("task QA report ID does not match immutable contents")
+        object.__setattr__(self, "report_content_sha256", content_sha256)
+        object.__setattr__(self, "report_id", report_id)
+        return self
+
+    @property
+    def qualified(self) -> bool:
+        return self.status == GateOutcome.PASS
+
+
+def qualify_task_qa(
+    *,
+    task_identity: QATaskIdentity,
+    environment_identity: EnvironmentIdentity,
+    verifier_identity: VerifierIdentity,
+    expert_panel: ExpertPanel,
+    metrics: TaskQAMetrics,
+    stage_evidence: tuple[TaskQAStageEvidence, ...] | list[TaskQAStageEvidence],
+) -> TaskQAReport:
+    seen: set[TaskQAStage] = set()
+    for item in stage_evidence:
+        if item.stage in seen:
+            raise ValueError(f"duplicate task QA stage: {item.stage.value}")
+        seen.add(item.stage)
     return TaskQAReport(
         task_identity=task_identity,
         environment_identity=environment_identity,
@@ -434,8 +424,6 @@ def qualify_task_qa(
         expert_panel=expert_panel,
         metrics=metrics,
         stage_evidence=tuple(stage_evidence),
-        gates=gates,
-        status=status,
     )
 
 
@@ -451,11 +439,16 @@ def task_qa_evidence_record(
     """Wrap a task QA report in the shared evidence contract for cross-subsystem composition."""
 
     outcome = EvidenceOutcome(report.status.value)
+    claims = {
+        GateOutcome.PASS: "Task QA protocol requirements are satisfied.",
+        GateOutcome.FAIL: "Task QA protocol requirements failed.",
+        GateOutcome.UNKNOWN: "Task QA protocol requirements remain unresolved.",
+    }
     return EvidenceRecord(
         evidence_type="qualification.task_qa",
         outcome=outcome,
         visibility=visibility,
-        claim="Task QA protocol requirements are satisfied." if report.qualified else "Task QA protocol requirements are not fully satisfied.",
+        claim=claims[report.status],
         subjects=(
             EvidenceSubjectRef(
                 kind="environment",
