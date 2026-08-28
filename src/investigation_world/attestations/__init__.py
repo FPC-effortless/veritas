@@ -3,10 +3,12 @@ from investigation_world.attestations.models import (
     SIGNATURE_SCHEMA_VERSION,
     ArtifactIdentity,
     AttestationSignature,
+    AttestationVisibility,
     ContentIdentity,
     EnvironmentAttestation,
     QualificationBinding,
     serialize_attestation,
+    serialize_public_attestation,
 )
 
 __all__ = [
@@ -14,8 +16,10 @@ __all__ = [
     "SIGNATURE_SCHEMA_VERSION",
     "ArtifactIdentity",
     "AttestationSignature",
+    "AttestationVisibility",
     "ContentIdentity",
     "EnvironmentAttestation",
     "QualificationBinding",
     "serialize_attestation",
+    "serialize_public_attestation",
 ]
