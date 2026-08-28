@@ -1,0 +1,72 @@
+name: Architecture proposal
+description: Propose a new Veritas-owned product or infrastructure boundary
+title: "Architecture proposal: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Veritas integrates commodity infrastructure and owns assurance-critical semantics. Complete every evidence field when this proposal enters a presumptive non-goal.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Proposed scope
+      options:
+        - Environment correctness or fidelity
+        - Verifier trust or qualification
+        - Frontier or training-value qualification
+        - Portability or conformance
+        - Trajectory diagnosis or reverification
+        - Presumptive non-goal / new owned infrastructure
+    validations:
+      required: true
+  - type: textarea
+    id: requirement
+    attributes:
+      label: Assurance invariant or buyer requirement
+      description: State the concrete requirement and the evidence that it is real.
+    validations:
+      required: true
+  - type: textarea
+    id: integrations
+    attributes:
+      label: Integration alternatives evaluated
+      description: Name exact external systems/versions and summarize tests or research performed.
+    validations:
+      required: true
+  - type: textarea
+    id: insufficiency
+    attributes:
+      label: Why integration is insufficient
+      description: Identify the semantic or assurance loss that an adapter/configuration cannot close. Write “Not a presumptive non-goal” only when applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Minimum Veritas-owned boundary
+      description: Define what Veritas must own and what remains delegated.
+    validations:
+      required: true
+  - type: textarea
+    id: identity
+    attributes:
+      label: Veritas identity contribution
+      description: Explain the improvement to correctness, verifier trust, frontier utility, portability, or diagnosis.
+    validations:
+      required: true
+  - type: textarea
+    id: falsifiers
+    attributes:
+      label: Falsifiers and exit path
+      description: State evidence that would invalidate the proposal and how to return to integration.
+    validations:
+      required: true
+  - type: checkboxes
+    id: policy
+    attributes:
+      label: Policy acknowledgement
+      options:
+        - label: I reviewed the Veritas “Do Not Build” Architecture Policy.
+          required: true
+        - label: This proposal does not treat competitor feature count or convenience as sufficient evidence.
+          required: true
