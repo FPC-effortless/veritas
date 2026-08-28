@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "corpus_id": "csb-gold-10",
+  "coverage_target": 10,
+  "pilots": [
+    {
+      "case_id": "2005-04-I-TX",
+      "pilot_dir": "csb_texas_city_2005"
+    },
+    {
+      "case_id": "2008-03-I-FL",
+      "pilot_dir": "csb_t2_laboratories_2007"
+    },
+    {
+      "case_id": "2008-05-I-GA",
+      "pilot_dir": "csb_imperial_sugar_2008"
+    },
+    {
+      "case_id": "2010-08-I-WA",
+      "pilot_dir": "csb_tesoro_anacortes_2010"
+    },
+    {
+      "case_id": "2012-03-I-CA",
+      "pilot_dir": "csb_chevron_richmond_2012"
+    },
+    {
+      "case_id": "2013-02-I-TX",
+      "pilot_dir": "csb_west_fertilizer_2013"
+    },
+    {
+      "case_id": "2013-03-I-LA",
+      "pilot_dir": "csb_williams_olefins_2013"
+    },
+    {
+      "case_id": "2017-08-I-TX",
+      "pilot_dir": "csb_arkema_crosby_2017"
+    },
+    {
+      "case_id": "2018-02-I-WI",
+      "pilot_dir": "csb_husky_superior_2018"
+    },
+    {
+      "case_id": "2019-04-I-PA",
+      "pilot_dir": "csb_pes_philadelphia_2019"
+    }
+  ]
+}
