@@ -1,0 +1,25 @@
+{
+  "review_id": "review-csb-tesoro-anacortes-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2010-08-I-WA",
+  "scope": [
+    "Reference CSB-authored public news and video landing pages by external locator only.",
+    "Treat April 2, 2010 deployment and April 1, 2011 anniversary safety message as ongoing-investigation context.",
+    "Treat January 29, 2014 HTHA findings as draft institutional findings, distinct from May 1 final approval.",
+    "Preserve the animation date discrepancy: the video landing page displays January 28, 2014, while the contemporaneous CSB news release states the animation was released January 30, 2014.",
+    "Use the January 30 publisher release announcement for conservative historical availability; do not backdate the animation to the landing-page display date.",
+    "Treat October 28, 2014 Behind the Curve as post-final communication.",
+    "Do not copy draft/final report PDFs, appendices, source text, video bytes, captions, transcripts, frames, photographs, or named-person records into the repository.",
+    "Do not promote precise public event times or institutional findings into private ground truth automatically.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises provenance, publication-date reconciliation, draft-to-final hypothesis revision, HTHA/metallurgy reasoning, and external evidence references only.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Artifact acquisition, extraction, redistribution, or training use requires a separate artifact-level review.",
+    "CSB draft and final findings remain institutional evidence, not omniscient causal truth."
+  ]
+}
