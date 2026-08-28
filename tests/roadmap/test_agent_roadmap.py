@@ -218,3 +218,15 @@ def test_sync_resolves_dependency_alias_from_live_contract(
     synced = roadmap.sync(current, "FPC-effortless/veritas", None)
     by_id = {entry["work_id"]: entry for entry in synced["work"]}
     assert by_id["B"]["dependencies"] == ["A"]
+
+
+def test_sync_rejects_active_issue_without_trusted_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1, state="CLAIMED"))
+    issue_a = issue(1, "A", "CLAIMED", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
+
+    with pytest.raises(roadmap.RoadmapError, match="missing trusted status"):
+        roadmap.sync(current, "FPC-effortless/veritas", None)
