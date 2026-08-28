@@ -9,6 +9,8 @@ The compiler consumes two authorities:
 1. the canonical trajectory, which preserves event ordering, structured event payloads, state digests, evidence/resource references, costs, visibility, model/harness/runtime/verifier identity, and provenance where producers recorded them;
 2. the exact portable operational contract, which preserves public actions/runtime operations and evaluator-private transitions, process requirements, invariants, budgets, evidence requirements, and verifier component semantics.
 
+Because TRACE-002 derives evaluator-private semantics, the trajectory must bind the **full** portable contract identity. A missing contract reference or a reference containing only `public_id` fails closed rather than authorizing process, transition, invariant, budget, or verifier derivation from private evaluator state. A public contract identity proves only the public task/runtime surface and is not interchangeable with `contract_id`.
+
 The compiler does **not** inspect natural-language transcript text to infer an action, subgoal, permission, cause, or evidence flow. Structured facts that are not represented remain `UNKNOWN` or `NOT_APPLICABLE`.
 
 ## Produced semantics
@@ -39,7 +41,7 @@ Changing material trajectory or contract semantics therefore changes or invalida
 
 `apply_semantic_annotations()` returns a new `MachineExperience` containing the bundle's `ExperienceSpan` and `StructuralRecord` outputs. It never mutates the source `TrajectoryV2` or source `MachineExperience`, and the underlying `experience_id` remains derived only from the canonical trajectory identity.
 
-Private process, invariant, transition, and verifier facts are emitted with evaluator-private visibility. Public and buyer-safe bundle projections omit the full contract/evaluator identity and expose only the independently content-bound public contract identity plus facts whose source visibility permits disclosure.
+Private process, invariant, transition, and verifier facts are emitted with evaluator-private visibility. Public and buyer-safe bundle projections omit the full contract/evaluator identity **and the private-bound `bundle_id`**, exposing only the independently content-bound public contract identity plus facts whose source visibility permits disclosure. The internal bundle retains its full content-derived identity for trusted lineage and reverification.
 
 ## What UNKNOWN means
 
