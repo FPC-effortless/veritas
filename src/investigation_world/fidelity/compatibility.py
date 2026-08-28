@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from investigation_world.fidelity.record import FidelityRecord
-from investigation_world.fidelity.schema import CoverageStatus, FidelityDimension, FidelityLevel
+from investigation_world.fidelity.record import FidelityRecord, revalidate_fidelity_record
+from investigation_world.fidelity.schema import (
+    CoverageStatus,
+    FidelityDimension,
+    FidelityLevel,
+)
 
 
 _LEVEL_RANK: dict[FidelityLevel, int] = {
@@ -46,15 +50,16 @@ def evaluate_fidelity_compatibility(
     record: FidelityRecord,
     requirement: FidelityClaimRequirement,
 ) -> FidelityCompatibilityResult:
+    validated_record = revalidate_fidelity_record(record)
     failures: list[str] = []
-    actual_level = record.declaration.level
+    actual_level = validated_record.declaration.level
     if _LEVEL_RANK[actual_level] < _LEVEL_RANK[requirement.minimum_level]:
         failures.append(
             f"fidelity level {actual_level.value} is below required "
             f"{requirement.minimum_level.value}"
         )
 
-    coverage = {item.dimension: item for item in record.declaration.coverage}
+    coverage = {item.dimension: item for item in validated_record.declaration.coverage}
     for dimension in requirement.required_dimensions:
         item = coverage.get(dimension)
         if item is None or item.status == CoverageStatus.OMITTED:
