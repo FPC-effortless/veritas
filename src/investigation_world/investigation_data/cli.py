@@ -12,14 +12,13 @@ from .acquisition import (
     verify_receipt,
 )
 from .catalog import catalog_digest, find_source, load_catalog
-from .corpus import (
-    corpus_digest,
-    load_fusion_corpus,
-    validate_fusion_corpus_sources,
-)
 from .fusion import FusionManifest, fuse_manifest, manifest_digest
-from .models import ArtifactReceipt
-from .preparation import PreparationError, prepare_zip_artifact
+from .models import ArtifactReceipt, DocumentPreparationPlan
+from .preparation import (
+    PreparationError,
+    prepare_document_artifact,
+    prepare_zip_artifact,
+)
 from .serialization import canonical_json_bytes, write_episode_bundle
 
 app = typer.Typer(help="Acquire and prepare source data for Veritas investigation environments.")
@@ -149,39 +148,43 @@ def prepare_zip_cmd(
     typer.echo(json.dumps({"prepared": True, "manifest": str(manifest)}, indent=2))
 
 
-@app.command("validate-fusion-corpus")
-def validate_fusion_corpus(
-    index: Path,
+@app.command("prepare-document")
+def prepare_document_cmd(
+    receipt: Path,
+    plan: Path,
+    acquisition_root: Path = Path(".veritas-data"),
+    output: Path = Path(".veritas-prepared"),
+    oracle_output: Path | None = None,
     catalog: Path | None = None,
+    max_bytes: int = 512 * 1024 * 1024,
 ) -> None:
+    """Split a receipt-verified PDF into public pages and an optional sealed oracle output."""
     try:
-        loaded = load_fusion_corpus(index)
-        validate_fusion_corpus_sources(loaded, load_catalog(catalog))
-    except (OSError, ValueError, KeyError) as exc:
-        typer.echo(f"fusion corpus validation refused: {exc}", err=True)
-        raise typer.Exit(2) from exc
-
-    phases = {
-        phase: sum(
-            release.phase == phase
-            for case in loaded.cases
-            for release in case.evidence_releases
+        loaded_plan = DocumentPreparationPlan.model_validate_json(
+            plan.read_text(encoding="utf-8")
         )
-        for phase in ("pre_final", "final", "post_final")
-    }
+        result = prepare_document_artifact(
+            receipt,
+            acquisition_root,
+            output,
+            loaded_plan,
+            oracle_root=oracle_output,
+            catalog=load_catalog(catalog),
+            max_bytes=max_bytes,
+        )
+    except (OSError, PreparationError, AcquisitionError, KeyError, ValueError) as exc:
+        typer.echo(f"document preparation refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
     typer.echo(
         json.dumps(
             {
-                "valid": True,
-                "corpus_id": loaded.corpus_id,
-                "source_id": loaded.source_id,
-                "cases": len(loaded.cases),
-                "evidence_releases": sum(
-                    len(case.evidence_releases) for case in loaded.cases
-                ),
-                "phases": phases,
-                "date_only_availability_policy": loaded.date_only_availability_policy,
-                "sha256": corpus_digest(loaded),
+                "prepared": True,
+                "plan_id": result.plan_id,
+                "source_sha256": result.source_sha256,
+                "public_manifest": result.public_manifest,
+                "public_slices": len(result.public_slices),
+                "oracle_materialized": result.oracle_manifest is not None,
+                "ignored_page_count": result.ignored_page_count,
             },
             indent=2,
         )

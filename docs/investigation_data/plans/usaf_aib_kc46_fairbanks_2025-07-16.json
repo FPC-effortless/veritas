@@ -1,0 +1,123 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "usaf-aib-kc46-fairbanks-2025-07-16",
+  "version": "1.0.0",
+  "source_id": "usaf-aib",
+  "artifact_id": "kc46-fairbanks-2025-07-16",
+  "source_case_id": "KC-46A-TN-18-6054-2025-07-16",
+  "public_title": "KC-46A Fairbanks maintenance mishap investigation",
+  "domain": "military_accident_investigation",
+  "event_date": "2025-07-16",
+  "objective": "Determine the best-supported causal explanation and materially contributing conditions from the released factual record without access to the Air Force board's opinion or answer-bearing finding pages.",
+  "expected_page_count": 27,
+  "expected_sha256": null,
+  "slices": [
+    {
+      "slice_id": "front-matter",
+      "title": "Cover and convening material",
+      "exposure": "ignore",
+      "page_ranges": [
+        {
+          "start_page": 1,
+          "end_page": 2
+        }
+      ]
+    },
+    {
+      "slice_id": "executive-summary",
+      "title": "Executive summary containing the board finding",
+      "exposure": "oracle",
+      "page_ranges": [
+        {
+          "start_page": 3,
+          "end_page": 3
+        }
+      ]
+    },
+    {
+      "slice_id": "navigation",
+      "title": "Table of contents and acronyms",
+      "exposure": "ignore",
+      "page_ranges": [
+        {
+          "start_page": 4,
+          "end_page": 6
+        }
+      ]
+    },
+    {
+      "slice_id": "factual-record-a",
+      "title": "Released factual record, first segment",
+      "exposure": "public",
+      "page_ranges": [
+        {
+          "start_page": 7,
+          "end_page": 16
+        }
+      ]
+    },
+    {
+      "slice_id": "answer-bearing-factual-page",
+      "title": "Factual-section page containing an explicit causal statement",
+      "exposure": "oracle",
+      "page_ranges": [
+        {
+          "start_page": 17,
+          "end_page": 17
+        }
+      ]
+    },
+    {
+      "slice_id": "factual-record-b",
+      "title": "Released factual record, second segment",
+      "exposure": "public",
+      "page_ranges": [
+        {
+          "start_page": 18,
+          "end_page": 22
+        }
+      ]
+    },
+    {
+      "slice_id": "transition-page",
+      "title": "Non-extractable transition page retained outside the public package",
+      "exposure": "ignore",
+      "page_ranges": [
+        {
+          "start_page": 23,
+          "end_page": 23
+        }
+      ]
+    },
+    {
+      "slice_id": "statement-of-opinion",
+      "title": "Statement of Opinion, cause, contributing factor, and conclusion",
+      "exposure": "oracle",
+      "page_ranges": [
+        {
+          "start_page": 24,
+          "end_page": 25
+        }
+      ]
+    },
+    {
+      "slice_id": "tab-index",
+      "title": "Index of tabs",
+      "exposure": "ignore",
+      "page_ranges": [
+        {
+          "start_page": 26,
+          "end_page": 27
+        }
+      ]
+    }
+  ],
+  "forbidden_public_patterns": [
+    "preponderance of (?:the )?evidence",
+    "mishap was caused by",
+    "substantially contribut(?:ed|ing)",
+    "ultimately,? due to consistent heat",
+    "statement of opinion"
+  ],
+  "text_scan_required": true
+}

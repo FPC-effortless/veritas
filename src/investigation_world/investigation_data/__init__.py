@@ -1,14 +1,6 @@
 """Acquisition, preparation, and evidence-fusion primitives for investigation datasets."""
 
 from .catalog import catalog_digest, find_source, load_catalog
-from .corpus import (
-    CorpusCaseSpec,
-    CorpusEvidenceRelease,
-    FusionCorpusIndex,
-    corpus_digest,
-    load_fusion_corpus,
-    validate_fusion_corpus_sources,
-)
 from .fusion import (
     DerivationKind,
     EpistemicRole,
@@ -24,40 +16,48 @@ from .fusion import (
     validate_fusion_sources,
 )
 from .models import (
+    DocumentPageExposure,
+    DocumentPreparationPlan,
+    DocumentPreparationResult,
+    DocumentSliceSpec,
     InvestigationEpisodeBundle,
+    PageRange,
+    PreparedDocumentSlice,
     PrivateInvestigationOracle,
     PublicInvestigationEpisode,
     SourceCatalog,
     SourceSpec,
 )
+from .preparation import prepare_document_artifact
 from .serialization import write_episode_bundle
 
 __all__ = [
-    "CorpusCaseSpec",
-    "CorpusEvidenceRelease",
     "DerivationKind",
+    "DocumentPageExposure",
+    "DocumentPreparationPlan",
+    "DocumentPreparationResult",
+    "DocumentSliceSpec",
     "EpistemicRole",
     "EvidenceFragment",
     "EvidenceModality",
     "EvidenceRelation",
-    "FusionCorpusIndex",
     "FusionError",
     "FusionManifest",
     "FusionReport",
     "FusionResult",
     "InvestigationEpisodeBundle",
+    "PageRange",
+    "PreparedDocumentSlice",
     "PrivateInvestigationOracle",
     "PublicInvestigationEpisode",
     "SourceCatalog",
     "SourceSpec",
     "catalog_digest",
-    "corpus_digest",
     "find_source",
     "fuse_manifest",
     "load_catalog",
-    "load_fusion_corpus",
     "manifest_digest",
-    "validate_fusion_corpus_sources",
+    "prepare_document_artifact",
     "validate_fusion_sources",
     "write_episode_bundle",
 ]

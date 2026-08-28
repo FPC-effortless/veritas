@@ -516,6 +516,75 @@
       "requires_redaction_review": true
     },
     {
+      "source_id": "usaf-aib",
+      "name": "U.S. Air Force Accident Investigation Board reports",
+      "publisher": "United States Air Force",
+      "domains": [
+        "military_accident",
+        "aviation",
+        "maintenance_investigation"
+      ],
+      "homepage": "https://www.afjag.af.mil/AIB-Reports/",
+      "allowed_hosts": [
+        "afjag.af.mil"
+      ],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "review_required",
+        "ai_use": "allowed_with_conditions",
+        "license_expression": "U.S. government accident-investigation report; embedded or incorporated third-party material requires separate review",
+        "terms_url": "https://www.afjag.af.mil/AIB-Reports/",
+        "attribution_required": true,
+        "review_notes": "Acquire publicly released AIB reports from the official Air Force JAG index. Review embedded photographs, technical material, and personally identifying content before redistribution."
+      },
+      "truth": {
+        "strength": "strong",
+        "basis": "Formal Air Force accident investigations contain factual records plus board opinions on cause and contributing factors.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "evidence_reference",
+        "limitations": [
+          "AIB cause and contributing-factor statements are official investigative opinions rather than omniscient ground truth.",
+          "Answer-bearing findings can appear outside the formal Statement of Opinion and require page-level leakage review."
+        ]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "kc46-fairbanks-2025-07-16",
+          "label": "KC-46A Fairbanks high-power engine-run mishap AIB report",
+          "method": "http_file",
+          "url": "https://www.afjag.af.mil/LinkClick.aspx?fileticket=nDggM1_F7Vw%3D&portalid=77",
+          "artifact_class": "document",
+          "filename": "kc46-fairbanks-2025-07-16-aib.pdf",
+          "expected_sha256": null,
+          "notes": "Official 27-page AIB report released in 2026 for the 16 July 2025 Fairbanks International Airport mishap. Use the checked-in page-sealing plan before constructing an agent-visible episode."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "usaf-aib-depth-10",
+          "label": "Completed evidence-rich military accident investigations",
+          "target_episodes": 10,
+          "selection_method": "Select completed AIB reports with reconstructable factual sections and independently isolatable opinion/finding material; review every physical page for answer leakage before public preparation.",
+          "selectors": [
+            "completed AIB report",
+            "publicly released factual record",
+            "separable opinion/findings"
+          ],
+          "strata": [
+            "maintenance",
+            "human factors",
+            "mechanical/system",
+            "ground operations",
+            "environmental"
+          ],
+          "notes": "Historical AIB cases are reference/development material, not contamination-resistant sealed evaluation cases."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": true,
+      "requires_redaction_review": true
+    },
+    {
       "source_id": "acled",
       "name": "Armed Conflict Location & Event Data (ACLED)",
       "publisher": "ACLED Analysis, Inc.",

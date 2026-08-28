@@ -3,12 +3,26 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from pypdf import PdfReader, PdfWriter
+
+from .models import (
+    AIUsePolicy,
+    ArtifactReceipt,
+    DocumentPageExposure,
+    DocumentPreparationPlan,
+    DocumentPreparationResult,
+    DocumentSliceSpec,
+    PreparedDocumentSlice,
+    SourceCatalog,
+)
 
 
 class PreparationError(RuntimeError):
@@ -198,7 +212,6 @@ def prepare_zip_artifact(
 ) -> Path:
     """Verify an acquisition receipt, safely extract its ZIP, and write a hash manifest."""
     from .acquisition import verify_receipt
-    from .models import ArtifactReceipt
 
     receipt_bytes = receipt_path.read_bytes()
     receipt = ArtifactReceipt.model_validate_json(receipt_bytes)
@@ -242,6 +255,275 @@ def prepare_zip_artifact(
         encoding="utf-8",
     )
     return manifest_path
+
+
+def prepare_document_artifact(
+    receipt_path: Path,
+    acquisition_root: Path,
+    prepared_root: Path,
+    plan: DocumentPreparationPlan,
+    *,
+    oracle_root: Path | None = None,
+    catalog: SourceCatalog | None = None,
+    max_bytes: int = 512 * 1024 * 1024,
+) -> DocumentPreparationResult:
+    """Split a receipt-verified PDF into physically separate public and oracle page slices."""
+    from .acquisition import verify_receipt
+    from .catalog import find_source
+
+    if max_bytes < 1:
+        raise ValueError("max_bytes must be positive")
+    receipt_bytes = receipt_path.read_bytes()
+    receipt = ArtifactReceipt.model_validate_json(receipt_bytes)
+    if not verify_receipt(acquisition_root, receipt):
+        raise PreparationError("acquired artifact does not match its provenance receipt")
+    if receipt.source_id != plan.source_id or receipt.artifact_id != plan.artifact_id:
+        raise PreparationError("document plan source/artifact identity does not match receipt")
+    if plan.expected_sha256 is not None and plan.expected_sha256 != receipt.sha256:
+        raise PreparationError("document source SHA-256 does not match the preparation plan")
+
+    if catalog is not None:
+        source = find_source(catalog, plan.source_id)
+        if not any(item.artifact_id == plan.artifact_id for item in source.artifacts):
+            raise PreparationError("document plan artifact is absent from the current source catalog")
+        if source.rights.ai_use is AIUsePolicy.BLOCKED:
+            raise PreparationError("current source policy blocks AI use")
+        if source.rights.ai_use is AIUsePolicy.REVIEW_REQUIRED and not receipt.rights_review_id:
+            raise PreparationError("current source policy requires an AI-use review identifier")
+
+    acquisition = acquisition_root.resolve()
+    source_path = (acquisition / receipt.local_path).resolve()
+    if acquisition not in source_path.parents:
+        raise PreparationError("receipt artifact path escaped acquisition root")
+    if source_path.stat().st_size > max_bytes:
+        raise PreparationError(f"document exceeds max_bytes={max_bytes}")
+    with source_path.open("rb") as handle:
+        if handle.read(5) != b"%PDF-":
+            raise PreparationError("document artifact is not a PDF")
+
+    public_base = prepared_root.resolve()
+    oracle_base = oracle_root.resolve() if oracle_root is not None else None
+    if oracle_base is not None:
+        _assert_separate_roots(public_base, oracle_base)
+    public_destination = public_base / plan.plan_id / receipt.sha256[:16]
+    oracle_destination = (
+        oracle_base / plan.plan_id / receipt.sha256[:16]
+        if oracle_base is not None
+        else None
+    )
+    if public_destination.exists():
+        raise PreparationError(f"public document destination already exists: {public_destination}")
+    if oracle_destination is not None and oracle_destination.exists():
+        raise PreparationError(f"oracle document destination already exists: {oracle_destination}")
+
+    reader = PdfReader(source_path)
+    if reader.is_encrypted:
+        raise PreparationError("encrypted PDF documents are not accepted")
+    if len(reader.pages) != plan.expected_page_count:
+        raise PreparationError(
+            f"document page count changed: expected {plan.expected_page_count}, "
+            f"got {len(reader.pages)}"
+        )
+
+    public_pages = _pages_for_exposure(plan, DocumentPageExposure.PUBLIC)
+    _scan_public_pages(reader, public_pages, plan)
+
+    public_destination.mkdir(parents=True, exist_ok=False)
+    if oracle_destination is not None:
+        oracle_destination.mkdir(parents=True, exist_ok=False)
+
+    public_slices = _write_exposure_slices(
+        reader,
+        plan,
+        DocumentPageExposure.PUBLIC,
+        public_destination,
+    )
+    oracle_slices: tuple[PreparedDocumentSlice, ...] = ()
+    if oracle_destination is not None:
+        oracle_slices = _write_exposure_slices(
+            reader,
+            plan,
+            DocumentPageExposure.ORACLE,
+            oracle_destination,
+        )
+
+    ignored_pages = len(_pages_for_exposure(plan, DocumentPageExposure.IGNORE))
+    public_manifest_path = public_destination / "manifest.json"
+    public_manifest = {
+        "schema_version": "1.0",
+        "plan_id": plan.plan_id,
+        "plan_version": plan.version,
+        "source_id": plan.source_id,
+        "artifact_id": plan.artifact_id,
+        "source_sha256": receipt.sha256,
+        "catalog_sha256": receipt.catalog_sha256,
+        "public_title": plan.public_title,
+        "domain": plan.domain,
+        "event_date": plan.event_date.isoformat(),
+        "objective": plan.objective,
+        "text_scan": {
+            "required": plan.text_scan_required,
+            "pages_scanned": len(public_pages),
+            "passed": True,
+        },
+        "slices": [item.model_dump(mode="json") for item in public_slices],
+    }
+    _write_json(public_manifest_path, public_manifest)
+
+    oracle_manifest_path: Path | None = None
+    if oracle_destination is not None:
+        oracle_manifest_path = oracle_destination / "manifest.json"
+        oracle_manifest = {
+            "schema_version": "1.0",
+            "plan": plan.model_dump(mode="json"),
+            "source_case_id": plan.source_case_id,
+            "source_url": receipt.source_url,
+            "resolved_url": receipt.resolved_url,
+            "source_sha256": receipt.sha256,
+            "source_byte_count": receipt.byte_count,
+            "catalog_sha256": receipt.catalog_sha256,
+            "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+            "rights_review_id": receipt.rights_review_id,
+            "public_slices": [item.model_dump(mode="json") for item in public_slices],
+            "oracle_slices": [item.model_dump(mode="json") for item in oracle_slices],
+            "ignored_page_count": ignored_pages,
+        }
+        _write_json(oracle_manifest_path, oracle_manifest)
+
+    return DocumentPreparationResult(
+        plan_id=plan.plan_id,
+        source_sha256=receipt.sha256,
+        public_slices=public_slices,
+        oracle_slices=oracle_slices,
+        ignored_page_count=ignored_pages,
+        public_manifest=str(public_manifest_path),
+        oracle_manifest=str(oracle_manifest_path) if oracle_manifest_path is not None else None,
+    )
+
+
+def _pages_for_exposure(
+    plan: DocumentPreparationPlan,
+    exposure: DocumentPageExposure,
+) -> tuple[int, ...]:
+    pages: list[int] = []
+    for item in plan.slices:
+        if item.exposure is not exposure:
+            continue
+        for page_range in item.page_ranges:
+            pages.extend(range(page_range.start_page, page_range.end_page + 1))
+    return tuple(pages)
+
+
+def _scan_public_pages(
+    reader: PdfReader,
+    public_pages: tuple[int, ...],
+    plan: DocumentPreparationPlan,
+) -> None:
+    patterns: list[re.Pattern[str]] = []
+    for index, expression in enumerate(plan.forbidden_public_patterns, start=1):
+        try:
+            patterns.append(re.compile(expression, re.IGNORECASE | re.MULTILINE))
+        except re.error as exc:
+            raise PreparationError(f"invalid forbidden public pattern #{index}") from exc
+
+    for page_number in public_pages:
+        try:
+            text = reader.pages[page_number - 1].extract_text() or ""
+        except Exception as exc:
+            raise PreparationError(f"could not extract text from public page {page_number}") from exc
+        if plan.text_scan_required and not text.strip():
+            raise PreparationError(f"public page {page_number} has no extractable text")
+        for pattern_index, pattern in enumerate(patterns, start=1):
+            if pattern.search(text):
+                raise PreparationError(
+                    f"public page {page_number} matched forbidden pattern #{pattern_index}"
+                )
+
+
+def _write_exposure_slices(
+    reader: PdfReader,
+    plan: DocumentPreparationPlan,
+    exposure: DocumentPageExposure,
+    destination: Path,
+) -> tuple[PreparedDocumentSlice, ...]:
+    written: list[PreparedDocumentSlice] = []
+    for index, item in enumerate(plan.slices, start=1):
+        if item.exposure is not exposure:
+            continue
+        page_numbers = _pages_for_slice(item)
+        relative_path = Path("slices") / f"{index:03d}-{item.slice_id}.pdf"
+        output_path = destination / relative_path
+        digest = _write_pdf_slice(reader, page_numbers, output_path)
+        written.append(
+            PreparedDocumentSlice(
+                slice_id=item.slice_id,
+                title=item.title,
+                exposure=exposure,
+                page_count=len(page_numbers),
+                local_path=relative_path.as_posix(),
+                sha256=digest,
+            )
+        )
+    return tuple(written)
+
+
+def _pages_for_slice(item: DocumentSliceSpec) -> tuple[int, ...]:
+    pages: list[int] = []
+    for page_range in item.page_ranges:
+        pages.extend(range(page_range.start_page, page_range.end_page + 1))
+    return tuple(pages)
+
+
+def _write_pdf_slice(reader: PdfReader, page_numbers: tuple[int, ...], destination: Path) -> str:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    writer = PdfWriter()
+    for page_number in page_numbers:
+        page = reader.pages[page_number - 1]
+        page.pop("/Annots", None)
+        writer.add_page(page)
+    writer.add_metadata(
+        {
+            "/Title": "",
+            "/Author": "",
+            "/Subject": "",
+            "/Keywords": "",
+            "/Creator": "",
+        }
+    )
+    temp_path = destination.with_name(f".{destination.name}.part")
+    try:
+        with temp_path.open("wb") as handle:
+            writer.write(handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, destination)
+    finally:
+        temp_path.unlink(missing_ok=True)
+    return _sha256_file(destination)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _assert_separate_roots(public_root: Path, oracle_root: Path) -> None:
+    if (
+        public_root == oracle_root
+        or public_root in oracle_root.parents
+        or oracle_root in public_root.parents
+    ):
+        raise PreparationError("oracle output root must be separate from the public preparation root")
 
 
 def _selection_digest(salt: str, identity: str) -> bytes:
