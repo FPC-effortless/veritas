@@ -333,6 +333,7 @@ class BatchReverificationReport(CanonicalModel):
         return self
 
     def buyer_safe_summary(self) -> BuyerSafeBatchSummary:
+        canonical = type(self).model_validate(self.model_dump(mode="python"))
         visible = {
             VisibilityClass.PUBLIC,
             VisibilityClass.BUYER_SAFE,
@@ -343,14 +344,14 @@ class BatchReverificationReport(CanonicalModel):
                 status=item.status,
                 reason_code=item.reason_code,
             )
-            for item in self.entries
+            for item in canonical.entries
             if item.trajectory_visibility in visible
         )
         return BuyerSafeBatchSummary(
-            total_trajectories=len(self.entries),
+            total_trajectories=len(canonical.entries),
             disclosed_trajectory_count=len(entries),
-            hidden_trajectory_count=len(self.entries) - len(entries),
-            status_counts=self.status_counts,
+            hidden_trajectory_count=len(canonical.entries) - len(entries),
+            status_counts=canonical.status_counts,
             entries=entries,
         )
 

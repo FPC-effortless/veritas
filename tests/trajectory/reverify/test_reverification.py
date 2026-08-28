@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from investigation_world.foundry.models import stable_hash
 from investigation_world.operational.models import (
@@ -30,6 +31,7 @@ from investigation_world.trajectory import (
     TrajectoryV2,
     UsageTotals,
     VerifierIdentity,
+    VisibilityClass,
     WorldIdentity,
     canonical_hash,
 )
@@ -534,8 +536,10 @@ def test_buyer_safe_batch_summary_aggregates_sealed_results_without_identifiers(
     )
 
     summary = result.report.buyer_safe_summary()
+    repeated_summary = result.report.buyer_safe_summary()
     serialized = json.dumps(summary.model_dump(mode="json"), sort_keys=True)
 
+    assert repeated_summary.summary_id == summary.summary_id
     assert summary.total_trajectories == 1
     assert summary.hidden_trajectory_count == 1
     assert summary.entries == ()
@@ -545,6 +549,65 @@ def test_buyer_safe_batch_summary_aggregates_sealed_results_without_identifiers(
     assert result.report.batch_id not in serialized
     assert result.report.entries[0].record_id is not None
     assert result.report.entries[0].record_id not in serialized
+
+
+def test_buyer_safe_summary_rejects_copied_visibility_with_stale_identities() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    sealed = TrajectoryV2.model_validate(
+        {**trajectory.model_dump(mode="python"), "visibility": "sealed"}
+    )
+    registry, verifier = _registry()
+    result = batch_reverify_trajectories(
+        (sealed,),
+        verifier=verifier,
+        registry=registry,
+    )
+    original = result.report
+    copied_entry = original.entries[0].model_copy(
+        update={"trajectory_visibility": VisibilityClass.PUBLIC}
+    )
+    copied_report = original.model_copy(update={"entries": (copied_entry,)})
+
+    assert copied_entry.entry_id == original.entries[0].entry_id
+    assert copied_report.batch_id == original.batch_id
+    with pytest.raises(ValidationError, match="entry_id does not match"):
+        copied_report.buyer_safe_summary()
+
+
+def test_buyer_safe_summary_rejects_copied_semantics_with_stale_batch_id() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    registry, verifier = _registry()
+    result = batch_reverify_trajectories(
+        (trajectory,),
+        verifier=verifier,
+        registry=registry,
+    )
+    copied = result.report.model_copy(update={"engine_version": "tampered-version"})
+
+    assert copied.batch_id == result.report.batch_id
+    with pytest.raises(ValidationError, match="batch_id does not match"):
+        copied.buyer_safe_summary()
+
+
+def test_version_comparison_rejects_copied_trajectory_with_stale_identity() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    copied = trajectory.model_copy(
+        update={
+            "model": ModelIdentity(
+                provider="offline-test",
+                model_id="different-model",
+                snapshot="different-snapshot",
+            )
+        }
+    )
+
+    assert copied.trajectory_id == trajectory.trajectory_id
+    with pytest.raises(ValidationError, match="trajectory_id does not match"):
+        compare_reverification_versions(
+            copied,
+            baseline_verifier=trajectory.verifier,
+            candidate_verifier=trajectory.verifier,
+        )
 
 
 def test_batch_retains_existing_history_when_appending_new_version() -> None:
