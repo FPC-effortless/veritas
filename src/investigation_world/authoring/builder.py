@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 
 from investigation_world.foundry.models import stable_hash
-from investigation_world.operational import (
+from investigation_world.operational.models import (
     ActionKind,
     AssertionComparison,
     HiddenActionEffect,
@@ -130,9 +130,9 @@ class EnvironmentBuilder:
         observed_at: str | None = None,
         valid_from: str | None = None,
         valid_to: str | None = None,
-        source_authority: str = "medium",
+        source_authority: Literal["low", "medium", "high", "authoritative"] = "medium",
         confidence: float = 1.0,
-        freshness: str = "unknown",
+        freshness: Literal["current", "recent", "stale", "historical", "unknown"] = "unknown",
         provenance_ids: Iterable[str] = (),
     ) -> "EnvironmentBuilder":
         if system not in self._systems:
@@ -196,8 +196,8 @@ class EnvironmentBuilder:
         expected_value: Any,
         comparison: AssertionComparison = AssertionComparison.EQUAL,
         tolerance: float | None = None,
-        severity: str = "high",
-        scope: str = "final",
+        severity: Literal["low", "medium", "high", "critical"] = "high",
+        scope: Literal["final", "always"] = "final",
     ) -> "EnvironmentBuilder":
         self._invariants.append(
             OperationalInvariant(
