@@ -98,8 +98,8 @@ def build_environment():
         .require_action("close")
         .require_order("inspect", "cross_check", "reconcile", "close")
         .require_evidence("recon-evidence-001")
-        .budgets(max_cost=4, max_tool_calls=4)
-        .success("CASE-1 is reconciled and closed within the four-action budget.")
+        .budgets(max_cost=8, max_tool_calls=8)
+        .success("CASE-1 is reconciled and closed with budget headroom.")
         .build()
     )
 
@@ -124,4 +124,6 @@ def budget_falsifier_raises() -> None:
     runtime = OperationalRuntime(build_environment())
     for action_name in ("inspect", "cross_check", "reconcile", "close"):
         runtime.act(action_name, case_id="CASE-1")
+    for _ in range(4):
+        runtime.act("extra_probe", case_id="CASE-1")
     runtime.act("extra_probe", case_id="CASE-1")
