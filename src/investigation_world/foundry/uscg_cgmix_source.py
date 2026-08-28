@@ -9,6 +9,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from defusedxml import ElementTree as DefusedET
+
 _ENDPOINT = "https://cgmix.uscg.mil/xml/IIRData.asmx"
 _HOST = "cgmix.uscg.mil"
 _NAMESPACE = "https://cgmix.uscg.mil/xml/"
@@ -67,7 +69,7 @@ def _soap_envelope(operation: str, parameters: dict[str, str]) -> bytes:
 def _dataset_rows(xml_text: str) -> list[dict[str, str]]:
     if not xml_text.strip():
         return []
-    root = ET.fromstring(xml_text)
+    root = DefusedET.fromstring(xml_text)
     rows: list[dict[str, str]] = []
     for element in root.iter():
         children = list(element)
@@ -85,7 +87,7 @@ def _dataset_rows(xml_text: str) -> list[dict[str, str]]:
 
 def parse_uscg_soap_response(payload: bytes, operation: str) -> list[dict[str, str]]:
     _require_operation(operation)
-    root = ET.fromstring(payload)
+    root = DefusedET.fromstring(payload)
     expected = f"{operation}Result"
     result_text: str | None = None
     for element in root.iter():
