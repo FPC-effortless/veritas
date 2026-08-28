@@ -318,7 +318,7 @@ class EnvironmentBuilder:
             raise ValueError("environment requires at least one permitted system")
         if not self._actions:
             raise ValueError("environment requires at least one action")
-        identity_payload = {
+        public_identity_payload = {
             "name": self._name,
             "domain": self._domain.value,
             "objective": self._objective,
@@ -326,24 +326,12 @@ class EnvironmentBuilder:
             "systems": self._systems,
             "actions": [item.model_dump(mode="json") for item in self._actions],
             "records": [item.model_dump(mode="json") for item in self._records],
-            "effects": [item.model_dump(mode="json") for item in self._effects],
-            "initial_state": self._initial_state,
-            "targets": [item.model_dump(mode="json") for item in self._targets],
-            "invariants": [item.model_dump(mode="json") for item in self._invariants],
-            "required_actions": self._required_actions,
-            "required_action_order": self._required_action_order,
-            "required_action_counts": self._required_action_counts,
-            "forbidden_actions": self._forbidden_actions,
-            "required_evidence_ids": self._required_evidence_ids,
             "constraints": self._constraints,
             "success_description": self._success_description,
-            "max_cost": self._max_cost,
-            "max_tool_calls": self._max_tool_calls,
             "public_metadata": self._public_metadata,
-            "private_metadata": self._private_metadata,
             "episode_metadata": self._episode_metadata,
         }
-        digest = stable_hash(identity_payload).upper()
+        digest = stable_hash(public_identity_payload).upper()
         world_id = self._world_id or f"WORLD-{digest[:20]}"
         task_id = self._task_id or f"TASK-{digest[20:40]}"
         episode_id = self._episode_id or f"EP-{digest[40:60]}"
