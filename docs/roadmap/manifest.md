@@ -17,18 +17,22 @@ Execution state is synchronized from GitHub:
 2. exactly one `work:ready|blocked|claimed|review|done|superseded` label is required;
 3. for `CLAIMED` and `REVIEW`, the synchronizer requires the latest trusted
    `<!-- veritas-agent-work-status:v1 -->` comment authored by `github-actions[bot]`
-   and requires its Work ID, issue number, and state to agree with the label;
+   and requires its Work ID, issue number, state, holder, branch, and state-specific PR
+   linkage to agree with the canonical coordination state;
 4. trusted status lookup paginates the complete issue-comment history rather than
    assuming the authoritative status is present on the first 100-comment page;
-5. if that trusted status record is missing or unparseable for `CLAIMED`/`REVIEW`,
-   synchronization fails closed instead of falling back to issue-body or stale
-   manifest claimant/PR metadata;
-6. `BLOCKED` may be either unowned dependency-blocked work or work still held by an
-   active agent. When a blocked issue has coordination comments, the synchronizer
-   checks the latest trusted bot status and preserves its holder/branch/PR only when
-   that status still declares an owner. A released blocked status clears stale
-   claimant and PR metadata;
-7. the issue Work Contract supplies Work ID, branch convention, dependency prose,
+5. bot-authored status with malformed JSON, an unexpected schema, or an invalid
+   transition sequence fails closed rather than being ignored;
+6. if trusted status is missing for `CLAIMED`/`REVIEW`, synchronization fails closed
+   instead of falling back to issue-body or stale manifest claimant/PR metadata;
+7. `BLOCKED` may be either unowned dependency-blocked work or work still held by an
+   active agent. When a blocked issue has comments, synchronization requires a trusted
+   bot status rather than guessing that the lane is unowned. Owner-held BLOCKED status
+   preserves holder/branch/PR and the corresponding path reservation; a released
+   BLOCKED status must clear active holder/branch/PR metadata;
+8. a pristine BLOCKED issue with no comments can remain unowned without a status
+   lookup, because it cannot yet contain a coordination transition record;
+9. the issue Work Contract supplies Work ID, branch convention, dependency prose,
    positive/negative ownership, and fallback PR linkage only where trusted live
    status is not authoritative.
 
@@ -83,9 +87,10 @@ GITHUB_TOKEN=... python tools/roadmap/agent_roadmap.py sync
 
 A token is optional for the public repository but avoids unauthenticated API limits.
 The sync command is the only networked path. BLOCKED issues with no comments require
-no status-comment request because they cannot contain a trusted coordination status.
-When comments exist, trusted-status lookup follows all comment pages before deciding
-that no bot-authored status exists.
+no status-comment request because they cannot contain a coordination transition
+record. Once a BLOCKED issue has comments, trusted-status lookup follows all comment
+pages and synchronization fails closed if no authoritative bot status can establish
+whether the lane is held or released.
 
 ## Baseline validation
 
@@ -95,6 +100,11 @@ that no bot-authored status exists.
 - dependencies that point to missing roadmap Work IDs;
 - dependency cycles;
 - missing trusted coordination status for live `CLAIMED`/`REVIEW` work;
+- ambiguous commented `BLOCKED` work with no trusted coordination status;
+- malformed/wrong-schema trusted status or invalid transition sequence;
+- `CLAIMED`/`REVIEW` trusted status with no active holder/branch;
+- `REVIEW` trusted status with no linked PR, or `CLAIMED` status carrying one;
+- inconsistent owner-held/released BLOCKED active metadata;
 - a `READY`, `CLAIMED`, or `REVIEW` item whose explicitly classified hard dependency
   is not `DONE` or `SUPERSEDED`;
 - exact duplicate exclusive-path claims among `READY`, `CLAIMED`, `REVIEW`, and
