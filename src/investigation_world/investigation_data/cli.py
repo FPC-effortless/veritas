@@ -12,8 +12,10 @@ from .acquisition import (
     verify_receipt,
 )
 from .catalog import catalog_digest, find_source, load_catalog
+from .fusion import FusionManifest, fuse_manifest, manifest_digest
 from .models import ArtifactReceipt
 from .preparation import PreparationError, prepare_zip_artifact
+from .serialization import canonical_json_bytes, write_episode_bundle
 
 app = typer.Typer(help="Acquire and prepare source data for Veritas investigation environments.")
 
@@ -140,3 +142,65 @@ def prepare_zip_cmd(
         typer.echo(f"preparation refused: {exc}", err=True)
         raise typer.Exit(2) from exc
     typer.echo(json.dumps({"prepared": True, "manifest": str(manifest)}, indent=2))
+
+
+@app.command("validate-fusion")
+def validate_fusion(
+    manifest: Path,
+    catalog: Path | None = None,
+) -> None:
+    try:
+        loaded = FusionManifest.model_validate_json(manifest.read_text(encoding="utf-8"))
+        result = fuse_manifest(loaded, load_catalog(catalog))
+    except (OSError, ValueError) as exc:
+        typer.echo(f"fusion validation refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(
+        json.dumps(
+            {
+                "valid": True,
+                "episode_id": loaded.episode_id,
+                "fragments": len(loaded.fragments),
+                "relations": len(loaded.relations),
+                "manifest_sha256": manifest_digest(loaded),
+                "catalog_sha256": result.report.catalog_sha256,
+            },
+            indent=2,
+        )
+    )
+
+
+@app.command("fuse")
+def fuse(
+    manifest: Path,
+    output: Path = Path(".veritas-fused"),
+    catalog: Path | None = None,
+) -> None:
+    try:
+        loaded = FusionManifest.model_validate_json(manifest.read_text(encoding="utf-8"))
+        result = fuse_manifest(loaded, load_catalog(catalog))
+        episode_dir = output / loaded.episode_id
+        public_path = episode_dir / "public.json"
+        oracle_path = episode_dir / "oracle.json"
+        report_path = episode_dir / "fusion_report.json"
+        hashes = write_episode_bundle(result.bundle, public_path, oracle_path)
+        report_payload = result.report.model_dump(mode="json")
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_bytes(canonical_json_bytes(report_payload) + b"\n")
+    except (OSError, ValueError) as exc:
+        typer.echo(f"fusion refused: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        json.dumps(
+            {
+                "fused": True,
+                "episode_id": loaded.episode_id,
+                "public": str(public_path),
+                "oracle": str(oracle_path),
+                "report": str(report_path),
+                **hashes,
+            },
+            indent=2,
+        )
+    )
