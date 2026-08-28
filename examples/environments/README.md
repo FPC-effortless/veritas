@@ -38,7 +38,8 @@ The templates intentionally include falsifiers rather than only happy paths. In 
   allowance, then a falsifier consumes the remaining headroom and proves the next probe is rejected;
 - the sealed-evaluator task rejects a wrong choice and never checks an evaluator answer into the
   example package; and
-- the MachineExperience example emits only public action results into its trajectory and remains at
+- the MachineExperience example emits only public action results into its trajectory, derives its
+  public-semantic initial-state digest only from explicitly public task metadata, and remains at
   `E0_TRACEABLE` rather than manufacturing higher learning-readiness evidence.
 
 ## Sealed private evaluator
@@ -57,6 +58,12 @@ The canonical Machine Experience foundation merged in PR #149. The template ther
 public `machine_experience_from_trajectory()` adapter instead of copying its schema. The environment
 executes and verifies first, then a canonical `TrajectoryV2` is constructed from public action
 results and wrapped as `MachineExperience` at `E0_TRACEABLE`.
+
+`StateDigest` defaults to public-semantic scope, so this example declares the agent-visible initial
+semantic state in public task metadata and hashes that public value. It never derives the public state
+digest from `HiddenOracle.initial_state`. A regression varies evaluator-private initial state while
+holding the public initial state fixed and requires the public state digest, trajectory ID, and
+Experience ID to remain unchanged.
 
 The example does not claim reverification, diagnostics, counterfactual, curriculum, training, or
 continual-learning readiness merely because a trace exists.
