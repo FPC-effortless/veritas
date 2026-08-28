@@ -9,10 +9,10 @@ Install from this directory after installing Veritas:
 python -m pip install .
 ```
 
-Then import `veritas_environment_examples` and call any `run_*` function. Every example constructs a
-canonical episode with `investigation_world.authoring.EnvironmentBuilder`, executes actions through
-the public `investigation_world.operational.OperationalRuntime`, and submits to the canonical
-structured verifier.
+Then import `veritas_environment_examples` and call the relevant `run_*` function. Every environment
+is authored with the public `investigation_world.authoring.EnvironmentBuilder`, executes through the
+canonical operational runtime, and uses the canonical verifier rather than a template-specific
+runtime or grading shortcut.
 
 | Example | What it demonstrates |
 | --- | --- |
@@ -23,6 +23,42 @@ structured verifier.
 | `native_artifact_backed` | a real XLSX workbook read with OpenPyXL |
 | `hierarchical_observation` | nested public observation fields preserved through runtime payloads |
 | `structured_grader` | targets, invariants, required action order, forbidden actions, and evidence |
+| `authority_sensitive` | delegated authority, hidden preconditions, and a forbidden bypass path |
+| `long_horizon_budgeted` | ordered multi-step work that exactly consumes a declared cost/tool-call budget |
+| `sealed_private_evaluator` | caller-supplied evaluator material that remains absent from the public payload |
+| `machine_experience_ready` | a verified episode converted to canonical `TrajectoryV2` and then `MachineExperience` |
+
+## Negative boundaries are part of the examples
+
+The templates intentionally include falsifiers rather than only happy paths. In particular:
+
+- the authority-sensitive task blocks `apply_change` before delegated authority and marks the
+  explicit override action forbidden;
+- the budgeted task exhausts its four-action budget and rejects an additional probe;
+- the sealed-evaluator task rejects a wrong choice and never checks an evaluator answer into the
+  example package; and
+- the MachineExperience example emits only public action results into its trajectory and remains at
+  `E0_TRACEABLE` rather than manufacturing higher learning-readiness evidence.
+
+## Sealed private evaluator
+
+`sealed_private_evaluator.run_demo(private_expected_choice=...)` requires evaluator material to be
+provided by the caller. The example package contains no canonical answer. Only a digest is retained
+inside private episode metadata, and the demonstration explicitly verifies that the supplied value is
+absent from `OperationalRuntime.public_payload()`.
+
+This is a teaching example of the disclosure boundary, not a substitute for Veritas sealed-panel
+release or qualification workflows.
+
+## MachineExperience-ready example
+
+The canonical Machine Experience foundation merged in PR #149. The template therefore consumes the
+public `machine_experience_from_trajectory()` adapter instead of copying its schema. The environment
+executes and verifies first, then a canonical `TrajectoryV2` is constructed from public action
+results and wrapped as `MachineExperience` at `E0_TRACEABLE`.
+
+The example does not claim reverification, diagnostics, counterfactual, curriculum, training, or
+continual-learning readiness merely because a trace exists.
 
 ## Deliberate safety and qualification boundary
 
@@ -32,11 +68,6 @@ usefulness, safety, realism/fidelity, training value, commercial readiness, or r
 
 The examples use synthetic data and local resources. They do not endorse the illustrated domain
 actions as real-world procedures. The HTTP example binds only to loopback and does not call an
-external service.
-
-## MachineExperience example
-
-DX-003 requires a MachineExperience-ready example only after the canonical MachineExperience API is
-merged. That dependency is still under review in PR #149 at the time of this template release, so no
-example here imports or copies its unmerged contract. Add that example in a follow-up after the
-dependency lands rather than creating a parallel schema.
+external service. Evaluated agents must not be given direct access to `HiddenOracle`, runtime
+`state_snapshot()`, or verifier-only `trace()` data simply because those surfaces exist for harness
+and evaluation infrastructure.
