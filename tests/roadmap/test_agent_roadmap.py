@@ -68,7 +68,9 @@ def issue(
     dependencies: str,
     *,
     comments: int = 0,
+    path: str | None = None,
 ) -> dict:
+    ownership_path = path or f"src/{work_id.lower()}/**"
     return {
         "number": number,
         "title": work_id,
@@ -79,7 +81,7 @@ def issue(
 - **State:** BLOCKED
 - **Dependencies:** {dependencies}
 - **Branch:** `feat/{work_id.lower()}`
-- **Positive ownership:** `src/{work_id.lower()}/**`
+- **Positive ownership:** `{ownership_path}`
 - **Negative ownership:** other
 - **Claim holder:** none
 - **Linked PR:** none
@@ -273,8 +275,8 @@ def test_sync_owned_blocked_status_preserves_holder_and_reserves_path(
     blocked = row("A", 1, state="CLAIMED", path="src/x/**")
     ready = row("B", 2, path="src/x/**")
     current = manifest(blocked, ready)
-    issue_a = issue(1, "A", "BLOCKED", "none", comments=1)
-    issue_b = issue(2, "B", "READY", "none")
+    issue_a = issue(1, "A", "BLOCKED", "none", comments=1, path="src/x/**")
+    issue_b = issue(2, "B", "READY", "none", path="src/x/**")
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
 
     def status_record(_repo: str, number: int, _token: str | None) -> dict | None:
