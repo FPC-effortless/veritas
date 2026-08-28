@@ -60,8 +60,27 @@ def test_public_projection_sanitizes_truth_metadata() -> None:
     assert projection["metadata"]["nested"]["safe"] == "visible"
 
 
+def test_public_projection_sanitizes_artifact_metadata_and_omits_dataset_notes() -> None:
+    dataset = load_public_investigation_dataset(SEED_PATH)
+    payload = dataset.model_dump(mode="json")
+    payload["notes"] = ["probable cause: must not reach the public projection"]
+    payload["cases"][0]["public_evidence"][0]["metadata"] = {
+        "probable_cause": "must remain sealed",
+        "safe": "visible",
+    }
+    modified = PublicInvestigationDataset.model_validate(payload)
+
+    projection = modified.public_projection()
+    artifact_metadata = projection["cases"][0]["public_evidence"][0]["metadata"]
+
+    assert "notes" not in projection
+    assert "probable_cause" not in artifact_metadata
+    assert artifact_metadata["safe"] == "visible"
+
+
 def test_projection_hash_is_deterministic() -> None:
     dataset = load_public_investigation_dataset(SEED_PATH)
+
     public_hash = dataset.public_projection()["content_hash"]
     verifier_hash = dataset.verifier_projection()["content_hash"]
 
