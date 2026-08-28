@@ -1,0 +1,25 @@
+{
+  "review_id": "review-csb-t2-laboratories-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2008-03-I-FL",
+  "scope": [
+    "Reference CSB-authored public news and video landing pages by external locator only.",
+    "Treat the December 19, 2007 deployment release and January 3, 2008 investigation update as context, not completed causal findings.",
+    "Treat the January 25, 2008 field-phase release as preliminary institutional findings that remain distinct from the September 2009 final report.",
+    "Treat the September 22, 2009 Runaway video as post-final institutional communication.",
+    "Do not resolve, bulk-download, redistribute, or extract embedded third-party media in this pilot.",
+    "Do not copy final-report PDFs, transcripts, source text, video bytes, captions, frames, photographs, or downloaded update documents into the repository.",
+    "Exclude worker, owner, investigator, injured-person, and other individual names from normalized task state.",
+    "Do not promote precise event times stated by CSB into private ground truth solely because they are precise.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises provenance, temporal gating, preliminary-to-final hypothesis revision, reactive-chemistry reasoning, and external evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Document downloads, media resolution, transcript extraction, frame extraction, local acquisition, redistribution, or training use requires a separate artifact-level review.",
+    "CSB preliminary and final findings are institutional evidence and are not promoted to omniscient causal ground truth."
+  ]
+}

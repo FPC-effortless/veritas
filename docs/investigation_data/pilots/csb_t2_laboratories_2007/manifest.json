@@ -1,0 +1,189 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2008-03-I-FL-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2008-03-I-FL"
+  ],
+  "simulation_start": "2007-12-19T00:00:00Z",
+  "simulation_as_of": "2007-12-20T12:00:00Z",
+  "initial_public_state": {
+    "incident": "December 19, 2007 explosion and fire at T2 Laboratories in Jacksonville, Florida",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct the reactive-chemical failure, distinguish early hypotheses from final causal findings, and revise conclusions as CSB evidence matures.",
+    "epistemic_rule": "Deployment context, investigation updates, preliminary field findings, final findings, and post-final reconstruction must remain temporally and epistemically distinct."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "t2-laboratories",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "T2 Laboratories"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "review_video",
+    "request_document",
+    "build_timeline",
+    "assess_reactive_chemistry",
+    "assess_cooling_system",
+    "assess_thermal_runaway",
+    "assess_hazard_recognition",
+    "compare_preliminary_and_final_analysis",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "preliminary_findings_are_not_final_findings": true,
+    "public_exact_times_are_not_private_ground_truth": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-t2-deployment-2007-12-19",
+      "source_id": "uscsb",
+      "source_artifact_id": "t2-deployment-2007-12-19",
+      "case_ids": [
+        "CSB-2008-03-I-FL"
+      ],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-deploys-to-fatal-jacksonville-florida-explosion/",
+      "content_ref": "external-document://uscsb/t2/deployment-2007-12-19",
+      "available_from": "2007-12-20T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-t2-laboratories-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-t2-investigation-update-2008-01-03",
+      "source_id": "uscsb",
+      "source_artifact_id": "t2-investigation-update-2008-01-03",
+      "case_ids": [
+        "CSB-2008-03-I-FL"
+      ],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/statement-by-csb-investigator-in-charge-robert-hall-updating-the-public-on-the-investigation-of-the-t2-laboratories-explosion-and-fire/",
+      "content_ref": "external-document://uscsb/t2/investigation-update-2008-01-03",
+      "available_from": "2008-01-04T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-t2-laboratories-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-t2-field-findings-2008-01-25",
+      "source_id": "uscsb",
+      "source_artifact_id": "t2-field-findings-2008-01-25",
+      "case_ids": [
+        "CSB-2008-03-I-FL"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-concludes-field-phase-of-t2-blast-investigation-in-jacksonville-fl-higher-number-of-offsite-injuries-found/",
+      "content_ref": "external-document://uscsb/t2/field-findings-2008-01-25",
+      "available_from": "2008-01-26T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-t2-laboratories-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-t2-final-release-2009-09-15",
+      "source_id": "uscsb",
+      "source_artifact_id": "t2-final-release-2009-09-15",
+      "case_ids": [
+        "CSB-2008-03-I-FL"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-finds-t2-laboratories-explosion-caused-by-failure-of-cooling-system-resulting-in-runaway-chemical-reaction-report-notes-company-did-not-recognize-hazards-of-chemical-process/",
+      "content_ref": "external-document://uscsb/t2/final-release-2009-09-15",
+      "available_from": "2009-09-16T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-t2-laboratories-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-t2-runaway-video-2009-09-22",
+      "source_id": "uscsb",
+      "source_artifact_id": "t2-runaway-video-2009-09-22",
+      "case_ids": [
+        "CSB-2008-03-I-FL"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/runaway-explosion-at-t2-laboratories/",
+      "content_ref": "external-page://uscsb/t2/runaway-video-2009-09-22",
+      "available_from": "2009-09-23T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-t2-laboratories-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "t2-update-to-deployment",
+      "source_fragment_id": "csb-t2-investigation-update-2008-01-03",
+      "target_fragment_id": "csb-t2-deployment-2007-12-19",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "t2-field-findings-to-update",
+      "source_fragment_id": "csb-t2-field-findings-2008-01-25",
+      "target_fragment_id": "csb-t2-investigation-update-2008-01-03",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "t2-final-to-field-findings",
+      "source_fragment_id": "csb-t2-final-release-2009-09-15",
+      "target_fragment_id": "csb-t2-field-findings-2008-01-25",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "t2-post-final-video-to-final",
+      "source_fragment_id": "csb-t2-runaway-video-2009-09-22",
+      "target_fragment_id": "csb-t2-final-release-2009-09-15",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-t2-final-institutional-findings-2009",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation concluded that the explosion resulted from a runaway chemical reaction likely initiated by insufficient reactor cooling and that T2 did not recognize the reactive hazards of the MCMT process.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-t2-final-release-2009-09-15"
+      ]
+    }
+  ],
+  "actual_timeline": [],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_preliminary_vs_final_distinction": true,
+    "require_reactive_chemistry_and_cooling_reasoning": true,
+    "require_hypothesis_revision": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}
