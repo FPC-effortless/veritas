@@ -112,8 +112,15 @@ def _ruff_diagnostics() -> list[dict[str, str]]:
     except json.JSONDecodeError as exc:
         raise QualityBaselineError("ruff returned invalid JSON") from exc
     diagnostics: list[dict[str, str]] = []
+    debug_paths = {
+        "src/investigation_world/foundry/public_investigation_acquisition.py",
+        "tests/unit/test_public_investigation_acquisition.py",
+        "tests/unit/test_public_investigation_data.py",
+    }
     for row in rows:
         path = _relative_path(row["filename"])
+        if path in debug_paths and str(row["code"]) == "I001":
+            print("QUALITY_DEBUG " + json.dumps(row, sort_keys=True), file=sys.stderr)
         diagnostics.append(
             {
                 "tool": "ruff",
@@ -169,7 +176,6 @@ def _snapshot() -> dict[str, Any]:
             "mypy": list(MYPY_COMMAND[2:]),
         },
         "fingerprints": dict(sorted(fingerprints.items())),
-        "diagnostics": diagnostics,
         "summary": {
             "diagnostics_by_tool": dict(sorted(by_tool.items())),
             "files_by_tool": {
@@ -212,13 +218,8 @@ def _check(snapshot: dict[str, Any], baseline: dict[str, Any]) -> None:
     print(f"ratchet_removed={sum(removed.values())}")
     if introduced:
         print(f"ratchet_introduced={sum(introduced.values())}", file=sys.stderr)
-        diagnostic_index = {
-            _fingerprint(item["tool"], item["path"], item["code"], item["message"]): item
-            for item in snapshot["diagnostics"]
-        }
         for fingerprint, count in sorted(introduced.items()):
             print(f"new {fingerprint} x{count}", file=sys.stderr)
-            print(json.dumps(diagnostic_index[fingerprint], sort_keys=True), file=sys.stderr)
         raise QualityBaselineError("new Ruff/Mypy diagnostics exceed the committed baseline")
     print("ratchet_introduced=0")
 
