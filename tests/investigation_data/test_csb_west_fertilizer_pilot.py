@@ -142,7 +142,10 @@ def test_west_pilot_is_bound_to_gold_10_without_rewriting_video_page_date() -> N
         set(case.capability_tags)
     )
     assert release.release_date.isoformat() == "2013-05-10"
-    assert any(item.fragment_id == "csb-west-video-release-news-2013-05-03" for item in manifest.fragments)
+    assert any(
+        item.fragment_id == "csb-west-video-release-news-2013-05-03"
+        for item in manifest.fragments
+    )
     assert any(
         item.fragment_id == "csb-west-blast-damage-video-page-2013-05-10"
         for item in manifest.fragments
