@@ -2,7 +2,15 @@
 
 `csb-gold-10` is the first case-level expansion of Veritas high-stakes investigation data beyond the BP Texas City pilot.
 
-It is a **fusion source index**, not yet a ten-case scientific benchmark. The index records completed U.S. Chemical Safety Board investigations, dated visual evidence surfaces, causal-capability coverage, and the conservative date policy that downstream case manifests must preserve.
+It is a **reviewed executable fusion corpus**, not yet a ten-case scientific benchmark. The corpus records completed U.S. Chemical Safety Board investigations, dated evidence surfaces, causal-capability coverage, hindsight-controlled `FusionManifest` pilots, and the conservative date policy that every case preserves.
+
+## Current executable status
+
+All ten selected cases now have reviewed executable pilots under `docs/investigation_data/pilots/`.
+
+`pilot_coverage.json` maps the canonical `index.json` case set to exactly one pilot per case. CI fails if coverage drops below 10/10, a mapping is duplicated, a pilot loses its review binding, private truth is introduced into a link-only public fragment, or source artifact bytes are checked into the pilot directories.
+
+This is implementation/provenance coverage only. It does not establish scientific qualification, frontier discrimination, exploit resistance, or training readiness.
 
 ## Selected cases
 
@@ -61,7 +69,7 @@ Downstream episode construction must continue to distinguish:
 5. genuinely supportable private truth claims;
 6. unknown or contested propositions.
 
-The Texas City pilot demonstrates this separation by leaving `ground_truth_claims` empty and recording the final CSB conclusion separately as an official finding.
+The executable pilots preserve this separation. Institutional conclusions remain `OfficialFinding`-class evidence unless a stronger independent basis justifies a private truth claim.
 
 ## Validation
 
@@ -83,8 +91,20 @@ Validation checks:
 - every URL remains under the source's allowed hosts;
 - the corpus contains both pre-final and post-final evidence.
 
-## Next construction wave
+Repository CI additionally validates `pilot_coverage.json` against every executable pilot and `report_acquisition.json` against the corpus, coverage registry, source policy, and verified-artifact registry.
 
-The next wave converts each indexed case into a reviewed `FusionManifest` with dated document releases, public evidence, withheld future evidence, sealed evaluator references, explicit claims, and case-specific verifier targets.
+## Final-report acquisition wave
 
-Do not mass-generate those manifests by scraping current CSB pages and pretending the current page text existed at historical cutoffs. Each historical release surface must be individually dated and reviewed before it becomes time-gated agent evidence.
+`report_acquisition.json` is the machine-readable queue for the ten official CSB final reports. It deliberately distinguishes **official URL resolution** from **verified artifact acquisition**.
+
+Every report currently remains `pending_binary_acquisition`. A URL being reachable in a browser or renderable by a document service is not enough to mark the report verified. Verification requires:
+
+1. byte-level acquisition through an allowlisted transport;
+2. SHA-256 hashing of the acquired bytes;
+3. a provenance receipt with source URL, resolved URL, byte count, retrieval time, and catalog digest;
+4. registration in `docs/investigation_data/verified_artifacts.json`;
+5. artifact-level review before redistribution or derived training artifacts where required.
+
+Raw report bytes remain outside Git. The next substantive construction step is to acquire and verify these final reports, then perform safe text/layout extraction with page-level provenance. Report-derived facts and CSB conclusions must remain epistemically distinct, and videos stay downstream multimodal augmentation rather than the primary report-grounded evidence layer.
+
+Do not mass-scrape current CSB pages and pretend current page text existed at historical cutoffs. Each historical release surface must remain individually dated and reviewed before it becomes time-gated agent evidence.
