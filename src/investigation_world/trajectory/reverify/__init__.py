@@ -1,18 +1,35 @@
 """Offline, evidence-bound trajectory reverification."""
 
+from investigation_world.trajectory.reverify.batch import (
+    batch_reverify_trajectories,
+    compare_reverification_versions,
+)
 from investigation_world.trajectory.reverify.engine import (
     attach_operational_replay_evidence,
     reverify_trajectory,
 )
 from investigation_world.trajectory.reverify.models import (
+    BATCH_REVERIFICATION_ENGINE_VERSION,
+    BATCH_REVERIFICATION_SCHEMA,
+    BATCH_REVERIFICATION_SUMMARY_SCHEMA,
     REPLAY_EVIDENCE_PRIVATE_KEY,
     REPLAY_EVIDENCE_REFERENCE_TYPE,
     REPLAY_EVIDENCE_SCHEMA,
     REVERIFICATION_ENGINE_ID,
     REVERIFICATION_ENGINE_VERSION,
+    BatchReverificationEntry,
+    BatchReverificationReport,
+    BatchReverificationResult,
+    BuyerSafeBatchSummary,
+    BuyerSafeReverificationEntry,
+    ComparisonStatus,
+    EvaluationSnapshot,
+    EvaluationSource,
     OperationalReplayEvidence,
+    ReverificationComparison,
     ReverificationOutcome,
     ReverificationStatus,
+    VerifierReasonAttribution,
 )
 from investigation_world.trajectory.reverify.operational import (
     AuthorizedVerifierRegistry,
@@ -23,18 +40,33 @@ from investigation_world.trajectory.reverify.operational import (
 )
 
 __all__ = [
+    "BATCH_REVERIFICATION_ENGINE_VERSION",
+    "BATCH_REVERIFICATION_SCHEMA",
+    "BATCH_REVERIFICATION_SUMMARY_SCHEMA",
     "REPLAY_EVIDENCE_PRIVATE_KEY",
     "REPLAY_EVIDENCE_REFERENCE_TYPE",
     "REPLAY_EVIDENCE_SCHEMA",
     "REVERIFICATION_ENGINE_ID",
     "REVERIFICATION_ENGINE_VERSION",
     "AuthorizedVerifierRegistry",
+    "BatchReverificationEntry",
+    "BatchReverificationReport",
+    "BatchReverificationResult",
+    "BuyerSafeBatchSummary",
+    "BuyerSafeReverificationEntry",
+    "ComparisonStatus",
+    "EvaluationSnapshot",
+    "EvaluationSource",
     "OperationalEvaluatorInput",
     "OperationalReplayEvidence",
     "OperationalVerifierBinding",
     "ReverificationOutcome",
     "ReverificationStatus",
+    "ReverificationComparison",
+    "VerifierReasonAttribution",
     "attach_operational_replay_evidence",
+    "batch_reverify_trajectories",
+    "compare_reverification_versions",
     "current_operational_verifier_binding",
     "evaluator_input_from_evidence",
     "reverify_trajectory",

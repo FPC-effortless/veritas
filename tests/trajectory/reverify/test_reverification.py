@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from investigation_world.foundry.models import stable_hash
 from investigation_world.operational.models import (
@@ -23,21 +24,26 @@ from investigation_world.trajectory import (
     ArtifactIdentity,
     EvaluationRecord,
     ModelIdentity,
+    ReverificationRecord,
     StateDigest,
     TaskIdentity,
     TrajectoryEvent,
     TrajectoryV2,
     UsageTotals,
     VerifierIdentity,
+    VisibilityClass,
     WorldIdentity,
     canonical_hash,
 )
 from investigation_world.trajectory.reverify import (
     REPLAY_EVIDENCE_PRIVATE_KEY,
     AuthorizedVerifierRegistry,
+    ComparisonStatus,
     OperationalReplayEvidence,
     ReverificationStatus,
     attach_operational_replay_evidence,
+    batch_reverify_trajectories,
+    compare_reverification_versions,
     current_operational_verifier_binding,
     evaluator_input_from_evidence,
     reverify_trajectory,
@@ -105,6 +111,7 @@ def _episode() -> OperationalEpisode:
 def _reverifiable_trajectory(
     *,
     include_required_evidence: bool = True,
+    model_snapshot: str = "snapshot",
 ) -> tuple[TrajectoryV2, OperationalReplayEvidence]:
     episode = _episode()
     contract = compile_operational_episode(episode)
@@ -176,7 +183,11 @@ def _reverifiable_trajectory(
             ),
         ),
         task=TaskIdentity(task_id=episode.task.task_id, taskset_version="tests", split="iid_test"),
-        model=ModelIdentity(provider="offline-test", model_id="model", snapshot="snapshot"),
+        model=ModelIdentity(
+            provider="offline-test",
+            model_id="model",
+            snapshot=model_snapshot,
+        ),
         verifier=old_verifier,
         initial_state=StateDigest(digest=evidence.initial_state_digest),
         events=trajectory_events,
@@ -353,3 +364,285 @@ def test_registry_rejects_arbitrary_callable_bindings() -> None:
 
     with pytest.raises(TypeError, match="statically authorized offline verifier bindings"):
         AuthorizedVerifierRegistry((ProviderCallingBinding(),))  # type: ignore[arg-type]
+
+
+def test_batch_identity_and_entries_are_independent_of_input_order() -> None:
+    first, _ = _reverifiable_trajectory(model_snapshot="first")
+    second, _ = _reverifiable_trajectory(model_snapshot="second")
+    registry, verifier = _registry()
+
+    forward = batch_reverify_trajectories(
+        (first, second),
+        verifier=verifier,
+        registry=registry,
+    )
+    reverse = batch_reverify_trajectories(
+        (second, first),
+        verifier=verifier,
+        registry=registry,
+    )
+
+    assert forward.report.batch_id == reverse.report.batch_id
+    assert [item.entry_id for item in forward.report.entries] == [
+        item.entry_id for item in reverse.report.entries
+    ]
+    assert [item.input_trajectory_id for item in forward.report.entries] == sorted(
+        (first.trajectory_id, second.trajectory_id)
+    )
+    assert [item.trajectory_id for item in forward.trajectories] == [
+        item.trajectory_id for item in reverse.trajectories
+    ]
+
+
+def test_batch_appends_records_without_overwriting_original_evaluations() -> None:
+    first, _ = _reverifiable_trajectory(model_snapshot="first")
+    second, _ = _reverifiable_trajectory(model_snapshot="second")
+    originals = {
+        item.trajectory_id: item.original_evaluation for item in (first, second)
+    }
+    registry, verifier = _registry()
+
+    result = batch_reverify_trajectories(
+        (first, second),
+        verifier=verifier,
+        registry=registry,
+    )
+
+    assert first.reverifications == ()
+    assert second.reverifications == ()
+    assert all(len(item.reverifications) == 1 for item in result.trajectories)
+    assert all(
+        item.original_evaluation == originals[item.trajectory_id]
+        for item in result.trajectories
+    )
+    assert all(
+        entry.status is ReverificationStatus.REVERIFIED
+        for entry in result.report.entries
+    )
+
+
+def test_batch_preserves_not_reverifiable_without_fabricating_a_score() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    stripped = TrajectoryV2.model_validate(
+        {**trajectory.model_dump(mode="python"), "private_metadata": {}}
+    )
+    registry, verifier = _registry()
+
+    result = batch_reverify_trajectories(
+        (stripped,),
+        verifier=verifier,
+        registry=registry,
+    )
+
+    entry = result.report.entries[0]
+    assert entry.status is ReverificationStatus.NOT_REVERIFIABLE
+    assert entry.reason_code == "PRIVATE_REPLAY_EVIDENCE_MISSING"
+    assert entry.record_id is None
+    assert entry.comparison.status is ComparisonStatus.NOT_AVAILABLE
+    assert entry.comparison.reward_delta is None
+    assert result.trajectories == (stripped,)
+
+
+def test_failed_same_version_batch_does_not_reuse_original_score_as_candidate() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+
+    result = batch_reverify_trajectories(
+        (trajectory,),
+        verifier=trajectory.verifier,
+        registry=AuthorizedVerifierRegistry(()),
+    )
+
+    entry = result.report.entries[0]
+    assert entry.status is ReverificationStatus.UNAUTHORIZED
+    assert entry.record_id is None
+    assert entry.comparison.status is ComparisonStatus.NOT_AVAILABLE
+    assert entry.comparison.candidate is None
+    assert entry.comparison.reward_delta is None
+
+
+def test_version_comparison_binds_exact_identities_and_reports_only_known_deltas() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    registry, verifier = _registry()
+    outcome = reverify_trajectory(trajectory, verifier=verifier, registry=registry)
+    assert outcome.trajectory_with_reverification is not None
+
+    comparison = compare_reverification_versions(
+        outcome.trajectory_with_reverification,
+        baseline_verifier=trajectory.verifier,
+        candidate_verifier=verifier,
+    )
+
+    assert comparison.status is ComparisonStatus.COMPARED
+    assert comparison.baseline is not None
+    assert comparison.candidate is not None
+    assert comparison.baseline.verifier == trajectory.verifier
+    assert comparison.candidate.verifier == verifier
+    assert comparison.reward_delta == pytest.approx(0.75)
+    assert comparison.component_deltas == {"outcome": pytest.approx(0.75)}
+    assert comparison.unknown_components == (
+        "constraints",
+        "efficiency",
+        "evidence",
+        "process",
+        "side_effects",
+        "state",
+    )
+    assert comparison.attribution is not None
+    assert comparison.attribution.source_record_id == comparison.candidate.source_record_id
+
+
+def test_version_comparison_does_not_guess_an_absent_verifier_score() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    missing = VerifierIdentity(verifier_id="missing", version="v9")
+
+    comparison = compare_reverification_versions(
+        trajectory,
+        baseline_verifier=trajectory.verifier,
+        candidate_verifier=missing,
+    )
+
+    assert comparison.status is ComparisonStatus.NOT_AVAILABLE
+    assert comparison.reason_code == "CANDIDATE_EVALUATION_NOT_AVAILABLE"
+    assert comparison.candidate is None
+    assert comparison.reward_delta is None
+    assert comparison.component_deltas == {}
+
+
+def test_batch_rejects_duplicate_trajectory_identities() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    registry, verifier = _registry()
+
+    with pytest.raises(ValueError, match="duplicate trajectory identity"):
+        batch_reverify_trajectories(
+            (trajectory, trajectory),
+            verifier=verifier,
+            registry=registry,
+        )
+
+
+def test_buyer_safe_batch_summary_aggregates_sealed_results_without_identifiers() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    sealed = TrajectoryV2.model_validate(
+        {
+            **trajectory.model_dump(mode="python"),
+            "visibility": "sealed",
+        }
+    )
+    registry, verifier = _registry()
+    result = batch_reverify_trajectories(
+        (sealed,),
+        verifier=verifier,
+        registry=registry,
+    )
+
+    summary = result.report.buyer_safe_summary()
+    repeated_summary = result.report.buyer_safe_summary()
+    serialized = json.dumps(summary.model_dump(mode="json"), sort_keys=True)
+
+    assert repeated_summary.summary_id == summary.summary_id
+    assert summary.total_trajectories == 1
+    assert summary.hidden_trajectory_count == 1
+    assert summary.entries == ()
+    assert sealed.trajectory_id not in serialized
+    assert verifier.verifier_id is not None
+    assert verifier.verifier_id not in serialized
+    assert result.report.batch_id not in serialized
+    assert result.report.entries[0].record_id is not None
+    assert result.report.entries[0].record_id not in serialized
+
+
+def test_buyer_safe_summary_rejects_copied_visibility_with_stale_identities() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    sealed = TrajectoryV2.model_validate(
+        {**trajectory.model_dump(mode="python"), "visibility": "sealed"}
+    )
+    registry, verifier = _registry()
+    result = batch_reverify_trajectories(
+        (sealed,),
+        verifier=verifier,
+        registry=registry,
+    )
+    original = result.report
+    copied_entry = original.entries[0].model_copy(
+        update={"trajectory_visibility": VisibilityClass.PUBLIC}
+    )
+    copied_report = original.model_copy(update={"entries": (copied_entry,)})
+
+    assert copied_entry.entry_id == original.entries[0].entry_id
+    assert copied_report.batch_id == original.batch_id
+    with pytest.raises(ValidationError, match="entry_id does not match"):
+        copied_report.buyer_safe_summary()
+
+
+def test_buyer_safe_summary_rejects_copied_semantics_with_stale_batch_id() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    registry, verifier = _registry()
+    result = batch_reverify_trajectories(
+        (trajectory,),
+        verifier=verifier,
+        registry=registry,
+    )
+    copied = result.report.model_copy(update={"engine_version": "tampered-version"})
+
+    assert copied.batch_id == result.report.batch_id
+    with pytest.raises(ValidationError, match="batch_id does not match"):
+        copied.buyer_safe_summary()
+
+
+def test_version_comparison_rejects_copied_trajectory_with_stale_identity() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    copied = trajectory.model_copy(
+        update={
+            "model": ModelIdentity(
+                provider="offline-test",
+                model_id="different-model",
+                snapshot="different-snapshot",
+            )
+        }
+    )
+
+    assert copied.trajectory_id == trajectory.trajectory_id
+    with pytest.raises(ValidationError, match="trajectory_id does not match"):
+        compare_reverification_versions(
+            copied,
+            baseline_verifier=trajectory.verifier,
+            candidate_verifier=trajectory.verifier,
+        )
+
+
+def test_batch_retains_existing_history_when_appending_new_version() -> None:
+    trajectory, _ = _reverifiable_trajectory()
+    historical_verifier = VerifierIdentity(
+        verifier_id="operational",
+        version="historical-v0",
+    )
+    historical = trajectory.with_reverification(
+        ReverificationRecord(
+            input_trajectory_id=trajectory.trajectory_id,
+            verifier=historical_verifier,
+            component_scores={"outcome": 0.5},
+            reward=0.5,
+        )
+    )
+    registry, verifier = _registry()
+
+    result = batch_reverify_trajectories(
+        (historical,),
+        verifier=verifier,
+        registry=registry,
+        baseline_verifier=historical_verifier,
+    )
+
+    updated = result.trajectories[0]
+    assert [item.record_id for item in updated.reverifications][0] == (
+        historical.reverifications[0].record_id
+    )
+    assert len(updated.reverifications) == 2
+    comparison = result.report.entries[0].comparison
+    assert result.report.baseline_mode == "exact_verifier"
+    assert comparison.status is ComparisonStatus.COMPARED
+    assert comparison.baseline is not None
+    assert comparison.baseline.verifier == historical_verifier
+    assert comparison.candidate is not None
+    assert comparison.candidate.verifier == verifier
+    assert comparison.reward_delta == pytest.approx(0.5)
