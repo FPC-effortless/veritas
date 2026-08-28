@@ -23,10 +23,10 @@ def test_sec_parser_builds_only_paired_cases() -> None:
     assert all(case.verifier_references for case in cases)
     assert cases[0].public_evidence[0].title == "SEC Complaint"
     assert cases[0].verifier_references[0].title.startswith("Final Judgment")
-    assert cases[0].metadata["release_url"].endswith("/lr-26613")
+    assert cases[0].metadata["release_number"] == "LR-26613"
 
 
-def test_sec_public_projection_contains_no_disposition_documents() -> None:
+def test_sec_public_projection_contains_no_disposition_or_release_page() -> None:
     html = FIXTURE_PATH.read_text(encoding="utf-8")
     cases = parse_sec_litigation_page(html, page_url=PAGE_URL, paired_only=True)
 
@@ -35,6 +35,8 @@ def test_sec_public_projection_contains_no_disposition_documents() -> None:
     assert "Consent of Defendant" not in public_text
     assert "final-judgment-26613.pdf" not in public_text
     assert "consent-26613.pdf" not in public_text
+    assert "/lr-26613" not in public_text
+    assert "John Isaac" not in public_text
 
 
 def test_sec_parser_ignores_external_hosts() -> None:
@@ -66,4 +68,5 @@ def test_sec_discovery_deduplicates_and_stops_on_empty_page() -> None:
     assert len(dataset.cases) == 2
     assert len(calls) == 2
     assert dataset.source_registry_id == "veritas-public-operations-sources"
+    assert dataset.as_of == date(2026, 8, 28)
     assert all(case.split.value == "train_reference" for case in dataset.cases)
