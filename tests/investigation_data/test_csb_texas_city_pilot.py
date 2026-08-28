@@ -31,7 +31,7 @@ def public_ids(as_of: datetime) -> tuple[str, ...]:
 def test_texas_city_pilot_enforces_historical_release_cutoffs() -> None:
     preliminary = "csb-preliminary-findings-2005-10-27"
     organizational = "csb-organizational-findings-2006-10-30"
-    final_report = "csb-final-report-2007-03-20"
+    final_findings = "csb-final-findings-release-2007-03-20"
     video = "csb-anatomy-of-a-disaster-2008-03-21"
 
     assert public_ids(datetime(2005, 10, 28, tzinfo=UTC)) == (preliminary,)
@@ -42,12 +42,12 @@ def test_texas_city_pilot_enforces_historical_release_cutoffs() -> None:
     assert public_ids(datetime(2007, 3, 21, tzinfo=UTC)) == (
         preliminary,
         organizational,
-        final_report,
+        final_findings,
     )
     assert public_ids(datetime(2008, 3, 22, tzinfo=UTC)) == (
         preliminary,
         organizational,
-        final_report,
+        final_findings,
         video,
     )
 
@@ -65,7 +65,7 @@ def test_texas_city_video_is_multimodal_and_reviewed() -> None:
     assert result.report.reviewed_fragment_ids == (
         "csb-preliminary-findings-2005-10-27",
         "csb-organizational-findings-2006-10-30",
-        "csb-final-report-2007-03-20",
+        "csb-final-findings-release-2007-03-20",
         "csb-anatomy-of-a-disaster-2008-03-21",
     )
 
