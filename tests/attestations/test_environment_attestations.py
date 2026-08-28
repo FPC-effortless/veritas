@@ -6,10 +6,12 @@ from pydantic import ValidationError
 from investigation_world.attestations import (
     ArtifactIdentity,
     AttestationSignature,
+    AttestationVisibility,
     ContentIdentity,
     EnvironmentAttestation,
     QualificationBinding,
     serialize_attestation,
+    serialize_public_attestation,
 )
 from investigation_world.qualification.maturity import (
     EnvironmentIdentity,
@@ -168,11 +170,13 @@ def test_draft_is_not_qualified_for_attestation() -> None:
 
 def test_models_carry_references_not_private_payloads() -> None:
     with pytest.raises(ValidationError):
-        ContentIdentity(
-            kind="source",
-            identity="git:x",
-            content_sha256=DIGESTS["a"],
-            payload={"secret": "truth"},
+        ContentIdentity.model_validate(
+            {
+                "kind": "source",
+                "identity": "git:x",
+                "content_sha256": DIGESTS["a"],
+                "payload": {"secret": "truth"},
+            }
         )
 
     payload = json.loads(serialize_attestation(_attestation()))
@@ -200,3 +204,18 @@ def test_signature_is_detached_from_semantic_identity() -> None:
         update={"attestation_content_sha256": DIGESTS["a"]}
     )
     assert not wrong_signature.binds(attestation)
+
+
+def test_public_serialization_is_fail_closed_and_changes_identity() -> None:
+    private = _attestation()
+
+    assert private.visibility == AttestationVisibility.OPERATOR_PRIVATE
+    with pytest.raises(ValueError, match="only PUBLIC"):
+        serialize_public_attestation(private)
+
+    data = private.model_dump(exclude={"attestation_id", "content_sha256"})
+    data["visibility"] = AttestationVisibility.PUBLIC
+    public = EnvironmentAttestation(**data)
+
+    assert serialize_public_attestation(public) == serialize_attestation(public)
+    assert public.attestation_id != private.attestation_id
