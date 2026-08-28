@@ -95,7 +95,10 @@ def evaluate_fidelity_compatibility(
         if item is None or item.status == schema.CoverageStatus.OMITTED:
             failures.append(f"required fidelity dimension is not implemented: {dimension.value}")
             continue
-        if validated_requirement.require_full_coverage and item.status != schema.CoverageStatus.FULL:
+        if (
+            validated_requirement.require_full_coverage
+            and item.status != schema.CoverageStatus.FULL
+        ):
             failures.append(f"required fidelity dimension is not full: {dimension.value}")
 
     return FidelityCompatibilityResult(
