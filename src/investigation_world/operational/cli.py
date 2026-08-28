@@ -10,6 +10,7 @@ from investigation_world.operational.deep_distribution import (
     OperationalDistributionConfig,
     compile_operational_distribution,
 )
+from investigation_world.operational.env_cli import env_app
 from investigation_world.operational.models import WorldDomain
 from investigation_world.operational.native_runtime import NativeOperationalRuntime
 from investigation_world.operational.native_validation import validate_native_artifact_distribution
@@ -19,6 +20,7 @@ app = typer.Typer(
     help="Veritas unified operational-world capability foundry",
     no_args_is_help=True,
 )
+app.add_typer(env_app, name="env")
 
 
 @app.command("capabilities")
