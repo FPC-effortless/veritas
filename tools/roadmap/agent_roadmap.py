@@ -15,14 +15,12 @@ from typing import Any
 SCHEMA = "veritas.agent-roadmap.v1"
 STATES = {"READY", "BLOCKED", "CLAIMED", "REVIEW", "DONE", "SUPERSEDED"}
 ACTIVE = {"READY", "CLAIMED", "REVIEW"}
+TRUSTED_STATUS_REQUIRED = {"CLAIMED", "REVIEW"}
 SATISFIED = {"DONE", "SUPERSEDED"}
 LABEL_STATE = {f"work:{state.lower()}": state for state in STATES}
 MARKER = "<!-- veritas-agent-work -->"
 STATUS_MARKER = "<!-- veritas-agent-work-status:v1 -->"
-FIELD_RE = re.compile(
-    r"^- \*\*(?P<key>[^*]+):\*\* (?P<value>.*)$",
-    re.MULTILINE,
-)
+FIELD_RE = re.compile(r"^- \*\*(?P<key>[^*]+):\*\* (?P<value>.*)$", re.MULTILINE)
 REF_RE = re.compile(r"(?<![\w/])#(\d+)\b")
 TICK_RE = re.compile(r"`([^`]+)`")
 STATUS_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
@@ -48,7 +46,6 @@ def validate(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if data.get("schema_version") != SCHEMA:
         errors.append(f"schema_version must be {SCHEMA!r}")
-
     rows = data.get("work")
     if not isinstance(rows, list) or not rows:
         return errors + ["work must be a non-empty list"]
@@ -56,12 +53,10 @@ def validate(data: dict[str, Any]) -> list[str]:
     by_id: dict[str, dict[str, Any]] = {}
     by_issue: dict[int, str] = {}
     names: dict[str, str] = {}
-
     for index, row in enumerate(rows):
         if not isinstance(row, dict):
             errors.append(f"work[{index}] must be an object")
             continue
-
         work_id = row.get("work_id")
         if not isinstance(work_id, str) or not work_id:
             errors.append(f"work[{index}].work_id must be non-empty")
@@ -75,23 +70,17 @@ def validate(data: dict[str, Any]) -> list[str]:
         if not isinstance(issue, int) or issue <= 0:
             errors.append(f"{work_id}: issue must be positive")
         elif issue in by_issue:
-            errors.append(
-                f"duplicate issue #{issue}: {by_issue[issue]} and {work_id}"
-            )
+            errors.append(f"duplicate issue #{issue}: {by_issue[issue]} and {work_id}")
         else:
             by_issue[issue] = work_id
 
         for key in ("title", "branch", "program", "wave"):
             if not isinstance(row.get(key), str) or not row[key].strip():
                 errors.append(f"{work_id}: {key} must be non-empty")
-
         if row.get("state") not in STATES:
             errors.append(f"{work_id}: invalid state {row.get('state')!r}")
-
         linked_pr = row.get("linked_pr")
-        if linked_pr is not None and (
-            not isinstance(linked_pr, int) or linked_pr <= 0
-        ):
+        if linked_pr is not None and (not isinstance(linked_pr, int) or linked_pr <= 0):
             errors.append(f"{work_id}: linked_pr must be null or positive")
 
         aliases = row.get("aliases", [])
@@ -118,9 +107,7 @@ def validate(data: dict[str, Any]) -> list[str]:
             if not isinstance(paths, list) or any(
                 not isinstance(path, str) or not path for path in paths
             ):
-                errors.append(
-                    f"{work_id}: ownership.exclusive_paths must be string list"
-                )
+                errors.append(f"{work_id}: ownership.exclusive_paths must be string list")
 
         dependencies = row.get("dependencies")
         hard_dependencies = row.get("hard_dependencies")
@@ -135,14 +122,12 @@ def validate(data: dict[str, Any]) -> list[str]:
         elif isinstance(dependencies, list):
             for dep in hard_dependencies:
                 if dep not in dependencies:
-                    errors.append(
-                        f"{work_id}: hard dependency {dep} missing from dependencies"
-                    )
+                    errors.append(f"{work_id}: hard dependency {dep} missing from dependencies")
 
     graph: dict[str, list[str]] = {}
     for work_id, row in by_id.items():
-        dependencies = row.get("dependencies", [])
         graph[work_id] = []
+        dependencies = row.get("dependencies", [])
         if isinstance(dependencies, list):
             for dep in dependencies:
                 if dep not in by_id:
@@ -159,8 +144,7 @@ def validate(data: dict[str, Any]) -> list[str]:
             return
         if work_id in visiting:
             start = stack.index(work_id)
-            cycle = " -> ".join(stack[start:] + [work_id])
-            errors.append(f"dependency cycle: {cycle}")
+            errors.append(f"dependency cycle: {' -> '.join(stack[start:] + [work_id])}")
             return
         visiting.add(work_id)
         stack.append(work_id)
@@ -173,8 +157,6 @@ def validate(data: dict[str, Any]) -> list[str]:
     for work_id in sorted(graph):
         visit(work_id)
 
-    # ROADMAP-002 checks exact active claims only. Parent/glob and live PR overlap
-    # remain ROADMAP-004 / ROADMAP-LOCK-001 responsibilities.
     path_owner: dict[str, str] = {}
     for work_id, row in sorted(by_id.items()):
         if row.get("state") not in ACTIVE:
@@ -184,12 +166,10 @@ def validate(data: dict[str, Any]) -> list[str]:
         for path in paths:
             if path in path_owner and path_owner[path] != work_id:
                 errors.append(
-                    "direct ownership collision on "
-                    f"{path}: {path_owner[path]} and {work_id}"
+                    f"direct ownership collision on {path}: {path_owner[path]} and {work_id}"
                 )
             else:
                 path_owner[path] = work_id
-
         hard_dependencies = row.get("hard_dependencies", [])
         if not isinstance(hard_dependencies, list):
             continue
@@ -197,10 +177,8 @@ def validate(data: dict[str, Any]) -> list[str]:
             dep_row = by_id.get(dep)
             if dep_row is not None and dep_row.get("state") not in SATISFIED:
                 errors.append(
-                    f"{work_id}: active while hard dependency {dep} is "
-                    f"{dep_row.get('state')}"
+                    f"{work_id}: active while hard dependency {dep} is {dep_row.get('state')}"
                 )
-
     return sorted(set(errors))
 
 
@@ -213,12 +191,11 @@ def request_json(url: str, token: str | None) -> Any:
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
-
     request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.load(response)
-    except Exception as exc:  # network/API errors must fail closed
+    except Exception as exc:
         raise RoadmapError(f"GitHub request failed for {url}: {exc}") from exc
 
 
@@ -235,9 +212,7 @@ def fetch_issues(repo: str, token: str | None) -> list[dict[str, Any]]:
         if not isinstance(batch, list):
             raise RoadmapError("GitHub issues response must be a list")
         issues.extend(
-            item
-            for item in batch
-            if isinstance(item, dict) and "pull_request" not in item
+            item for item in batch if isinstance(item, dict) and "pull_request" not in item
         )
         if len(batch) < 100:
             return issues
@@ -245,14 +220,11 @@ def fetch_issues(repo: str, token: str | None) -> list[dict[str, Any]]:
 
 
 def parse_contract(body: str, issue: int) -> dict[str, Any]:
-    """Parse the stable fields from an agent-work Work Contract."""
+    """Parse stable fields from an agent-work Work Contract."""
     if MARKER not in body:
         raise RoadmapError(f"issue #{issue}: missing agent-work marker")
-
     fields = {
-        match.group("key").strip().lower().replace(" ", "_"): match.group(
-            "value"
-        ).strip()
+        match.group("key").strip().lower().replace(" ", "_"): match.group("value").strip()
         for match in FIELD_RE.finditer(body)
     }
     required = {
@@ -268,11 +240,9 @@ def parse_contract(body: str, issue: int) -> dict[str, Any]:
         raise RoadmapError(
             f"issue #{issue}: missing Work Contract fields: {', '.join(missing)}"
         )
-
     ids = [part.strip() for part in fields["work_id"].split("/") if part.strip()]
     if not ids:
         raise RoadmapError(f"issue #{issue}: empty Work ID")
-
     linked = REF_RE.search(fields["linked_pr"])
     paths = sorted(
         {
@@ -303,22 +273,15 @@ def state_from_labels(issue: dict[str, Any], number: int) -> str:
         if isinstance(label, dict) and label.get("name") in LABEL_STATE
     )
     if len(found) != 1:
-        raise RoadmapError(
-            f"issue #{number}: expected one work:* state label, got {found}"
-        )
+        raise RoadmapError(f"issue #{number}: expected one work:* state label, got {found}")
     return found[0]
 
 
-def status_record(
-    repo: str,
-    number: int,
-    token: str | None,
-) -> dict[str, Any] | None:
+def status_record(repo: str, number: int, token: str | None) -> dict[str, Any] | None:
     """Return the latest trusted coordination status comment."""
     url = f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100"
     comments = request_json(url, token)
     trusted: list[dict[str, Any]] = []
-
     for comment in comments if isinstance(comments, list) else []:
         user = comment.get("user", {}) if isinstance(comment, dict) else {}
         body = comment.get("body", "") if isinstance(comment, dict) else ""
@@ -333,7 +296,6 @@ def status_record(
             continue
         if isinstance(record, dict):
             trusted.append(record)
-
     return max(
         trusted,
         key=lambda record: int(record.get("transition_seq", -1)),
@@ -363,9 +325,7 @@ def derive_dependencies(
 ) -> list[str]:
     """Derive current dependency edges only from the live Work Contract."""
     dependencies = {
-        issue_to_id[ref]
-        for ref in contract["refs"]
-        if ref in issue_to_id
+        issue_to_id[ref] for ref in contract["refs"] if ref in issue_to_id
     }
     summary = contract["dependency_summary"]
     for name, primary in name_to_id.items():
@@ -375,11 +335,7 @@ def derive_dependencies(
     return sorted(dependencies)
 
 
-def sync(
-    current: dict[str, Any],
-    repo: str,
-    token: str | None,
-) -> dict[str, Any]:
+def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any]:
     """Refresh issue-derived coordination fields while preserving curated policy."""
     issues = fetch_issues(repo, token)
     previous = {
@@ -387,7 +343,6 @@ def sync(
         for row in current.get("work", [])
         if isinstance(row, dict)
     }
-
     parsed: list[tuple[dict[str, Any], dict[str, Any], str]] = []
     issue_to_id: dict[int, str] = {}
     for issue in issues:
@@ -408,7 +363,6 @@ def sync(
         number = issue["number"]
         candidate = previous.get(number, {})
         old = candidate if isinstance(candidate, dict) else {}
-
         dependencies = derive_dependencies(contract, issue_to_id, name_to_id)
         old_hard = old.get("hard_dependencies", [])
         hard_dependencies = (
@@ -420,20 +374,18 @@ def sync(
         linked_pr = contract["linked_pr"]
         branch = contract["branch"]
         claimant = old.get("claimant")
-        status = (
-            status_record(repo, number, token)
-            if state in {"CLAIMED", "REVIEW"}
-            else None
-        )
+        status = status_record(repo, number, token) if state in TRUSTED_STATUS_REQUIRED else None
+        if state in TRUSTED_STATUS_REQUIRED and status is None:
+            raise RoadmapError(
+                f"issue #{number}: {state} missing trusted coordination status"
+            )
         if status is not None:
             if (
                 status.get("issue_number") != number
                 or status.get("work_id") != contract["work_id"]
                 or status.get("state") != state
             ):
-                raise RoadmapError(
-                    f"issue #{number}: trusted status disagrees with live issue"
-                )
+                raise RoadmapError(f"issue #{number}: trusted status disagrees with live issue")
             if isinstance(status.get("linked_pr"), int):
                 linked_pr = status["linked_pr"]
             if isinstance(status.get("branch"), str) and status["branch"]:
@@ -484,9 +436,7 @@ def sync(
     }
     errors = validate(result)
     if errors:
-        raise RoadmapError(
-            "synchronized manifest invalid:\n- " + "\n- ".join(errors)
-        )
+        raise RoadmapError("synchronized manifest invalid:\n- " + "\n- ".join(errors))
     return result
 
 
@@ -494,9 +444,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Construct the command-line parser."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--manifest",
-        type=Path,
-        default=Path(".github/agent-roadmap.yml"),
+        "--manifest", type=Path, default=Path(".github/agent-roadmap.yml")
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("validate")
@@ -521,12 +469,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             print(f"roadmap valid: {len(data['work'])} work items")
             return 0
-
         data = sync(data, args.repository, os.environ.get(args.token_env))
-        args.manifest.write_text(
-            json.dumps(data, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        args.manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         print(f"roadmap synchronized: {len(data['work'])} work items")
         return 0
     except RoadmapError as exc:
