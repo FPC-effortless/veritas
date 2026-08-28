@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2008-05-I-GA-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": ["CSB-2008-05-I-GA"],
+  "simulation_start": "2008-02-08T00:00:00Z",
+  "simulation_as_of": "2008-02-09T12:00:00Z",
+  "initial_public_state": {
+    "incident": "February 7, 2008 explosion and fire at the Imperial Sugar refinery in Port Wentworth, Georgia",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct how combustible-dust conditions produced primary and secondary explosion propagation, and revise hypotheses as CSB evidence matures.",
+    "epistemic_rule": "Early investigation context, preliminary propagation findings, final causal findings, and post-final reconstruction must remain distinct."
+  },
+  "actors": [
+    {"actor_id": "uscsb", "role": "investigator_and_publisher", "public_attributes": {"name": "U.S. Chemical Safety and Hazard Investigation Board"}},
+    {"actor_id": "imperial-sugar", "role": "facility_operator", "public_attributes": {"name": "Imperial Sugar Port Wentworth Refinery"}}
+  ],
+  "available_actions": [
+    "inspect_evidence", "review_video", "request_document", "build_timeline",
+    "assess_combustible_dust", "assess_housekeeping", "assess_equipment_design",
+    "assess_secondary_explosion_propagation", "compare_preliminary_and_final_analysis",
+    "form_hypothesis", "revise_hypothesis", "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "primary_event_uncertainty_must_be_preserved": true,
+    "preliminary_findings_are_not_final_findings": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-imperial-deployment-2008-02-08",
+      "source_id": "uscsb",
+      "source_artifact_id": "imperial-deployment-2008-02-08",
+      "case_ids": ["CSB-2008-05-I-GA"],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/investigative-team-from-u-s-chemical-safety-board-deploys-to-explosion-at-georgia-sugar-refinery/",
+      "content_ref": "external-document://uscsb/imperial/deployment-2008-02-08",
+      "available_from": "2008-02-09T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-imperial-sugar-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-imperial-update-2008-02-17",
+      "source_id": "uscsb",
+      "source_artifact_id": "imperial-update-2008-02-17",
+      "case_ids": ["CSB-2008-05-I-GA"],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/statement-of-csb-investigations-manager-stephen-selk-p-e-updating-the-public-on-the-investigation-of-the-imperial-sugar-company-explosion-and-fire-savannah-georgia/",
+      "content_ref": "external-document://uscsb/imperial/update-2008-02-17",
+      "available_from": "2008-02-18T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-imperial-sugar-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-imperial-preliminary-propagation-2008-03-12",
+      "source_id": "uscsb",
+      "source_artifact_id": "imperial-preliminary-propagation-2008-03-12",
+      "case_ids": ["CSB-2008-05-I-GA"],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/testimony-of-csb-board-member-william-wright-before-house-education-and-labor-committee-hearing-on-combustible-dust-hazards/",
+      "content_ref": "external-document://uscsb/imperial/preliminary-propagation-2008-03-12",
+      "available_from": "2008-03-13T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-imperial-sugar-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-imperial-final-release-2009-09-24",
+      "source_id": "uscsb",
+      "source_artifact_id": "imperial-final-release-2009-09-24",
+      "case_ids": ["CSB-2008-05-I-GA"],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/final-csb-report-on-imperial-sugar-disaster-concludes-inadequate-equipment-design-maintenance-and-housekeeping-led-to-massive-sugar-dust-explosions/",
+      "content_ref": "external-document://uscsb/imperial/final-release-2009-09-24",
+      "available_from": "2009-09-25T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-imperial-sugar-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-imperial-inferno-video-2009-10-06",
+      "source_id": "uscsb",
+      "source_artifact_id": "imperial-inferno-video-2009-10-06",
+      "case_ids": ["CSB-2008-05-I-GA"],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/inferno-dust-explosion-at-imperial-sugar/",
+      "content_ref": "external-page://uscsb/imperial/inferno-video-2009-10-06",
+      "available_from": "2009-10-07T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-imperial-sugar-link-only-v1"
+    }
+  ],
+  "relations": [
+    {"relation_id": "imperial-update-to-deployment", "source_fragment_id": "csb-imperial-update-2008-02-17", "target_fragment_id": "csb-imperial-deployment-2008-02-08", "relation": "same_event"},
+    {"relation_id": "imperial-preliminary-to-update", "source_fragment_id": "csb-imperial-preliminary-propagation-2008-03-12", "target_fragment_id": "csb-imperial-update-2008-02-17", "relation": "same_event"},
+    {"relation_id": "imperial-final-to-preliminary", "source_fragment_id": "csb-imperial-final-release-2009-09-24", "target_fragment_id": "csb-imperial-preliminary-propagation-2008-03-12", "relation": "same_event"},
+    {"relation_id": "imperial-video-to-final", "source_fragment_id": "csb-imperial-inferno-video-2009-10-06", "target_fragment_id": "csb-imperial-final-release-2009-09-24", "relation": "same_event"}
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-imperial-final-institutional-findings-2009",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation concluded that inadequately designed and maintained dust collection and sugar-handling equipment, together with inadequate housekeeping, allowed combustible sugar dust to accumulate and enabled catastrophic primary and secondary explosions.",
+      "confidence": 1.0,
+      "source_evidence_ids": ["csb-imperial-final-release-2009-09-24"]
+    }
+  ],
+  "actual_timeline": [],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_primary_event_uncertainty": true,
+    "require_secondary_explosion_reasoning": true,
+    "require_preliminary_vs_final_distinction": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}
