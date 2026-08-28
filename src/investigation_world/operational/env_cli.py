@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from enum import StrEnum
-from importlib import import_module
-from pathlib import Path
+import enum
+import pathlib
 
 import typer
 
@@ -14,7 +12,7 @@ env_app = typer.Typer(
 )
 
 
-class EnvironmentAdapter(StrEnum):
+class EnvironmentAdapter(enum.StrEnum):
     NEMO = "nemo"
     OPENENV = "openenv"
     HUD = "hud"
@@ -22,12 +20,12 @@ class EnvironmentAdapter(StrEnum):
     HARBOR = "harbor"
 
 
-def _portability_main(arguments: Sequence[str]) -> int:
-    module = import_module("investigation_world.world_portability")
+def _portability_main(arguments: list[str] | tuple[str, ...]) -> int:
+    module = __import__("investigation_world.world_portability", fromlist=("main",))
     return int(module.main(tuple(arguments)))
 
 
-def _run_portability(arguments: Sequence[str]) -> None:
+def _run_portability(arguments: list[str] | tuple[str, ...]) -> None:
     """Delegate to the canonical portability CLI and preserve its exit status."""
 
     exit_code = _portability_main(arguments)
@@ -35,7 +33,11 @@ def _run_portability(arguments: Sequence[str]) -> None:
         raise typer.Exit(exit_code)
 
 
-def _append_optional_path(arguments: list[str], flag: str, value: Path | None) -> None:
+def _append_optional_path(
+    arguments: list[str],
+    flag: str,
+    value: pathlib.Path | None,
+) -> None:
     if value is not None:
         arguments.extend((flag, str(value)))
 
@@ -47,9 +49,9 @@ def _append_optional_text(arguments: list[str], flag: str, value: str | None) ->
 
 @env_app.command("compile")
 def compile_environment_cmd(
-    episode: Path = typer.Option(..., "--episode"),
-    output: Path = typer.Option(..., "--output"),
-    public_output: Path | None = typer.Option(None, "--public-output"),
+    episode: pathlib.Path = typer.Option(..., "--episode"),
+    output: pathlib.Path = typer.Option(..., "--output"),
+    public_output: pathlib.Path | None = typer.Option(None, "--public-output"),
 ) -> None:
     """Compile a canonical OperationalEpisode into a portable operational contract."""
 
@@ -60,7 +62,7 @@ def compile_environment_cmd(
 
 @env_app.command("inspect")
 def inspect_environment_cmd(
-    contract: Path = typer.Option(..., "--contract"),
+    contract: pathlib.Path = typer.Option(..., "--contract"),
     include_private_identities: bool = typer.Option(
         False,
         "--include-private-identities",
@@ -76,7 +78,7 @@ def inspect_environment_cmd(
 
 @env_app.command("validate")
 def validate_environment_cmd(
-    contract: Path = typer.Option(..., "--contract"),
+    contract: pathlib.Path = typer.Option(..., "--contract"),
 ) -> None:
     """Validate the public/evaluator-private contract partition."""
 
@@ -85,8 +87,8 @@ def validate_environment_cmd(
 
 @env_app.command("run")
 def run_environment_cmd(
-    contract: Path = typer.Option(..., "--contract"),
-    vector: Path | None = typer.Option(None, "--vector"),
+    contract: pathlib.Path = typer.Option(..., "--contract"),
+    vector: pathlib.Path | None = typer.Option(None, "--vector"),
     seed: int | None = typer.Option(None, "--seed"),
     include_operator_metadata: bool = typer.Option(
         False,
@@ -107,8 +109,8 @@ def run_environment_cmd(
 @env_app.command("export")
 def export_environment_cmd(
     adapter: EnvironmentAdapter = typer.Option(..., "--adapter"),
-    contract: Path = typer.Option(..., "--contract"),
-    output: Path = typer.Option(..., "--output"),
+    contract: pathlib.Path = typer.Option(..., "--contract"),
+    output: pathlib.Path = typer.Option(..., "--output"),
     seed: int = typer.Option(0, "--seed"),
     veritas_requirement: str | None = typer.Option(None, "--veritas-requirement"),
     task_name: str | None = typer.Option(None, "--task-name"),
@@ -140,8 +142,8 @@ def export_environment_cmd(
 @env_app.command("conformance")
 def conformance_environment_cmd(
     adapter: EnvironmentAdapter = typer.Option(..., "--adapter"),
-    contract: Path = typer.Option(..., "--contract"),
-    vector: Path = typer.Option(..., "--vector"),
+    contract: pathlib.Path = typer.Option(..., "--contract"),
+    vector: pathlib.Path = typer.Option(..., "--vector"),
 ) -> None:
     """Run fail-closed semantic conformance for one runtime adapter."""
 
@@ -160,8 +162,8 @@ def conformance_environment_cmd(
 
 @env_app.command("reverify")
 def reverify_environment_cmd(
-    trajectory: Path = typer.Option(..., "--trajectory"),
-    contract: Path = typer.Option(..., "--contract"),
+    trajectory: pathlib.Path = typer.Option(..., "--trajectory"),
+    contract: pathlib.Path = typer.Option(..., "--contract"),
     include_private_identities: bool = typer.Option(
         False,
         "--include-private-identities",
