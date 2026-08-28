@@ -11,9 +11,9 @@ from urllib.parse import urlparse
 from pydantic import Field, model_validator
 
 from .models import (
-    AIUsePolicy,
     AcquisitionPolicy,
     Actor,
+    AIUsePolicy,
     EvidenceItem,
     EvidenceProvenance,
     InvestigationEpisodeBundle,

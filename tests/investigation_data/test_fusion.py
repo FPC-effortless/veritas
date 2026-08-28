@@ -17,7 +17,6 @@ from investigation_world.investigation_data.fusion import (
 )
 from investigation_world.investigation_data.models import Sensitivity, TruthClaim
 
-
 NOW = datetime(2026, 8, 28, 12, 0, tzinfo=UTC)
 CATALOG = load_catalog()
 
