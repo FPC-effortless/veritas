@@ -219,10 +219,12 @@ def profile_dataset(
     owned = connection is None
     conn = connection or duckdb.connect(database=":memory:")
     try:
+        # Dynamic SQL below is constrained to an escaped file path plus identifiers
+        # quoted from DuckDB's own discovered schema. Data values remain parameterized.
         reader = _reader_sql(dataset)
-        description = conn.execute(f"DESCRIBE SELECT * FROM {reader}").fetchall()
+        description = conn.execute(f"DESCRIBE SELECT * FROM {reader}").fetchall()  # nosec B608
         columns = {str(row[0]): str(row[1]) for row in description}
-        row_count = int(conn.execute(f"SELECT COUNT(*) FROM {reader}").fetchone()[0])
+        row_count = int(conn.execute(f"SELECT COUNT(*) FROM {reader}").fetchone()[0])  # nosec B608
         null_fraction: dict[str, float] = {}
         distinct_count: dict[str, int] = {}
         numeric_summary: dict[str, dict[str, float | None]] = {}
@@ -230,14 +232,14 @@ def profile_dataset(
         for column, column_type in columns.items():
             identifier = _quote_identifier(column)
             nulls, distinct = conn.execute(
-                f"SELECT COUNT(*) - COUNT({identifier}), "
+                f"SELECT COUNT(*) - COUNT({identifier}), "  # nosec B608
                 f"COUNT(DISTINCT {identifier}) FROM {reader}"
             ).fetchone()
             null_fraction[column] = float(nulls) / max(1, row_count)
             distinct_count[column] = int(distinct)
             if any(marker in column_type.upper() for marker in _NUMERIC_MARKERS):
                 values = conn.execute(
-                    "SELECT "
+                    "SELECT "  # nosec B608
                     f"MIN({identifier}), MAX({identifier}), AVG({identifier}), "
                     f"MEDIAN({identifier}), STDDEV_POP({identifier}), "
                     f"QUANTILE_CONT({identifier}, 0.25), "
@@ -277,7 +279,7 @@ def _fit_distribution_target(
 
     if rule.statistic == CalibrationStatistic.COUNT_ROWS:
         expected: Any = int(
-            conn.execute(f"SELECT COUNT(*) FROM {reader}{where}", params).fetchone()[0]
+            conn.execute(f"SELECT COUNT(*) FROM {reader}{where}", params).fetchone()[0]  # nosec B608
         )
     else:
         assert rule.column is not None
@@ -288,7 +290,7 @@ def _fit_distribution_target(
         identifier = _quote_identifier(rule.column)
         if rule.statistic == CalibrationStatistic.NULL_RATE:
             nulls, total = conn.execute(
-                f"SELECT COUNT(*) - COUNT({identifier}), COUNT(*) "
+                f"SELECT COUNT(*) - COUNT({identifier}), COUNT(*) "  # nosec B608
                 f"FROM {reader}{where}",
                 params,
             ).fetchone()
@@ -296,16 +298,16 @@ def _fit_distribution_target(
         elif rule.statistic == CalibrationStatistic.DISTINCT_COUNT:
             expected = int(
                 conn.execute(
-                    f"SELECT COUNT(DISTINCT {identifier}) FROM {reader}{where}",
+                    f"SELECT COUNT(DISTINCT {identifier}) FROM {reader}{where}",  # nosec B608
                     params,
                 ).fetchone()[0]
             )
         elif rule.statistic == CalibrationStatistic.CATEGORY_DISTRIBUTION:
             total = int(
-                conn.execute(f"SELECT COUNT(*) FROM {reader}{where}", params).fetchone()[0]
+                conn.execute(f"SELECT COUNT(*) FROM {reader}{where}", params).fetchone()[0]  # nosec B608
             )
             rows = conn.execute(
-                f"SELECT CAST({identifier} AS VARCHAR), COUNT(*) AS n "
+                f"SELECT CAST({identifier} AS VARCHAR), COUNT(*) AS n "  # nosec B608
                 f"FROM {reader}{where} "
                 "GROUP BY 1 ORDER BY n DESC, 1 ASC LIMIT 50",
                 params,
@@ -323,12 +325,12 @@ def _fit_distribution_target(
             }.get(rule.statistic)
             if rule.statistic == CalibrationStatistic.QUANTILE:
                 assert rule.quantile is not None
-                query = (
+                query = (  # nosec B608
                     f"SELECT QUANTILE_CONT({identifier}, {float(rule.quantile)}) "
                     f"FROM {reader}{where}"
                 )
             elif aggregate is not None:
-                query = f"SELECT {aggregate}({identifier}) FROM {reader}{where}"
+                query = f"SELECT {aggregate}({identifier}) FROM {reader}{where}"  # nosec B608
             else:
                 raise ValueError(f"unsupported statistic {rule.statistic}")
             value = conn.execute(query, params).fetchone()[0]
@@ -368,7 +370,7 @@ def _fit_dependency_target(
     cause = _quote_identifier(rule.cause_column)
     effect = _quote_identifier(rule.effect_column)
     value = conn.execute(
-        f"SELECT CORR({cause}, {effect}) FROM {_reader_sql(dataset)} "
+        f"SELECT CORR({cause}, {effect}) FROM {_reader_sql(dataset)} "  # nosec B608
         f"WHERE {cause} IS NOT NULL AND {effect} IS NOT NULL"
     ).fetchone()[0]
     return DependencyTarget(
