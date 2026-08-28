@@ -8,6 +8,8 @@ Canonical release tag: **v0.11.0**.
 
 Veritas 0.11 is the commercial-portability release. It is built on the 0.9 native-artifact runtime, the 0.9.1 experimental-integrity hardening, and the 0.10 benchmark-qualification release. The merged portability implementation is the software release identity; 0.11 is no longer reserved for a future industrial-sandbox rewrite.
 
+Development `main` may contain post-`v0.11.0` integration work while package metadata remains `0.11.0`; that does **not** create or authorize a new 0.11 release artifact. Portable operational convergence is one such post-release integration candidate and remains subject to the release authority described below.
+
 ## Release identity
 
 The buyer-facing 0.11 release must agree across all public surfaces:
@@ -36,7 +38,8 @@ Veritas currently includes:
 - generic benchmark qualification with source-disjoint splitting, near-duplicate clustering, provenance, replay, leakage, contamination, feasibility, policy-ordering and exploit-resistance gates;
 - private-panel stratum coverage gates that reject majority-class benchmark artifacts;
 - vendor-neutral portable environment/task/release/capability/reset/verifier/artifact/metering contracts;
-- standalone HUD v6 and Prime Verifiers v1 packaging for the qualified SRE v4 release.
+- standalone HUD v6 and Prime Verifiers v1 packaging for the qualified SRE v4 release;
+- a generic `PortableOperationalContract` / `PortableRuntimeProtocol` program with MCP compilation, Woyengi schema consumption, trajectory/reverification, NeMo/OpenEnv/Harbor/Prime/HUD operational exporters, sandbox boundaries, and cross-runtime conformance machinery on the post-release development line.
 
 ## 0.11 commercial portability
 
@@ -55,6 +58,14 @@ The exact sealed SRE v4 proof establishes:
 - deterministic HUD and Prime package identities.
 
 The validated buyer-safe identities are pinned in `release/0.11.0/PORTABILITY_IDENTITIES.json` and are carried into the GitHub release provenance record.
+
+## Portable operational convergence candidate
+
+The generic operational program is integrated through shared package surfaces without superseding the frozen SRE HUD/Prime compatibility paths. `PortableEnvironmentManifest` can reference generic operational semantics by `PortableOperationalContract` schema version plus `PortablePublicContract.public_id`; the full contract ID is intentionally excluded because it commits to evaluator-private semantics. Unbound legacy manifests omit the new reference field entirely so their serialized shape and content-derived identity remain compatible.
+
+The installed generic command is `veritas-portable`; `tools/world_portability.py` remains a compatibility launcher. Exact interface versions, runtime mapping status, and unsupported external-runtime semantics are recorded in `docs/portability/portable-operational-convergence.md`.
+
+This integration is **not** scientific qualification, Frontier Qualification, commercial qualification, or release authorization.
 
 ## Operational Worlds Production v3
 
@@ -134,6 +145,25 @@ Veritas 0.11.0 is publishable only when the exact release commit passes:
 - root-license and commercial-licensing policy checks.
 
 The release workflow then emits an immutable procurement object containing Python distribution hashes, GHCR image digest, pinned HUD/Prime/qualification identities, SBOM and provenance.
+
+### Portable operational convergence release gate
+
+Any release that promotes the generic portable operational program must additionally have fresh evidence for all of the following on the exact candidate/merge ref:
+
+- deterministic `PortableOperationalContract` fixture and canonical bytes;
+- public/private leakage suite;
+- deterministic reset;
+- native operational verifier/reward parity;
+- cross-runtime semantic conformance with no semantic loss promoted over missing evidence;
+- clean external wheel/package installation;
+- existing SRE HUD smoke;
+- existing SRE Prime smoke;
+- Woyengi pinned-fixture parity;
+- deterministic trajectory conversion;
+- offline reverification;
+- explicit documentation of unsupported external-runtime semantics.
+
+The `Portable Operational Convergence` workflow supplies the generic implementation/package gates. Existing `Portability Validation` supplies the frozen SRE HUD/Prime compatibility gates. Ordinary repository `CI` remains required for the full repository verification ladder. A missing, skipped, unavailable, or stale gate is **UNVERIFIED**, not PASS.
 
 ## Next release: 0.12
 
