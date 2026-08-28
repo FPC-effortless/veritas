@@ -23,7 +23,10 @@ from investigation_world.operational.models import (
     TaskContract,
     WorldDomain,
 )
-from investigation_world.portable_contract import compile_operational_episode
+from investigation_world.portable_contract import (
+    PortableOperationalContract,
+    compile_operational_episode,
+)
 from investigation_world.trajectory import (
     ArtifactIdentity,
     EvaluationRecord,
@@ -118,20 +121,24 @@ def _episode(*, approved_value: str = "approved") -> OperationalEpisode:
     )
 
 
-def _trajectory(contract: object, *, prose_only: bool = False) -> TrajectoryV2:
+def _trajectory(
+    contract: PortableOperationalContract,
+    *,
+    prose_only: bool = False,
+) -> TrajectoryV2:
     verifier = VerifierIdentity(verifier_id="verifier:semantic", version="1")
     events = (
         TrajectoryEvent(
             step=0,
             event_type="tool_call",
-            payload={
-                "message": "approve_order"
-            }
-            if prose_only
-            else {
-                "method": "open_record",
-                "arguments": {"record_id": "record-001"},
-            },
+            payload=(
+                {"message": "approve_order"}
+                if prose_only
+                else {
+                    "method": "open_record",
+                    "arguments": {"record_id": "record-001"},
+                }
+            ),
             state_before=StateDigest(digest="state-0"),
             state_after=StateDigest(digest="state-0"),
             cost=1.0,
