@@ -80,9 +80,9 @@
       "rights_review_id": "review-csb-texas-city-link-only-v1"
     },
     {
-      "fragment_id": "csb-final-report-2007-03-20",
+      "fragment_id": "csb-final-findings-release-2007-03-20",
       "source_id": "uscsb",
-      "source_artifact_id": "final-report-2005-04-I-TX",
+      "source_artifact_id": "final-findings-release-2007-03-20",
       "case_ids": [
         "CSB-2005-04-I-TX"
       ],
@@ -90,8 +90,8 @@
       "epistemic_role": "official_finding",
       "derivation": "original",
       "sensitivity": "public",
-      "locator": "https://www.csb.gov/assets/1/20/csbfinalreportbp.pdf",
-      "content_ref": "external-document://uscsb/2005-04-I-TX/final-report",
+      "locator": "https://www.csb.gov/u-s-chemical-safety-board-concludes-organizational-and-safety-deficiencies-at-all-levels-of-the-bp-corporation-caused-march-2005-texas-city-disaster-that-killed-15-injured-180/",
+      "content_ref": "external-document://uscsb/2005-04-I-TX/final-findings-release-2007-03-20",
       "available_from": "2007-03-21T00:00:00Z",
       "reliability": "high",
       "rights_review_id": "review-csb-texas-city-link-only-v1"
@@ -123,14 +123,14 @@
     },
     {
       "relation_id": "texas-city-final-to-preliminary",
-      "source_fragment_id": "csb-final-report-2007-03-20",
+      "source_fragment_id": "csb-final-findings-release-2007-03-20",
       "target_fragment_id": "csb-preliminary-findings-2005-10-27",
       "relation": "same_event"
     },
     {
       "relation_id": "texas-city-video-to-final",
       "source_fragment_id": "csb-anatomy-of-a-disaster-2008-03-21",
-      "target_fragment_id": "csb-final-report-2007-03-20",
+      "target_fragment_id": "csb-final-findings-release-2007-03-20",
       "relation": "same_event"
     }
   ],
@@ -139,10 +139,10 @@
     {
       "finding_id": "csb-final-organizational-cause-2007",
       "authority": "U.S. Chemical Safety and Hazard Investigation Board",
-      "finding": "The CSB final report concluded that organizational and safety deficiencies at multiple levels of BP contributed causally to the Texas City disaster.",
+      "finding": "The CSB final findings release states that organizational and safety deficiencies at multiple levels of BP contributed causally to the Texas City disaster.",
       "confidence": 1.0,
       "source_evidence_ids": [
-        "csb-final-report-2007-03-20"
+        "csb-final-findings-release-2007-03-20"
       ]
     }
   ],
