@@ -184,7 +184,7 @@ def verify_receipt(root: Path, receipt: ArtifactReceipt) -> bool:
     path = (root.resolve() / receipt.local_path).resolve()
     if root.resolve() not in path.parents:
         raise AcquisitionError("receipt path escaped acquisition root")
-    if not path.is_file():
+    if not path.is_file() or path.stat().st_size != receipt.byte_count:
         return False
     digest = hashlib.sha256()
     with path.open("rb") as handle:
