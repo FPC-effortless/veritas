@@ -106,7 +106,9 @@ _REQUIRED_EVIDENCE_TYPE: dict[FidelityLevel, FidelityEvidenceType] = {
     FidelityLevel.L1_STRUCTURED_SYNTHETIC_APPLICATION: FidelityEvidenceType.BEHAVIORAL,
     FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION: FidelityEvidenceType.NATIVE_ARTIFACT,
     FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA: FidelityEvidenceType.SERVICE_REPLICA,
-    FidelityLevel.L4_CONTROLLED_REAL_SYSTEM_INTEGRATION: FidelityEvidenceType.REAL_SYSTEM_INTEGRATION,
+    FidelityLevel.L4_CONTROLLED_REAL_SYSTEM_INTEGRATION: (
+        FidelityEvidenceType.REAL_SYSTEM_INTEGRATION
+    ),
 }
 
 _REQUIRED_DIMENSIONS: dict[FidelityLevel, tuple[FidelityDimension, ...]] = {
