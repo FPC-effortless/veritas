@@ -219,3 +219,40 @@ def test_public_serialization_is_fail_closed_and_changes_identity() -> None:
 
     assert serialize_public_attestation(public) == serialize_attestation(public)
     assert public.attestation_id != private.attestation_id
+
+
+def test_model_copy_semantic_mutation_is_rejected_at_consumers() -> None:
+    attestation = _attestation()
+    signature = AttestationSignature(
+        attestation_id=attestation.attestation_id,
+        attestation_content_sha256=attestation.content_sha256,
+        algorithm="ed25519",
+        key_id="release-key",
+        signature="opaque-signature",
+    )
+    copied = attestation.model_copy(
+        update={
+            "source": ContentIdentity(
+                kind="source",
+                identity="git:cafebabe",
+                content_sha256=DIGESTS["a"],
+            )
+        }
+    )
+
+    assert copied.attestation_id == attestation.attestation_id
+    assert copied.content_sha256 == attestation.content_sha256
+    with pytest.raises(ValidationError, match="attestation digest"):
+        serialize_attestation(copied)
+    assert not signature.binds(copied)
+
+
+def test_model_copy_visibility_escalation_cannot_be_publicly_serialized() -> None:
+    private = _attestation()
+    copied = private.model_copy(update={"visibility": AttestationVisibility.PUBLIC})
+
+    assert copied.visibility == AttestationVisibility.PUBLIC
+    assert copied.attestation_id == private.attestation_id
+    assert copied.content_sha256 == private.content_sha256
+    with pytest.raises(ValidationError, match="attestation digest"):
+        serialize_public_attestation(copied)
