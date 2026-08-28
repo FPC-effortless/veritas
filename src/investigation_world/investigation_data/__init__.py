@@ -16,16 +16,27 @@ from .fusion import (
     validate_fusion_sources,
 )
 from .models import (
+    DocumentPageExposure,
+    DocumentPreparationPlan,
+    DocumentPreparationResult,
+    DocumentSliceSpec,
     InvestigationEpisodeBundle,
+    PageRange,
+    PreparedDocumentSlice,
     PrivateInvestigationOracle,
     PublicInvestigationEpisode,
     SourceCatalog,
     SourceSpec,
 )
+from .preparation import prepare_document_artifact
 from .serialization import write_episode_bundle
 
 __all__ = [
     "DerivationKind",
+    "DocumentPageExposure",
+    "DocumentPreparationPlan",
+    "DocumentPreparationResult",
+    "DocumentSliceSpec",
     "EpistemicRole",
     "EvidenceFragment",
     "EvidenceModality",
@@ -35,6 +46,8 @@ __all__ = [
     "FusionReport",
     "FusionResult",
     "InvestigationEpisodeBundle",
+    "PageRange",
+    "PreparedDocumentSlice",
     "PrivateInvestigationOracle",
     "PublicInvestigationEpisode",
     "SourceCatalog",
@@ -44,6 +57,7 @@ __all__ = [
     "fuse_manifest",
     "load_catalog",
     "manifest_digest",
+    "prepare_document_artifact",
     "validate_fusion_sources",
     "write_episode_bundle",
 ]
