@@ -27,6 +27,7 @@ test = [
 iworld = "investigation_world.cli:app"
 veritas = "investigation_world.operational.cli:app"
 veritas-observe = "investigation_world.observatory.cli:app"
+veritas-foundry = "investigation_world.foundry.cli:app"
 
 [build-system]
 requires = ["hatchling"]
