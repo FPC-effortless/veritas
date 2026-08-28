@@ -1,26 +1,9 @@
 from __future__ import annotations
 
+import pydantic
 import pytest
-from pydantic import ValidationError
 
-from investigation_world.fidelity import (
-    CoverageStatus,
-    DimensionCoverage,
-    FidelityClaimRequirement,
-    FidelityCompatibilityError,
-    FidelityDeclaration,
-    FidelityDimension,
-    FidelityEvidenceRef,
-    FidelityEvidenceType,
-    FidelityLevel,
-    FidelityPolicyRef,
-    FidelityRecord,
-    ReproducibilityProfile,
-    ResetMode,
-    evaluate_fidelity_compatibility,
-    require_fidelity_compatibility,
-    serialize_fidelity_record,
-)
+import investigation_world.fidelity as fidelity
 
 
 SHA = "a" * 64
@@ -29,11 +12,11 @@ POLICY_SHA = "b" * 64
 
 def _evidence(
     evidence_id: str,
-    evidence_type: FidelityEvidenceType,
-    *dimensions: FidelityDimension,
+    evidence_type: fidelity.FidelityEvidenceType,
+    *dimensions: fidelity.FidelityDimension,
     version: str = "1.0.0",
-) -> FidelityEvidenceRef:
-    return FidelityEvidenceRef(
+) -> fidelity.FidelityEvidenceRef:
+    return fidelity.FidelityEvidenceRef(
         evidence_id=evidence_id,
         evidence_type=evidence_type,
         content_sha256=SHA,
@@ -44,12 +27,12 @@ def _evidence(
 
 
 def _coverage(
-    dimension: FidelityDimension,
+    dimension: fidelity.FidelityDimension,
     evidence_id: str,
     *,
-    status: CoverageStatus = CoverageStatus.FULL,
-) -> DimensionCoverage:
-    return DimensionCoverage(
+    status: fidelity.CoverageStatus = fidelity.CoverageStatus.FULL,
+) -> fidelity.DimensionCoverage:
+    return fidelity.DimensionCoverage(
         dimension=dimension,
         status=status,
         evidence_ids=(evidence_id,),
@@ -57,53 +40,53 @@ def _coverage(
     )
 
 
-def _l2_declaration() -> FidelityDeclaration:
+def _l2_declaration() -> fidelity.FidelityDeclaration:
     evidence = (
         _evidence(
             "config",
-            FidelityEvidenceType.CONFIGURATION,
-            FidelityDimension.STATE_MODEL,
+            fidelity.FidelityEvidenceType.CONFIGURATION,
+            fidelity.FidelityDimension.STATE_MODEL,
         ),
         _evidence(
             "behavior",
-            FidelityEvidenceType.BEHAVIORAL,
-            FidelityDimension.APPLICATION_BEHAVIOR,
+            fidelity.FidelityEvidenceType.BEHAVIORAL,
+            fidelity.FidelityDimension.APPLICATION_BEHAVIOR,
         ),
         _evidence(
             "artifact",
-            FidelityEvidenceType.NATIVE_ARTIFACT,
-            FidelityDimension.NATIVE_ARTIFACTS,
+            fidelity.FidelityEvidenceType.NATIVE_ARTIFACT,
+            fidelity.FidelityDimension.NATIVE_ARTIFACTS,
         ),
     )
-    return FidelityDeclaration(
+    return fidelity.FidelityDeclaration(
         environment_id="gold-test",
         environment_version="1.0.0",
-        level=FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION,
+        level=fidelity.FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION,
         evidence=evidence,
         coverage=(
-            _coverage(FidelityDimension.STATE_MODEL, "config"),
-            _coverage(FidelityDimension.APPLICATION_BEHAVIOR, "behavior"),
-            _coverage(FidelityDimension.NATIVE_ARTIFACTS, "artifact"),
-            DimensionCoverage(
-                dimension=FidelityDimension.SERVICE_TOPOLOGY,
-                status=CoverageStatus.OMITTED,
+            _coverage(fidelity.FidelityDimension.STATE_MODEL, "config"),
+            _coverage(fidelity.FidelityDimension.APPLICATION_BEHAVIOR, "behavior"),
+            _coverage(fidelity.FidelityDimension.NATIVE_ARTIFACTS, "artifact"),
+            fidelity.DimensionCoverage(
+                dimension=fidelity.FidelityDimension.SERVICE_TOPOLOGY,
+                status=fidelity.CoverageStatus.OMITTED,
                 detail="multi-service behavior is not represented",
             ),
         ),
         limitations=("network services are not replicated",),
         omitted_real_world_semantics=("external service timing and outages",),
-        reproducibility=ReproducibilityProfile(
-            reset_mode=ResetMode.DETERMINISTIC_SNAPSHOT,
+        reproducibility=fidelity.ReproducibilityProfile(
+            reset_mode=fidelity.ResetMode.DETERMINISTIC_SNAPSHOT,
             deterministic_replay=True,
             constraints=("native toolchain version must be pinned",),
         ),
     )
 
 
-def _record() -> FidelityRecord:
-    return FidelityRecord(
+def _record() -> fidelity.FidelityRecord:
+    return fidelity.FidelityRecord(
         declaration=_l2_declaration(),
-        assessment_policy=FidelityPolicyRef(
+        assessment_policy=fidelity.FidelityPolicyRef(
             policy_id="default-fidelity-policy",
             policy_version="1",
             content_sha256=POLICY_SHA,
@@ -115,36 +98,36 @@ def test_declaration_is_version_bound_and_content_addressed() -> None:
     record = _record()
     assert record.record_id.startswith("FID-")
     assert len(record.content_sha256) == 64
-    assert FidelityRecord.model_validate(record.model_dump()) == record
+    assert fidelity.FidelityRecord.model_validate(record.model_dump()) == record
 
 
 def test_declared_level_requires_level_specific_evidence() -> None:
     declaration = _l2_declaration()
     payload = declaration.model_dump()
     payload["evidence"] = payload["evidence"][:2]
-    with pytest.raises(ValidationError, match="native_artifact evidence"):
-        FidelityDeclaration.model_validate(payload)
+    with pytest.raises(pydantic.ValidationError, match="native_artifact evidence"):
+        fidelity.FidelityDeclaration.model_validate(payload)
 
 
 def test_native_artifact_alone_cannot_upgrade_environment_to_l2() -> None:
     artifact = _evidence(
         "artifact",
-        FidelityEvidenceType.NATIVE_ARTIFACT,
-        FidelityDimension.NATIVE_ARTIFACTS,
+        fidelity.FidelityEvidenceType.NATIVE_ARTIFACT,
+        fidelity.FidelityDimension.NATIVE_ARTIFACTS,
     )
-    with pytest.raises(ValidationError, match="state_model"):
-        FidelityDeclaration(
+    with pytest.raises(pydantic.ValidationError, match="state_model"):
+        fidelity.FidelityDeclaration(
             environment_id="not-faithful",
             environment_version="1.0.0",
-            level=FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION,
+            level=fidelity.FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION,
             evidence=(artifact,),
             coverage=(
-                _coverage(FidelityDimension.NATIVE_ARTIFACTS, "artifact"),
+                _coverage(fidelity.FidelityDimension.NATIVE_ARTIFACTS, "artifact"),
             ),
             limitations=("state and behavior are not modeled",),
             omitted_real_world_semantics=("application behavior",),
-            reproducibility=ReproducibilityProfile(
-                reset_mode=ResetMode.DETERMINISTIC_SNAPSHOT,
+            reproducibility=fidelity.ReproducibilityProfile(
+                reset_mode=fidelity.ResetMode.DETERMINISTIC_SNAPSHOT,
                 deterministic_replay=True,
                 constraints=("fixture only",),
             ),
@@ -155,57 +138,57 @@ def test_evidence_from_other_environment_version_is_rejected() -> None:
     declaration = _l2_declaration()
     payload = declaration.model_dump()
     payload["evidence"][0]["subject_version"] = "0.9.0"
-    with pytest.raises(ValidationError, match="bind the declared environment version"):
-        FidelityDeclaration.model_validate(payload)
+    with pytest.raises(pydantic.ValidationError, match="bind the declared environment version"):
+        fidelity.FidelityDeclaration.model_validate(payload)
 
 
 def test_coverage_must_be_supported_by_referenced_evidence() -> None:
     declaration = _l2_declaration()
     payload = declaration.model_dump()
     payload["coverage"][0]["evidence_ids"] = ("artifact",)
-    with pytest.raises(ValidationError, match="does not support"):
-        FidelityDeclaration.model_validate(payload)
+    with pytest.raises(pydantic.ValidationError, match="does not support"):
+        fidelity.FidelityDeclaration.model_validate(payload)
 
 
 def test_claim_policy_accepts_sufficient_level_and_dimensions() -> None:
-    requirement = FidelityClaimRequirement(
+    requirement = fidelity.FidelityClaimRequirement(
         claim_id="native-artifact-behavior",
-        minimum_level=FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION,
-        required_dimensions=(FidelityDimension.NATIVE_ARTIFACTS,),
+        minimum_level=fidelity.FidelityLevel.L2_NATIVE_ARTIFACT_EXECUTION,
+        required_dimensions=(fidelity.FidelityDimension.NATIVE_ARTIFACTS,),
         require_full_coverage=True,
     )
-    result = evaluate_fidelity_compatibility(_record(), requirement)
+    result = fidelity.evaluate_fidelity_compatibility(_record(), requirement)
     assert result.compatible
     assert result.failures == ()
 
 
 def test_claim_policy_fails_closed_for_higher_fidelity_claim() -> None:
-    requirement = FidelityClaimRequirement(
+    requirement = fidelity.FidelityClaimRequirement(
         claim_id="faithful-service-replica",
-        minimum_level=FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA,
-        required_dimensions=(FidelityDimension.SERVICE_TOPOLOGY,),
+        minimum_level=fidelity.FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA,
+        required_dimensions=(fidelity.FidelityDimension.SERVICE_TOPOLOGY,),
     )
-    result = evaluate_fidelity_compatibility(_record(), requirement)
+    result = fidelity.evaluate_fidelity_compatibility(_record(), requirement)
     assert not result.compatible
     assert len(result.failures) == 2
-    with pytest.raises(FidelityCompatibilityError, match="faithful-service-replica"):
-        require_fidelity_compatibility(_record(), requirement)
+    with pytest.raises(fidelity.FidelityCompatibilityError, match="faithful-service-replica"):
+        fidelity.require_fidelity_compatibility(_record(), requirement)
 
 
 def test_copied_level_upgrade_is_rejected_at_external_boundaries() -> None:
     declaration = _l2_declaration().model_copy(
-        update={"level": FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA}
+        update={"level": fidelity.FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA}
     )
     stale_record = _record().model_copy(update={"declaration": declaration})
-    requirement = FidelityClaimRequirement(
+    requirement = fidelity.FidelityClaimRequirement(
         claim_id="stale-upgrade",
-        minimum_level=FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA,
+        minimum_level=fidelity.FidelityLevel.L3_FAITHFUL_MULTI_SERVICE_REPLICA,
     )
 
-    with pytest.raises(ValidationError, match="service_replica evidence"):
-        serialize_fidelity_record(stale_record)
-    with pytest.raises(ValidationError, match="service_replica evidence"):
-        evaluate_fidelity_compatibility(stale_record, requirement)
+    with pytest.raises(pydantic.ValidationError, match="service_replica evidence"):
+        fidelity.serialize_fidelity_record(stale_record)
+    with pytest.raises(pydantic.ValidationError, match="service_replica evidence"):
+        fidelity.evaluate_fidelity_compatibility(stale_record, requirement)
 
 
 def test_copied_environment_version_is_rejected_at_serialization() -> None:
@@ -214,8 +197,8 @@ def test_copied_environment_version_is_rejected_at_serialization() -> None:
     )
     stale_record = _record().model_copy(update={"declaration": declaration})
 
-    with pytest.raises(ValidationError, match="bind the declared environment version"):
-        serialize_fidelity_record(stale_record)
+    with pytest.raises(pydantic.ValidationError, match="bind the declared environment version"):
+        fidelity.serialize_fidelity_record(stale_record)
 
 
 def test_copied_evidence_content_invalidates_stale_record_identity() -> None:
@@ -228,5 +211,5 @@ def test_copied_evidence_content_invalidates_stale_record_identity() -> None:
     )
     stale_record = _record().model_copy(update={"declaration": changed_declaration})
 
-    with pytest.raises(ValidationError, match="content digest"):
-        serialize_fidelity_record(stale_record)
+    with pytest.raises(pydantic.ValidationError, match="content digest"):
+        fidelity.serialize_fidelity_record(stale_record)
