@@ -115,7 +115,7 @@ def test_declared_failure_preserves_stated_uncertainty() -> None:
 
     assert attribution.primary_category is FailureCategory.UNKNOWN
     assert attribution.category_probabilities[FailureCategory.MODEL_FAILURE.value] == 0.55
-    assert attribution.category_probabilities[FailureCategory.UNKNOWN.value] == 0.45
+    assert attribution.category_probabilities[FailureCategory.UNKNOWN.value] == pytest.approx(0.45)
     assert attribution.ambiguous is True
     assert attribution.evidence[0].direct is True
 
