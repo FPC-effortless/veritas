@@ -45,6 +45,7 @@
     "no_hindsight": true,
     "evidence_release_time_enforced": true,
     "distinguish_early_statement_from_reconstruction": true,
+    "source_event_dates_are_date_precision_only": true,
     "official_findings_are_not_private_truth": true,
     "review_scope": "link_only_public_material"
   },
@@ -127,28 +128,7 @@
       ]
     }
   ],
-  "actual_timeline": [
-    {
-      "at": "2017-08-29T00:00:00Z",
-      "event": "Hurricane Harvey flooding disabled refrigeration systems at the Crosby facility."
-    },
-    {
-      "at": "2017-08-30T00:00:00Z",
-      "event": "People within a 1.5-mile radius were evacuated as refrigerated peroxide storage became increasingly difficult to maintain."
-    },
-    {
-      "at": "2017-08-31T00:00:00Z",
-      "event": "Organic peroxides in warming trailers decomposed and combusted."
-    },
-    {
-      "at": "2017-09-03T00:00:00Z",
-      "event": "Officials intentionally ignited remaining trailers containing organic peroxides."
-    },
-    {
-      "at": "2017-09-04T00:00:00Z",
-      "event": "The evacuation zone was lifted."
-    }
-  ],
+  "actual_timeline": [],
   "causal_edges": [],
   "verifier_targets": {
     "mode": "staged_evidence_hypothesis_revision",
