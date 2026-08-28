@@ -34,12 +34,26 @@ def test_texas_city_pilot_enforces_historical_release_cutoffs() -> None:
     final_findings = "csb-final-findings-release-2007-03-20"
     video = "csb-anatomy-of-a-disaster-2008-03-21"
 
+    assert public_ids(datetime(2005, 10, 28, 11, 59, 59, tzinfo=UTC)) == ()
     assert public_ids(datetime(2005, 10, 28, 12, tzinfo=UTC)) == (preliminary,)
+
+    assert public_ids(datetime(2006, 10, 31, 11, 59, 59, tzinfo=UTC)) == (preliminary,)
     assert public_ids(datetime(2006, 10, 31, 12, tzinfo=UTC)) == (
         preliminary,
         organizational,
     )
+
+    assert public_ids(datetime(2007, 3, 21, 11, 59, 59, tzinfo=UTC)) == (
+        preliminary,
+        organizational,
+    )
     assert public_ids(datetime(2007, 3, 21, 12, tzinfo=UTC)) == (
+        preliminary,
+        organizational,
+        final_findings,
+    )
+
+    assert public_ids(datetime(2008, 3, 22, 11, 59, 59, tzinfo=UTC)) == (
         preliminary,
         organizational,
         final_findings,
@@ -77,6 +91,13 @@ def test_texas_city_review_id_matches_checked_in_review_record() -> None:
     assert review["status"] == "approved_for_link_only_pilot"
     assert review["review_id"] == "review-csb-texas-city-link-only-v1"
     assert {item.rights_review_id for item in manifest.fragments} == {review["review_id"]}
+
+
+def test_texas_city_ambiguous_final_report_pdf_is_not_time_gated_evidence() -> None:
+    manifest = load_manifest()
+    locators = tuple(item.locator for item in manifest.fragments)
+
+    assert all("csbfinalreportbp.pdf" not in locator.lower() for locator in locators)
 
 
 def test_texas_city_official_conclusion_stays_in_private_oracle() -> None:
