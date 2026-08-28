@@ -92,7 +92,7 @@ def test_local_provider_runs_inside_fail_closed_bubblewrap_boundary() -> None:
 
     provider = LocalSandboxProvider(
         commands={"build": LocalCommandSpec(executable="/bin/sh")},
-        bubblewrap_path="/usr/bin/bwrap",
+        bubblewrap_path=sys.executable,
         network=LocalNetworkPolicy.DENY,
         process_runner=runner,
     )
@@ -181,7 +181,7 @@ def test_provider_reset_is_deterministic_and_discards_mutated_state(provider_kin
     if provider_kind == "local":
         provider = LocalSandboxProvider(
             commands={"build": LocalCommandSpec(executable="/bin/sh")},
-            bubblewrap_path="/usr/bin/bwrap",
+            bubblewrap_path=sys.executable,
             process_runner=local_runner,
         )
     else:
@@ -235,7 +235,7 @@ def test_secret_bytes_are_redacted_and_never_mounted_in_workspace(provider_kind:
         provider = LocalSandboxProvider(
             commands={"build": LocalCommandSpec(executable="/bin/sh")},
             secret_values={"secret://api-token": secret},
-            bubblewrap_path="/usr/bin/bwrap",
+            bubblewrap_path=sys.executable,
             process_runner=local_runner,
         )
     else:
@@ -283,7 +283,7 @@ def test_symlink_artifact_escape_is_rejected_and_rolled_back(
     if provider_kind == "local":
         provider = LocalSandboxProvider(
             commands={"build": LocalCommandSpec(executable="/bin/sh")},
-            bubblewrap_path="/usr/bin/bwrap",
+            bubblewrap_path=sys.executable,
             process_runner=local_runner,
         )
     else:
@@ -326,7 +326,7 @@ def test_read_only_asset_mutation_is_rejected_and_rolled_back(provider_kind: str
     if provider_kind == "local":
         provider = LocalSandboxProvider(
             commands={"build": LocalCommandSpec(executable="/bin/sh")},
-            bubblewrap_path="/usr/bin/bwrap",
+            bubblewrap_path=sys.executable,
             process_runner=local_runner,
         )
     else:
@@ -378,7 +378,7 @@ def test_process_resource_limits_fail_closed(
     if provider_kind == "local":
         provider = LocalSandboxProvider(
             commands={"build": LocalCommandSpec(executable="/bin/sh")},
-            bubblewrap_path="/usr/bin/bwrap",
+            bubblewrap_path=sys.executable,
             process_runner=runner,
         )
     else:
@@ -419,7 +419,7 @@ def test_artifact_limit_rejects_and_rolls_back(provider_kind: str) -> None:
     if provider_kind == "local":
         provider = LocalSandboxProvider(
             commands={"build": LocalCommandSpec(executable="/bin/sh")},
-            bubblewrap_path="/usr/bin/bwrap",
+            bubblewrap_path=sys.executable,
             process_runner=local_runner,
         )
     else:
@@ -474,7 +474,7 @@ def test_docker_reserved_launch_exit_is_infrastructure_not_workload() -> None:
 def test_missing_secret_value_is_rejected_before_execution() -> None:
     provider = LocalSandboxProvider(
         commands={"build": LocalCommandSpec(executable="/bin/sh")},
-        bubblewrap_path="/usr/bin/bwrap",
+        bubblewrap_path=sys.executable,
         process_runner=lambda _argv, _stdin, _timeout, _max_output: SandboxProcessResult(
             exit_code=0
         ),
@@ -486,7 +486,7 @@ def test_missing_secret_value_is_rejected_before_execution() -> None:
 def test_stale_copied_requests_are_revalidated_fail_closed() -> None:
     provider = LocalSandboxProvider(
         commands={"build": LocalCommandSpec(executable="/bin/sh")},
-        bubblewrap_path="/usr/bin/bwrap",
+        bubblewrap_path=sys.executable,
         process_runner=lambda _argv, _stdin, _timeout, _max_output: SandboxProcessResult(
             exit_code=0
         ),
@@ -506,7 +506,7 @@ def test_stale_copied_requests_are_revalidated_fail_closed() -> None:
 
 def test_workspace_rejects_file_directory_mount_topology_conflicts() -> None:
     provider = LocalSandboxProvider(
-        bubblewrap_path="/usr/bin/bwrap",
+        bubblewrap_path=sys.executable,
         process_runner=lambda _argv, _stdin, _timeout, _max_output: SandboxProcessResult(
             exit_code=0
         ),
@@ -564,7 +564,7 @@ def test_real_process_runner_terminates_at_output_and_time_limits() -> None:
 def test_destroy_removes_provider_workspace_and_invalidates_session() -> None:
     provider = LocalSandboxProvider(
         commands={"build": LocalCommandSpec(executable="/bin/sh")},
-        bubblewrap_path="/usr/bin/bwrap",
+        bubblewrap_path=sys.executable,
         process_runner=lambda _argv, _stdin, _timeout, _max_output: SandboxProcessResult(
             exit_code=0
         ),
