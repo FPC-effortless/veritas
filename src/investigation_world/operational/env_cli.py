@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import enum
 import pathlib
-import typer
 
+import typer
 
 env_app = typer.Typer(
     help="Unified environment compile, validation, execution, export, and replay commands.",
