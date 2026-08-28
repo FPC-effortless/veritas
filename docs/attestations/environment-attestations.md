@@ -24,8 +24,26 @@ The semantic attestation binds:
 
 `ContentIdentity` and `ArtifactIdentity` intentionally contain no URI, filesystem path, raw package
 contents, evaluator payload, or private evidence. They are opaque identities plus content digests.
-This lets an operator bind sealed or private material without copying that material into a public
-attestation.
+This lets an operator bind sealed or private material without copying that material into the
+attestation model.
+
+## Public/private partition
+
+Every attestation has an `AttestationVisibility`: `PUBLIC`, `OPERATOR_PRIVATE`, or `SEALED`.
+The default is `OPERATOR_PRIVATE`, so ordinary construction does not authorize disclosure.
+Visibility is part of the semantic hash; changing disclosure class produces a different attestation
+identity rather than silently reusing the private identity.
+
+`serialize_public_attestation(...)` fails closed unless the attestation is explicitly `PUBLIC`.
+Operator-private and sealed attestations can still be serialized internally with
+`serialize_attestation(...)`, but must not be routed through buyer/public surfaces.
+
+The partition is intentionally envelope-level. A public attestation is a distinct statement whose
+source, builder, verifier, qualification, artifact, adapter, dependency, and SBOM identities have all
+been authorized for public disclosure by the caller. If any referenced identifier or hash would
+create a leakage risk, keep the attestation private/sealed or construct a separate public attestation
+using only identities authorized for disclosure. Do not expose the private attestation ID as a
+surrogate public digest because that can itself become a side channel.
 
 ## Deterministic identity
 
@@ -38,8 +56,9 @@ EATT-<first 24 uppercase hex characters of semantic SHA-256>
 ```
 
 Supplying a pre-existing `attestation_id` or `content_sha256` causes validation to fail if either no
-longer matches the immutable semantic fields. Changing source, builder, artifact, verifier,
-qualification, adapter, dependency, or SBOM identity therefore changes the attestation identity.
+longer matches the immutable semantic fields. Changing visibility, source, builder, artifact,
+verifier, qualification, adapter, dependency, or SBOM identity therefore changes the attestation
+identity.
 
 ## Qualification binding
 
