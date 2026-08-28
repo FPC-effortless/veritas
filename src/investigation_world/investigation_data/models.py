@@ -211,7 +211,11 @@ class PublicInvestigationEpisode(StrictModel):
 
     @model_validator(mode="after")
     def reject_sealed_public_evidence(self) -> "PublicInvestigationEpisode":
-        sealed = [item.evidence_id for item in self.evidence if item.sensitivity is Sensitivity.SEALED]
+        sealed = [
+            item.evidence_id
+            for item in self.evidence
+            if item.sensitivity is Sensitivity.SEALED
+        ]
         if sealed:
             raise ValueError(f"public episode contains sealed evidence: {sealed}")
         return self
