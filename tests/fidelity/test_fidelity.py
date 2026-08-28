@@ -6,6 +6,7 @@ import pytest
 from investigation_world.fidelity import (
     CoverageStatus,
     DimensionCoverage,
+    evaluate_fidelity_compatibility,
     FidelityClaimRequirement,
     FidelityCompatibilityError,
     FidelityDeclaration,
@@ -16,9 +17,8 @@ from investigation_world.fidelity import (
     FidelityPolicyRef,
     FidelityRecord,
     ReproducibilityProfile,
-    ResetMode,
-    evaluate_fidelity_compatibility,
     require_fidelity_compatibility,
+    ResetMode,
     serialize_fidelity_record,
 )
 
