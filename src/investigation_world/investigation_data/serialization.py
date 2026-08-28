@@ -20,7 +20,10 @@ _PRIVATE_KEYS = {
 
 
 def canonical_json_bytes(payload: Any) -> bytes:
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    rendered = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return rendered.encode("utf-8")
 
 
 def canonical_sha256(payload: Any) -> str:
