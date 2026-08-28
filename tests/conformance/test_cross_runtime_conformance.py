@@ -309,9 +309,9 @@ def _nemo_snapshot(contract: PortableOperationalContract):
 
 class _RecordingRuntime(PortableOperationalRuntime):
     def __init__(self, contract: PortableOperationalContract):
-        super().__init__(contract)
         self.recorded_reset = None
         self.recorded_results = []
+        super().__init__(contract)
 
     def reset(self, *, seed: int = 0):
         result = super().reset(seed=seed)
