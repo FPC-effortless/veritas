@@ -1,26 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
 [project]
 name = "investigation-world"
 version = "0.11.0"
-description = "Veritas verified capability foundry for persistent operational-world agent training and evaluation"
+description = "A verified synthetic world generator, capability foundry, and continuous capability observatory for training and evaluating AI agents."
 readme = "README.md"
-license = {file = "LICENSE"}
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Veritas contributors" }]
 dependencies = [
-  "pydantic>=2.7,<3",
   "fastapi>=0.115",
-  "uvicorn>=0.30",
-  "typer>=0.12",
-  "sqlalchemy>=2.0",
-  "duckdb>=1.0",
+  "httpx>=0.28",
   "openpyxl>=3.1",
-  "shapely>=2.0",
+  "pydantic>=2.7",
   "pyproj>=3.7",
+  "shapely>=2.0",
+  "typer>=0.12",
+  "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
 test = [
-  "pytest>=8",
-  "hypothesis>=6",
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
 ]
 
 [project.scripts]
@@ -28,21 +32,19 @@ iworld = "investigation_world.cli:app"
 veritas = "investigation_world.operational.cli:app"
 veritas-observe = "investigation_world.observatory.cli:app"
 veritas-foundry = "investigation_world.foundry.cli:app"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
-addopts = "-q"
+veritas-portable = "investigation_world.world_portability:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/investigation_world"]
 
 [tool.ruff]
 line-length = 100
+target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
