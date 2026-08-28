@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from copy import deepcopy
 import json
-from pathlib import Path
 import sys
+from copy import deepcopy
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from pydantic import ValidationError
@@ -600,7 +600,7 @@ def _command_export(args: argparse.Namespace) -> int:
             (root / "task-row.json").write_bytes(_json_bytes(row))
             metadata = surface.metadata(seed=args.seed)
             (root / "metadata.json").write_bytes(_json_bytes(metadata))
-            result = {
+            result: dict[str, Any] = {
                 "adapter": "nemo",
                 "output_dir": str(root),
                 "public_contract_id": contract.public.public_id,
@@ -625,26 +625,26 @@ def _command_export(args: argparse.Namespace) -> int:
             result = {"adapter": "openenv", "output_dir": str(root), **payload}
             result.pop("tools", None)
         elif args.adapter == "hud":
-            built = build_hud_operational_export(contract, output)
+            hud_built = build_hud_operational_export(contract, output)
             result = {
                 "adapter": "hud",
-                "output_dir": built.output_dir,
-                "public_contract_id": built.public_contract_id,
-                "public_package_id": built.public_package_id,
-                "export_id": built.export_id,
+                "output_dir": hud_built.output_dir,
+                "public_contract_id": hud_built.public_contract_id,
+                "public_package_id": hud_built.public_package_id,
+                "export_id": hud_built.export_id,
             }
         elif args.adapter == "prime":
-            built = build_prime_operational_package(
+            prime_built = build_prime_operational_package(
                 output,
                 contracts=[contract],
                 veritas_requirement=args.veritas_requirement,
             )
             result = {
                 "adapter": "prime",
-                "output_dir": built.output_dir,
+                "output_dir": prime_built.output_dir,
                 "public_contract_id": contract.public.public_id,
-                "package_id": built.package_id,
-                "export_id": built.export_id,
+                "package_id": prime_built.package_id,
+                "export_id": prime_built.export_id,
             }
         elif args.adapter == "harbor":
             missing = [
@@ -664,13 +664,13 @@ def _command_export(args: argparse.Namespace) -> int:
                 verifier_image=args.verifier_image,
                 seed=args.seed,
             )
-            built = export_harbor_package(contract, output, config)
+            harbor_built = export_harbor_package(contract, output, config)
             result = {
                 "adapter": "harbor",
-                "output_dir": built.output_dir,
-                "public_contract_id": built.public_contract_id,
-                "package_id": built.package_id,
-                "mcp_surface_id": built.mcp_surface_id,
+                "output_dir": harbor_built.output_dir,
+                "public_contract_id": harbor_built.public_contract_id,
+                "package_id": harbor_built.package_id,
+                "mcp_surface_id": harbor_built.mcp_surface_id,
             }
         else:
             raise WorldPortabilityCLIError("ADAPTER_UNSUPPORTED", args.adapter)
