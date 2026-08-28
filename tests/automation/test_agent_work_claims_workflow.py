@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 WORKFLOW = Path(".github/workflows/agent-work-claims.yml")
 DOC = Path("docs/automation/agent-work-claims.md")
 
