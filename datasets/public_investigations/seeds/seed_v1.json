@@ -1,0 +1,230 @@
+{
+  "dataset_id": "veritas-public-investigations-seed",
+  "version": "1.0.0",
+  "as_of": "2026-08-28",
+  "source_registry_id": "veritas-public-operations-sources",
+  "notes": [
+    "Reference/training seed only. Do not use these known public cases as sealed benchmark holdouts.",
+    "Remote artifacts are linked by provenance URL rather than redistributed. Freeze bytes and record sha256 when materializing a training/evaluation release."
+  ],
+  "cases": [
+    {
+      "case_id": "ntsb-DCA24MM031",
+      "source_id": "ntsb",
+      "title": "Contact of Containership Dali with Francis Scott Key Bridge and Subsequent Bridge Collapse",
+      "jurisdiction": "United States",
+      "domain": "marine_transportation",
+      "event_date": "2024-03-26",
+      "location": "Baltimore, Maryland",
+      "status": "completed",
+      "split": "train_reference",
+      "objective": "Reconstruct the incident chronology, develop and test causal hypotheses, identify material uncertainty, and support every material claim with the supplied evidence. Do not use verifier-only references.",
+      "public_evidence": [
+        {
+          "artifact_id": "DCA24MM031-preliminary",
+          "title": "Marine Investigation Preliminary Report",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=DCA24MM031_PreliminaryReport+3-Rel.pdf&ID=17620690",
+          "role": "initial_report",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "DCA24MM031-update-2024-06-24",
+          "title": "Investigative Update, June 24 2024",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=DCA24MM031_InvestigativeUpdate_24JUN24-Rel.pdf&ID=17631155",
+          "role": "factual_report",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "DCA24MM031-nautical-factual",
+          "title": "Nautical Operations Factual Report",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=Dali+-+DCA24MM031+-+Nautical+Operations+-+Factual+Report+-+FINAL-Rel.pdf&ID=19280064",
+          "role": "factual_report",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "DCA24MM031-engineering-factual",
+          "title": "Engineering Factual Report",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=DALI+-+DCA24MM031+-+Engineering+-+Factual+Report+-+FINAL-Rel.pdf&ID=19228257",
+          "role": "factual_report",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "DCA24MM031-aerial-video",
+          "title": "NTSB B-Roll: Aerial Imagery of Francis Scott Key Bridge and Cargo Ship Dali",
+          "url": "https://www.youtube.com/watch?v=CwgOHpZlxvc",
+          "role": "video",
+          "media_type": "video/youtube"
+        },
+        {
+          "artifact_id": "DCA24MM031-investigators-video",
+          "title": "NTSB B-Roll: Investigators Aboard the Cargo Ship Dali",
+          "url": "https://www.youtube.com/watch?v=YwWVqTy4Ofg",
+          "role": "video",
+          "media_type": "video/youtube"
+        }
+      ],
+      "verifier_references": [
+        {
+          "artifact_id": "DCA24MM031-official-findings",
+          "title": "Completed NTSB investigation page with findings and probable cause",
+          "url": "https://www.ntsb.gov/investigations/Pages/DCA24MM031.aspx",
+          "role": "verifier_reference",
+          "media_type": "text/html"
+        }
+      ],
+      "metadata": {
+        "official_case_number": "DCA24MM031",
+        "evidence_inventory_note": "The public docket contains 168 items as of the 2026 source review; this seed selects a compact multimodal subset."
+      }
+    },
+    {
+      "case_id": "ntsb-RRD23MR005",
+      "source_id": "ntsb",
+      "title": "Norfolk Southern Railway Derailment and Hazardous Materials Release",
+      "jurisdiction": "United States",
+      "domain": "rail_hazardous_materials",
+      "event_date": "2023-02-03",
+      "location": "East Palestine, Ohio",
+      "status": "completed",
+      "split": "train_reference",
+      "objective": "Reconstruct the incident chronology, develop and test causal hypotheses, identify material uncertainty, and support every material claim with the supplied evidence. Do not use verifier-only references.",
+      "public_evidence": [
+        {
+          "artifact_id": "RRD23MR005-event-recorder",
+          "title": "Locomotive Event Recorders Specialist Factual Report",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=RRD23MR005_ER-Factual-Report_FINAL-Rel.pdf&ID=15618483",
+          "role": "telemetry",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "RRD23MR005-interviews",
+          "title": "Factual Report of Investigation Interviews, Statements and Documentation",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=Interviews%2C+Statements+and+Documentation_redacted-Rel.pdf&ID=15609743",
+          "role": "interview",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "RRD23MR005-weather",
+          "title": "Meteorological Factual Report",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=RRD23MR005+-+East+Palestine%2C+OH+WX+Factual-Rel.pdf&ID=16603387",
+          "role": "factual_report",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "RRD23MR005-hazmat-supplemental",
+          "title": "Hazardous Materials Group Factual Report - Supplemental",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=East+Palestine+OH+Hazmat+Group+Factual+Supplemental+%2810-25-23_+Final+RRD23MR005-Rel.pdf&ID=16291375",
+          "role": "factual_report",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "RRD23MR005-selected-texts",
+          "title": "Selected Norfolk Southern Text Messages, February 4-6 2023",
+          "url": "https://data.ntsb.gov/Docket/Document/docBLOB?FileExtension=pdf&FileName=Selected+NS+Text+Messages+2-4+through+2-6-23_Redacted-Rel.pdf&ID=16575323",
+          "role": "other_evidence",
+          "media_type": "application/pdf"
+        }
+      ],
+      "verifier_references": [
+        {
+          "artifact_id": "RRD23MR005-final-report",
+          "title": "NTSB Railroad Investigation Report RIR-24-05",
+          "url": "https://www.ntsb.gov/investigations/AccidentReports/Reports/RIR2405%20CORRECTED.pdf",
+          "role": "verifier_reference",
+          "media_type": "application/pdf"
+        }
+      ],
+      "metadata": {
+        "official_case_number": "RRD23MR005",
+        "evidence_inventory_note": "The investigation docket contains 89 items and a companion public-hearing docket; this seed selects representative telemetry, interview, weather, hazmat, and communications evidence."
+      }
+    },
+    {
+      "case_id": "csb-2005-04-I-TX",
+      "source_id": "csb",
+      "title": "BP America Texas City Refinery Explosion",
+      "jurisdiction": "United States",
+      "domain": "chemical_process_safety",
+      "event_date": "2005-03-23",
+      "location": "Texas City, Texas",
+      "status": "completed",
+      "split": "train_reference",
+      "objective": "Reconstruct the incident chronology, develop and test causal hypotheses, identify material uncertainty, and support every material claim with the supplied evidence. Do not use verifier-only references.",
+      "public_evidence": [
+        {
+          "artifact_id": "2005-04-I-TX-preliminary-findings",
+          "title": "CSB preliminary findings release, October 27 2005",
+          "url": "https://www.csb.gov/csb-issues-preliminary-findings-in-bp-texas-city-refinery-accident-investigators-present-data-in-public-meeting/",
+          "role": "initial_report",
+          "media_type": "text/html"
+        },
+        {
+          "artifact_id": "2005-04-I-TX-community-transcript",
+          "title": "Transcript of Board Community Meeting, October 27 2005",
+          "url": "https://www.csb.gov/assets/1/20/BP_Transcript_2.pdf?13848=",
+          "role": "transcript",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "2005-04-I-TX-animation",
+          "title": "Updated BP Texas City Animation",
+          "url": "https://www.youtube.com/embed/goSEyGNfiPM",
+          "role": "video",
+          "media_type": "video/youtube"
+        }
+      ],
+      "verifier_references": [
+        {
+          "artifact_id": "2005-04-I-TX-final-report",
+          "title": "CSB Final Investigation Report",
+          "url": "https://www.csb.gov/assets/1/20/CSBFinalReportBP.pdf?13841=",
+          "role": "verifier_reference",
+          "media_type": "application/pdf"
+        }
+      ],
+      "metadata": {
+        "official_report_number": "2005-04-I-TX"
+      }
+    },
+    {
+      "case_id": "csb-2013-02-I-TX",
+      "source_id": "csb",
+      "title": "West Fertilizer Explosion and Fire",
+      "jurisdiction": "United States",
+      "domain": "chemical_distribution_emergency_response",
+      "event_date": "2013-04-17",
+      "location": "West, Texas",
+      "status": "completed",
+      "split": "train_reference",
+      "objective": "Reconstruct the incident chronology, develop and test causal hypotheses, identify material uncertainty, and support every material claim with the supplied evidence. Do not use verifier-only references.",
+      "public_evidence": [
+        {
+          "artifact_id": "2013-02-I-TX-preliminary-findings",
+          "title": "Preliminary Findings into the West Fertilizer Explosion and Fire",
+          "url": "https://www.csb.gov/assets/1/20/West_Preliminary_Findings.pdf?14988=",
+          "role": "initial_report",
+          "media_type": "application/pdf"
+        },
+        {
+          "artifact_id": "2013-02-I-TX-blast-damage-video",
+          "title": "CSB video documenting blast damage in West, Texas",
+          "url": "https://www.csb.gov/csb-releases-video-documenting-the-blast-damage-in-west-texas/",
+          "role": "video",
+          "media_type": "text/html"
+        }
+      ],
+      "verifier_references": [
+        {
+          "artifact_id": "2013-02-I-TX-final-report",
+          "title": "West Fertilizer Final Investigation Report",
+          "url": "https://www.csb.gov/assets/1/20/West_Fertilizer_FINAL_Report_for_website_0223161.pdf?15628=",
+          "role": "verifier_reference",
+          "media_type": "application/pdf"
+        }
+      ],
+      "metadata": {
+        "official_report_number": "2013-02-I-TX"
+      }
+    }
+  ]
+}
