@@ -455,19 +455,11 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
         linked_pr = contract["linked_pr"]
         branch = contract["branch"]
         claimant: str | None = None
-        comment_count = issue.get("comments", 0)
-        has_comments = isinstance(comment_count, int) and comment_count > 0
-        needs_status_lookup = state in TRUSTED_STATUS_REQUIRED or (
-            state == "BLOCKED" and has_comments
-        )
+        needs_status_lookup = state in TRUSTED_STATUS_REQUIRED or state == "BLOCKED"
         status = status_record(repo, number, token) if needs_status_lookup else None
         if state in TRUSTED_STATUS_REQUIRED and status is None:
             raise RoadmapError(
                 f"issue #{number}: {state} missing trusted coordination status"
-            )
-        if state == "BLOCKED" and has_comments and status is None:
-            raise RoadmapError(
-                f"issue #{number}: BLOCKED with comments missing trusted coordination status"
             )
         if status is not None:
             claimant, status_branch, status_linked_pr = validate_live_status(
@@ -479,6 +471,8 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
             linked_pr = status_linked_pr
             if status_branch is not None:
                 branch = status_branch
+        elif state == "BLOCKED":
+            linked_pr = None
 
         rows.append(
             {
