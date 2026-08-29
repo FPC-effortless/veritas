@@ -7,7 +7,6 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 from investigation_world.sandbox.models import (
     SandboxCaptureResult,
