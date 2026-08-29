@@ -1,4 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true,
+      "preview-*": true
+    }
+  },
   "ignoreCommand": "if [ -z \"${VERCEL_GIT_PREVIOUS_SHA:-}\" ] || [ -z \"${VERCEL_GIT_COMMIT_SHA:-}\" ]; then exit 1; fi; git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" \"$VERCEL_GIT_COMMIT_SHA\" -- app components hooks lib public src styles package.json package-lock.json pnpm-lock.yaml yarn.lock bun.lock bun.lockb next-env.d.ts middleware.ts middleware.js instrumentation.ts instrumentation.js next.config.js next.config.mjs next.config.ts next.config.cjs postcss.config.js postcss.config.mjs postcss.config.ts postcss.config.cjs tailwind.config.js tailwind.config.mjs tailwind.config.ts tailwind.config.cjs tsconfig.json components.json vercel.json; status=$?; if [ \"$status\" -eq 0 ]; then exit 0; fi; exit 1"
 }
