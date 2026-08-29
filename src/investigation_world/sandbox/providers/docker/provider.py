@@ -145,9 +145,9 @@ class DockerSandboxProvider:
         argv: list[str] = [
             self._docker_path,
             "run",
+            "--rm",
             "--pull",
             "never",
-            "--rm",
             "--name",
             container_name,
             "--network",
