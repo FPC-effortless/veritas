@@ -576,7 +576,10 @@ async function runCoordinationRepositoryEditingProse() {
     ),
     'repository-editing coordination prose did not fail closed'
   );
-  assert(parseStatus(comments[150][0]).entries.length === 0, 'rejected prose claim reserved globally');
+  assert(
+    parseStatus(comments[150][0]).entries.length === 0,
+    'rejected prose claim reserved globally'
+  );
 }
 
 async function runExplicitIssueOnlyOwnership() {
@@ -598,7 +601,10 @@ async function runExplicitIssueOnlyOwnership() {
   const registry = parseStatus(comments[150][0]);
   assert(registry.entries.length === 1, 'issue-only lane was not represented in registry');
   assert(registry.entries[0].issue === 1, 'wrong issue-only reservation');
-  assert(registry.entries[0].paths.length === 0, 'issue-only lane unexpectedly reserved source paths');
+  assert(
+    registry.entries[0].paths.length === 0,
+    'issue-only lane unexpectedly reserved source paths'
+  );
 }
 
 async function runRootFileCollision() {
