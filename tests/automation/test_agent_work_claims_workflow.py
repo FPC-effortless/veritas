@@ -47,11 +47,18 @@ def test_execution_requires_trusted_status_not_labels_or_mutable_contract_state(
 def test_claim_enforces_declared_branch_and_global_path_reservations() -> None:
     script = _script()
     assert "command.branch !== contract.declaredBranch" in script
-    assert "activeIssueReservations" in script
+    assert "trustedRegistry" in script
+    assert "updateRegistryEntry" in script
     assert "openPrConflicts" in script
     assert "pathsOverlap(candidate, reserved)" in script
-    assert "open PR #${first.pr} reserves" in script
+    assert "open PR #${conflict.pr} reserves" in script
     assert "veritas-agent-work-reservations:v1" in script
+
+
+def test_label_reconciliation_reads_fresh_issue_state() -> None:
+    script = _script()
+    assert "freshIssue = (await github.rest.issues.get" in script
+    assert "setStateLabels(issue.number, status.state)" in script
 
 
 def test_handoff_and_done_bind_exact_final_pr_head() -> None:
@@ -67,7 +74,8 @@ def test_handoff_and_done_bind_exact_final_pr_head() -> None:
 def test_bootstrap_materializes_status_for_all_enrolled_issues() -> None:
     script = _script()
     assert "bootstrapStatus(issue, contract)" in script
-    assert "if (!current) current = await writeStatus" in script
+    assert "current = await writeStatus(issue, null, bootstrapStatus(issue, contract))" in script
+    assert "writeRegistry(entries)" in script
     assert "Labels are discovery metadata only after bootstrap" in script
 
 
