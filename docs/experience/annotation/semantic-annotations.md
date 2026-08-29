@@ -21,7 +21,7 @@ For each canonical trajectory event the compiler may derive:
 - state-digest transition relation, including digest algorithm and scope;
 - evaluator-private process requirement relevance;
 - candidate invariant effects from transition/state-key overlap;
-- evidence created/consumed/referenced when direction is structurally represented;
+- evidence consumed/referenced when direction and successful access are structurally represented;
 - public static system-permission compatibility, without inventing dynamic actor authority;
 - declared resource charges and observed event cost;
 - evaluator-private verifier-component relevance candidates grounded in contract structure;
@@ -30,6 +30,8 @@ For each canonical trajectory event the compiler may derive:
 A state transition is `DERIVED` only when both state digests use the same algorithm and scope. Different digest domains are not comparable and remain `UNKNOWN`, even when their digest strings happen to match.
 
 Derived visibility is provenance-sensitive. A semantic fact derived from a resource call or nested reference inherits at least the visibility of that source, and downstream spans/records preserve that classification rather than widening it through a more-public containing event.
+
+Evidence direction is also outcome-sensitive. A resource-backed `open_record` or `open_document` proves consumption only when the canonical `ResourceCallSummary.success` value is explicitly `true`; failed or success-unknown calls do not become consumed evidence. Generic action arguments are request/input facts. Fields such as `created_evidence_ids` or `emitted_evidence_ids` therefore do not prove that evidence was actually created or emitted. TRACE-002 leaves creation unasserted until the canonical trajectory preserves an outcome/result fact capable of establishing it.
 
 The resulting `SemanticAnnotationBundle` is content-derived and binds:
 
@@ -57,6 +59,8 @@ Private process, invariant, transition, and verifier facts are emitted with eval
 - only one of the two state digests is present;
 - state digests use different algorithms or scopes;
 - an evidence reference exists but the trace does not say whether it was created or consumed;
+- a resource read has failed or has no canonical success value;
+- an action requests evidence creation/emission but no canonical outcome proves it occurred;
 - a runtime operation declares permission failure behavior but the trajectory does not preserve the actor's dynamic permission state;
 - a private transition could affect an invariant, but digest-only state evidence cannot prove field-level invariant satisfaction.
 
