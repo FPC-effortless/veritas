@@ -298,14 +298,24 @@ class HarnessConformancePolicy(_CanonicalModel):
             raise ValueError("unsupported harness conformance policy schema version")
         if len(self.required_capabilities) != len(set(self.required_capabilities)):
             raise ValueError("required capabilities must be unique")
+        if len(self.required_trace_fields) != len(set(self.required_trace_fields)):
+            raise ValueError("trace fields must be unique")
+
+        # HARNESS-001 defines these as an irreducible observation baseline.
+        # A harness-specific policy may add requirements, but it cannot remove
+        # canonical capability or trace obligations supplied by this schema.
         capabilities = tuple(
-            sorted(self.required_capabilities, key=lambda item: item.value)
+            sorted(
+                set(_DEFAULT_CAPABILITIES) | set(self.required_capabilities),
+                key=lambda item: item.value,
+            )
         )
-        traces = _normalized_trace_fields(self.required_trace_fields)
-        if not capabilities:
-            raise ValueError("conformance policy must require at least one capability")
-        if not traces:
-            raise ValueError("conformance policy must require trace fields")
+        traces = tuple(
+            sorted(
+                set(_DEFAULT_TRACE_FIELDS) | set(self.required_trace_fields),
+                key=lambda item: item.value,
+            )
+        )
         object.__setattr__(self, "required_capabilities", capabilities)
         object.__setattr__(self, "required_trace_fields", traces)
 
