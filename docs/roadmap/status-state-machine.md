@@ -46,7 +46,9 @@ REVIEW is not DONE and does not imply that required CI, security, exact-head rev
 
 ### DONE
 
-The work-class-specific completion condition has been satisfied and the coordination issue is complete. `/done` is not a generic synonym for "PR exists" or "CI is green". Completion rules must remain separate from scientific, Frontier, training, commercial, release, and external/manual evidence states.
+DONE means the coordination workflow accepted completion for the work item. Policy requires that the work-class-specific completion condition also be satisfied before DONE is legitimate.
+
+The current `agent-work-claims.yml` implementation is narrower than that policy: `/done` currently verifies the REVIEW holder, linked PR identity, and that the PR is merged. It does **not** yet evaluate the richer work-class completion rules tracked by ROADMAP-DONE-001 (#233). Until that owner-scoped extension exists, a merged implementation PR can satisfy the current coordination command while still lacking scientific, Frontier, training, commercial, release, external/manual, or other class-specific evidence. Consumers must not infer those states from `work:done`.
 
 ### SUPERSEDED
 
@@ -60,7 +62,8 @@ The current claim workflow has no ordinary agent command that creates or reopens
 BLOCKED --authorized prerequisite/admin resolution--> READY
 READY   --/claim-->                            CLAIMED
 CLAIMED --/handoff-->                          REVIEW
-REVIEW  --work-class completion + /done-->     DONE
+REVIEW  --merged linked PR + /done today-->    DONE
+            + work-class completion by policy
 
 CLAIMED --/release-->                          READY
 CLAIMED --/blocked <reason>-->                 BLOCKED
@@ -84,10 +87,12 @@ The repository workflow parses only exact single-line commands and checks the au
 | `/heartbeat <agent> [branch]` | CLAIMED, BLOCKED, or REVIEW | current holder | state unchanged |
 | `/release <agent> [reason]` | CLAIMED, BLOCKED, or REVIEW | current holder | READY, or contract-initial BLOCKED |
 | `/blocked <agent> <reason>` | CLAIMED or REVIEW | current holder | BLOCKED |
-| `/handoff <agent> <pr>` | CLAIMED | current holder | REVIEW only after PR/branch validation |
-| `/done <agent> <pr>` | REVIEW | current holder | DONE only after workflow completion checks |
+| `/handoff <agent> <pr>` | CLAIMED | current holder | REVIEW only after open-PR, branch, issue, and Work-ID validation |
+| `/done <agent> <pr>` | REVIEW | current holder | DONE only when the handed-off PR is merged |
 
-Commands outside their permitted source states are rejected rather than silently relabeling the issue. A malformed, multiline, unauthorized, non-holder, mismatched-branch, unresolved-PR, or otherwise invalid command must leave the canonical state unchanged.
+Commands outside their permitted source states are rejected rather than silently relabeling the issue. A malformed, multiline, unauthorized, non-holder, mismatched-branch, unresolved-PR, unmerged-PR, or otherwise invalid command must leave the canonical state unchanged.
+
+The table describes **current automation**, not the full completion policy. ROADMAP-DONE-001 (#233) owns the extension that makes `/done` evaluate completion by work class rather than treating a merged PR as sufficient for every class.
 
 ## Illegal transitions
 
@@ -164,8 +169,14 @@ The coordination contract is violated if any of the following is possible:
 6. an ordinary issue comment is interpreted as ownership authority;
 7. heartbeat expiry automatically frees a lane;
 8. DONE or SUPERSEDED reopens without an explicit audited authority action;
-9. coordination state is cited as scientific, Frontier, training, commercial, release, sealed, paid-compute, or external-account PASS.
+9. coordination state is cited as scientific, Frontier, training, commercial, release, sealed, paid-compute, or external-account PASS;
+10. current `/done` merge-only enforcement is misrepresented as already implementing ROADMAP-DONE-001 work-class completion rules.
 
 ## Implementation boundary
 
-This specification is grounded in the current `agent-work-claims.yml` behavior but does not modify that workflow. Where the policy requires an administrative supersede/reopen transition, current ordinary automation is intentionally insufficient; a future owner-scoped coordination change must implement that path explicitly rather than pretending an existing agent command already provides it.
+This specification is grounded in the current `agent-work-claims.yml` behavior but does not modify that workflow. Two deliberate automation gaps remain explicit rather than hidden:
+
+1. SUPERSEDED/reopen transitions require a future authorized administrative path; and
+2. `/done` currently proves merged-PR completion only, while ROADMAP-DONE-001 (#233) owns work-class-specific completion enforcement.
+
+Future owner-scoped coordination changes should implement those policies explicitly rather than pretending the existing command workflow already provides them.
