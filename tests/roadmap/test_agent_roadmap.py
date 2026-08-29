@@ -340,19 +340,19 @@ def test_sync_rejects_active_status_without_holder(
         roadmap.sync(current, "FPC-effortless/veritas", None)
 
 
-def test_sync_rejects_commented_blocked_without_trusted_status(
+def test_sync_allows_commented_unowned_blocked_without_trusted_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     current = manifest(row("A", 1, state="BLOCKED"))
-    issue_a = issue(1, "A", "BLOCKED", "none", comments=1)
+    issue_a = issue(1, "A", "BLOCKED", "none", comments=1, linked_pr=42)
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
     monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
 
-    with pytest.raises(
-        roadmap.RoadmapError,
-        match="BLOCKED with comments missing trusted coordination status",
-    ):
-        roadmap.sync(current, "FPC-effortless/veritas", None)
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+    entry = synced["work"][0]
+    assert entry["state"] == "BLOCKED"
+    assert entry["claimant"] is None
+    assert entry["linked_pr"] is None
 
 
 def test_sync_owned_blocked_status_preserves_holder_and_reserves_path(
