@@ -137,6 +137,55 @@ def test_failed_interruption_cleanup_poison_session(
     session.destroy()
 
 
+def test_cached_public_operations_cannot_bypass_poison() -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def runner(
+        argv: tuple[str, ...],
+        _stdin: bytes,
+        _timeout_ms: int,
+        _max_output_bytes: int,
+    ) -> SandboxProcessResult:
+        calls.append(argv)
+        if len(calls) == 1:
+            return SandboxProcessResult(exit_code=None, timed_out=True)
+        return SandboxProcessResult(exit_code=1, stderr=b"cleanup failed")
+
+    provider = DockerSandboxProvider(
+        image=f"worker@sha256:{'d' * 64}",
+        commands={"build": DockerCommandSpec(argv=("/worker",))},
+        docker_path="/usr/bin/docker",
+        process_runner=runner,
+    )
+    session = provider.create(
+        SandboxCreateRequest(
+            seed=31,
+            writable_paths=("work",),
+            capabilities=SandboxCapabilityPolicy(commands=("build",)),
+        )
+    )
+    cached_reset = session.reset
+    cached_capture = session.capture
+    cached_metadata = session.metadata
+
+    result = session.execute(
+        SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="build")
+    )
+
+    assert result.status is SandboxExecutionStatus.INFRASTRUCTURE_ERROR
+    assert result.failure is not None
+    assert result.failure.code is SandboxFailureCode.INFRASTRUCTURE_ERROR
+
+    with pytest.raises(RuntimeError, match="non-reusable"):
+        cached_reset()
+    with pytest.raises(RuntimeError, match="non-reusable"):
+        cached_capture(("work/result.txt",))
+    with pytest.raises(RuntimeError, match="non-reusable"):
+        cached_metadata()
+
+    session.destroy()
+
+
 def test_cleanup_exception_poison_session() -> None:
     calls: list[tuple[str, ...]] = []
 
