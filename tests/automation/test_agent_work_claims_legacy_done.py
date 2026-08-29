@@ -111,11 +111,17 @@ function parseJsonComment(comment) {
   return match ? JSON.parse(match[1]) : null;
 }
 
-function makeWorld({ command, status, prHead = 'reviewed-head', merged = true }) {
+function makeWorld({
+  command,
+  status,
+  issueState = 'closed',
+  prHead = 'reviewed-head',
+  merged = true,
+}) {
   const issues = {
     1: {
       number: 1,
-      state: 'closed',
+      state: issueState,
       body: issueBody(),
       labels: [{ name: 'agent-work' }, { name: 'work:review' }],
     },
@@ -229,6 +235,32 @@ async function movedHeadStillRejects() {
   );
 }
 
+async function missingHandoffHeadRejects() {
+  const command = commandComment(2001, '/done legacy-agent 42');
+  const world = makeWorld({ command, status: legacyReview(null) });
+  await coordinate({ github: world.github, context: context(command.body) });
+
+  const finalStatus = parseJsonComment(world.comments[1][0]);
+  assert(finalStatus.state === 'REVIEW', 'legacy REVIEW without exact head reached DONE');
+  assert(
+    world.audits.some((entry) => entry.body.includes('recorded exact handed-off PR head')),
+    'missing exact-head rejection was not audited'
+  );
+}
+
+async function openLegacyReviewFailsClosed() {
+  const command = commandComment(2001, '/done legacy-agent 42');
+  const world = makeWorld({ command, status: legacyReview(), issueState: 'open' });
+  await coordinate({ github: world.github, context: context(command.body) });
+
+  const finalStatus = parseJsonComment(world.comments[1][0]);
+  assert(finalStatus.state === 'REVIEW', 'open legacy REVIEW bypassed bootstrap migration');
+  assert(
+    world.audits.some((entry) => entry.body.includes('predates frozen ownership snapshots')),
+    'open legacy REVIEW did not fail closed'
+  );
+}
+
 async function nonDoneLegacyCommandFailsClosed() {
   const command = commandComment(2001, '/release legacy-agent should-not-release');
   const world = makeWorld({ command, status: legacyReview() });
@@ -245,6 +277,8 @@ async function nonDoneLegacyCommandFailsClosed() {
 (async () => {
   await exactMergedDoneSucceeds();
   await movedHeadStillRejects();
+  await missingHandoffHeadRejects();
+  await openLegacyReviewFailsClosed();
   await nonDoneLegacyCommandFailsClosed();
   process.stdout.write('ok\n');
 })().catch((error) => {
