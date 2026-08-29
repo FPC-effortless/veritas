@@ -444,6 +444,7 @@ def _evidence_flow(
     known = {record.record_id for record in contract.public.evidence.records}
     consumed: set[str] = set()
     referenced: set[str] = set()
+    unresolved_attempt = False
     visibilities = [event.visibility]
 
     # Structured action arguments are request/input facts. They may establish that
@@ -452,6 +453,15 @@ def _evidence_flow(
     # a canonical outcome/result record, which TrajectoryEvent does not currently
     # expose as a typed success-bearing field.
     if arguments is not None:
+        requested_creation = {
+            item
+            for key in ("created_evidence_ids", "emitted_evidence_ids")
+            for item in _ids_from_value(arguments.get(key))
+            if item in known
+        }
+        if requested_creation:
+            unresolved_attempt = True
+
         consume_keys = (
             "evidence_id",
             "evidence_ids",
@@ -484,13 +494,13 @@ def _evidence_flow(
                 continue
             candidate = resource_id[len(prefix) :]
             read_operations = {"open_record", "open_document"}
-            if (
-                call.success is True
-                and candidate in known
-                and call.operation in read_operations
-            ):
+            if candidate not in known or call.operation not in read_operations:
+                continue
+            call_contributed = True
+            if call.success is True:
                 consumed.add(candidate)
-                call_contributed = True
+            else:
+                unresolved_attempt = True
         if call_contributed:
             visibilities.append(call.visibility)
 
@@ -500,15 +510,24 @@ def _evidence_flow(
             status=SemanticDerivationStatus.DERIVED,
             consumed_ids=tuple(sorted(consumed)),
             referenced_ids=tuple(sorted(referenced)),
-            direction_complete=True,
+            direction_complete=not unresolved_attempt,
+            reason=(
+                "some evidence-flow attempts lack canonical success/outcome evidence"
+                if unresolved_attempt
+                else None
+            ),
             visibility=visibility,
         )
-    if referenced:
+    if referenced or unresolved_attempt:
         return EvidenceFlowAnnotation(
             status=SemanticDerivationStatus.UNKNOWN,
             referenced_ids=tuple(sorted(referenced)),
             direction_complete=False,
-            reason="evidence direction is not represented by the trajectory",
+            reason=(
+                "evidence-flow attempt lacks canonical success/outcome evidence"
+                if unresolved_attempt
+                else "evidence direction is not represented by the trajectory"
+            ),
             visibility=visibility,
         )
     return EvidenceFlowAnnotation(
