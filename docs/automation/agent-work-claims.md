@@ -26,13 +26,21 @@ Ordinary commands require GitHub `OWNER`, `MEMBER`, or `COLLABORATOR` associatio
 
 Ordinary holder commands require both the matching agent ID and the authenticated GitHub actor recorded by the claim. Bootstrap-derived holders use `github_actor: "bootstrap"` and cannot silently inherit ordinary holder authority.
 
-Repository owners may explicitly adopt a bootstrap-derived or stale held lane with:
+Repository owners may explicitly adopt a bootstrap-derived or stale held source lane with:
 
 ```text
 /recover <new-agent-id> <recorded-branch> <reason>
 ```
 
 Recovery requires `OWNER`, preserves the existing branch and frozen ownership paths, is accepted immediately for bootstrap-derived ownership, and otherwise requires the last heartbeat to be at least two hours old. It is an audited ownership recovery, not automatic expiry.
+
+A separate narrow recovery command exists only for legacy bootstrap metadata-only reservations whose recorded branch is descriptive prose rather than a repository branch:
+
+```text
+/recover-metadata <new-agent-id> <reason>
+```
+
+`/recover-metadata` is OWNER-only and does not accept a branch argument. It applies only when the trusted lane is still bootstrap-derived with zero frozen source paths, zero transition history, no linked PR, an exact allow-listed no-source `Positive ownership` form, and the same non-concrete descriptive branch in trusted status and the Work Contract. The recorded descriptive branch is preserved verbatim; it is never reinterpreted as a Git branch. Source-owning lanes, concrete-branch lanes, transitioned lanes, and non-OWNER callers fail closed. After adoption, the owner may use ordinary holder commands such as `/release` without fabricating source ownership.
 
 ## Commands
 
@@ -46,6 +54,7 @@ Commands are exact single lines:
 /handoff <agent-id> <pr-number>
 /done <agent-id> <pr-number>
 /recover <new-agent-id> <branch> <reason>
+/recover-metadata <new-agent-id> <reason>
 ```
 
 The repository OWNER may run `/roadmap-bootstrap` only on #150.
@@ -87,7 +96,7 @@ A successful claim stores its release target in trusted status as `return_state`
 
 Active-to-inactive transitions may publish the local release/completion state before registry cleanup. If cleanup fails, the old reservation remains stale and conservative; partial failure can make work temporarily non-claimable but cannot make still-owned work look free.
 
-`/blocked` preserves the current authenticated holder, branch, and frozen ownership reservation while making the lane non-claimable. Staleness alone never frees a lane; explicit `/release` or owner `/recover` is required.
+`/blocked` preserves the current authenticated holder, branch, and frozen ownership reservation while making the lane non-claimable. Staleness alone never frees a lane; explicit `/release`, owner `/recover`, or the narrowly scoped owner `/recover-metadata` path is required.
 
 ## Handoff and exact-head completion
 
