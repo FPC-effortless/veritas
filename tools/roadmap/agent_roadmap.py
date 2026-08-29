@@ -25,6 +25,7 @@ FIELD_RE = re.compile(r"^- \*\*(?P<key>[^*]+):\*\* (?P<value>.*)$", re.MULTILINE
 REF_RE = re.compile(r"(?<![\w/])#(\d+)\b")
 TICK_RE = re.compile(r"`([^`]+)`")
 STATUS_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class RoadmapError(ValueError):
@@ -48,11 +49,7 @@ def reserves_exclusive_paths(row: dict[str, Any]) -> bool:
     if state in ACTIVE:
         return True
     claimant = row.get("claimant")
-    return (
-        state == "BLOCKED"
-        and isinstance(claimant, str)
-        and bool(claimant.strip())
-    )
+    return state == "BLOCKED" and isinstance(claimant, str) and bool(claimant.strip())
 
 
 def validate(data: dict[str, Any]) -> list[str]:
@@ -60,6 +57,9 @@ def validate(data: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if data.get("schema_version") != SCHEMA:
         errors.append(f"schema_version must be {SCHEMA!r}")
+    source_commit = data.get("source_commit")
+    if not isinstance(source_commit, str) or COMMIT_RE.fullmatch(source_commit) is None:
+        errors.append("source_commit must be a 40-character lowercase Git commit SHA")
     rows = data.get("work")
     if not isinstance(rows, list) or not rows:
         return errors + ["work must be a non-empty list"]
@@ -94,7 +94,9 @@ def validate(data: dict[str, Any]) -> list[str]:
         if row.get("state") not in STATES:
             errors.append(f"{work_id}: invalid state {row.get('state')!r}")
         linked_pr = row.get("linked_pr")
-        if linked_pr is not None and (not isinstance(linked_pr, int) or linked_pr <= 0):
+        if linked_pr is not None and (
+            not isinstance(linked_pr, int) or isinstance(linked_pr, bool) or linked_pr <= 0
+        ):
             errors.append(f"{work_id}: linked_pr must be null or positive")
 
         aliases = row.get("aliases", [])
@@ -328,11 +330,7 @@ def status_record(repo: str, number: int, token: str | None) -> dict[str, Any] |
         if len(comments) < 100:
             break
         page += 1
-    return max(
-        trusted,
-        key=lambda record: record["transition_seq"],
-        default=None,
-    )
+    return max(trusted, key=lambda record: record["transition_seq"], default=None)
 
 
 def dependency_name_map(
@@ -356,15 +354,23 @@ def derive_dependencies(
     name_to_id: dict[str, str],
 ) -> list[str]:
     """Derive current dependency edges only from the live Work Contract."""
-    dependencies = {
-        issue_to_id[ref] for ref in contract["refs"] if ref in issue_to_id
-    }
+    dependencies = {issue_to_id[ref] for ref in contract["refs"] if ref in issue_to_id}
     summary = contract["dependency_summary"]
     for name, primary in name_to_id.items():
         pattern = rf"(?<![A-Za-z0-9_-]){re.escape(name)}(?![A-Za-z0-9_-])"
         if re.search(pattern, summary):
             dependencies.add(primary)
     return sorted(dependencies)
+
+
+def status_state(status: dict[str, Any], *, issue_number: int, work_id: str) -> str:
+    """Resolve execution state from a trusted status record."""
+    if status.get("issue_number") != issue_number or status.get("work_id") != work_id:
+        raise RoadmapError(f"issue #{issue_number}: trusted status identity mismatch")
+    state = status.get("state")
+    if state not in STATES:
+        raise RoadmapError(f"issue #{issue_number}: trusted status has invalid state {state!r}")
+    return str(state)
 
 
 def validate_live_status(
@@ -409,15 +415,29 @@ def validate_live_status(
                     f"issue #{issue_number}: unowned BLOCKED status retains active metadata"
                 )
         elif branch is None:
-            raise RoadmapError(
-                f"issue #{issue_number}: owner-held BLOCKED status missing branch"
-            )
+            raise RoadmapError(f"issue #{issue_number}: owner-held BLOCKED status missing branch")
 
     return agent_id, branch, linked_pr
 
 
-def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any]:
+def resolve_source_commit(explicit: str | None) -> str:
+    """Require an exact authority commit instead of recycling stale manifest provenance."""
+    source_commit = explicit or os.environ.get("GITHUB_SHA")
+    if not isinstance(source_commit, str) or COMMIT_RE.fullmatch(source_commit) is None:
+        raise RoadmapError(
+            "source commit is required as --source-commit or GITHUB_SHA and must be a 40-character lowercase Git SHA"
+        )
+    return source_commit
+
+
+def sync(
+    current: dict[str, Any],
+    repo: str,
+    token: str | None,
+    source_commit: str | None = None,
+) -> dict[str, Any]:
     """Refresh issue-derived coordination fields while preserving curated policy."""
+    authority_commit = resolve_source_commit(source_commit)
     issues = fetch_issues(repo, token)
     previous = {
         row.get("issue"): row
@@ -425,6 +445,7 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
         if isinstance(row, dict)
     }
     parsed: list[tuple[dict[str, Any], dict[str, Any], str]] = []
+    trusted_by_issue: dict[int, dict[str, Any]] = {}
     issue_to_id: dict[int, str] = {}
     for issue in issues:
         number = issue.get("number")
@@ -432,9 +453,16 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
         if not isinstance(number, int) or not isinstance(body, str):
             raise RoadmapError("agent-work issue missing number/body")
         contract = parse_contract(body, number)
-        state = state_from_labels(issue, number)
         if number in issue_to_id or contract["work_id"] in issue_to_id.values():
             raise RoadmapError("duplicate live issue/Work ID")
+
+        trusted = status_record(repo, number, token)
+        if trusted is not None:
+            state = status_state(trusted, issue_number=number, work_id=contract["work_id"])
+            trusted_by_issue[number] = trusted
+        else:
+            state = state_from_labels(issue, number)
+
         issue_to_id[number] = contract["work_id"]
         parsed.append((issue, contract, state))
 
@@ -455,15 +483,10 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
         linked_pr = contract["linked_pr"]
         branch = contract["branch"]
         claimant: str | None = None
-        needs_status_lookup = state in TRUSTED_STATUS_REQUIRED or state == "BLOCKED"
-        status = status_record(repo, number, token) if needs_status_lookup else None
-        if state in TRUSTED_STATUS_REQUIRED and status is None:
-            raise RoadmapError(
-                f"issue #{number}: {state} missing trusted coordination status"
-            )
-        if status is not None:
+        trusted = trusted_by_issue.get(number)
+        if trusted is not None:
             claimant, status_branch, status_linked_pr = validate_live_status(
-                status,
+                trusted,
                 issue_number=number,
                 work_id=contract["work_id"],
                 state=state,
@@ -471,8 +494,11 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
             linked_pr = status_linked_pr
             if status_branch is not None:
                 branch = status_branch
-        elif state == "BLOCKED":
-            linked_pr = None
+        else:
+            if state in TRUSTED_STATUS_REQUIRED:
+                raise RoadmapError(f"issue #{number}: {state} missing trusted coordination status")
+            if state == "BLOCKED":
+                linked_pr = None
 
         rows.append(
             {
@@ -505,11 +531,11 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
     result = {
         "schema_version": SCHEMA,
         "repository": repo,
-        "source_commit": current.get("source_commit"),
+        "source_commit": authority_commit,
         "state_authority": current.get(
             "state_authority",
             {
-                "execution": "GitHub work:* labels + trusted bot status",
+                "execution": "trusted bot status when present; work:* label fallback otherwise",
                 "qualification": "not_authoritative",
             },
         ),
@@ -524,9 +550,7 @@ def sync(current: dict[str, Any], repo: str, token: str | None) -> dict[str, Any
 def build_parser() -> argparse.ArgumentParser:
     """Construct the command-line parser."""
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--manifest", type=Path, default=Path(".github/agent-roadmap.yml")
-    )
+    parser.add_argument("--manifest", type=Path, default=Path(".github/agent-roadmap.yml"))
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("validate")
     sync_parser = subparsers.add_parser("sync")
@@ -535,6 +559,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("GITHUB_REPOSITORY", "FPC-effortless/veritas"),
     )
     sync_parser.add_argument("--token-env", default="GITHUB_TOKEN")
+    sync_parser.add_argument("--source-commit", default=os.environ.get("GITHUB_SHA"))
     return parser
 
 
@@ -550,7 +575,12 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             print(f"roadmap valid: {len(data['work'])} work items")
             return 0
-        data = sync(data, args.repository, os.environ.get(args.token_env))
+        data = sync(
+            data,
+            args.repository,
+            os.environ.get(args.token_env),
+            args.source_commit,
+        )
         args.manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         print(f"roadmap synchronized: {len(data['work'])} work items")
         return 0
