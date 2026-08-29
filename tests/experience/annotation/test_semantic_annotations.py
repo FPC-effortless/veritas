@@ -266,6 +266,7 @@ def test_private_resource_call_semantics_do_not_widen_into_public_output() -> No
                 call_index=0,
                 resource_id="record_id:record-001",
                 operation="open_record",
+                success=True,
                 visibility=VisibilityClass.EVALUATOR_PRIVATE,
                 public_metadata={"source_event_step": 0},
             ),
@@ -292,6 +293,62 @@ def test_private_resource_call_semantics_do_not_widen_into_public_output() -> No
         record["attributes"].get("relation") != "evidence_flow"
         for record in public_payload["structural_records"]
     )
+
+
+@pytest.mark.parametrize("success", [False, None])
+def test_failed_or_unknown_resource_read_does_not_become_consumed_evidence(
+    success: bool | None,
+) -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract, prose_only=True)
+    trajectory = _replace_trajectory(
+        trajectory,
+        resource_calls=(
+            ResourceCallSummary(
+                call_index=0,
+                resource_id="record_id:record-001",
+                operation="open_record",
+                success=success,
+                public_metadata={"source_event_step": 0},
+            ),
+        ),
+    )
+
+    bundle = compile_semantic_annotations(trajectory, contract)
+    evidence = bundle.event_annotations[0].evidence_flow
+
+    assert evidence.consumed_ids == ()
+    assert evidence.created_ids == ()
+    assert evidence.status is SemanticDerivationStatus.NOT_APPLICABLE
+    assert not any(
+        record.attributes.get("relation") == "evidence_flow"
+        for record in bundle.structural_records
+    )
+
+
+def test_requested_created_evidence_ids_do_not_prove_creation() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract)
+    action = trajectory.events[1].model_dump(mode="python")
+    action["payload"] = {
+        "method": "approve_order",
+        "arguments": {
+            "order_id": "ORDER-001",
+            "created_evidence_ids": ["record-001"],
+            "emitted_evidence_ids": ["record-001"],
+        },
+    }
+    trajectory = _replace_trajectory(
+        trajectory,
+        events=(trajectory.events[0], TrajectoryEvent.model_validate(action)),
+    )
+
+    bundle = compile_semantic_annotations(trajectory, contract)
+    evidence = bundle.event_annotations[1].evidence_flow
+
+    assert evidence.created_ids == ()
+    assert evidence.consumed_ids == ()
+    assert evidence.status is SemanticDerivationStatus.NOT_APPLICABLE
 
 
 def test_state_digest_domain_mismatch_is_unknown() -> None:
