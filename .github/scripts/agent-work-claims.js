@@ -120,6 +120,27 @@ function hasActiveReservation(status) {
   return Boolean(status && ACTIVE_STATES.has(status.state) && status.agent_id);
 }
 
+function canReconcileBootstrapReady(status, contract) {
+  return Boolean(
+    status &&
+    status.state === 'BLOCKED' &&
+    status.github_actor === null &&
+    status.agent_id === null &&
+    status.branch === null &&
+    status.claimed_at === null &&
+    status.heartbeat_at === null &&
+    status.linked_pr === null &&
+    status.linked_pr_head === null &&
+    Array.isArray(status.ownership_paths) &&
+    status.blocker === 'bootstrap/reconciliation required' &&
+    status.released_reason === null &&
+    status.return_state === 'BLOCKED' &&
+    Number(status.transition_seq || 0) === 0 &&
+    Number(status.last_command_comment_id || 0) === 0 &&
+    contract.initialState === 'READY'
+  );
+}
+
 function renderStatus(status) {
   return `${STATUS_MARKER}\n**Agent work status**\n\n\`\`\`json\n${JSON.stringify(status, null, 2)}\n\`\`\``;
 }
@@ -314,6 +335,15 @@ module.exports = async function coordinate({ github, context }) {
       let writeRequired = false;
       if (!current) {
         status = bootstrapStatus(issue, contract);
+        writeRequired = true;
+      } else if (canReconcileBootstrapReady(current.status, contract)) {
+        status = {
+          ...current.status,
+          state: 'READY',
+          blocker: null,
+          return_state: 'READY',
+          updated_at: now(),
+        };
         writeRequired = true;
       } else if (!current.status.return_state || !Array.isArray(current.status.ownership_paths)) {
         status = {
