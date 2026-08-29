@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from investigation_world.sandbox.models import (
     SandboxCreateRequest,
@@ -49,6 +50,37 @@ def _default_process_runner(
     argv: tuple[str, ...], stdin: bytes, timeout_ms: int, max_output_bytes: int
 ) -> SandboxProcessResult:
     return run_process(argv, stdin, timeout_ms, max_output_bytes)
+
+
+class _DockerSandboxSession:
+    """Delegate session that becomes permanently non-reusable after uncertain cleanup."""
+
+    def __init__(
+        self,
+        session: FilesystemSandboxSession,
+        poisoned: list[bool],
+    ) -> None:
+        self._session = session
+        self._poisoned = poisoned
+
+    def _ensure_reusable(self) -> None:
+        if self._poisoned[0]:
+            raise RuntimeError(
+                "Docker sandbox session is non-reusable after unverified container cleanup"
+            )
+
+    def execute(self, request: SandboxExecutionRequest) -> Any:
+        self._ensure_reusable()
+        return self._session.execute(request)
+
+    def destroy(self) -> Any:
+        # Host-side workspace/secret cleanup remains available even when the
+        # container's daemon-side absence could not be established.
+        return self._session.destroy()
+
+    def __getattr__(self, name: str) -> Any:
+        self._ensure_reusable()
+        return getattr(self._session, name)
 
 
 class DockerSandboxProvider:
@@ -129,6 +161,36 @@ class DockerSandboxProvider:
         options = f"type=bind,src={source},dst={target}"
         return f"{options},readonly" if readonly else options
 
+    def _force_remove_interrupted_container(
+        self,
+        container_name: str,
+        poisoned: list[bool],
+    ) -> None:
+        try:
+            cleanup = self._process_runner(
+                (self._docker_path, "rm", "-f", container_name),
+                b"",
+                10_000,
+                16_384,
+            )
+        except Exception as exc:
+            poisoned[0] = True
+            raise SandboxBackendUnavailableError(
+                "Docker interruption cleanup failed; container absence is unverified"
+            ) from exc
+
+        cleanup_failed = (
+            not isinstance(cleanup, SandboxProcessResult)
+            or cleanup.timed_out
+            or cleanup.output_limited
+            or cleanup.exit_code != 0
+        )
+        if cleanup_failed:
+            poisoned[0] = True
+            raise SandboxBackendUnavailableError(
+                "Docker interruption cleanup failed; container absence is unverified"
+            )
+
     def _execute(
         self,
         request: SandboxExecutionRequest,
@@ -136,6 +198,7 @@ class DockerSandboxProvider:
         secret_root: Path,
         create_request: SandboxCreateRequest,
         session_token: str,
+        poisoned: list[bool],
     ) -> SandboxProcessResult | None:
         spec = self._spec_for(request)
         if spec is None:
@@ -201,25 +264,18 @@ class DockerSandboxProvider:
             create_request.resources.max_output_bytes,
         )
         if result.timed_out or result.output_limited:
-            try:
-                self._process_runner(
-                    (self._docker_path, "rm", "-f", container_name),
-                    b"",
-                    10_000,
-                    16_384,
-                )
-            except Exception:
-                pass
+            self._force_remove_interrupted_container(container_name, poisoned)
         elif result.exit_code in {125, 126, 127}:
             detail = result.stderr.decode(errors="replace").strip() or "container launch failed"
             raise SandboxBackendUnavailableError(f"Docker infrastructure failure: {detail}")
         return result
 
-    def create(self, request: SandboxCreateRequest) -> FilesystemSandboxSession:
+    def create(self, request: SandboxCreateRequest) -> _DockerSandboxSession:
         request = SandboxCreateRequest.model_validate(request.model_dump(mode="python"))
         backend_identity = self._ensure_available()
         provider_version = f"{self.provider_version}:{canonical_digest(backend_identity)[:12]}"
         session_token = os.urandom(6).hex()
+        poisoned = [False]
 
         def execute(
             execution_request: SandboxExecutionRequest,
@@ -232,12 +288,14 @@ class DockerSandboxProvider:
                 secret_root,
                 request,
                 session_token,
+                poisoned,
             )
 
-        return FilesystemSandboxSession(
+        session = FilesystemSandboxSession(
             request=request,
             provider_name=self.provider_name,
             provider_version=provider_version,
             executor=execute,
             secret_values=self._secret_values,
         )
+        return _DockerSandboxSession(session, poisoned)
