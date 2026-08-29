@@ -106,7 +106,8 @@ def test_ownership_path_wildcards_are_terminal_subtrees_only() -> None:
     source = r"""
 const fs = require('fs');
 const vm = require('vm');
-const source = fs.readFileSync(__SCRIPT__, 'utf8') + '\nmodule.exports.__pathToken = repositoryPathToken;';
+const exportPathToken = '\nmodule.exports.__pathToken = repositoryPathToken;';
+const source = fs.readFileSync(__SCRIPT__, 'utf8') + exportPathToken;
 const moduleObject = { exports: {} };
 vm.runInNewContext(source, {
   module: moduleObject,
@@ -126,10 +127,17 @@ const pathToken = moduleObject.exports.__pathToken;
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
-for (const invalid of ['src/*/private/**', 'src/**/private/**', '*.md/**']) {
+const invalidPaths = ['src/*/private/**', 'src/**/private/**', '*.md/**'];
+for (const invalid of invalidPaths) {
   assert(pathToken(invalid) === null, `unsupported wildcard accepted: ${invalid}`);
 }
-for (const valid of ['Dockerfile', '.github/workflows/file.yml', 'src/private/file.py', 'src/private/**']) {
+const validPaths = [
+  'Dockerfile',
+  '.github/workflows/file.yml',
+  'src/private/file.py',
+  'src/private/**',
+];
+for (const valid of validPaths) {
   assert(pathToken(valid) === valid, `valid ownership rejected: ${valid}`);
 }
 """.replace("__SCRIPT__", script_path)
@@ -587,26 +595,44 @@ async function runMalformedOwnershipToken() {
 }
 
 async function runUnsupportedWildcardOwnership() {
-  for (const [index, ownership] of ['`src/*/private/**`', '`src/**/private/**`', '`*.md/**`'].entries()) {
+  const ownershipCases = [
+    '`src/*/private/**`',
+    '`src/**/private/**`',
+    '`*.md/**`',
+  ];
+  for (const [index, ownership] of ownershipCases.entries()) {
     const issueNumber = index + 1;
+    const branch = `feat/wildcard-${index}`;
     const issues = {
       [issueNumber]: {
         number: issueNumber,
-        body: contract(`WILDCARD-${index}`, `feat/wildcard-${index}`, ownership),
+        body: contract(`WILDCARD-${index}`, branch, ownership),
         labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
       },
     };
-    const claim = commandComment(2100 + index, `/claim wildcard-${index} feat/wildcard-${index}`);
+    const claim = commandComment(2100 + index, `/claim wildcard-${index} ${branch}`);
+    const status = readyStatus(issueNumber, `WILDCARD-${index}`);
     const comments = {
-      [issueNumber]: [statusComment(1100 + index, readyStatus(issueNumber, `WILDCARD-${index}`)), claim],
+      [issueNumber]: [statusComment(1100 + index, status), claim],
       150: [registryComment([])],
     };
     const world = makeWorld({ issues, comments });
-    await coordinate({ github: world.github, context: context(issueNumber, claim.body) });
-    assert(parseStatus(comments[issueNumber][0]).state === 'READY', `${ownership} published CLAIMED`);
-    assert(parseStatus(comments[150][0]).entries.length === 0, `${ownership} created a reservation`);
+    await coordinate({
+      github: world.github,
+      context: context(issueNumber, claim.body),
+    });
     assert(
-      world.audits.some((entry) => entry.body.includes('no machine-checkable positive-ownership path')),
+      parseStatus(comments[issueNumber][0]).state === 'READY',
+      `${ownership} published CLAIMED`
+    );
+    assert(
+      parseStatus(comments[150][0]).entries.length === 0,
+      `${ownership} created a reservation`
+    );
+    assert(
+      world.audits.some(
+        (entry) => entry.body.includes('no machine-checkable positive-ownership path')
+      ),
       `${ownership} did not fail closed`
     );
   }
@@ -626,12 +652,24 @@ async function runTerminalSubtreeOpenPrCollision() {
     150: [registryComment([])],
   };
   const world = makeWorld({ issues, comments });
-  world.github.rest.pulls.list = async () => [{ number: 77, head: { ref: 'feat/other' } }];
-  world.github.rest.pulls.listFiles = async () => [{ filename: 'src/private/file.py' }];
-  await coordinate({ github: world.github, context: context(1, claim.body) });
-  assert(parseStatus(comments[1][0]).state === 'READY', 'open-PR subtree collision was accepted');
+  world.github.rest.pulls.list = async () => [
+    { number: 77, head: { ref: 'feat/other' } },
+  ];
+  world.github.rest.pulls.listFiles = async () => [
+    { filename: 'src/private/file.py' },
+  ];
+  await coordinate({
+    github: world.github,
+    context: context(1, claim.body),
+  });
   assert(
-    world.audits.some((entry) => entry.body.includes('open PR #77 reserves src/private/file.py')),
+    parseStatus(comments[1][0]).state === 'READY',
+    'open-PR subtree collision was accepted'
+  );
+  assert(
+    world.audits.some(
+      (entry) => entry.body.includes('open PR #77 reserves src/private/file.py')
+    ),
     'terminal subtree did not collide with open PR descendant'
   );
 }
