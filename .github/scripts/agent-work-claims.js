@@ -16,7 +16,6 @@ const LABEL_DEFINITIONS = {
   'work:superseded': ['cfd3d7', 'Replaced by another canonical work item'],
 };
 const STATE_LABELS = new Set(STATES.map((state) => `work:${state.toLowerCase()}`));
-
 const now = () => new Date().toISOString();
 const labelForState = (state) => `work:${state.toLowerCase()}`;
 const labelNames = (issue) => new Set((issue.labels || []).map((item) => typeof item === 'string' ? item : item.name));
@@ -56,27 +55,13 @@ function parseContract(text, number) {
 function parseCommand(text) {
   if (text.includes('\n') || text.includes('\r')) return null;
   let match;
-  if ((match = text.match(/^\/claim ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127})$/))) {
-    return { kind: 'claim', agent: match[1], branch: match[2] };
-  }
-  if ((match = text.match(/^\/heartbeat ([A-Za-z0-9][A-Za-z0-9._-]{0,63})(?: ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}))?$/))) {
-    return { kind: 'heartbeat', agent: match[1], branch: match[2] || null };
-  }
-  if ((match = text.match(/^\/release ([A-Za-z0-9][A-Za-z0-9._-]{0,63})(?: (.{1,500}))?$/))) {
-    return { kind: 'release', agent: match[1], reason: match[2] || null };
-  }
-  if ((match = text.match(/^\/blocked ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) {
-    return { kind: 'blocked', agent: match[1], reason: match[2] };
-  }
-  if ((match = text.match(/^\/handoff ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) {
-    return { kind: 'handoff', agent: match[1], pr: Number(match[2]) };
-  }
-  if ((match = text.match(/^\/done ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) {
-    return { kind: 'done', agent: match[1], pr: Number(match[2]) };
-  }
-  if ((match = text.match(/^\/recover ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}) (.{1,500})$/))) {
-    return { kind: 'recover', agent: match[1], branch: match[2], reason: match[3] };
-  }
+  if ((match = text.match(/^\/claim ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127})$/))) return { kind: 'claim', agent: match[1], branch: match[2] };
+  if ((match = text.match(/^\/heartbeat ([A-Za-z0-9][A-Za-z0-9._-]{0,63})(?: ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}))?$/))) return { kind: 'heartbeat', agent: match[1], branch: match[2] || null };
+  if ((match = text.match(/^\/release ([A-Za-z0-9][A-Za-z0-9._-]{0,63})(?: (.{1,500}))?$/))) return { kind: 'release', agent: match[1], reason: match[2] || null };
+  if ((match = text.match(/^\/blocked ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) return { kind: 'blocked', agent: match[1], reason: match[2] };
+  if ((match = text.match(/^\/handoff ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'handoff', agent: match[1], pr: Number(match[2]) };
+  if ((match = text.match(/^\/done ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'done', agent: match[1], pr: Number(match[2]) };
+  if ((match = text.match(/^\/recover ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}) (.{1,500})$/))) return { kind: 'recover', agent: match[1], branch: match[2], reason: match[3] };
   return text === '/roadmap-bootstrap' ? { kind: 'bootstrap' } : null;
 }
 
@@ -103,15 +88,26 @@ function renderStatus(status) {
 }
 
 function parseStatusComment(comment, expectedIssue) {
-  if (comment.user?.login !== 'github-actions[bot]') return null;
-  if (!comment.body?.includes(STATUS_MARKER)) return null;
+  if (comment.user?.login !== 'github-actions[bot]' || !comment.body?.includes(STATUS_MARKER)) return null;
   const match = comment.body.match(/```json\s*([\s\S]*?)```/);
   if (!match) return null;
   try {
     const status = JSON.parse(match[1]);
-    if (status.schema_version !== 'veritas.agent-work-status.v1') return null;
-    if (status.issue_number !== expectedIssue) return null;
+    if (status.schema_version !== 'veritas.agent-work-status.v1' || status.issue_number !== expectedIssue) return null;
     return { commentId: comment.id, status };
+  } catch {
+    return null;
+  }
+}
+
+function parseRegistryComment(comment) {
+  if (comment.user?.login !== 'github-actions[bot]' || !comment.body?.includes(RESERVATION_MARKER)) return null;
+  const match = comment.body.match(/```json\s*([\s\S]*?)```/);
+  if (!match) return null;
+  try {
+    const registry = JSON.parse(match[1]);
+    if (registry.schema_version !== 'veritas.agent-work-reservations.v1' || !Array.isArray(registry.entries)) return null;
+    return { commentId: comment.id, registry };
   } catch {
     return null;
   }
@@ -139,17 +135,18 @@ module.exports = async function coordinate({ github, context }) {
     }
   }
 
-  async function setStateLabels(issue, state) {
-    const existing = labelNames(issue);
+  async function setStateLabels(issueNumberToUpdate, state) {
+    const freshIssue = (await github.rest.issues.get({ owner, repo, issue_number: issueNumberToUpdate })).data;
+    const existing = labelNames(freshIssue);
     for (const label of STATE_LABELS) {
       if (!existing.has(label)) continue;
       try {
-        await github.rest.issues.removeLabel({ owner, repo, issue_number: issue.number, name: label });
+        await github.rest.issues.removeLabel({ owner, repo, issue_number: issueNumberToUpdate, name: label });
       } catch (error) {
         if (error.status !== 404) throw error;
       }
     }
-    await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: ['agent-work', labelForState(state)] });
+    await github.rest.issues.addLabels({ owner, repo, issue_number: issueNumberToUpdate, labels: ['agent-work', labelForState(state)] });
   }
 
   async function commentsFor(number) {
@@ -182,28 +179,17 @@ module.exports = async function coordinate({ github, context }) {
     const holder = contract.declaredHolder && !/^none$/i.test(contract.declaredHolder) ? contract.declaredHolder : null;
     if (state === 'READY' && holder) state = 'CLAIMED';
     if (ACTIVE_STATES.has(state) && !holder) state = 'BLOCKED';
-    const declaredPr = contract.declaredPr && !/^none$/i.test(contract.declaredPr)
-      ? Number(String(contract.declaredPr).replace(/^#/, '')) || null
-      : null;
+    const declaredPr = contract.declaredPr && !/^none$/i.test(contract.declaredPr) ? Number(String(contract.declaredPr).replace(/^#/, '')) || null : null;
     const timestamp = now();
     return {
-      schema_version: 'veritas.agent-work-status.v1',
-      work_id: contract.workId,
-      issue_number: issue.number,
-      state,
-      github_actor: holder ? 'bootstrap' : null,
-      agent_id: holder,
+      schema_version: 'veritas.agent-work-status.v1', work_id: contract.workId, issue_number: issue.number, state,
+      github_actor: holder ? 'bootstrap' : null, agent_id: holder,
       branch: holder && branchIsConcrete(contract.declaredBranch) ? contract.declaredBranch : null,
-      claimed_at: holder ? timestamp : null,
-      heartbeat_at: holder ? timestamp : null,
-      linked_pr: declaredPr,
-      linked_pr_head: null,
+      claimed_at: holder ? timestamp : null, heartbeat_at: holder ? timestamp : null,
+      linked_pr: declaredPr, linked_pr_head: null,
       blocker: state === 'BLOCKED' ? 'bootstrap/reconciliation required' : null,
-      released_reason: null,
-      return_state: state === 'BLOCKED' ? 'BLOCKED' : 'READY',
-      transition_seq: 0,
-      last_command_comment_id: 0,
-      updated_at: timestamp,
+      released_reason: null, return_state: state === 'BLOCKED' ? 'BLOCKED' : 'READY',
+      transition_seq: 0, last_command_comment_id: 0, updated_at: timestamp,
     };
   }
 
@@ -212,83 +198,66 @@ module.exports = async function coordinate({ github, context }) {
     return issues.filter((issue) => !issue.pull_request && issue.body?.includes(ENROLLMENT_MARKER));
   }
 
-  async function activeIssueReservations(skipIssue) {
-    const reservations = [];
-    for (const issue of await listEnrolledIssues()) {
-      if (issue.number === skipIssue) continue;
-      const current = await trustedStatus(issue);
-      if (!current) {
-        const labels = labelNames(issue);
-        if ([...STATE_LABELS].some((label) => labels.has(label) && label !== 'work:ready')) {
-          throw new Error(`issue #${issue.number} has active-looking coordination labels but no trusted status; run /roadmap-bootstrap`);
-        }
-        continue;
-      }
-      const status = current.status;
-      if (!ACTIVE_STATES.has(status.state) || !status.agent_id) continue;
-      const contract = parseContract(issue.body || '', issue.number);
-      reservations.push({ issue: issue.number, work_id: contract.workId, branch: status.branch, paths: contract.paths });
+  async function trustedRegistry() {
+    const comments = await commentsFor(150);
+    for (const comment of comments.slice().reverse()) {
+      const parsed = parseRegistryComment(comment);
+      if (parsed) return parsed;
     }
-    return reservations;
+    return null;
+  }
+
+  async function writeRegistry(entries) {
+    const sorted = entries.slice().sort((a, b) => a.issue - b.issue);
+    const body = `${RESERVATION_MARKER}\n**Global agent-work reservations**\n\n\`\`\`json\n${JSON.stringify({ schema_version: 'veritas.agent-work-reservations.v1', updated_at: now(), entries: sorted }, null, 2)}\n\`\`\``;
+    const current = await trustedRegistry();
+    if (current) {
+      await github.rest.issues.updateComment({ owner, repo, comment_id: current.commentId, body });
+    } else {
+      await github.rest.issues.createComment({ owner, repo, issue_number: 150, body });
+    }
+  }
+
+  async function updateRegistryEntry(issue, contract, status) {
+    const current = await trustedRegistry();
+    if (!current) throw new Error('global reservation registry is missing; run /roadmap-bootstrap on #150');
+    const entries = current.registry.entries.filter((entry) => entry.issue !== issue.number);
+    if (ACTIVE_STATES.has(status.state) && status.agent_id) {
+      entries.push({ issue: issue.number, work_id: contract.workId, state: status.state, actor: status.github_actor, agent: status.agent_id, branch: status.branch, linked_pr: status.linked_pr, paths: contract.paths });
+    }
+    await writeRegistry(entries);
   }
 
   async function openPrConflicts(candidatePaths, candidateBranch) {
-    const conflicts = [];
     const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 });
     for (const pr of pulls) {
       if (pr.head?.ref === candidateBranch) continue;
       const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 });
       for (const file of files) {
         for (const candidate of candidatePaths) {
-          if (pathsOverlap(candidate, file.filename)) {
-            conflicts.push({ pr: pr.number, path: file.filename, candidate });
-          }
+          if (pathsOverlap(candidate, file.filename)) return { pr: pr.number, path: file.filename, candidate };
         }
       }
     }
-    return conflicts;
+    return null;
   }
 
   async function assertClaimHasNoConflict(issue, contract, branch) {
-    if (contract.paths.length === 0) {
-      const coordinationOnly = /coordination|metadata only|no product branch/i.test(contract.positiveOwnership);
-      if (!coordinationOnly) throw new Error('claim exposes no machine-checkable positive-ownership path');
+    if (contract.paths.length === 0 && !/coordination|metadata only|no product branch/i.test(contract.positiveOwnership)) {
+      throw new Error('claim exposes no machine-checkable positive-ownership path');
     }
-    for (const reservation of await activeIssueReservations(issue.number)) {
+    const registry = await trustedRegistry();
+    if (!registry) throw new Error('global reservation registry is missing; run /roadmap-bootstrap on #150');
+    for (const reservation of registry.registry.entries) {
+      if (reservation.issue === issue.number) continue;
       for (const candidate of contract.paths) {
-        for (const reserved of reservation.paths) {
-          if (pathsOverlap(candidate, reserved)) {
-            throw new Error(`ownership conflict with ${reservation.work_id}/#${reservation.issue}: ${candidate} overlaps ${reserved}`);
-          }
+        for (const reserved of reservation.paths || []) {
+          if (pathsOverlap(candidate, reserved)) throw new Error(`ownership conflict with ${reservation.work_id}/#${reservation.issue}: ${candidate} overlaps ${reserved}`);
         }
       }
     }
-    const prConflicts = await openPrConflicts(contract.paths, branch);
-    if (prConflicts.length) {
-      const first = prConflicts[0];
-      throw new Error(`open PR #${first.pr} reserves ${first.path}, overlapping ${first.candidate}`);
-    }
-  }
-
-  async function updateReservationRegistry() {
-    const entries = [];
-    for (const issue of await listEnrolledIssues()) {
-      const current = await trustedStatus(issue);
-      if (!current) continue;
-      const status = current.status;
-      if (!ACTIVE_STATES.has(status.state) || !status.agent_id) continue;
-      const contract = parseContract(issue.body || '', issue.number);
-      entries.push({ issue: issue.number, work_id: contract.workId, state: status.state, actor: status.github_actor, agent: status.agent_id, branch: status.branch, linked_pr: status.linked_pr, paths: contract.paths });
-    }
-    entries.sort((a, b) => a.issue - b.issue);
-    const body = `${RESERVATION_MARKER}\n**Global agent-work reservations**\n\n\`\`\`json\n${JSON.stringify({ schema_version: 'veritas.agent-work-reservations.v1', updated_at: now(), entries }, null, 2)}\n\`\`\``;
-    const rootComments = await commentsFor(150);
-    const existing = rootComments.slice().reverse().find((comment) => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(RESERVATION_MARKER));
-    if (existing) {
-      await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-    } else {
-      await github.rest.issues.createComment({ owner, repo, issue_number: 150, body });
-    }
+    const conflict = await openPrConflicts(contract.paths, branch);
+    if (conflict) throw new Error(`open PR #${conflict.pr} reserves ${conflict.path}, overlapping ${conflict.candidate}`);
   }
 
   async function bootstrap(actor, association) {
@@ -296,16 +265,25 @@ module.exports = async function coordinate({ github, context }) {
     if (!ALLOWED_ASSOCIATIONS.has(association)) return audit(issueNumber, `Rejected roadmap bootstrap from unauthorized actor @${actor} (${association || 'NONE'}).`);
     await ensureLabels();
     const counts = {};
+    const entries = [];
     let initialized = 0;
     for (const issue of await listEnrolledIssues()) {
       const contract = parseContract(issue.body || '', issue.number);
       let current = await trustedStatus(issue);
-      if (!current) current = await writeStatus(issue, null, bootstrapStatus(issue, contract));
-      await setStateLabels(issue, current.status.state);
+      if (!current) {
+        current = await writeStatus(issue, null, bootstrapStatus(issue, contract));
+      } else if (!current.status.return_state) {
+        const migrated = { ...current.status, return_state: contract.initialState === 'BLOCKED' ? 'BLOCKED' : 'READY', updated_at: now() };
+        current = await writeStatus(issue, current, migrated);
+      }
+      await setStateLabels(issue.number, current.status.state);
       counts[current.status.state] = (counts[current.status.state] || 0) + 1;
+      if (ACTIVE_STATES.has(current.status.state) && current.status.agent_id) {
+        entries.push({ issue: issue.number, work_id: contract.workId, state: current.status.state, actor: current.status.github_actor, agent: current.status.agent_id, branch: current.status.branch, linked_pr: current.status.linked_pr, paths: contract.paths });
+      }
       initialized += 1;
     }
-    await updateReservationRegistry();
+    await writeRegistry(entries);
     await audit(issueNumber, `Roadmap bootstrap complete: trusted status materialized/reconciled for ${initialized} agent-work issues. State counts: ${Object.entries(counts).sort().map(([key, value]) => `${key}=${value}`).join(', ')}. Labels are discovery metadata only after bootstrap.`);
   }
 
@@ -328,11 +306,8 @@ module.exports = async function coordinate({ github, context }) {
 
   const allComments = await commentsFor(issueNumber);
   const lastProcessed = Number(current.status.last_command_comment_id || 0);
-  const pending = allComments
-    .filter((comment) => comment.id > lastProcessed && looksLikeCommand(comment.body || '') && comment.body !== '/roadmap-bootstrap')
-    .sort((a, b) => a.id - b.id);
+  const pending = allComments.filter((comment) => comment.id > lastProcessed && looksLikeCommand(comment.body || '') && comment.body !== '/roadmap-bootstrap').sort((a, b) => a.id - b.id);
 
-  let changed = false;
   for (const comment of pending) {
     const actor = comment.user?.login || 'unknown';
     const association = comment.author_association || '';
@@ -353,21 +328,13 @@ module.exports = async function coordinate({ github, context }) {
       return Boolean(status.agent_id && status.agent_id === agent && status.github_actor === actor);
     }
 
-    if (!command) {
-      await reject('malformed command. Commands must be one exact single line.');
-      continue;
-    }
-    if (!ALLOWED_ASSOCIATIONS.has(association)) {
-      await reject(`unauthorized actor association ${association || 'NONE'}.`);
-      continue;
-    }
+    if (!command) { await reject('malformed command. Commands must be one exact single line.'); continue; }
+    if (!ALLOWED_ASSOCIATIONS.has(association)) { await reject(`unauthorized actor association ${association || 'NONE'}.`); continue; }
 
     try {
       if (command.kind === 'claim') {
         if (status.state !== 'READY') throw new Error(`work is ${status.state}; current holder is ${status.agent_id || 'none'}`);
-        if (branchIsConcrete(contract.declaredBranch) && command.branch !== contract.declaredBranch) {
-          throw new Error(`branch ${command.branch} does not match Work Contract branch ${contract.declaredBranch}`);
-        }
+        if (branchIsConcrete(contract.declaredBranch) && command.branch !== contract.declaredBranch) throw new Error(`branch ${command.branch} does not match Work Contract branch ${contract.declaredBranch}`);
         await assertClaimHasNoConflict(issue, contract, command.branch);
         Object.assign(status, { state: 'CLAIMED', github_actor: actor, agent_id: command.agent, branch: command.branch, claimed_at: timestamp, heartbeat_at: timestamp, linked_pr: null, linked_pr_head: null, blocker: null, released_reason: null, return_state: 'READY' });
       } else if (command.kind === 'heartbeat') {
@@ -380,9 +347,7 @@ module.exports = async function coordinate({ github, context }) {
         Object.assign(status, { state: target, github_actor: null, agent_id: null, branch: null, claimed_at: null, heartbeat_at: null, linked_pr: null, linked_pr_head: null, blocker: target === 'BLOCKED' ? status.blocker : null, released_reason: command.reason });
       } else if (command.kind === 'blocked') {
         if (!['CLAIMED', 'REVIEW'].includes(status.state) || !isHolder(command.agent)) throw new Error('blocked transition requires the current authenticated holder');
-        status.state = 'BLOCKED';
-        status.blocker = command.reason;
-        status.heartbeat_at = timestamp;
+        status.state = 'BLOCKED'; status.blocker = command.reason; status.heartbeat_at = timestamp;
       } else if (command.kind === 'handoff') {
         if (status.state !== 'CLAIMED' || !isHolder(command.agent)) throw new Error('handoff requires the current CLAIMED authenticated holder');
         const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
@@ -391,19 +356,14 @@ module.exports = async function coordinate({ github, context }) {
         const primaryWorkId = String(contract.workId).split('/')[0].trim();
         const prBody = pr.body || '';
         if (!prBody.includes(`#${issueNumber}`) || !prBody.includes(primaryWorkId)) throw new Error(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}`);
-        status.state = 'REVIEW';
-        status.linked_pr = command.pr;
-        status.linked_pr_head = pr.head.sha;
-        status.heartbeat_at = timestamp;
+        status.state = 'REVIEW'; status.linked_pr = command.pr; status.linked_pr_head = pr.head.sha; status.heartbeat_at = timestamp;
       } else if (command.kind === 'done') {
         if (status.state !== 'REVIEW' || !isHolder(command.agent)) throw new Error('done requires the current REVIEW authenticated holder');
         if (!status.linked_pr || status.linked_pr !== command.pr) throw new Error(`PR mismatch; handoff recorded PR #${status.linked_pr || 'none'}`);
         const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
         if (!pr.merged_at) throw new Error(`PR #${command.pr} is not merged; implementation work remains in REVIEW`);
         if (status.linked_pr_head && status.linked_pr_head !== pr.head.sha) throw new Error(`PR #${command.pr} head moved after handoff; re-handoff/review exact final head before DONE`);
-        status.state = 'DONE';
-        status.linked_pr_head = pr.head.sha;
-        status.heartbeat_at = timestamp;
+        status.state = 'DONE'; status.linked_pr_head = pr.head.sha; status.heartbeat_at = timestamp;
       } else if (command.kind === 'recover') {
         if (association !== 'OWNER') throw new Error('stale/bootstrap recovery requires repository OWNER authority');
         if (!ACTIVE_STATES.has(status.state) || !status.agent_id) throw new Error('recovery requires an active held lane');
@@ -412,11 +372,7 @@ module.exports = async function coordinate({ github, context }) {
         if (status.github_actor !== 'bootstrap' && !stale) throw new Error('holder is not bootstrap-derived or stale for at least two hours');
         if (status.branch && command.branch !== status.branch) throw new Error(`recovery branch must preserve recorded branch ${status.branch}`);
         if (branchIsConcrete(contract.declaredBranch) && command.branch !== contract.declaredBranch) throw new Error(`recovery branch must match Work Contract branch ${contract.declaredBranch}`);
-        status.github_actor = actor;
-        status.agent_id = command.agent;
-        status.branch = command.branch;
-        status.heartbeat_at = timestamp;
-        status.released_reason = `owner recovery: ${command.reason}`;
+        status.github_actor = actor; status.agent_id = command.agent; status.branch = command.branch; status.heartbeat_at = timestamp; status.released_reason = `owner recovery: ${command.reason}`;
       }
     } catch (error) {
       await reject(error.message || String(error));
@@ -427,12 +383,10 @@ module.exports = async function coordinate({ github, context }) {
     status.last_command_comment_id = comment.id;
     status.updated_at = timestamp;
     current = await writeStatus(issue, current, status);
-    await setStateLabels(issue, status.state);
+    await setStateLabels(issue.number, status.state);
+    await updateRegistryEntry(issue, contract, status);
     const holder = status.agent_id ? ` owner=${status.agent_id} (@${status.github_actor})` : '';
     const prText = status.linked_pr ? ` PR=#${status.linked_pr}` : '';
     await audit(issueNumber, `Agent-work transition accepted in comment order: **${contract.workId}** → **${status.state}**.${holder}${prText} Transition #${status.transition_seq}. Coordination state only; no merge, release, sealed, paid-compute, or qualification authority is granted.`);
-    changed = true;
   }
-
-  if (changed) await updateReservationRegistry();
 };
