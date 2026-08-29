@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "veritas-environment-examples"
+version = "0.1.0"
+description = "Executable environment-authoring examples for Veritas"
+requires-python = ">=3.12"
+dependencies = [
+  "investigation-world>=0.11.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["veritas_environment_examples"]
