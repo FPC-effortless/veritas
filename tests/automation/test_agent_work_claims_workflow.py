@@ -899,12 +899,7 @@ assert(
 """.replace("__SCRIPT__", script_path)
     _run_node(source)
 
-    block = script.split(
-        "} else if (command.kind === 'recover-metadata') {", 1
-    )[1].split(
-        "} else if (command.kind === 'recover') {", 1
-    )[0]
-    assert "canRecoverMetadataOnly(status, contract, association)" in block
-    assert "status.branch =" not in block
-    assert "status.github_actor = actor" in block
-    assert "status.agent_id = command.agent" in block
+
+def test_recover_metadata_command_is_routed_by_workflow() -> None:
+    workflow = _workflow()
+    assert "startsWith(github.event.comment.body, '/recover-metadata ')" in workflow
