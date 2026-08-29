@@ -6,6 +6,9 @@ from investigation_world.experience.annotation import (
     SemanticAnnotationError,
     compile_semantic_annotations,
 )
+from investigation_world.experience.annotation.compiler import (
+    compile_semantic_annotations as compile_semantic_annotations_core,
+)
 from investigation_world.operational.models import (
     ActionKind,
     HiddenActionEffect,
@@ -166,6 +169,16 @@ def test_missing_contract_binding_cannot_authorize_private_semantics() -> None:
         compile_semantic_annotations(_trajectory(contract, binding="missing"), contract)
 
 
+def test_core_compiler_also_rejects_missing_contract_binding() -> None:
+    contract = _contract()
+
+    with pytest.raises(SemanticAnnotationError, match="exact full portable contract"):
+        compile_semantic_annotations_core(
+            _trajectory(contract, binding="missing"),
+            contract,
+        )
+
+
 def test_public_contract_binding_cannot_authorize_private_semantics() -> None:
     contract = _contract()
 
@@ -192,5 +205,29 @@ def test_safe_projection_omits_private_bound_bundle_identity() -> None:
     assert bundle.bundle_id.startswith("SEMBUNDLE-")
     assert "bundle_id" not in bundle.public_payload()
     assert "bundle_id" not in bundle.buyer_safe_payload()
+    assert "trajectory_id" not in bundle.public_payload()
+    assert "trajectory_id" not in bundle.buyer_safe_payload()
     assert "contract_id" not in bundle.public_payload()
     assert "evaluator_semantics_id" not in bundle.public_payload()
+
+
+def test_private_only_contract_change_does_not_change_safe_projection() -> None:
+    original = _contract(final_status="approved")
+    changed_private = _contract(final_status="reviewed")
+
+    assert original.public.public_id == changed_private.public.public_id
+    assert original.contract_id != changed_private.contract_id
+
+    original_bundle = compile_semantic_annotations(
+        _trajectory(original, binding="full"),
+        original,
+    )
+    changed_bundle = compile_semantic_annotations(
+        _trajectory(changed_private, binding="full"),
+        changed_private,
+    )
+
+    assert original_bundle.bundle_id != changed_bundle.bundle_id
+    assert original_bundle.trajectory_id != changed_bundle.trajectory_id
+    assert original_bundle.public_payload() == changed_bundle.public_payload()
+    assert original_bundle.buyer_safe_payload() == changed_bundle.buyer_safe_payload()

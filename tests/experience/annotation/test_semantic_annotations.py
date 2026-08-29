@@ -4,6 +4,7 @@ import pytest
 
 from investigation_world.experience import MachineExperience
 from investigation_world.experience.annotation import (
+    SemanticAnnotationBundle,
     SemanticAnnotationError,
     SemanticDerivationStatus,
     SemanticInvocationKind,
@@ -30,7 +31,9 @@ from investigation_world.portable_contract import (
 from investigation_world.trajectory import (
     ArtifactIdentity,
     EvaluationRecord,
+    ResourceCallSummary,
     StateDigest,
+    StateDigestScope,
     TaskIdentity,
     TrajectoryEvent,
     TrajectoryV2,
@@ -198,6 +201,13 @@ def _trajectory(
     )
 
 
+def _replace_trajectory(trajectory: TrajectoryV2, **changes: object) -> TrajectoryV2:
+    payload = trajectory.model_dump(mode="python")
+    payload.update(changes)
+    payload["trajectory_id"] = ""
+    return TrajectoryV2.model_validate(payload)
+
+
 def test_compiler_derives_structured_semantics_deterministically() -> None:
     contract = compile_operational_episode(_episode())
     trajectory = _trajectory(contract)
@@ -246,6 +256,79 @@ def test_compiler_does_not_infer_action_identity_from_prose() -> None:
     assert annotation.process_requirement.status is SemanticDerivationStatus.UNKNOWN
 
 
+def test_private_resource_call_semantics_do_not_widen_into_public_output() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract, prose_only=True)
+    trajectory = _replace_trajectory(
+        trajectory,
+        resource_calls=(
+            ResourceCallSummary(
+                call_index=0,
+                resource_id="record_id:record-001",
+                operation="open_record",
+                visibility=VisibilityClass.EVALUATOR_PRIVATE,
+                public_metadata={"source_event_step": 0},
+            ),
+        ),
+    )
+
+    bundle = compile_semantic_annotations(trajectory, contract)
+    annotation = bundle.event_annotations[0]
+
+    assert annotation.invocation.name == "open_record"
+    assert annotation.invocation.visibility is VisibilityClass.EVALUATOR_PRIVATE
+    assert annotation.evidence_flow.consumed_ids == ("record-001",)
+    assert annotation.evidence_flow.visibility is VisibilityClass.EVALUATOR_PRIVATE
+
+    public_payload = bundle.public_payload()
+    public_event = public_payload["event_annotations"][0]
+    assert "invocation" not in public_event
+    assert "evidence_flow" not in public_event
+    assert all(
+        span["span_type"] != "semantic_invocation"
+        for span in public_payload["spans"]
+    )
+    assert all(
+        record["attributes"].get("relation") != "evidence_flow"
+        for record in public_payload["structural_records"]
+    )
+
+
+def test_state_digest_domain_mismatch_is_unknown() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract, prose_only=True)
+    event = trajectory.events[0].model_dump(mode="python")
+    event["state_before"] = StateDigest(
+        digest="same",
+        algorithm="sha256",
+        scope=StateDigestScope.PUBLIC,
+    )
+    event["state_after"] = StateDigest(
+        digest="same",
+        algorithm="blake3",
+        scope=StateDigestScope.SEMANTIC,
+    )
+    trajectory = _replace_trajectory(
+        trajectory,
+        events=(TrajectoryEvent.model_validate(event),),
+        final_state=event["state_after"],
+    )
+
+    bundle = compile_semantic_annotations(trajectory, contract)
+    state = bundle.event_annotations[0].state_transition
+
+    assert state.status is SemanticDerivationStatus.UNKNOWN
+    assert state.changed is None
+    assert state.state_before_algorithm == "sha256"
+    assert state.state_before_scope is StateDigestScope.PUBLIC
+    assert state.state_after_algorithm == "blake3"
+    assert state.state_after_scope is StateDigestScope.SEMANTIC
+    assert not any(
+        record.attributes.get("relation") == "state_digest_transition"
+        for record in bundle.structural_records
+    )
+
+
 def test_public_projection_does_not_widen_private_contract_semantics() -> None:
     contract = compile_operational_episode(_episode())
     bundle = compile_semantic_annotations(_trajectory(contract), contract)
@@ -287,6 +370,50 @@ def test_stale_copied_contract_semantics_fail_closed() -> None:
         compile_semantic_annotations(_trajectory(contract), stale_contract)
 
 
+def test_composition_rejects_fresh_bundle_with_mismatched_contract_authority() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract)
+    experience = MachineExperience(trajectory=trajectory)
+    bundle = compile_semantic_annotations(trajectory, contract)
+    payload = bundle.model_dump(mode="python")
+    payload["bundle_id"] = ""
+    payload["contract_id"] = "POC-FORGED"
+    forged = SemanticAnnotationBundle.model_validate(payload)
+
+    with pytest.raises(SemanticAnnotationError, match="contract identity"):
+        apply_semantic_annotations(experience, forged)
+
+
+def test_composition_rejects_fresh_bundle_with_mismatched_verifier_authority() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract)
+    experience = MachineExperience(trajectory=trajectory)
+    bundle = compile_semantic_annotations(trajectory, contract)
+    payload = bundle.model_dump(mode="python")
+    payload["bundle_id"] = ""
+    payload["trajectory_verifier_version"] = "forged-version"
+    forged = SemanticAnnotationBundle.model_validate(payload)
+
+    with pytest.raises(SemanticAnnotationError, match="verifier identity/version"):
+        apply_semantic_annotations(experience, forged)
+
+
+def test_composition_rejects_fresh_bundle_with_mismatched_event_binding() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract)
+    experience = MachineExperience(trajectory=trajectory)
+    bundle = compile_semantic_annotations(trajectory, contract)
+    payload = bundle.model_dump(mode="python")
+    payload["bundle_id"] = ""
+    event_payload = payload["event_annotations"][0]
+    event_payload["annotation_id"] = ""
+    event_payload["event_type"] = "forged-event-type"
+    forged = SemanticAnnotationBundle.model_validate(payload)
+
+    with pytest.raises(SemanticAnnotationError, match="event binding"):
+        apply_semantic_annotations(experience, forged)
+
+
 def test_annotation_composition_is_immutable_and_preserves_experience_identity() -> None:
     contract = compile_operational_episode(_episode())
     trajectory = _trajectory(contract)
@@ -297,8 +424,12 @@ def test_annotation_composition_is_immutable_and_preserves_experience_identity()
 
     assert original.spans == ()
     assert original.structural_records == ()
+    assert original.derivation_references == ()
     assert enriched.experience_id == original.experience_id
     assert enriched.trajectory.trajectory_id == original.trajectory.trajectory_id
     assert len(enriched.spans) == len(bundle.spans)
     assert len(enriched.structural_records) == len(bundle.structural_records)
+    assert enriched.derivation_references[-1].reference_id == bundle.bundle_id
+    assert enriched.derivation_references[-1].visibility is VisibilityClass.EVALUATOR_PRIVATE
+    assert bundle.bundle_id not in repr(enriched.public_payload())
     assert contract.contract_id not in repr(enriched.public_payload())

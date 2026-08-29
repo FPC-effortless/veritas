@@ -6,7 +6,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.experience.models import ExperienceSpan, StructuralRecord
-from investigation_world.trajectory import VisibilityClass, canonical_hash
+from investigation_world.trajectory import (
+    StateDigestScope,
+    VisibilityClass,
+    canonical_hash,
+)
 
 SEMANTIC_ANNOTATION_SCHEMA: Literal["veritas.semantic-experience-annotation.v1"] = (
     "veritas.semantic-experience-annotation.v1"
@@ -57,7 +61,11 @@ class InvocationAnnotation(AnnotationModel):
 class StateTransitionAnnotation(AnnotationModel):
     status: SemanticDerivationStatus
     state_before_digest: str | None = None
+    state_before_algorithm: str | None = None
+    state_before_scope: StateDigestScope | None = None
     state_after_digest: str | None = None
+    state_after_algorithm: str | None = None
+    state_after_scope: StateDigestScope | None = None
     changed: bool | None = None
     reason: str | None = None
     visibility: VisibilityClass = VisibilityClass.PUBLIC
@@ -191,12 +199,59 @@ class SemanticAnnotationBundle(AnnotationModel):
         payload = _safe_payload(validated, maximum, root=True)
         if not isinstance(payload, dict):
             raise ValueError("semantic annotation bundle could not be projected")
-        # These identities commit to evaluator-private semantics. Safe projections
-        # expose only the independently content-bound public contract identity and
-        # visibility-filtered semantic facts, never a fingerprint of the private bundle.
+
+        private_ids = {
+            validated.bundle_id,
+            validated.contract_id,
+            validated.evaluator_semantics_id,
+            validated.trajectory_id,
+        }
         payload.pop("bundle_id", None)
         payload.pop("contract_id", None)
         payload.pop("evaluator_semantics_id", None)
+        # Canonical trajectory identity commits to the full private contract digest.
+        # A safe projection must not expose that private-semantic fingerprint.
+        payload.pop("trajectory_id", None)
+
+        projected_annotation_ids: dict[str, str] = {}
+        for annotation in payload.get("event_annotations", []):
+            if not isinstance(annotation, dict):
+                continue
+            original = annotation.pop("annotation_id", None)
+            projected = _projection_id("SEMSAFEANN", annotation)
+            annotation["annotation_id"] = projected
+            if isinstance(original, str):
+                projected_annotation_ids[original] = projected
+
+        for span in payload.get("spans", []):
+            if not isinstance(span, dict):
+                continue
+            original_span_id = span.pop("span_id", None)
+            references = span.get("reference_ids", [])
+            if isinstance(references, list):
+                span["reference_ids"] = [
+                    projected_annotation_ids.get(reference, reference)
+                    for reference in references
+                    if reference not in private_ids
+                ]
+            parent = span.get("parent_span_id")
+            if parent in private_ids or parent == original_span_id:
+                span["parent_span_id"] = None
+            span["span_id"] = _projection_id("SEMSAFESPAN", span)
+
+        for record in payload.get("structural_records", []):
+            if not isinstance(record, dict):
+                continue
+            record.pop("record_id", None)
+            subjects = record.get("subject_references", [])
+            if isinstance(subjects, list):
+                record["subject_references"] = [
+                    projected_annotation_ids.get(reference, reference)
+                    for reference in subjects
+                    if reference not in private_ids
+                ]
+            record["record_id"] = _projection_id("SEMSAFEREC", record)
+
         return payload
 
 
@@ -208,6 +263,10 @@ _VISIBILITY_RANK = {
     VisibilityClass.SEALED: 4,
 }
 _DROP = object()
+
+
+def _projection_id(prefix: str, payload: dict[str, Any]) -> str:
+    return f"{prefix}-{canonical_hash(payload)[:24].upper()}"
 
 
 def _safe_payload(value: Any, maximum: VisibilityClass, *, root: bool = False) -> Any:

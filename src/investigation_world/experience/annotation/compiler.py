@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from investigation_world.experience.models import (
+    ExperienceReference,
     ExperienceSpan,
     MachineExperience,
     StructuralRecord,
@@ -95,13 +96,24 @@ def _validate_binding(
         raise SemanticAnnotationError(
             "trajectory world identity does not match portable contract world identity"
         )
+
     reference = trajectory.world.portable_operational_contract
     if reference is None or reference.digest is None:
-        return
-    accepted = {contract.contract_id, contract.public.public_id}
-    if reference.digest not in accepted:
         raise SemanticAnnotationError(
-            "trajectory portable-contract digest does not match supplied contract"
+            "semantic annotation requires trajectory binding to the exact full "
+            "portable contract identity"
+        )
+    if (
+        reference.digest == contract.public.public_id
+        and reference.digest != contract.contract_id
+    ):
+        raise SemanticAnnotationError(
+            "public-only portable-contract binding cannot authorize evaluator-private "
+            "semantic derivation"
+        )
+    if reference.digest != contract.contract_id:
+        raise SemanticAnnotationError(
+            "trajectory portable-contract digest does not match supplied full contract"
         )
 
 
@@ -128,22 +140,26 @@ def _invocation_candidates(
     related_calls: tuple[ResourceCallSummary, ...],
     action_names: set[str],
     operation_names: set[str],
-) -> tuple[tuple[str, SemanticInvocationKind, str], ...]:
-    raw: list[tuple[str, Any]] = [
-        ("payload.action", event.payload.get("action")),
-        ("payload.method", event.payload.get("method")),
-        ("payload.name", event.payload.get("name")),
-        ("event_type", event.event_type),
+) -> tuple[tuple[str, SemanticInvocationKind, str, VisibilityClass], ...]:
+    raw: list[tuple[str, Any, VisibilityClass]] = [
+        ("payload.action", event.payload.get("action"), event.visibility),
+        ("payload.method", event.payload.get("method"), event.visibility),
+        ("payload.name", event.payload.get("name"), event.visibility),
+        ("event_type", event.event_type, event.visibility),
     ]
     request = _nested_request(event.payload)
     if request is not None:
-        raw.append(("payload.request.name", request.get("name")))
+        raw.append(
+            ("payload.request.name", request.get("name"), event.visibility)
+        )
     for index, call in enumerate(related_calls):
         source = f"resource_call[{index}].operation"
-        raw.append((source, call.operation))
+        raw.append((source, call.operation, call.visibility))
 
-    candidates: list[tuple[str, SemanticInvocationKind, str]] = []
-    for source, value in raw:
+    candidates: list[
+        tuple[str, SemanticInvocationKind, str, VisibilityClass]
+    ] = []
+    for source, value, visibility in raw:
         if not isinstance(value, str) or not value:
             continue
         in_action = value in action_names
@@ -153,9 +169,13 @@ def _invocation_candidates(
                 f"invocation {value!r} is both action and runtime operation"
             )
         if in_action:
-            candidates.append((value, SemanticInvocationKind.ACTION, source))
+            candidates.append(
+                (value, SemanticInvocationKind.ACTION, source, visibility)
+            )
         elif in_operation:
-            candidates.append((value, SemanticInvocationKind.OPERATION, source))
+            candidates.append(
+                (value, SemanticInvocationKind.OPERATION, source, visibility)
+            )
     return tuple(candidates)
 
 
@@ -171,7 +191,7 @@ def _derive_invocation(
         set(actions),
         set(operations),
     )
-    identities = {(name, kind) for name, kind, _source in candidates}
+    identities = {(name, kind) for name, kind, _source, _visibility in candidates}
     if len(identities) > 1:
         raise SemanticAnnotationError(
             f"event {event.step} has conflicting structured invocation identities"
@@ -184,7 +204,22 @@ def _derive_invocation(
         )
 
     name, kind = next(iter(identities))
-    sources = tuple(sorted({source for _name, _kind, source in candidates}))
+    sources = tuple(
+        sorted(
+            {
+                source
+                for candidate_name, candidate_kind, source, _visibility in candidates
+                if (candidate_name, candidate_kind) == (name, kind)
+            }
+        )
+    )
+    source_visibilities = [
+        visibility
+        for candidate_name, candidate_kind, _source, visibility in candidates
+        if (candidate_name, candidate_kind) == (name, kind)
+    ]
+    visibility = _max_visibility(event.visibility, *source_visibilities)
+
     if kind is SemanticInvocationKind.ACTION:
         action_definition = actions[name]
         return InvocationAnnotation(
@@ -195,7 +230,7 @@ def _derive_invocation(
             action_kind=action_definition.kind,
             interaction_mode=action_definition.interaction_mode.value,
             source_fields=sources,
-            visibility=event.visibility,
+            visibility=visibility,
         )
 
     operation_definition = operations[name]
@@ -205,7 +240,7 @@ def _derive_invocation(
         name=name,
         interaction_mode=operation_definition.interaction_mode.value,
         source_fields=sources,
-        visibility=event.visibility,
+        visibility=visibility,
     )
 
 
@@ -233,21 +268,49 @@ def _structured_arguments(event: TrajectoryEvent) -> dict[str, Any] | None:
 
 
 def _state_transition(event: TrajectoryEvent) -> StateTransitionAnnotation:
-    before = event.state_before.digest if event.state_before is not None else None
-    after = event.state_after.digest if event.state_after is not None else None
+    before = event.state_before
+    after = event.state_after
+    before_digest = before.digest if before is not None else None
+    before_algorithm = before.algorithm if before is not None else None
+    before_scope = before.scope if before is not None else None
+    after_digest = after.digest if after is not None else None
+    after_algorithm = after.algorithm if after is not None else None
+    after_scope = after.scope if after is not None else None
+
     if before is None or after is None:
         return StateTransitionAnnotation(
             status=SemanticDerivationStatus.UNKNOWN,
-            state_before_digest=before,
-            state_after_digest=after,
+            state_before_digest=before_digest,
+            state_before_algorithm=before_algorithm,
+            state_before_scope=before_scope,
+            state_after_digest=after_digest,
+            state_after_algorithm=after_algorithm,
+            state_after_scope=after_scope,
             reason="trajectory does not preserve both state digests",
+            visibility=event.visibility,
+        )
+    if before.algorithm != after.algorithm or before.scope != after.scope:
+        return StateTransitionAnnotation(
+            status=SemanticDerivationStatus.UNKNOWN,
+            state_before_digest=before_digest,
+            state_before_algorithm=before_algorithm,
+            state_before_scope=before_scope,
+            state_after_digest=after_digest,
+            state_after_algorithm=after_algorithm,
+            state_after_scope=after_scope,
+            changed=None,
+            reason="state digests use incomparable algorithm/scope domains",
             visibility=event.visibility,
         )
     return StateTransitionAnnotation(
         status=SemanticDerivationStatus.DERIVED,
-        state_before_digest=before,
-        state_after_digest=after,
-        changed=before != after,
+        state_before_digest=before_digest,
+        state_before_algorithm=before_algorithm,
+        state_before_scope=before_scope,
+        state_after_digest=after_digest,
+        state_after_algorithm=after_algorithm,
+        state_after_scope=after_scope,
+        changed=before.digest != after.digest,
         visibility=event.visibility,
     )
 
@@ -307,10 +370,7 @@ def _transition_candidates(
         if required and arguments is None:
             continue
         if required and arguments is not None:
-            mismatch = any(
-                arguments.get(key) != value
-                for key, value in required.items()
-            )
+            mismatch = any(arguments.get(key) != value for key, value in required.items())
             if mismatch:
                 continue
         output.append(transition)
@@ -348,10 +408,9 @@ def _invariant_effect(
             invariant.invariant_id
             for invariant in contract.private.semantic_state.invariants
             if (
-                f"{invariant.assertion.object_id}."
-                f"{invariant.assertion.field_name}"
+                f"{invariant.assertion.object_id}.{invariant.assertion.field_name}"
+                in changed_keys
             )
-            in changed_keys
         )
     )
     return InvariantEffectAnnotation(
@@ -415,10 +474,12 @@ def _evidence_flow(
             visibilities.append(reference.visibility)
 
     for call in related_calls:
+        call_contributed = False
         for reference in call.evidence_references:
             if reference.reference_id in known:
                 referenced.add(reference.reference_id)
                 visibilities.append(reference.visibility)
+                call_contributed = True
         resource_id = call.resource_id or ""
         for prefix in ("record_id:", "target:"):
             if not resource_id.startswith(prefix):
@@ -427,6 +488,9 @@ def _evidence_flow(
             read_operations = {"open_record", "open_document"}
             if candidate in known and call.operation in read_operations:
                 consumed.add(candidate)
+                call_contributed = True
+        if call_contributed:
+            visibilities.append(call.visibility)
 
     visibility = _max_visibility(*visibilities)
     if created or consumed:
@@ -522,6 +586,7 @@ def _budget_impact(
     actions: dict[str, PortableActionDefinition],
     operations: dict[str, PortableRuntimeOperation],
 ) -> BudgetImpactAnnotation:
+    visibility = _max_visibility(event.visibility, invocation.visibility)
     if (
         invocation.status is not SemanticDerivationStatus.DERIVED
         or invocation.name is None
@@ -531,7 +596,7 @@ def _budget_impact(
             observed_event_cost=event.cost,
             remaining_budget_known=False,
             reason="declared charges require a derived invocation identity",
-            visibility=event.visibility,
+            visibility=visibility,
         )
 
     if invocation.kind is SemanticInvocationKind.ACTION:
@@ -544,7 +609,7 @@ def _budget_impact(
         observed_event_cost=event.cost,
         remaining_budget_known=False,
         reason="remaining evaluator-private budget is not inferred",
-        visibility=event.visibility,
+        visibility=visibility,
     )
 
 
@@ -672,7 +737,7 @@ def _experience_outputs(
                     end_step=annotation.step,
                     capability_tags=trajectory.capability_tags,
                     reference_ids=(annotation.annotation_id,),
-                    visibility=annotation.visibility,
+                    visibility=invocation.visibility,
                 )
             )
 
@@ -733,7 +798,19 @@ def _experience_outputs(
                 "kind": "state_digest_relation",
                 "annotation_id": annotation.annotation_id,
                 "before": state.state_before_digest,
+                "before_algorithm": state.state_before_algorithm,
+                "before_scope": (
+                    state.state_before_scope.value
+                    if state.state_before_scope is not None
+                    else None
+                ),
                 "after": state.state_after_digest,
+                "after_algorithm": state.state_after_algorithm,
+                "after_scope": (
+                    state.state_after_scope.value
+                    if state.state_after_scope is not None
+                    else None
+                ),
                 "changed": state.changed,
             }
             records.append(
@@ -745,7 +822,19 @@ def _experience_outputs(
                     attributes={
                         "relation": "state_digest_transition",
                         "state_before_digest": state.state_before_digest,
+                        "state_before_algorithm": state.state_before_algorithm,
+                        "state_before_scope": (
+                            state.state_before_scope.value
+                            if state.state_before_scope is not None
+                            else None
+                        ),
                         "state_after_digest": state.state_after_digest,
+                        "state_after_algorithm": state.state_after_algorithm,
+                        "state_after_scope": (
+                            state.state_after_scope.value
+                            if state.state_after_scope is not None
+                            else None
+                        ),
                         "changed": state.changed,
                     },
                     visibility=state.visibility,
@@ -898,6 +987,50 @@ def compile_semantic_annotations(
     )
 
 
+def _validate_composition_binding(
+    experience: MachineExperience,
+    bundle: SemanticAnnotationBundle,
+) -> None:
+    trajectory = experience.trajectory
+    if bundle.trajectory_id != trajectory.trajectory_id:
+        raise SemanticAnnotationError(
+            "semantic annotation bundle references a different trajectory"
+        )
+
+    reference = trajectory.world.portable_operational_contract
+    if reference is None or reference.digest is None:
+        raise SemanticAnnotationError(
+            "semantic annotation composition requires the trajectory's exact full "
+            "portable contract binding"
+        )
+    if bundle.contract_id != reference.digest:
+        raise SemanticAnnotationError(
+            "semantic annotation bundle contract identity does not match trajectory"
+        )
+    if (
+        bundle.trajectory_verifier_id != trajectory.verifier.verifier_id
+        or bundle.trajectory_verifier_version != trajectory.verifier.version
+    ):
+        raise SemanticAnnotationError(
+            "semantic annotation bundle verifier identity/version does not match trajectory"
+        )
+
+    if len(bundle.event_annotations) != len(trajectory.events):
+        raise SemanticAnnotationError(
+            "semantic annotation bundle event coverage does not match trajectory"
+        )
+    for annotation in bundle.event_annotations:
+        if annotation.event_index >= len(trajectory.events):
+            raise SemanticAnnotationError(
+                "semantic annotation references an unknown trajectory event index"
+            )
+        event = trajectory.events[annotation.event_index]
+        if annotation.step != event.step or annotation.event_type != event.event_type:
+            raise SemanticAnnotationError(
+                "semantic annotation event binding does not match trajectory event"
+            )
+
+
 def apply_semantic_annotations(
     experience: MachineExperience,
     bundle: SemanticAnnotationBundle,
@@ -916,10 +1049,7 @@ def apply_semantic_annotations(
             f"invalid annotation composition input: {exc}"
         ) from exc
 
-    if validated_bundle.trajectory_id != validated_experience.trajectory.trajectory_id:
-        raise SemanticAnnotationError(
-            "semantic annotation bundle references a different trajectory"
-        )
+    _validate_composition_binding(validated_experience, validated_bundle)
 
     existing_spans = {item.span_id for item in validated_experience.spans}
     new_spans = {item.span_id for item in validated_bundle.spans}
@@ -941,6 +1071,22 @@ def apply_semantic_annotations(
             "semantic annotation structural record already exists on experience"
         )
 
+    if any(
+        item.reference_id == validated_bundle.bundle_id
+        for item in validated_experience.derivation_references
+    ):
+        raise SemanticAnnotationError(
+            "semantic annotation bundle is already recorded as an experience derivation"
+        )
+
+    derivation = ExperienceReference(
+        reference_id=validated_bundle.bundle_id,
+        reference_type="semantic_annotation_bundle",
+        digest=validated_bundle.bundle_id,
+        visibility=VisibilityClass.EVALUATOR_PRIVATE,
+        public_metadata={"schema_version": validated_bundle.schema_version},
+    )
+
     payload = validated_experience.model_dump(mode="python")
     payload["spans"] = (
         *validated_experience.spans,
@@ -949,5 +1095,9 @@ def apply_semantic_annotations(
     payload["structural_records"] = (
         *validated_experience.structural_records,
         *validated_bundle.structural_records,
+    )
+    payload["derivation_references"] = (
+        *validated_experience.derivation_references,
+        derivation,
     )
     return MachineExperience.model_validate(payload)
