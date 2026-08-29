@@ -24,6 +24,7 @@ jobs:
        startsWith(github.event.comment.body, '/handoff ') ||
        startsWith(github.event.comment.body, '/done ') ||
        startsWith(github.event.comment.body, '/recover ') ||
+       startsWith(github.event.comment.body, '/recover-metadata ') ||
        github.event.comment.body == '/roadmap-bootstrap')
     runs-on: ubuntu-latest
     timeout-minutes: 10
