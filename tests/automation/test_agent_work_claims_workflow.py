@@ -101,6 +101,41 @@ def test_zero_path_claim_exemption_is_explicit_and_narrow() -> None:
     assert "coordination docs/tests only" not in script
 
 
+def test_ownership_path_wildcards_are_terminal_subtrees_only() -> None:
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(__SCRIPT__, 'utf8') + '\nmodule.exports.__pathToken = repositoryPathToken;';
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const pathToken = moduleObject.exports.__pathToken;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+for (const invalid of ['src/*/private/**', 'src/**/private/**', '*.md/**']) {
+  assert(pathToken(invalid) === null, `unsupported wildcard accepted: ${invalid}`);
+}
+for (const valid of ['Dockerfile', '.github/workflows/file.yml', 'src/private/file.py', 'src/private/**']) {
+  assert(pathToken(valid) === valid, `valid ownership rejected: ${valid}`);
+}
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
 def test_active_ownership_is_frozen_in_trusted_status() -> None:
     script = _script()
     claim_block = script.split("if (command.kind === 'claim') {", 1)[1].split(
@@ -551,6 +586,56 @@ async function runMalformedOwnershipToken() {
   );
 }
 
+async function runUnsupportedWildcardOwnership() {
+  for (const [index, ownership] of ['`src/*/private/**`', '`src/**/private/**`', '`*.md/**`'].entries()) {
+    const issueNumber = index + 1;
+    const issues = {
+      [issueNumber]: {
+        number: issueNumber,
+        body: contract(`WILDCARD-${index}`, `feat/wildcard-${index}`, ownership),
+        labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
+      },
+    };
+    const claim = commandComment(2100 + index, `/claim wildcard-${index} feat/wildcard-${index}`);
+    const comments = {
+      [issueNumber]: [statusComment(1100 + index, readyStatus(issueNumber, `WILDCARD-${index}`)), claim],
+      150: [registryComment([])],
+    };
+    const world = makeWorld({ issues, comments });
+    await coordinate({ github: world.github, context: context(issueNumber, claim.body) });
+    assert(parseStatus(comments[issueNumber][0]).state === 'READY', `${ownership} published CLAIMED`);
+    assert(parseStatus(comments[150][0]).entries.length === 0, `${ownership} created a reservation`);
+    assert(
+      world.audits.some((entry) => entry.body.includes('no machine-checkable positive-ownership path')),
+      `${ownership} did not fail closed`
+    );
+  }
+}
+
+async function runTerminalSubtreeOpenPrCollision() {
+  const issues = {
+    1: {
+      number: 1,
+      body: contract('TREE', 'feat/tree', '`src/private/**`'),
+      labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
+    },
+  };
+  const claim = commandComment(2201, '/claim agent-tree feat/tree');
+  const comments = {
+    1: [statusComment(1201, readyStatus(1, 'TREE')), claim],
+    150: [registryComment([])],
+  };
+  const world = makeWorld({ issues, comments });
+  world.github.rest.pulls.list = async () => [{ number: 77, head: { ref: 'feat/other' } }];
+  world.github.rest.pulls.listFiles = async () => [{ filename: 'src/private/file.py' }];
+  await coordinate({ github: world.github, context: context(1, claim.body) });
+  assert(parseStatus(comments[1][0]).state === 'READY', 'open-PR subtree collision was accepted');
+  assert(
+    world.audits.some((entry) => entry.body.includes('open PR #77 reserves src/private/file.py')),
+    'terminal subtree did not collide with open PR descendant'
+  );
+}
+
 async function runCoordinationRepositoryEditingProse() {
   const issues = {
     1: {
@@ -643,6 +728,8 @@ async function runRootFileCollision() {
   await runClaimLocalFailureThenOverlap();
   await runBootstrapFailureOrdering();
   await runMalformedOwnershipToken();
+  await runUnsupportedWildcardOwnership();
+  await runTerminalSubtreeOpenPrCollision();
   await runCoordinationRepositoryEditingProse();
   await runExplicitIssueOnlyOwnership();
   await runRootFileCollision();
