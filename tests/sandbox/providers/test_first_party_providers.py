@@ -370,9 +370,15 @@ def test_process_resource_limits_fail_closed(
     resources: SandboxResourcePolicy,
     expected_code: SandboxFailureCode,
 ) -> None:
+    calls = 0
+
     def runner(
-        _argv: tuple[str, ...], _stdin: bytes, _timeout_ms: int, _max_output_bytes: int
+        argv: tuple[str, ...], _stdin: bytes, _timeout_ms: int, _max_output_bytes: int
     ) -> SandboxProcessResult:
+        nonlocal calls
+        calls += 1
+        if provider_kind == "docker" and argv[1:3] == ("rm", "-f"):
+            return SandboxProcessResult(exit_code=0)
         return process_result
 
     if provider_kind == "local":
