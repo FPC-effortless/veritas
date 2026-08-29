@@ -102,6 +102,8 @@ When a corrected PR head is pushed after independent review, the authenticated h
 
 `/done` requires the authenticated REVIEW holder, the exact linked PR, a merged PR, and the same PR head SHA that was most recently handed off. If the PR head moves after handoff, `/done` rejects and the final head must be handed off/reviewed again.
 
+A narrow migration exception exists for trusted `REVIEW` records created before the `ownership_paths` field existed. Such a record may execute `/done` without reopening the issue or broadening bootstrap, but it still must satisfy the normal authenticated-holder, exact linked PR, merged PR, and exact handed-off-head checks. All other commands on an active legacy record without `ownership_paths` remain fail-closed. Successful legacy completion materializes an inert empty ownership snapshot before the status becomes `DONE`; registry cleanup remains conservative, so a cleanup failure can leave a stale reservation but cannot free still-active work.
+
 This is still implementation-level completion only. Work-class-specific scientific, experiment, external/manual, convergence, and release completion rules remain stricter and must not be inferred from a merged PR.
 
 ## Bootstrap and reconciliation
