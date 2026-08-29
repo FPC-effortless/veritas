@@ -66,17 +66,24 @@ Before accepting `/claim`, the workflow:
 4. rejects reuse of a branch already held by another active reservation;
 5. rejects ancestor/descendant or exact path overlap with active `CLAIMED`, `REVIEW`, or owner-held `BLOCKED` roadmap reservations;
 6. scans changed files of open PRs and rejects overlap, excluding only an existing PR on the candidate branch itself;
-7. freezes the accepted ownership paths into trusted status before later registry updates.
+7. freezes the accepted ownership paths into trusted status;
+8. commits the active global reservation before publishing the trusted local `CLAIMED` state or its discovery label.
+
+Backticked ownership tokens may be root-level repository files such as `Dockerfile`, `Makefile`, `LICENSE`, or `CODEOWNERS`, as well as dotfiles, nested paths, and `/**` subtree globs. The parser rejects whitespace-bearing prose, absolute paths, empty path segments, traversal segments (`.` or `..`), and unsupported wildcard forms. The `Positive ownership` field is read without stripping the code-span delimiters from a single-path declaration, so a contract that owns only `Dockerfile` is still machine-checkable.
 
 Coordination-only or metadata-only tickets may explicitly have no source path. Ordinary code tickets without machine-checkable ownership fail closed.
 
 The current active roadmap reservations are mirrored in one trusted bot-authored `veritas-agent-work-reservations:v1` record on #150. Active entries are rebuilt from trusted frozen ownership snapshots, not mutable Work Contract text. Open-PR changed files remain a live claim-time reservation source rather than relying on a potentially stale registry snapshot.
+
+Claim publication is fail-closed across partial API failure. If the reservation write fails, trusted/local `CLAIMED` state is not published. If the reservation succeeds but the later trusted-status or label write fails, the reservation is intentionally left stale so an overlapping second claim remains blocked until reconciliation. This ordering prevents a locally visible active owner from existing without a corresponding global exclusion record.
 
 This locking serializes only short coordination transitions. Coding work on disjoint reservations remains parallel.
 
 ## Release and blocking
 
 A successful claim stores its release target in trusted status as `return_state`. `/release` uses that frozen trusted value rather than reparsing mutable issue-body `State` at release time, and clears the released ownership snapshot from active status.
+
+Active-to-inactive transitions may publish the local release/completion state before registry cleanup. If cleanup fails, the old reservation remains stale and conservative; partial failure can make work temporarily non-claimable but cannot make still-owned work look free.
 
 `/blocked` preserves the current authenticated holder, branch, and frozen ownership reservation while making the lane non-claimable. Staleness alone never frees a lane; explicit `/release` or owner `/recover` is required.
 
@@ -104,10 +111,13 @@ OWNER-only bootstrap:
 1. creates missing coordination labels;
 2. scans all enrolled open issues;
 3. preserves existing trusted status records;
-4. materializes missing trusted status from Work Contract migration data, never from mutable state labels;
-5. adds a frozen ownership snapshot to legacy trusted statuses that predate that field;
-6. reconciles discovery labels from trusted state;
-7. refreshes the global active reservation record on #150 from frozen ownership snapshots.
+4. computes missing trusted status from Work Contract migration data, never from mutable state labels;
+5. computes frozen ownership snapshots for legacy trusted statuses that predate that field;
+6. builds the complete active reservation set from the computed trusted states and publishes that registry on #150 before any new/migrated active trusted state is materialized locally;
+7. materializes or migrates the trusted status records;
+8. reconciles discovery labels from trusted state.
+
+If bootstrap cannot publish the reservation registry, it does not materialize new active trusted state. If registry publication succeeds and a later status or label write fails, the already-published reservation remains fail-closed and continues blocking overlapping claims. A later OWNER-only bootstrap can reconcile the stale reservation and local status.
 
 Once bootstrap is complete, labels and Work Contract state/ownership are not execution authority for an already-active reservation.
 

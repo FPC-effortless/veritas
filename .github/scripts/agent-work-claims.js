@@ -20,26 +20,38 @@ const now = () => new Date().toISOString();
 const labelForState = (state) => `work:${state.toLowerCase()}`;
 const labelNames = (issue) => new Set((issue.labels || []).map((item) => typeof item === 'string' ? item : item.name));
 
-function contractValue(text, field) {
+function contractValue(text, field, unwrapSingleCodeSpan = true) {
   const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = text.match(new RegExp(`^- \\*\\*${escaped}:\\*\\*\\s*(.+)$`, 'mi'));
-  return match ? match[1].trim().replace(/^`|`$/g, '') : null;
+  if (!match) return null;
+  const value = match[1].trim();
+  if (unwrapSingleCodeSpan && /^`[^`]+`$/.test(value)) return value.slice(1, -1);
+  return value;
+}
+
+function repositoryPathToken(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.startsWith('#') || /\s/.test(raw)) return null;
+  const normalized = raw.replace(/^\.\//, '');
+  if (!normalized || normalized.startsWith('/') || normalized.endsWith('/') || normalized.includes('//')) return null;
+  if (!/^[A-Za-z0-9._/*+\-]+$/.test(normalized)) return null;
+  if (normalized.includes('*') && !normalized.endsWith('/**')) return null;
+  if (normalized.split('/').some((segment) => segment === '.' || segment === '..')) return null;
+  return normalized;
 }
 
 function parsePaths(text) {
   const paths = [];
   for (const match of String(text || '').matchAll(/`([^`]+)`/g)) {
-    const raw = match[1].trim();
-    if (!raw || raw.startsWith('#') || raw.includes(' ')) continue;
-    if (!(raw.includes('/') || raw.startsWith('.'))) continue;
-    paths.push(raw.replace(/^\.\//, ''));
+    const path = repositoryPathToken(match[1]);
+    if (path) paths.push(path);
   }
   return [...new Set(paths)].sort();
 }
 
 function parseContract(text, number) {
   const state = (contractValue(text, 'State') || 'BLOCKED').toUpperCase();
-  const positiveOwnership = contractValue(text, 'Positive ownership') || '';
+  const positiveOwnership = contractValue(text, 'Positive ownership', false) || '';
   return {
     enrolled: text.includes(ENROLLMENT_MARKER),
     workId: contractValue(text, 'Work ID') || `ISSUE-${number}`,
@@ -91,6 +103,10 @@ function frozenOwnershipPaths(status) {
     throw new Error('trusted ownership snapshot is malformed');
   }
   return [...new Set(status.ownership_paths)].sort();
+}
+
+function hasActiveReservation(status) {
+  return Boolean(status && ACTIVE_STATES.has(status.state) && status.agent_id);
 }
 
 function renderStatus(status) {
@@ -231,7 +247,7 @@ module.exports = async function coordinate({ github, context }) {
     const current = await trustedRegistry();
     if (!current) throw new Error('global reservation registry is missing; run /roadmap-bootstrap on #150');
     const entries = current.registry.entries.filter((entry) => entry.issue !== issue.number);
-    if (ACTIVE_STATES.has(status.state) && status.agent_id) {
+    if (hasActiveReservation(status)) {
       entries.push({ issue: issue.number, work_id: contract.workId, state: status.state, actor: status.github_actor, agent: status.agent_id, branch: status.branch, linked_pr: status.linked_pr, paths: frozenOwnershipPaths(status) });
     }
     await writeRegistry(entries);
@@ -278,29 +294,44 @@ module.exports = async function coordinate({ github, context }) {
     await ensureLabels();
     const counts = {};
     const entries = [];
+    const plans = [];
     let initialized = 0;
     for (const issue of await listEnrolledIssues()) {
       const contract = parseContract(issue.body || '', issue.number);
-      let current = await trustedStatus(issue);
+      const current = await trustedStatus(issue);
+      let status;
+      let writeRequired = false;
       if (!current) {
-        current = await writeStatus(issue, null, bootstrapStatus(issue, contract));
+        status = bootstrapStatus(issue, contract);
+        writeRequired = true;
       } else if (!current.status.return_state || !Array.isArray(current.status.ownership_paths)) {
-        const migrated = {
+        status = {
           ...current.status,
           return_state: current.status.return_state || (contract.initialState === 'BLOCKED' ? 'BLOCKED' : 'READY'),
           ownership_paths: Array.isArray(current.status.ownership_paths) ? current.status.ownership_paths : contract.paths.slice(),
           updated_at: now(),
         };
-        current = await writeStatus(issue, current, migrated);
+        writeRequired = true;
+      } else {
+        status = current.status;
       }
-      await setStateLabels(issue.number, current.status.state);
-      counts[current.status.state] = (counts[current.status.state] || 0) + 1;
-      if (ACTIVE_STATES.has(current.status.state) && current.status.agent_id) {
-        entries.push({ issue: issue.number, work_id: contract.workId, state: current.status.state, actor: current.status.github_actor, agent: current.status.agent_id, branch: current.status.branch, linked_pr: current.status.linked_pr, paths: frozenOwnershipPaths(current.status) });
+      counts[status.state] = (counts[status.state] || 0) + 1;
+      if (hasActiveReservation(status)) {
+        entries.push({ issue: issue.number, work_id: contract.workId, state: status.state, actor: status.github_actor, agent: status.agent_id, branch: status.branch, linked_pr: status.linked_pr, paths: frozenOwnershipPaths(status) });
       }
+      plans.push({ issue, current, status, writeRequired });
       initialized += 1;
     }
+
+    // Publish all active reservations before materializing/migrating trusted local active state.
+    // If a later local write fails, the stale reservation remains fail-closed and blocks overlap.
     await writeRegistry(entries);
+    for (const plan of plans) {
+      if (plan.writeRequired) {
+        await writeStatus(plan.issue, plan.current, plan.status);
+      }
+      await setStateLabels(plan.issue.number, plan.status.state);
+    }
     await audit(issueNumber, `Roadmap bootstrap complete: trusted status materialized/reconciled for ${initialized} agent-work issues. State counts: ${Object.entries(counts).sort().map(([key, value]) => `${key}=${value}`).join(', ')}. Labels are discovery metadata only after bootstrap.`);
   }
 
@@ -333,7 +364,8 @@ module.exports = async function coordinate({ github, context }) {
     const actor = comment.user?.login || 'unknown';
     const association = comment.author_association || '';
     const command = parseCommand(comment.body || '');
-    const status = { ...current.status };
+    const previousStatus = current.status;
+    const status = { ...previousStatus };
     const timestamp = now();
 
     async function persistProcessed() {
@@ -405,9 +437,20 @@ module.exports = async function coordinate({ github, context }) {
     status.transition_seq = Number(status.transition_seq || 0) + 1;
     status.last_command_comment_id = comment.id;
     status.updated_at = timestamp;
+
+    const reservationMustPrecedeLocal = !hasActiveReservation(previousStatus) && hasActiveReservation(status);
+    if (reservationMustPrecedeLocal) {
+      // Claim publication is two-phase: reserve globally, then publish trusted local state.
+      // A local publication failure leaves a stale global reservation, which is fail-closed.
+      await updateRegistryEntry(issue, contract, status);
+    }
     current = await writeStatus(issue, current, status);
     await setStateLabels(issue.number, status.state);
-    await updateRegistryEntry(issue, contract, status);
+    if (!reservationMustPrecedeLocal) {
+      // Releases/removals publish locally first. If registry cleanup then fails, the stale
+      // reservation remains conservative rather than making active ownership look free.
+      await updateRegistryEntry(issue, contract, status);
+    }
     const holder = status.agent_id ? ` owner=${status.agent_id} (@${status.github_actor})` : '';
     const prText = status.linked_pr ? ` PR=#${status.linked_pr}` : '';
     await audit(issueNumber, `Agent-work transition accepted in comment order: **${contract.workId}** → **${status.state}**.${holder}${prText} Transition #${status.transition_seq}. Coordination state only; no merge, release, sealed, paid-compute, or qualification authority is granted.`);
