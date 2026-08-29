@@ -8,6 +8,7 @@ container filesystem changes never directly change operational ground truth or v
 
 Images must be pinned as `name@sha256:<digest>`. Mutable tags are rejected. Every execution uses:
 
+- `--pull never`, so image acquisition is never an implicit side effect of sandbox execution;
 - `--rm` and a unique container name;
 - a read-only root filesystem;
 - all Linux capabilities dropped;
@@ -19,8 +20,10 @@ Images must be pinned as `name@sha256:<digest>`. Mutable tags are rejected. Ever
 - separate writable bind mounts only for declared `writable_paths`.
 
 The default `DockerNetworkPolicy.NONE` passes `--network none`. `BRIDGE` is an explicit
-operator-controlled opt-in. There is no automatic fallback to Local execution when Docker, its
-daemon, or the configured image is unavailable.
+operator-controlled opt-in for the container workload. Neither policy authorizes the Docker daemon
+to acquire an absent image: a missing pinned image fails closed and must be installed by an explicit
+operator action outside sandbox execution. There is no automatic fallback to Local execution when
+Docker, its daemon, or the configured image is unavailable.
 
 ## Example
 
@@ -55,8 +58,10 @@ configuration, Docker daemon identity, seed, reset generation, execution index, 
 digest. Container names and host temporary paths are ephemeral and are never returned.
 
 Docker-reserved launch exit codes are reported as infrastructure failures, not workload/model
-failures. Timeouts trigger a best-effort forced removal of the named container. Missing Docker or a
-failed daemon probe raises `DockerUnavailableError` before a session exists.
+failures. Timeout and output-limit interruption both trigger a best-effort forced removal of the
+named container before the workspace result is processed, so an interrupted Docker client cannot
+intentionally leave its workload holding the bind-mounted workspace. Missing Docker or a failed
+daemon probe raises `DockerUnavailableError` before a session exists.
 
 The shared workspace layer rejects and rolls back read-only input changes, symlinks, non-regular
 files, undeclared output paths, and resource-policy violations. It revalidates copied Pydantic
@@ -68,8 +73,9 @@ workspace, and are redacted from surfaced output and artifacts.
 
 ## Limits
 
-Docker image presence/pull policy remains an operator concern; the provider does not silently pull
-or substitute a tag. The neutral v1 resource policy does not express portable CPU, memory, or disk
-limits, so this provider enforces only the shared timeout/output/artifact/execution limits plus its
-fixed hardening defaults. Portable CPU/memory fields require a separately reviewed shared-contract
-extension rather than Docker-specific values leaking into environment semantics.
+Image acquisition remains an operator concern rather than an execution side effect. Sandbox runs use
+`--pull never`; they neither silently pull an absent digest-pinned image nor substitute a tag. The
+neutral v1 resource policy does not express portable CPU, memory, or disk limits, so this provider
+enforces only the shared timeout/output/artifact/execution limits plus its fixed hardening defaults.
+Portable CPU/memory fields require a separately reviewed shared-contract extension rather than
+Docker-specific values leaking into environment semantics.
