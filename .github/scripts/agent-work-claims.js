@@ -362,7 +362,9 @@ module.exports = async function coordinate({ github, context }) {
     await audit(issueNumber, 'Rejected agent-work command: trusted status is missing. Run `/roadmap-bootstrap` on #150; labels and mutable Work Contract state are not execution authority.');
     return;
   }
-  if (ACTIVE_STATES.has(current.status.state) && current.status.agent_id && !Array.isArray(current.status.ownership_paths)) {
+  const legacyActiveWithoutOwnership = ACTIVE_STATES.has(current.status.state) && current.status.agent_id && !Array.isArray(current.status.ownership_paths);
+  const legacyDoneTrigger = triggerCommand?.kind === 'done' && current.status.state === 'REVIEW';
+  if (legacyActiveWithoutOwnership && !legacyDoneTrigger) {
     await audit(issueNumber, 'Rejected agent-work command: trusted active status predates frozen ownership snapshots. Run `/roadmap-bootstrap` on #150 before further transitions.');
     return;
   }
@@ -394,6 +396,10 @@ module.exports = async function coordinate({ github, context }) {
 
     if (!command) { await reject('malformed command. Commands must be one exact single line.'); continue; }
     if (!ALLOWED_ASSOCIATIONS.has(association)) { await reject(`unauthorized actor association ${association || 'NONE'}.`); continue; }
+    if (ACTIVE_STATES.has(status.state) && status.agent_id && !Array.isArray(status.ownership_paths) && command.kind !== 'done') {
+      await reject('trusted active status predates frozen ownership snapshots; only exact merged REVIEW completion may proceed without migration');
+      continue;
+    }
 
     try {
       if (command.kind === 'claim') {
@@ -428,6 +434,7 @@ module.exports = async function coordinate({ github, context }) {
         const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
         if (!pr.merged_at) throw new Error(`PR #${command.pr} is not merged; implementation work remains in REVIEW`);
         if (status.linked_pr_head && status.linked_pr_head !== pr.head.sha) throw new Error(`PR #${command.pr} head moved after handoff; re-handoff/review exact final head before DONE`);
+        if (!Array.isArray(status.ownership_paths)) status.ownership_paths = [];
         status.state = 'DONE'; status.linked_pr_head = pr.head.sha; status.heartbeat_at = timestamp;
       } else if (command.kind === 'recover') {
         if (association !== 'OWNER') throw new Error('stale/bootstrap recovery requires repository OWNER authority');
