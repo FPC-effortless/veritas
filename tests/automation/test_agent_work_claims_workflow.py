@@ -493,7 +493,10 @@ async function runBootstrapFailureOrdering() {
   try {
     await coordinate({ github: world.github, context: context(150, bootstrap.body) });
   } catch (error) {
-    assert(error.message.includes('injected status create failure 1'), 'wrong bootstrap local failure');
+    assert(
+      error.message.includes('injected status create failure 1'),
+      'wrong bootstrap local failure'
+    );
   }
   const registryAfterFailure = parseStatus(comments[150][0]);
   assert(registryAfterFailure.entries.length === 1, 'bootstrap reservation was not retained');
@@ -505,7 +508,10 @@ async function runBootstrapFailureOrdering() {
 
   world.state.failCreatedStatusIssue = null;
   await coordinate({ github: world.github, context: context(2, claimB.body) });
-  assert(parseStatus(comments[2][0]).state === 'READY', 'overlap escaped bootstrap stale reservation');
+  assert(
+    parseStatus(comments[2][0]).state === 'READY',
+    'overlap escaped bootstrap stale reservation'
+  );
   assert(
     world.audits.some((entry) => entry.body.includes('ownership conflict with A/#1')),
     'bootstrap stale reservation did not reject overlap'
@@ -529,7 +535,9 @@ async function runMalformedOwnershipToken() {
   await coordinate({ github: world.github, context: context(1, claim.body) });
   assert(parseStatus(comments[1][0]).state === 'READY', 'non-path metadata token was accepted');
   assert(
-    world.audits.some((entry) => entry.body.includes('no machine-checkable positive-ownership path')),
+    world.audits.some(
+      (entry) => entry.body.includes('no machine-checkable positive-ownership path')
+    ),
     'non-path metadata token did not fail closed'
   );
 }
