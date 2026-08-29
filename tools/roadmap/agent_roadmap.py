@@ -425,7 +425,8 @@ def resolve_source_commit(explicit: str | None) -> str:
     source_commit = explicit or os.environ.get("GITHUB_SHA")
     if not isinstance(source_commit, str) or COMMIT_RE.fullmatch(source_commit) is None:
         raise RoadmapError(
-            "source commit is required as --source-commit or GITHUB_SHA and must be a 40-character lowercase Git SHA"
+            "source commit is required as --source-commit or GITHUB_SHA and must be "
+            "a 40-character lowercase Git SHA"
         )
     return source_commit
 
