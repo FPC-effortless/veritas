@@ -145,6 +145,8 @@ class DockerSandboxProvider:
         argv: list[str] = [
             self._docker_path,
             "run",
+            "--pull",
+            "never",
             "--rm",
             "--name",
             container_name,
@@ -198,7 +200,7 @@ class DockerSandboxProvider:
             create_request.resources.timeout_ms,
             create_request.resources.max_output_bytes,
         )
-        if result.timed_out:
+        if result.timed_out or result.output_limited:
             try:
                 self._process_runner(
                     (self._docker_path, "rm", "-f", container_name),
