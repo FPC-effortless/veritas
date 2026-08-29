@@ -810,7 +810,9 @@ def test_metadata_only_bootstrap_recovery_is_owner_only_and_zero_source() -> Non
     source = r"""
 const fs = require('fs');
 const vm = require('vm');
-const exportHelpers = '\nmodule.exports.__metadataRecovery = { parseCommand, canRecoverMetadataOnly, branchIsConcrete };';
+const exportHelpers =
+  '\nmodule.exports.__metadataRecovery = {' +
+  ' parseCommand, canRecoverMetadataOnly, branchIsConcrete };';
 const source = fs.readFileSync(__SCRIPT__, 'utf8') + exportHelpers;
 const moduleObject = { exports: {} };
 vm.runInNewContext(source, {
@@ -847,15 +849,37 @@ const contract = {
   positiveOwnership: 'roadmap issue comments/labels/manifest metadata only',
   declaredBranch: descriptiveBranch,
 };
-const metadataCommand = helpers.parseCommand('/recover-metadata agent-b adopt bootstrap metadata');
-assert(metadataCommand && metadataCommand.kind === 'recover-metadata', 'metadata command not parsed');
+const metadataCommand = helpers.parseCommand(
+  '/recover-metadata agent-b adopt bootstrap metadata'
+);
+assert(
+  metadataCommand && metadataCommand.kind === 'recover-metadata',
+  'metadata command not parsed'
+);
 assert(metadataCommand.agent === 'agent-b', 'metadata agent not parsed');
-assert(metadataCommand.reason === 'adopt bootstrap metadata', 'metadata reason not parsed');
-const ordinary = helpers.parseCommand('/recover agent-b no product branch; coordination metadata only');
-assert(ordinary && ordinary.branch === 'no', 'ordinary recover grammar was loosened for prose branch');
-assert(ordinary.branch !== descriptiveBranch, 'ordinary recover accepted descriptive branch as repository branch');
-assert(helpers.canRecoverMetadataOnly(status, contract, 'OWNER'), 'valid metadata-only recovery rejected');
-assert(!helpers.canRecoverMetadataOnly(status, contract, 'MEMBER'), 'non-OWNER metadata recovery accepted');
+assert(
+  metadataCommand.reason === 'adopt bootstrap metadata',
+  'metadata reason not parsed'
+);
+const ordinary = helpers.parseCommand(
+  '/recover agent-b no product branch; coordination metadata only'
+);
+assert(
+  ordinary && ordinary.branch === 'no',
+  'ordinary recover grammar was loosened for prose branch'
+);
+assert(
+  ordinary.branch !== descriptiveBranch,
+  'ordinary recover accepted descriptive branch as repository branch'
+);
+assert(
+  helpers.canRecoverMetadataOnly(status, contract, 'OWNER'),
+  'valid metadata-only recovery rejected'
+);
+assert(
+  !helpers.canRecoverMetadataOnly(status, contract, 'MEMBER'),
+  'non-OWNER metadata recovery accepted'
+);
 const sourceStatus = { ...status, ownership_paths: ['src/owned.py'] };
 const sourceContract = {
   ...contract,
@@ -875,7 +899,9 @@ assert(
 """.replace("__SCRIPT__", script_path)
     _run_node(source)
 
-    block = script.split("} else if (command.kind === 'recover-metadata') {", 1)[1].split(
+    block = script.split(
+        "} else if (command.kind === 'recover-metadata') {", 1
+    )[1].split(
         "} else if (command.kind === 'recover') {", 1
     )[0]
     assert "canRecoverMetadataOnly(status, contract, association)" in block
