@@ -1,6 +1,7 @@
 from pathlib import Path
 
 WORKFLOW = Path(".github/workflows/agent-work-claims.yml")
+SCRIPT = Path(".github/scripts/agent-work-claims.js")
 DOC = Path("docs/automation/agent-work-claims.md")
 
 
@@ -8,9 +9,12 @@ def _workflow() -> str:
     return WORKFLOW.read_text(encoding="utf-8")
 
 
+def _script() -> str:
+    return SCRIPT.read_text(encoding="utf-8")
+
+
 def test_claim_workflow_has_least_privilege_and_no_dispatch_authority() -> None:
     text = _workflow()
-
     assert "contents: read" in text
     assert "issues: write" in text
     assert "pull-requests: read" in text
@@ -21,66 +25,71 @@ def test_claim_workflow_has_least_privilege_and_no_dispatch_authority() -> None:
     assert "workflow_dispatch:" not in text
 
 
-def test_claim_workflow_serializes_transitions_without_cancellation() -> None:
-    text = _workflow()
-
-    assert "group: agent-work-coordination" in text
-    assert "cancel-in-progress: false" in text
-    assert "last_command_comment_id" in text
-
-
-def test_claim_workflow_restricts_scope_and_authority() -> None:
-    text = _workflow()
-
-    assert "OWNER', 'MEMBER', 'COLLABORATOR" in text
-    assert "veritas-agent-work" in text
-    assert "github-actions[bot]" in text
-    assert "issueNumber !== 150" in text
-    assert "Rejected malformed agent-work command" in text
+def test_claim_workflow_serializes_and_drains_through_script() -> None:
+    workflow = _workflow()
+    script = _script()
+    assert "group: agent-work-coordination" in workflow
+    assert "cancel-in-progress: false" in workflow
+    assert "actions/checkout@v4" in workflow
+    assert "agent-work-claims.js" in workflow
+    assert "sort((a, b) => a.id - b.id)" in script
+    assert "last_command_comment_id" in script
 
 
-def test_claim_workflow_covers_required_state_commands() -> None:
-    text = _workflow()
-
-    for command in ("claim", "heartbeat", "release", "blocked", "handoff", "done"):
-        assert f"command.kind === '{command}'" in text or f"kind: '{command}'" in text
-
-    for state in ("READY", "CLAIMED", "BLOCKED", "REVIEW", "DONE", "SUPERSEDED"):
-        assert state in text
+def test_execution_requires_trusted_status_not_labels_or_mutable_contract_state() -> None:
+    script = _script()
+    assert "trusted status is missing" in script
+    assert "labels and mutable Work Contract state are not execution authority" in script
+    assert "status.return_state === 'BLOCKED'" in script
+    assert "contract.initialState === 'BLOCKED'" not in script
 
 
-def test_handoff_and_done_validate_pull_request_evidence() -> None:
-    text = _workflow()
+def test_claim_enforces_declared_branch_and_global_path_reservations() -> None:
+    script = _script()
+    assert "command.branch !== contract.declaredBranch" in script
+    assert "activeIssueReservations" in script
+    assert "openPrConflicts" in script
+    assert "pathsOverlap(candidate, reserved)" in script
+    assert "open PR #${first.pr} reserves" in script
+    assert "veritas-agent-work-reservations:v1" in script
 
-    assert "pr.head.ref !== status.branch" in text
-    assert "prBody.includes(`#${issueNumber}`)" in text
-    assert "prBody.includes(primaryWorkId)" in text
-    assert "!pr.merged_at" in text
-    assert "done requires the current REVIEW holder" in text
+
+def test_handoff_and_done_bind_exact_final_pr_head() -> None:
+    script = _script()
+    assert "pr.head.ref !== status.branch" in script
+    assert "prBody.includes(`#${issueNumber}`)" in script
+    assert "prBody.includes(primaryWorkId)" in script
+    assert "!status.linked_pr || status.linked_pr !== command.pr" in script
+    assert "status.linked_pr_head !== pr.head.sha" in script
+    assert "re-handoff/review exact final head before DONE" in script
 
 
-def test_partial_transition_failures_stay_non_claimable() -> None:
-    text = _workflow()
+def test_bootstrap_materializes_status_for_all_enrolled_issues() -> None:
+    script = _script()
+    assert "bootstrapStatus(issue, contract)" in script
+    assert "if (!current) current = await writeStatus" in script
+    assert "Labels are discovery metadata only after bootstrap" in script
 
-    assert "parseStatusComment(comment, issue.number)" in text
-    assert "labeledStates.length === 1 ? labeledStates[0] : contract.initialState" in text
-    assert text.index("await writeStatus(issue, current, status);") < text.index(
-        "await setStateLabels(issue, status.state);"
-    )
+
+def test_bootstrap_holder_and_stale_recovery_require_owner_audit() -> None:
+    script = _script()
+    assert "command.kind === 'recover'" in script
+    assert "association !== 'OWNER'" in script
+    assert "status.github_actor !== 'bootstrap' && !stale" in script
+    assert "STALE_MS = 2 * 60 * 60 * 1000" in script
 
 
 def test_untrusted_comment_text_is_not_sent_to_a_shell() -> None:
-    text = _workflow()
-
-    assert "uses: actions/github-script@v7" in text
-    assert "shell:" not in text
-    assert "run:" not in text
+    workflow = _workflow()
+    assert "uses: actions/github-script@v7" in workflow
+    assert "shell:" not in workflow
+    assert "run:" not in workflow
 
 
 def test_bootstrap_and_agent_startup_are_documented() -> None:
     doc = DOC.read_text(encoding="utf-8")
-
     assert "/roadmap-bootstrap" in doc
-    assert "work:ready" in doc
-    assert "wait for the workflow's accepted `CLAIMED` acknowledgement" in doc
+    assert "trusted bot-authored status" in doc
+    assert "comment-ID order" in doc
+    assert "/recover" in doc
     assert "does not grant merge, release" in doc
