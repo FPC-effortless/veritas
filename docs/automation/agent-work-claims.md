@@ -71,7 +71,7 @@ Before accepting `/claim`, the workflow:
 
 Backticked ownership tokens may be root-level repository files such as `Dockerfile`, `Makefile`, `LICENSE`, or `CODEOWNERS`, as well as dotfiles, nested paths, and `/**` subtree globs. The parser rejects whitespace-bearing prose, absolute paths, empty path segments, traversal segments (`.` or `..`), and unsupported wildcard forms. The `Positive ownership` field is read without stripping the code-span delimiters from a single-path declaration, so a contract that owns only `Dockerfile` is still machine-checkable.
 
-Coordination-only or metadata-only tickets may explicitly have no source path. Ordinary code tickets without machine-checkable ownership fail closed.
+Zero-path claims are exceptional and use an exact allow-list of positive-ownership forms that describe GitHub coordination metadata only. A real rehearsal form such as `this issue's comments/labels only` remains claimable without repository paths. Repository-editing prose does not qualify merely because it contains words such as “coordination” or “metadata”: for example, `coordination docs/tests only` must expose concrete backticked repository paths or the claim fails closed. This prevents a docs/tests lane from bypassing the global path lock with an empty reservation.
 
 The current active roadmap reservations are mirrored in one trusted bot-authored `veritas-agent-work-reservations:v1` record on #150. Active entries are rebuilt from trusted frozen ownership snapshots, not mutable Work Contract text. Open-PR changed files remain a live claim-time reservation source rather than relying on a potentially stale registry snapshot.
 

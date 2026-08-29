@@ -5,6 +5,12 @@ const STATES = ['READY', 'CLAIMED', 'BLOCKED', 'REVIEW', 'DONE', 'SUPERSEDED'];
 const ACTIVE_STATES = new Set(['CLAIMED', 'REVIEW', 'BLOCKED']);
 const ALLOWED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const STALE_MS = 2 * 60 * 60 * 1000;
+const EXPLICIT_NO_SOURCE_OWNERSHIP = new Set([
+  "this issue's comments/labels only",
+  'issue labels/comments for roadmap tickets only',
+  'roadmap issue comments/labels/manifest metadata only',
+  'coordination issue comments/registry only',
+]);
 
 const LABEL_DEFINITIONS = {
   'agent-work': ['5319e7', 'Roadmap work managed by agent coordination automation'],
@@ -47,6 +53,11 @@ function parsePaths(text) {
     if (path) paths.push(path);
   }
   return [...new Set(paths)].sort();
+}
+
+function isExplicitNoSourceOwnership(text) {
+  const normalized = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return EXPLICIT_NO_SOURCE_OWNERSHIP.has(normalized);
 }
 
 function parseContract(text, number) {
@@ -268,7 +279,7 @@ module.exports = async function coordinate({ github, context }) {
   }
 
   async function assertClaimHasNoConflict(issue, contract, branch) {
-    if (contract.paths.length === 0 && !/coordination|metadata only|no product branch/i.test(contract.positiveOwnership)) {
+    if (contract.paths.length === 0 && !isExplicitNoSourceOwnership(contract.positiveOwnership)) {
       throw new Error('claim exposes no machine-checkable positive-ownership path');
     }
     const registry = await trustedRegistry();

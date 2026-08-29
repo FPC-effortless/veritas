@@ -92,6 +92,15 @@ def test_claim_enforces_declared_branch_global_paths_and_branch_uniqueness() -> 
     assert "veritas.agent-work-reservations.v1" in script
 
 
+def test_zero_path_claim_exemption_is_explicit_and_narrow() -> None:
+    script = _script()
+    assert "EXPLICIT_NO_SOURCE_OWNERSHIP" in script
+    assert "isExplicitNoSourceOwnership(contract.positiveOwnership)" in script
+    assert "!/coordination|metadata only|no product branch/i" not in script
+    assert '"this issue\'s comments/labels only"' in script
+    assert "coordination docs/tests only" not in script
+
+
 def test_active_ownership_is_frozen_in_trusted_status() -> None:
     script = _script()
     claim_block = script.split("if (command.kind === 'claim') {", 1)[1].split(
@@ -542,6 +551,56 @@ async function runMalformedOwnershipToken() {
   );
 }
 
+async function runCoordinationRepositoryEditingProse() {
+  const issues = {
+    1: {
+      number: 1,
+      body: contract('AUTH', 'docs/auth', 'coordination docs/tests only'),
+      labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
+    },
+  };
+  const claim = commandComment(2001, '/claim agent-auth docs/auth');
+  const comments = {
+    1: [statusComment(1001, readyStatus(1, 'AUTH')), claim],
+    150: [registryComment([])],
+  };
+  const world = makeWorld({ issues, comments });
+  await coordinate({ github: world.github, context: context(1, claim.body) });
+  assert(
+    parseStatus(comments[1][0]).state === 'READY',
+    'repository-editing coordination prose bypassed path locking'
+  );
+  assert(
+    world.audits.some(
+      (entry) => entry.body.includes('no machine-checkable positive-ownership path')
+    ),
+    'repository-editing coordination prose did not fail closed'
+  );
+  assert(parseStatus(comments[150][0]).entries.length === 0, 'rejected prose claim reserved globally');
+}
+
+async function runExplicitIssueOnlyOwnership() {
+  const issues = {
+    1: {
+      number: 1,
+      body: contract('REHEARSAL', 'test/rehearsal', "this issue's comments/labels only"),
+      labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
+    },
+  };
+  const claim = commandComment(2001, '/claim agent-rehearsal test/rehearsal');
+  const comments = {
+    1: [statusComment(1001, readyStatus(1, 'REHEARSAL')), claim],
+    150: [registryComment([])],
+  };
+  const world = makeWorld({ issues, comments });
+  await coordinate({ github: world.github, context: context(1, claim.body) });
+  assert(parseStatus(comments[1][0]).state === 'CLAIMED', 'explicit issue-only lane was rejected');
+  const registry = parseStatus(comments[150][0]);
+  assert(registry.entries.length === 1, 'issue-only lane was not represented in registry');
+  assert(registry.entries[0].issue === 1, 'wrong issue-only reservation');
+  assert(registry.entries[0].paths.length === 0, 'issue-only lane unexpectedly reserved source paths');
+}
+
 async function runRootFileCollision() {
   const issues = {
     1: {
@@ -578,6 +637,8 @@ async function runRootFileCollision() {
   await runClaimLocalFailureThenOverlap();
   await runBootstrapFailureOrdering();
   await runMalformedOwnershipToken();
+  await runCoordinationRepositoryEditingProse();
+  await runExplicitIssueOnlyOwnership();
   await runRootFileCollision();
   process.stdout.write('ok\n');
 })().catch((error) => {
@@ -606,4 +667,6 @@ def test_bootstrap_and_agent_startup_are_documented() -> None:
     assert "/recover" in doc
     assert "reservation" in doc.lower()
     assert "Dockerfile" in doc
+    assert "issue's comments/labels only" in doc
+    assert "coordination docs/tests only" in doc
     assert "does not grant merge, release" in doc
