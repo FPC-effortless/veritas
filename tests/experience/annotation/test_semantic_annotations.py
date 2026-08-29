@@ -319,7 +319,9 @@ def test_failed_or_unknown_resource_read_does_not_become_consumed_evidence(
 
     assert evidence.consumed_ids == ()
     assert evidence.created_ids == ()
-    assert evidence.status is SemanticDerivationStatus.NOT_APPLICABLE
+    assert evidence.status is SemanticDerivationStatus.UNKNOWN
+    assert evidence.direction_complete is False
+    assert "success/outcome" in (evidence.reason or "")
     assert not any(
         record.attributes.get("relation") == "evidence_flow"
         for record in bundle.structural_records
@@ -348,7 +350,9 @@ def test_requested_created_evidence_ids_do_not_prove_creation() -> None:
 
     assert evidence.created_ids == ()
     assert evidence.consumed_ids == ()
-    assert evidence.status is SemanticDerivationStatus.NOT_APPLICABLE
+    assert evidence.status is SemanticDerivationStatus.UNKNOWN
+    assert evidence.direction_complete is False
+    assert "success/outcome" in (evidence.reason or "")
 
 
 def test_state_digest_domain_mismatch_is_unknown() -> None:
