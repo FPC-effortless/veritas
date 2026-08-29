@@ -3,16 +3,23 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from investigation_world.sandbox.models import (
+    SandboxCaptureResult,
     SandboxCreateRequest,
+    SandboxCreateResult,
+    SandboxDestroyResult,
     SandboxExecutionKind,
     SandboxExecutionRequest,
+    SandboxExecutionResult,
+    SandboxMountResult,
+    SandboxReplayMetadata,
+    SandboxResetResult,
 )
 from investigation_world.sandbox.providers.local.workspace import (
     FilesystemSandboxSession,
@@ -53,7 +60,7 @@ def _default_process_runner(
 
 
 class _DockerSandboxSession:
-    """Delegate session that becomes permanently non-reusable after uncertain cleanup."""
+    """Session proxy that becomes permanently non-reusable after uncertain cleanup."""
 
     def __init__(
         self,
@@ -69,18 +76,40 @@ class _DockerSandboxSession:
                 "Docker sandbox session is non-reusable after unverified container cleanup"
             )
 
-    def execute(self, request: SandboxExecutionRequest) -> Any:
+    @property
+    def session_id(self) -> str:
+        self._ensure_reusable()
+        return self._session.session_id
+
+    @property
+    def create_result(self) -> SandboxCreateResult:
+        self._ensure_reusable()
+        return self._session.create_result
+
+    def metadata(self) -> SandboxReplayMetadata:
+        self._ensure_reusable()
+        return self._session.metadata()
+
+    def mount(self, asset_id: str, content: bytes) -> SandboxMountResult:
+        self._ensure_reusable()
+        return self._session.mount(asset_id, content)
+
+    def execute(self, request: SandboxExecutionRequest) -> SandboxExecutionResult:
         self._ensure_reusable()
         return self._session.execute(request)
 
-    def destroy(self) -> Any:
+    def capture(self, paths: Iterable[str]) -> SandboxCaptureResult:
+        self._ensure_reusable()
+        return self._session.capture(paths)
+
+    def reset(self) -> SandboxResetResult:
+        self._ensure_reusable()
+        return self._session.reset()
+
+    def destroy(self) -> SandboxDestroyResult:
         # Host-side workspace/secret cleanup remains available even when the
         # container's daemon-side absence could not be established.
         return self._session.destroy()
-
-    def __getattr__(self, name: str) -> Any:
-        self._ensure_reusable()
-        return getattr(self._session, name)
 
 
 class DockerSandboxProvider:
