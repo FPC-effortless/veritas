@@ -1,30 +1,40 @@
 # Agent Work Claim Automation
 
-The `Agent Work Claims` workflow turns GitHub issues marked with `<!-- veritas-agent-work -->` into an auditable coordination queue for parallel coding agents.
+The `Agent Work Claims` workflow turns GitHub issues marked with `<!-- veritas-agent-work -->` into an auditable coordination queue for parallel coding agents. Coordination state remains separate from environment maturity, scientific qualification, Frontier qualification, training qualification, commercial readiness, merge authority, and release authority.
 
-Coordination state is separate from Veritas environment maturity, scientific qualification, Frontier qualification, training qualification, and commercial release state.
+## Canonical authority
+
+After bootstrap, the only execution authority is the latest trusted bot-authored status record marked `veritas-agent-work-status:v1`. `work:*` labels are discovery metadata only. Mutable issue-body `State`, `Claim holder`, `Linked PR`, and manual label edits cannot directly authorize a later transition.
+
+`/roadmap-bootstrap` on coordination root #150 materializes a trusted status record for every enrolled open roadmap issue and reconciles labels to that record. Bootstrap may use existing Work Contract/label metadata only as migration input when no trusted record exists. Ordinary commands fail closed when trusted status is missing.
 
 ## Discovery
 
-After roadmap bootstrap, claimable work is discoverable with GitHub search:
+Claimable work remains discoverable with:
 
 ```text
 is:issue is:open label:agent-work label:work:ready
 ```
 
-Other useful states are `work:claimed`, `work:blocked`, `work:review`, `work:done`, and `work:superseded`.
+The workflow maintains exactly one discovery label from `work:ready`, `work:claimed`, `work:blocked`, `work:review`, `work:done`, and `work:superseded`.
 
-Exactly one `work:*` coordination-state label is maintained by the workflow. Existing unrelated labels are preserved.
+## Authorization and identity
 
-## Authorization
+Ordinary commands require GitHub `OWNER`, `MEMBER`, or `COLLABORATOR` association. The authenticated GitHub actor is authority; the declared agent ID is public coordination metadata only and must not contain secrets.
 
-State-changing commands are accepted only from GitHub actors whose issue-comment `author_association` is `OWNER`, `MEMBER`, or `COLLABORATOR`.
+Ordinary holder commands require both the matching agent ID and the authenticated GitHub actor recorded by the claim. Bootstrap-derived holders use `github_actor: "bootstrap"` and cannot silently inherit ordinary holder authority.
 
-The declared agent ID is coordination metadata only. It is not authentication and must never contain a token, password, email address, or other secret.
+Repository owners may explicitly adopt a bootstrap-derived or stale held lane with:
+
+```text
+/recover <new-agent-id> <recorded-branch> <reason>
+```
+
+Recovery requires `OWNER`, preserves the existing branch, is accepted immediately for bootstrap-derived ownership, and otherwise requires the last heartbeat to be at least two hours old. It is an audited ownership recovery, not automatic expiry.
 
 ## Commands
 
-Commands must be one exact line. Quoted or multiline command text is rejected.
+Commands are exact single lines:
 
 ```text
 /claim <agent-id> <branch>
@@ -33,71 +43,70 @@ Commands must be one exact line. Quoted or multiline command text is rejected.
 /blocked <agent-id> <reason>
 /handoff <agent-id> <pr-number>
 /done <agent-id> <pr-number>
+/recover <new-agent-id> <branch> <reason>
 ```
 
-The coordination owner should run `/roadmap-bootstrap` on issue #150 after the workflow is installed or when a one-time label reconciliation is required.
+The coordination owner may run `/roadmap-bootstrap` only on #150.
 
-## Claim behavior
+## Deterministic command ordering
 
-`/claim` is accepted only when the canonical live status is `READY`. The workflow serializes all coordination transitions through a non-cancelling concurrency group, so simultaneous claim events cannot use last-writer-wins semantics.
+GitHub Actions concurrency is non-cancelling but is not FIFO. The workflow therefore does not trust runner start order. Every invocation reads pending coordination comments for that issue and processes them in ascending comment-ID order after the last recorded command. A later event can drain an earlier pending command first, so rapid dependent commands such as `/claim` then `/release` are evaluated in authoring order rather than scheduler order.
 
-An accepted claim records:
+Rejected commands are also recorded as processed so they cannot be replayed indefinitely.
 
-- Work ID and issue;
-- authenticated GitHub actor;
-- declared agent ID;
-- branch;
-- claim timestamp;
-- latest heartbeat;
-- linked PR/head when present;
-- blocker/release reason;
-- monotonically increasing transition sequence.
+## Claim locking and parallelism
 
-The current record is maintained in a bot-authored issue comment marked `veritas-agent-work-status:v1`. User-authored lookalike comments are not accepted as status authority. Every accepted or rejected transition also receives a human-readable audit comment.
+Before accepting `/claim`, the workflow:
 
-## Heartbeats and stale work
+1. requires canonical state `READY`;
+2. requires the claimed branch to match a concrete Work Contract branch when one is declared;
+3. extracts machine-checkable backticked positive-ownership paths;
+4. rejects ancestor/descendant or exact path overlap with active `CLAIMED`, `REVIEW`, or owner-held `BLOCKED` roadmap reservations;
+5. scans changed files of open PRs and rejects overlap, excluding only an existing PR on the candidate branch itself.
 
-A heartbeat refreshes the current claim timestamp but does not change ownership. This workflow does not automatically steal or expire a claim. Stale-claim monitoring/reclaim is a separate audited policy.
+Coordination-only or metadata-only tickets may explicitly have no source path. Ordinary code tickets without machine-checkable ownership fail closed.
+
+The current active roadmap reservations are mirrored in one trusted bot-authored `veritas-agent-work-reservations:v1` record on #150. Open-PR changed files remain a live claim-time reservation source rather than relying on a potentially stale registry snapshot.
+
+This locking serializes only short coordination transitions. Coding work on disjoint reservations remains parallel.
 
 ## Release and blocking
 
-A holder may release active work. A ticket whose Work Contract was originally dependency-blocked returns conservatively to `BLOCKED`; otherwise it returns to `READY`.
+A successful claim stores its release target in trusted status as `return_state`. `/release` uses that frozen trusted value rather than reparsing mutable issue-body `State` at release time.
 
-`/blocked` preserves the current owner and branch while moving the coordination label to `work:blocked`, so the ticket is visibly non-claimable while the blocker exists.
+`/blocked` preserves the current authenticated holder and branch while making the lane non-claimable. Staleness alone never frees a lane; explicit `/release` or owner `/recover` is required.
 
-## Handoff
+## Handoff and exact-head completion
 
-`/handoff` is accepted only from a current claimant and validates that:
+`/handoff` requires the authenticated CLAIMED holder and validates that the PR:
 
-- the PR exists in this repository;
-- it is open;
-- its head branch matches the recorded claim branch;
-- its body references both the roadmap issue and the primary Work ID.
+- exists in this repository;
+- is open;
+- uses the recorded claimed branch;
+- references both the roadmap issue and primary Work ID.
 
-A valid handoff moves the ticket to `REVIEW` and records the PR number/head SHA.
+The handoff records the exact PR head SHA.
 
-## Done
+`/done` requires the authenticated REVIEW holder, the exact linked PR, a merged PR, and the same PR head SHA that was handed off. If the PR head moves after handoff, `/done` rejects and the final head must be handed off/reviewed again.
 
-For this first coordination layer, `/done` requires a prior `REVIEW` handoff and a merged linked PR. It does not close the issue automatically and it does not imply any scientific/manual/evidence qualification state.
+This is still implementation-level completion only. Work-class-specific scientific, experiment, external/manual, convergence, and release completion rules remain stricter and must not be inferred from a merged PR.
 
-Work classes whose completion requires experiments, private evidence, Frontier evaluation, training evidence, external accounts, payment, legal decisions, or release authority must retain their stricter completion gate outside this implementation-level transition.
+## Bootstrap and reconciliation
 
-## Bootstrap
+Bootstrap:
 
-`/roadmap-bootstrap` is accepted only on #150 from an authorized actor. It:
+1. creates missing coordination labels;
+2. scans all enrolled open issues;
+3. preserves existing trusted status records;
+4. materializes trusted status for every issue missing one;
+5. reconciles discovery labels;
+6. refreshes the global active reservation record on #150.
 
-1. creates the canonical coordination labels if absent;
-2. scans open issues marked `veritas-agent-work`;
-3. applies `agent-work` plus exactly one Work Contract/current-status label;
-4. preserves existing CLAIMED/REVIEW reservations;
-5. creates a canonical status comment for pre-existing active lanes where needed;
-6. posts an aggregate initialization audit to #150.
+Once bootstrap is complete, labels and Work Contract state are not execution authority.
 
-Bootstrap changes coordination metadata only.
+## Security boundary
 
-## Security boundaries
-
-The workflow has only:
+The workflow retains only:
 
 ```text
 contents: read
@@ -105,25 +114,17 @@ issues: write
 pull-requests: read
 ```
 
-It has no `actions: write`, no secrets permission, and no release/package authority. It cannot dispatch model-training, sealed, release, publishing, payment, or other protected workflows.
-
-The issue-comment body is consumed through the GitHub Script API rather than interpolated into a shell command. Agent IDs and branch names are validated against narrow character sets; reasons are stored as data and never executed.
-
-## Failure model
-
-The canonical bot status record plus coordination label is the live state. Commands are globally serialized and event comment IDs make accepted transitions idempotent against duplicate delivery.
-
-A partial GitHub API outage should be treated conservatively: agents must inspect the canonical status comment/label and wait for a reconciled transition rather than assuming work became free. More extensive rollback/reclaim automation is tracked separately.
+It has no Actions write, package, release, secret, payment, deployment, or model-training authority. Inputs are handled inside `actions/github-script`; no untrusted command text is interpolated into a shell.
 
 ## Agent startup rule
 
-An agent must not begin editing simply because an issue looks interesting. The required sequence is:
+An agent must:
 
-1. read `AGENTS.md` and repository overlay;
+1. read `AGENTS.md` and repository overlays;
 2. find a `work:ready` issue;
 3. inspect dependencies and positive/negative ownership;
 4. post `/claim <agent-id> <branch>`;
-5. wait for the workflow's accepted `CLAIMED` acknowledgement;
-6. only then create/use the branch and edit owned paths.
+5. wait for the accepted `CLAIMED` acknowledgement;
+6. only then edit the owned lane.
 
-A claim grants coordination ownership only. It does not grant merge, release, sealed/private-data, paid-compute, or qualification authority.
+A claim grants coordination ownership only. It does not grant merge, release, sealed/private-data, paid-compute, external-account, or qualification authority.
