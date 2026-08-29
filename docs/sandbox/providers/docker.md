@@ -51,17 +51,21 @@ on stdin. Neither request kind can replace the pinned image or registered execut
 `create()` validates Docker daemon availability and creates a private session workspace; it does not
 start a persistent container. Mounted assets form the reset baseline. Each `execute()` uses a fresh
 container against that workspace. `reset()` restores mounted bytes and discards mutations.
-`destroy()` removes the workspace and secret material.
+`destroy()` removes the host-side workspace and secret material.
 
 Replay metadata binds the create request, asset declarations, pinned image and provider
 configuration, Docker daemon identity, seed, reset generation, execution index, and filesystem
 digest. Container names and host temporary paths are ephemeral and are never returned.
 
 Docker-reserved launch exit codes are reported as infrastructure failures, not workload/model
-failures. Timeout and output-limit interruption both trigger a best-effort forced removal of the
-named container before the workspace result is processed, so an interrupted Docker client cannot
-intentionally leave its workload holding the bind-mounted workspace. Missing Docker or a failed
-daemon probe raises `DockerUnavailableError` before a session exists.
+failures. Timeout and output-limit interruption both force `docker rm -f` for the named container
+before the workspace result is accepted. A successful removal permits the original timeout or
+output-limit result to be returned. If removal raises, times out, exceeds its output bound, or exits
+nonzero, container absence has not been established: the execution fails closed as an infrastructure
+error and that session is permanently non-reusable. Only `destroy()` remains available so host-side
+workspace and secret material can still be discarded. This prevents a possibly orphaned container
+that retains workspace or secret bind mounts from being followed by further sandbox operations.
+Missing Docker or a failed daemon probe raises `DockerUnavailableError` before a session exists.
 
 The shared workspace layer rejects and rolls back read-only input changes, symlinks, non-regular
 files, undeclared output paths, and resource-policy violations. It revalidates copied Pydantic
