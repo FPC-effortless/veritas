@@ -45,7 +45,7 @@ Each dimension is `SUPPORTED`, `UNSUPPORTED`, or `UNKNOWN`.
 
 `SUPPORTED` requires observable semantics. `UNSUPPORTED` requires an explicit limitation. `UNKNOWN` requires an evidence gap and can never silently become PASS.
 
-A harness is not required to support every architecture feature. For example, serial-only tool execution may conform if parallel calls are explicitly unsupported and the fixture observes the declared rejection behavior.
+A harness is not required to support every architecture feature. For example, serial-only tool execution may conform if parallel calls are explicitly unsupported and the fixture observes the declared rejection behavior. The `UNSUPPORTED` enum alone is not evidence: every declared limitation must also appear as a content-bound fixture-observed behavior fact in `HarnessCapabilityObservation.semantic_facts`. An enum-only unsupported observation therefore fails conformance.
 
 ## Deterministic fixture evidence
 
@@ -53,7 +53,7 @@ A harness is not required to support every architecture feature. For example, se
 
 The default policy requires at least two fixture replay digests. Matching digests establish deterministic fixture replay. One run remains `UNKNOWN`; divergent replay digests are `FAIL`.
 
-Fixtures should inject representative success and failure behavior so trace obligations are actually exercised rather than inferred from schema presence.
+Fixtures should inject representative success and failure behavior so trace obligations are actually exercised rather than inferred from schema presence. For unsupported capabilities, the fixture must preserve the observed limitation/rejection fact, not merely repeat the declaration's support enum.
 
 ## Trace completeness
 

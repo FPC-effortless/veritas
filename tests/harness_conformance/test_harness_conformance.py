@@ -90,7 +90,7 @@ def _observation(
             HarnessCapabilityObservation(
                 capability=capability,
                 observed_support=declared.support,
-                semantic_facts=declared.semantics,
+                semantic_facts=(*declared.semantics, *declared.limitations),
                 evidence_gaps=declared.evidence_gaps,
             )
         )
@@ -123,6 +123,28 @@ def test_explicitly_unsupported_parallel_behavior_can_conform() -> None:
         == CapabilitySupport.UNSUPPORTED
     )
     require_harness_conformance(report)
+
+
+def test_unsupported_capability_requires_observed_limitation_evidence() -> None:
+    declaration = _declaration()
+    observation = _observation(
+        declaration,
+        overrides={
+            HarnessCapability.PARALLEL_TOOL_BEHAVIOR: HarnessCapabilityObservation(
+                capability=HarnessCapability.PARALLEL_TOOL_BEHAVIOR,
+                observed_support=CapabilitySupport.UNSUPPORTED,
+            )
+        },
+    )
+
+    report = evaluate_harness_conformance(declaration, observation)
+
+    assert report.status == HarnessConformanceStatus.FAIL
+    assert any(
+        "capability limitations not observed: parallel_tool_behavior"
+        in item
+        for item in report.failures
+    )
 
 
 def test_unknown_behavior_never_becomes_pass() -> None:

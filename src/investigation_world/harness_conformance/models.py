@@ -452,6 +452,13 @@ def _assess(
                 "capability semantics not observed: "
                 f"{capability.value} -> {', '.join(sorted(missing_semantics))}"
             )
+        if declared.support == CapabilitySupport.UNSUPPORTED:
+            missing_limitations = set(declared.limitations) - set(observed.semantic_facts)
+            if missing_limitations:
+                failures.append(
+                    "capability limitations not observed: "
+                    f"{capability.value} -> {', '.join(sorted(missing_limitations))}"
+                )
 
     required_trace_fields = set(policy.required_trace_fields)
     for item in declaration.capabilities:
