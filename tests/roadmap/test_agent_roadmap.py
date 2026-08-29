@@ -14,6 +14,11 @@ roadmap = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(roadmap)
 
 
+@pytest.fixture(autouse=True)
+def exact_source_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_SHA", "1" * 40)
+
+
 def row(
     work_id: str,
     issue: int,
@@ -119,9 +124,7 @@ def test_checked_in_manifest_validates() -> None:
 
 
 def test_duplicate_work_id_and_alias_fail_closed() -> None:
-    errors = roadmap.validate(
-        manifest(row("A", 1, aliases=["B"]), row("B", 2))
-    )
+    errors = roadmap.validate(manifest(row("A", 1, aliases=["B"]), row("B", 2)))
     assert any("duplicate Work ID/alias" in error for error in errors)
 
 
@@ -213,10 +216,7 @@ def test_status_record_paginates_to_latest_trusted_status(
     expected["transition_seq"] = 9
     trusted_comment = {
         "user": {"login": "github-actions[bot]"},
-        "body": (
-            f"{roadmap.STATUS_MARKER}\n```json\n"
-            f"{json.dumps(expected)}\n```"
-        ),
+        "body": f"{roadmap.STATUS_MARKER}\n```json\n{json.dumps(expected)}\n```",
     }
     requested: list[str] = []
 
@@ -236,10 +236,7 @@ def test_status_record_rejects_wrong_trusted_schema(
     invalid["schema_version"] = "other.status.v1"
     trusted_comment = {
         "user": {"login": "github-actions[bot]"},
-        "body": (
-            f"{roadmap.STATUS_MARKER}\n```json\n"
-            f"{json.dumps(invalid)}\n```"
-        ),
+        "body": f"{roadmap.STATUS_MARKER}\n```json\n{json.dumps(invalid)}\n```",
     }
     monkeypatch.setattr(roadmap, "request_json", lambda *_: [trusted_comment])
 
@@ -262,6 +259,7 @@ def test_sync_uses_live_labels_and_preserves_curated_hard_edge(
     issue_a = issue(1, "A", "DONE", "none")
     issue_b = issue(2, "B", "READY", "A")
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a, issue_b])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
 
     synced = roadmap.sync(current, "FPC-effortless/veritas", None)
     by_id = {entry["work_id"]: entry for entry in synced["work"]}
@@ -338,6 +336,72 @@ def test_sync_rejects_active_status_without_holder(
 
     with pytest.raises(roadmap.RoadmapError, match="CLAIMED trusted status missing holder"):
         roadmap.sync(current, "FPC-effortless/veritas", None)
+
+
+def test_sync_prefers_trusted_claimed_status_over_ready_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1))
+    issue_a = issue(1, "A", "READY", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(
+        roadmap,
+        "status_record",
+        lambda *_: status(1, "A", "CLAIMED", agent="agent-a", branch="feat/a"),
+    )
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+    entry = synced["work"][0]
+    assert entry["state"] == "CLAIMED"
+    assert entry["claimant"] == "agent-a"
+    assert entry["branch"] == "feat/a"
+
+
+def test_sync_prefers_trusted_review_status_over_ready_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1))
+    issue_a = issue(1, "A", "READY", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(
+        roadmap,
+        "status_record",
+        lambda *_: status(
+            1,
+            "A",
+            "REVIEW",
+            agent="agent-a",
+            branch="feat/a",
+            linked_pr=42,
+        ),
+    )
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+    entry = synced["work"][0]
+    assert entry["state"] == "REVIEW"
+    assert entry["claimant"] == "agent-a"
+    assert entry["linked_pr"] == 42
+
+
+def test_sync_replaces_stale_source_commit_with_current_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1, state="DONE"))
+    issue_a = issue(1, "A", "DONE", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+    assert current["source_commit"] == "0" * 40
+    assert synced["source_commit"] == "1" * 40
+
+
+def test_sync_rejects_missing_source_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GITHUB_SHA")
+    with pytest.raises(roadmap.RoadmapError, match="source commit is required"):
+        roadmap.sync(manifest(row("A", 1)), "FPC-effortless/veritas", None)
 
 
 def test_sync_allows_commented_unowned_blocked_without_trusted_status(
