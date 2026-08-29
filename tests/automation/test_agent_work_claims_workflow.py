@@ -796,8 +796,115 @@ def test_bootstrap_and_agent_startup_are_documented() -> None:
     assert "same PR" in doc
     assert "comment-ID order" in doc
     assert "/recover" in doc
+    assert "/recover-metadata" in doc
     assert "reservation" in doc.lower()
     assert "Dockerfile" in doc
     assert "issue's comments/labels only" in doc
     assert "coordination docs/tests only" in doc
     assert "does not grant merge, release" in doc
+
+
+def test_metadata_only_bootstrap_recovery_is_owner_only_and_zero_source() -> None:
+    script = _script()
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const exportHelpers =
+  '\nmodule.exports.__metadataRecovery = {' +
+  ' parseCommand, canRecoverMetadataOnly, branchIsConcrete };';
+const source = fs.readFileSync(__SCRIPT__, 'utf8') + exportHelpers;
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const helpers = moduleObject.exports.__metadataRecovery;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+const descriptiveBranch = 'no product branch; coordination metadata only';
+const status = {
+  state: 'CLAIMED',
+  github_actor: 'bootstrap',
+  agent_id: 'coordination-bootstrap',
+  branch: descriptiveBranch,
+  linked_pr: null,
+  linked_pr_head: null,
+  ownership_paths: [],
+  transition_seq: 0,
+};
+const contract = {
+  paths: [],
+  positiveOwnership: 'roadmap issue comments/labels/manifest metadata only',
+  declaredBranch: descriptiveBranch,
+};
+const metadataCommand = helpers.parseCommand(
+  '/recover-metadata agent-b adopt bootstrap metadata'
+);
+assert(
+  metadataCommand && metadataCommand.kind === 'recover-metadata',
+  'metadata command not parsed'
+);
+assert(metadataCommand.agent === 'agent-b', 'metadata agent not parsed');
+assert(
+  metadataCommand.reason === 'adopt bootstrap metadata',
+  'metadata reason not parsed'
+);
+const ordinary = helpers.parseCommand(
+  '/recover agent-b no product branch; coordination metadata only'
+);
+assert(
+  ordinary && ordinary.branch === 'no',
+  'ordinary recover grammar was loosened for prose branch'
+);
+assert(
+  ordinary.branch !== descriptiveBranch,
+  'ordinary recover accepted descriptive branch as repository branch'
+);
+assert(
+  helpers.canRecoverMetadataOnly(status, contract, 'OWNER'),
+  'valid metadata-only recovery rejected'
+);
+assert(
+  !helpers.canRecoverMetadataOnly(status, contract, 'MEMBER'),
+  'non-OWNER metadata recovery accepted'
+);
+const sourceStatus = { ...status, ownership_paths: ['src/owned.py'] };
+const sourceContract = {
+  ...contract,
+  paths: ['src/owned.py'],
+  positiveOwnership: '`src/owned.py`',
+};
+assert(
+  !helpers.canRecoverMetadataOnly(sourceStatus, sourceContract, 'OWNER'),
+  'source-owning metadata recovery accepted'
+);
+const concreteStatus = { ...status, branch: 'feat/concrete' };
+const concreteContract = { ...contract, declaredBranch: 'feat/concrete' };
+assert(
+  !helpers.canRecoverMetadataOnly(concreteStatus, concreteContract, 'OWNER'),
+  'concrete branch used metadata-only exception'
+);
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+    block = script.split(
+        "} else if (command.kind === 'recover-metadata') {", 1
+    )[1].split(
+        "} else if (command.kind === 'recover') {", 1
+    )[0]
+    assert "canRecoverMetadataOnly(status, contract, association)" in block
+    assert "status.branch =" not in block
+    assert "status.github_actor = actor" in block
+    assert "status.agent_id = command.agent" in block
