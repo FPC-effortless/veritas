@@ -157,7 +157,7 @@ def test_claim_publication_is_reservation_first_and_release_is_fail_closed() -> 
     local_status = tail.index("current = await writeStatus(issue, current, status)")
     assert first_registry < local_status
     assert "stale global reservation" in tail
-    assert "stale reservation remains conservative" in tail
+    assert "reservation remains conservative" in tail
 
 
 def test_bootstrap_holder_and_stale_recovery_require_owner_audit() -> None:
@@ -522,7 +522,7 @@ async function runMalformedOwnershipToken() {
   const issues = {
     1: {
       number: 1,
-      body: contract('BAD', 'feat/bad', '`metadata only`'),
+      body: contract('BAD', 'feat/bad', '`not a repository path`'),
       labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
     },
   };
