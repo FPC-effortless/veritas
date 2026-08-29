@@ -442,18 +442,16 @@ def _evidence_flow(
     contract: PortableOperationalContract,
 ) -> EvidenceFlowAnnotation:
     known = {record.record_id for record in contract.public.evidence.records}
-    created: set[str] = set()
     consumed: set[str] = set()
     referenced: set[str] = set()
     visibilities = [event.visibility]
 
+    # Structured action arguments are request/input facts. They may establish that
+    # existing evidence was supplied to an invocation, but they cannot prove that
+    # requested output evidence was actually created or emitted. Creation requires
+    # a canonical outcome/result record, which TrajectoryEvent does not currently
+    # expose as a typed success-bearing field.
     if arguments is not None:
-        for key in ("created_evidence_ids", "emitted_evidence_ids"):
-            created.update(
-                item
-                for item in _ids_from_value(arguments.get(key))
-                if item in known
-            )
         consume_keys = (
             "evidence_id",
             "evidence_ids",
@@ -486,17 +484,20 @@ def _evidence_flow(
                 continue
             candidate = resource_id[len(prefix) :]
             read_operations = {"open_record", "open_document"}
-            if candidate in known and call.operation in read_operations:
+            if (
+                call.success is True
+                and candidate in known
+                and call.operation in read_operations
+            ):
                 consumed.add(candidate)
                 call_contributed = True
         if call_contributed:
             visibilities.append(call.visibility)
 
     visibility = _max_visibility(*visibilities)
-    if created or consumed:
+    if consumed:
         return EvidenceFlowAnnotation(
             status=SemanticDerivationStatus.DERIVED,
-            created_ids=tuple(sorted(created)),
             consumed_ids=tuple(sorted(consumed)),
             referenced_ids=tuple(sorted(referenced)),
             direction_complete=True,
