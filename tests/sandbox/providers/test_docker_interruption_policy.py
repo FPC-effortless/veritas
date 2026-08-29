@@ -15,20 +15,23 @@ from investigation_world.sandbox.providers.local import SandboxProcessResult
 
 
 @pytest.mark.parametrize(
-    ("interrupted", "expected_failure"),
+    ("interrupted", "expected_status", "expected_failure"),
     [
         (
             SandboxProcessResult(exit_code=None, timed_out=True),
+            SandboxExecutionStatus.TIMED_OUT,
             SandboxFailureCode.TIMEOUT,
         ),
         (
             SandboxProcessResult(exit_code=None, output_limited=True),
+            SandboxExecutionStatus.REJECTED,
             SandboxFailureCode.OUTPUT_LIMIT,
         ),
     ],
 )
 def test_docker_never_pulls_and_force_removes_interrupted_container(
     interrupted: SandboxProcessResult,
+    expected_status: SandboxExecutionStatus,
     expected_failure: SandboxFailureCode,
 ) -> None:
     calls: list[tuple[str, ...]] = []
@@ -62,7 +65,7 @@ def test_docker_never_pulls_and_force_removes_interrupted_container(
         SandboxExecutionRequest(kind=SandboxExecutionKind.COMMAND, name="build")
     )
 
-    assert result.status is SandboxExecutionStatus.REJECTED
+    assert result.status is expected_status
     assert result.failure is not None
     assert result.failure.code is expected_failure
     assert len(calls) == 2
