@@ -83,6 +83,16 @@ function pathsOverlap(left, right) {
   return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 }
 
+function frozenOwnershipPaths(status) {
+  if (!Array.isArray(status.ownership_paths)) {
+    throw new Error('trusted ownership snapshot is missing; run /roadmap-bootstrap on #150');
+  }
+  if (status.ownership_paths.some((path) => typeof path !== 'string' || !path)) {
+    throw new Error('trusted ownership snapshot is malformed');
+  }
+  return [...new Set(status.ownership_paths)].sort();
+}
+
 function renderStatus(status) {
   return `${STATUS_MARKER}\n**Agent work status**\n\n\`\`\`json\n${JSON.stringify(status, null, 2)}\n\`\`\``;
 }
@@ -173,9 +183,7 @@ module.exports = async function coordinate({ github, context }) {
   }
 
   function bootstrapStatus(issue, contract) {
-    const labels = labelNames(issue);
-    const labeledStates = STATES.filter((state) => labels.has(labelForState(state)));
-    let state = labeledStates.length === 1 ? labeledStates[0] : contract.initialState;
+    let state = contract.initialState;
     const holder = contract.declaredHolder && !/^none$/i.test(contract.declaredHolder) ? contract.declaredHolder : null;
     if (state === 'READY' && holder) state = 'CLAIMED';
     if (ACTIVE_STATES.has(state) && !holder) state = 'BLOCKED';
@@ -187,6 +195,7 @@ module.exports = async function coordinate({ github, context }) {
       branch: holder && branchIsConcrete(contract.declaredBranch) ? contract.declaredBranch : null,
       claimed_at: holder ? timestamp : null, heartbeat_at: holder ? timestamp : null,
       linked_pr: declaredPr, linked_pr_head: null,
+      ownership_paths: contract.paths.slice(),
       blocker: state === 'BLOCKED' ? 'bootstrap/reconciliation required' : null,
       released_reason: null, return_state: state === 'BLOCKED' ? 'BLOCKED' : 'READY',
       transition_seq: 0, last_command_comment_id: 0, updated_at: timestamp,
@@ -223,7 +232,7 @@ module.exports = async function coordinate({ github, context }) {
     if (!current) throw new Error('global reservation registry is missing; run /roadmap-bootstrap on #150');
     const entries = current.registry.entries.filter((entry) => entry.issue !== issue.number);
     if (ACTIVE_STATES.has(status.state) && status.agent_id) {
-      entries.push({ issue: issue.number, work_id: contract.workId, state: status.state, actor: status.github_actor, agent: status.agent_id, branch: status.branch, linked_pr: status.linked_pr, paths: contract.paths });
+      entries.push({ issue: issue.number, work_id: contract.workId, state: status.state, actor: status.github_actor, agent: status.agent_id, branch: status.branch, linked_pr: status.linked_pr, paths: frozenOwnershipPaths(status) });
     }
     await writeRegistry(entries);
   }
@@ -250,6 +259,9 @@ module.exports = async function coordinate({ github, context }) {
     if (!registry) throw new Error('global reservation registry is missing; run /roadmap-bootstrap on #150');
     for (const reservation of registry.registry.entries) {
       if (reservation.issue === issue.number) continue;
+      if (reservation.branch && reservation.branch === branch) {
+        throw new Error(`branch conflict with ${reservation.work_id}/#${reservation.issue}: ${branch} is already reserved`);
+      }
       for (const candidate of contract.paths) {
         for (const reserved of reservation.paths || []) {
           if (pathsOverlap(candidate, reserved)) throw new Error(`ownership conflict with ${reservation.work_id}/#${reservation.issue}: ${candidate} overlaps ${reserved}`);
@@ -262,7 +274,7 @@ module.exports = async function coordinate({ github, context }) {
 
   async function bootstrap(actor, association) {
     if (issueNumber !== 150) return audit(issueNumber, 'Rejected `/roadmap-bootstrap`: bootstrap is accepted only on coordination root #150.');
-    if (!ALLOWED_ASSOCIATIONS.has(association)) return audit(issueNumber, `Rejected roadmap bootstrap from unauthorized actor @${actor} (${association || 'NONE'}).`);
+    if (association !== 'OWNER') return audit(issueNumber, `Rejected roadmap bootstrap from unauthorized actor @${actor} (${association || 'NONE'}); repository OWNER is required.`);
     await ensureLabels();
     const counts = {};
     const entries = [];
@@ -272,14 +284,19 @@ module.exports = async function coordinate({ github, context }) {
       let current = await trustedStatus(issue);
       if (!current) {
         current = await writeStatus(issue, null, bootstrapStatus(issue, contract));
-      } else if (!current.status.return_state) {
-        const migrated = { ...current.status, return_state: contract.initialState === 'BLOCKED' ? 'BLOCKED' : 'READY', updated_at: now() };
+      } else if (!current.status.return_state || !Array.isArray(current.status.ownership_paths)) {
+        const migrated = {
+          ...current.status,
+          return_state: current.status.return_state || (contract.initialState === 'BLOCKED' ? 'BLOCKED' : 'READY'),
+          ownership_paths: Array.isArray(current.status.ownership_paths) ? current.status.ownership_paths : contract.paths.slice(),
+          updated_at: now(),
+        };
         current = await writeStatus(issue, current, migrated);
       }
       await setStateLabels(issue.number, current.status.state);
       counts[current.status.state] = (counts[current.status.state] || 0) + 1;
       if (ACTIVE_STATES.has(current.status.state) && current.status.agent_id) {
-        entries.push({ issue: issue.number, work_id: contract.workId, state: current.status.state, actor: current.status.github_actor, agent: current.status.agent_id, branch: current.status.branch, linked_pr: current.status.linked_pr, paths: contract.paths });
+        entries.push({ issue: issue.number, work_id: contract.workId, state: current.status.state, actor: current.status.github_actor, agent: current.status.agent_id, branch: current.status.branch, linked_pr: current.status.linked_pr, paths: frozenOwnershipPaths(current.status) });
       }
       initialized += 1;
     }
@@ -301,6 +318,10 @@ module.exports = async function coordinate({ github, context }) {
   let current = await trustedStatus(issue);
   if (!current) {
     await audit(issueNumber, 'Rejected agent-work command: trusted status is missing. Run `/roadmap-bootstrap` on #150; labels and mutable Work Contract state are not execution authority.');
+    return;
+  }
+  if (ACTIVE_STATES.has(current.status.state) && current.status.agent_id && !Array.isArray(current.status.ownership_paths)) {
+    await audit(issueNumber, 'Rejected agent-work command: trusted active status predates frozen ownership snapshots. Run `/roadmap-bootstrap` on #150 before further transitions.');
     return;
   }
 
@@ -336,7 +357,7 @@ module.exports = async function coordinate({ github, context }) {
         if (status.state !== 'READY') throw new Error(`work is ${status.state}; current holder is ${status.agent_id || 'none'}`);
         if (branchIsConcrete(contract.declaredBranch) && command.branch !== contract.declaredBranch) throw new Error(`branch ${command.branch} does not match Work Contract branch ${contract.declaredBranch}`);
         await assertClaimHasNoConflict(issue, contract, command.branch);
-        Object.assign(status, { state: 'CLAIMED', github_actor: actor, agent_id: command.agent, branch: command.branch, claimed_at: timestamp, heartbeat_at: timestamp, linked_pr: null, linked_pr_head: null, blocker: null, released_reason: null, return_state: 'READY' });
+        Object.assign(status, { state: 'CLAIMED', github_actor: actor, agent_id: command.agent, branch: command.branch, claimed_at: timestamp, heartbeat_at: timestamp, linked_pr: null, linked_pr_head: null, ownership_paths: contract.paths.slice(), blocker: null, released_reason: null, return_state: 'READY' });
       } else if (command.kind === 'heartbeat') {
         if (!ACTIVE_STATES.has(status.state) || !isHolder(command.agent)) throw new Error('heartbeat requires the current authenticated holder');
         if (command.branch && status.branch && command.branch !== status.branch) throw new Error(`branch mismatch; recorded branch is ${status.branch}`);
@@ -344,12 +365,13 @@ module.exports = async function coordinate({ github, context }) {
       } else if (command.kind === 'release') {
         if (!ACTIVE_STATES.has(status.state) || !isHolder(command.agent)) throw new Error('release requires the current authenticated holder');
         const target = status.return_state === 'BLOCKED' ? 'BLOCKED' : 'READY';
-        Object.assign(status, { state: target, github_actor: null, agent_id: null, branch: null, claimed_at: null, heartbeat_at: null, linked_pr: null, linked_pr_head: null, blocker: target === 'BLOCKED' ? status.blocker : null, released_reason: command.reason });
+        Object.assign(status, { state: target, github_actor: null, agent_id: null, branch: null, claimed_at: null, heartbeat_at: null, linked_pr: null, linked_pr_head: null, ownership_paths: [], blocker: target === 'BLOCKED' ? status.blocker : null, released_reason: command.reason });
       } else if (command.kind === 'blocked') {
         if (!['CLAIMED', 'REVIEW'].includes(status.state) || !isHolder(command.agent)) throw new Error('blocked transition requires the current authenticated holder');
         status.state = 'BLOCKED'; status.blocker = command.reason; status.heartbeat_at = timestamp;
       } else if (command.kind === 'handoff') {
-        if (status.state !== 'CLAIMED' || !isHolder(command.agent)) throw new Error('handoff requires the current CLAIMED authenticated holder');
+        if (!['CLAIMED', 'REVIEW'].includes(status.state) || !isHolder(command.agent)) throw new Error('handoff requires the current CLAIMED/REVIEW authenticated holder');
+        if (status.state === 'REVIEW' && status.linked_pr !== command.pr) throw new Error(`re-handoff must preserve linked PR #${status.linked_pr || 'none'}`);
         const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
         if (pr.state !== 'open') throw new Error(`PR #${command.pr} is not open`);
         if (status.branch && pr.head.ref !== status.branch) throw new Error(`PR #${command.pr} head ${pr.head.ref} does not match claimed branch ${status.branch}`);
@@ -372,6 +394,7 @@ module.exports = async function coordinate({ github, context }) {
         if (status.github_actor !== 'bootstrap' && !stale) throw new Error('holder is not bootstrap-derived or stale for at least two hours');
         if (status.branch && command.branch !== status.branch) throw new Error(`recovery branch must preserve recorded branch ${status.branch}`);
         if (branchIsConcrete(contract.declaredBranch) && command.branch !== contract.declaredBranch) throw new Error(`recovery branch must match Work Contract branch ${contract.declaredBranch}`);
+        frozenOwnershipPaths(status);
         status.github_actor = actor; status.agent_id = command.agent; status.branch = command.branch; status.heartbeat_at = timestamp; status.released_reason = `owner recovery: ${command.reason}`;
       }
     } catch (error) {
