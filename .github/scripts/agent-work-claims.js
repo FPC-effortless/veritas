@@ -41,7 +41,7 @@ function repositoryPathToken(value) {
   const normalized = raw.replace(/^\.\//, '');
   if (!normalized || normalized.startsWith('/') || normalized.endsWith('/') || normalized.includes('//')) return null;
   if (!/^[A-Za-z0-9._/*+\-]+$/.test(normalized)) return null;
-  if (normalized.includes('*') && !normalized.endsWith('/**')) return null;
+  if (normalized.includes('*') && !/^[^*]+\/\*\*$/.test(normalized)) return null;
   if (normalized.split('/').some((segment) => segment === '.' || segment === '..')) return null;
   return normalized;
 }
