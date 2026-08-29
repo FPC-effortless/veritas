@@ -40,8 +40,12 @@ def test_execution_requires_trusted_status_not_labels_or_mutable_contract_state(
     script = _script()
     assert "trusted status is missing" in script
     assert "labels and mutable Work Contract state are not execution authority" in script
-    assert "status.return_state === 'BLOCKED'" in script
-    assert "contract.initialState === 'BLOCKED'" not in script
+    assert "const target = status.return_state === 'BLOCKED' ? 'BLOCKED' : 'READY'" in script
+    assert "return_state: contract.initialState === 'BLOCKED' ? 'BLOCKED' : 'READY'" in script
+    release_block = script.split("} else if (command.kind === 'release') {", 1)[1].split(
+        "} else if (command.kind === 'blocked') {", 1
+    )[0]
+    assert "contract.initialState" not in release_block
 
 
 def test_claim_enforces_declared_branch_and_global_path_reservations() -> None:
@@ -52,7 +56,7 @@ def test_claim_enforces_declared_branch_and_global_path_reservations() -> None:
     assert "openPrConflicts" in script
     assert "pathsOverlap(candidate, reserved)" in script
     assert "open PR #${conflict.pr} reserves" in script
-    assert "veritas-agent-work-reservations:v1" in script
+    assert "veritas.agent-work-reservations.v1" in script
 
 
 def test_label_reconciliation_reads_fresh_issue_state() -> None:
