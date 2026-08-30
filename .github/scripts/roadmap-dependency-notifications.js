@@ -326,13 +326,13 @@ module.exports = async function reconcileDependencies({ github, context }) {
   }
 
   async function ensureComment(issueNumber, marker, body) {
-    const expectedBody = `${marker}\n${body}`;
     const comments = await commentsFor(issueNumber);
     if (
       comments.some(
         (comment) =>
           comment.user?.login === 'github-actions[bot]' &&
-          comment.body === expectedBody,
+          typeof comment.body === 'string' &&
+          comment.body.startsWith(`${marker}\n`),
       )
     ) {
       return;
@@ -341,7 +341,7 @@ module.exports = async function reconcileDependencies({ github, context }) {
       owner,
       repo,
       issue_number: issueNumber,
-      body: expectedBody,
+      body: `${marker}\n${body}`,
     });
   }
 
