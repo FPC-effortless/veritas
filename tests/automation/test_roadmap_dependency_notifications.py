@@ -211,6 +211,9 @@ function makeWorld({
   heldReadyEvent = false,
   malformedRegistry = false,
   malformedRegistryEntry = false,
+  malformedRegistryBranch = false,
+  legacyRegistry = false,
+  legacyReservationCollision = false,
   malformedProviderStatus = false,
   closedCandidate = false,
   spoofReadyNotification = false,
@@ -250,6 +253,44 @@ function makeWorld({
         paths: ['docs/roadmap/**'],
       }]
     : [];
+  if (legacyRegistry) {
+    registryEntries.push(
+      {
+        issue: 184,
+        work_id: 'MIG-001',
+        state: 'REVIEW',
+        actor: 'bootstrap',
+        agent: 'existing PR #134 lane',
+        branch: 'existing `feat/investigation-structured-corpus',
+        linked_pr: 134,
+        paths: [
+          'src/investigation_world/investigation_data/structured_corpus.py',
+        ],
+      },
+      {
+        issue: 185,
+        work_id: 'DATA-001',
+        state: 'REVIEW',
+        actor: 'bootstrap',
+        agent: 'existing PR #147 lane',
+        branch: 'existing PR #147 branch',
+        linked_pr: 147,
+        paths: [],
+      },
+    );
+  }
+  if (legacyReservationCollision) {
+    registryEntries.push({
+      issue: 184,
+      work_id: 'MIG-001',
+      state: 'REVIEW',
+      actor: 'bootstrap',
+      agent: 'existing PR #134 lane',
+      branch: 'existing `feat/investigation-structured-corpus',
+      linked_pr: 134,
+      paths: ['docs/roadmap/**'],
+    });
+  }
   if (malformedRegistryEntry) {
     registryEntries.push({
       issue: 998,
@@ -260,6 +301,18 @@ function makeWorld({
       branch: 'feat/malformed-active-work',
       linked_pr: null,
       paths: 'docs/roadmap/**',
+    });
+  }
+  if (malformedRegistryBranch) {
+    registryEntries.push({
+      issue: 997,
+      work_id: 'MALFORMED-BRANCH-WORK',
+      state: 'CLAIMED',
+      actor: 'FPC-effortless',
+      agent: 'active-agent',
+      branch: '   ',
+      linked_pr: null,
+      paths: ['docs/elsewhere/**'],
     });
   }
   const registryComments = [registryComment(registryEntries)];
@@ -443,6 +496,25 @@ function trustedReadyComments(world) {
     'repeated run duplicated READY notice',
   );
 
+  const legacy = makeWorld({ legacyRegistry: true });
+  await reconcile({ github: legacy.github, context: legacy.context });
+  status = parseStatus(legacy.comments[239][0]);
+  assert(
+    status.state === 'READY',
+    'safe legacy reservation branch metadata blocked reconciliation',
+  );
+
+  const legacyCollision = makeWorld({ legacyReservationCollision: true });
+  await reconcile({
+    github: legacyCollision.github,
+    context: legacyCollision.context,
+  });
+  status = parseStatus(legacyCollision.comments[239][0]);
+  assert(
+    status.state === 'BLOCKED',
+    'legacy descriptive branch metadata erased an active path collision',
+  );
+
   const spoofedNotice = makeWorld({ spoofReadyNotification: true });
   await reconcile({
     github: spoofedNotice.github,
@@ -510,6 +582,7 @@ function trustedReadyComments(world) {
     ['partial linked PR', { linkedHead: true }, false],
     ['reservation registry', { malformedRegistry: true }, true],
     ['reservation entry', { malformedRegistryEntry: true }, true],
+    ['reservation branch', { malformedRegistryBranch: true }, true],
     ['marked status', { malformedProviderStatus: true }, true],
   ];
   for (const [name, options, shouldReject] of malformedCases) {
