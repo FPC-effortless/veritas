@@ -64,6 +64,11 @@ Missing or malformed decisive metadata fails closed. MEMBER/COLLABORATOR prose,
 a different comment ID, an active holder, a mismatched Work ID, or a synthetic
 label/closure/PR signal cannot complete the item.
 
+A newest bot-authored status bearing the trusted marker but lacking valid JSON
+fails the run closed; it cannot fall back to an older status. Eligible and
+repairable terminal records must remain fully unowned, including null claim
+timestamps and no frozen ownership paths.
+
 ## Publication order and audit
 
 The transition order is:
@@ -79,6 +84,10 @@ Trusted status is therefore visible before labels or closure. If a later step
 fails, reopening or rerunning the workflow validates the embedded completion
 event against the original evidence comment, repairs labels/audit/closure, and
 does not repeat the terminal transition.
+
+Only an exact audit body authored by `github-actions[bot]` satisfies the audit
+repair step. An ordinary user copying the public deterministic marker cannot
+suppress the trusted audit record.
 
 ## Triggers, serialization, and permissions
 
