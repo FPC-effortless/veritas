@@ -49,6 +49,12 @@ The first implementation is intentionally conservative. Automatic dependency sat
 7. the linked PR is actually merged and its head still matches the trusted handoff head; and
 8. the PR merge commit is reachable from current canonical `main`.
 
+Provider and consumer trusted statuses must also bind to the exact roadmap Work
+ID. Consumer transition sequence metadata must be a non-negative integer, and
+the unowned predicate rejects any actor, agent, claim timestamps, branch,
+linked PR, or linked PR head. Missing or malformed decisive metadata is not
+defaulted or synthesized.
+
 This deliberately does **not** infer that non-coordination, evidence, manual, paid, sealed, external-authority, scientific, Frontier, training, or commercial dependencies are satisfied merely because code merged or a roadmap item says `DONE`. Those cases remain blocked until a future typed-authority reconciler has sufficient evidence.
 
 The checked-in roadmap supplies dependency graph metadata only. Its stored execution state is not trusted as current; provider state is read from live trusted GitHub status comments and merge ancestry is verified live.
@@ -61,6 +67,11 @@ It then checks candidate paths against:
 
 - the trusted global active-reservation registry on #150; and
 - changed files of every open PR.
+
+A newest bot-authored reservation record bearing the trusted marker must have
+valid JSON, schema identity, and an entries array. Malformed marked authority
+fails closed; the notifier never falls back to an older registry that could
+omit a newer active reservation.
 
 Exact and ancestor/descendant path overlaps remain blocking. A collision leaves the item `BLOCKED` and posts one deterministic audit notice for that exact reason. Repeated runs do not spam duplicate collision comments.
 
@@ -76,6 +87,11 @@ The transition order is fail-closed:
 4. post the dependency-ready audit notification.
 
 The trusted status is written before the label, so a partial label failure cannot make a label the execution authority. A later run recognizes the embedded dependency-ready event, repairs the READY discovery label, and ensures the deterministic notification marker exists.
+
+Repair requires the event sequence to match trusted status, the recorded hard
+dependencies to exactly match the current roadmap edge list, and the recorded
+canonical base to be a concrete commit SHA. A schema string alone is not enough
+to authorize READY label or notification repair.
 
 The audit comment states that no claim or reservation was created. Optional `Watchers:` GitHub handles in the Work Contract are mentioned only in that notification; watchers never receive ownership automatically.
 
