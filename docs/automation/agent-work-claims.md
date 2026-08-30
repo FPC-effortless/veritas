@@ -4,11 +4,25 @@ The `Agent Work Claims` workflow turns GitHub issues marked with `<!-- veritas-a
 
 ## Canonical authority
 
-After bootstrap, the only execution authority is the latest trusted bot-authored status record marked `veritas-agent-work-status:v1`. `work:*` labels are discovery metadata only. Mutable issue-body `State`, `Claim holder`, `Linked PR`, `Positive ownership`, and manual label edits cannot directly authorize or reshape a later active transition.
+The only execution authority is the latest trusted bot-authored status record marked `veritas-agent-work-status:v1`. `work:*` labels are discovery metadata only. Mutable issue-body `State`, `Claim holder`, `Linked PR`, `Positive ownership`, and manual label edits cannot directly authorize or reshape a later active transition.
 
-`/roadmap-bootstrap` on coordination root #150 is OWNER-only. It materializes a trusted status record for every enrolled open roadmap issue and reconciles labels to that record. When no trusted record exists, bootstrap derives initial execution state from the Work Contract rather than mutable `work:*` labels. Ordinary commands fail closed when trusted status is missing.
+The effective positive-ownership paths are frozen into trusted status as `ownership_paths` when a claim is accepted or when a legacy status is deliberately migrated. Active registry updates consume that frozen ownership snapshot rather than reparsing mutable issue-body ownership text. Changing a Work Contract after claim therefore does not silently widen, shrink, or move an active reservation.
 
-The effective positive-ownership paths are frozen into trusted status as `ownership_paths` when a claim is accepted or when a legacy status is deliberately migrated during OWNER-only bootstrap. Active registry updates consume that frozen ownership snapshot rather than reparsing mutable issue-body ownership text. Changing a Work Contract after claim therefore does not silently widen, shrink, or move an active reservation.
+## Automatic enrollment
+
+A newly opened or reopened issue with `<!-- veritas-agent-work -->` is automatically enrolled when the issue author has GitHub `OWNER`, `MEMBER`, or `COLLABORATOR` association. Enrollment is serialized through the same `agent-work-coordination` concurrency group as claim/status commands.
+
+Automatic enrollment is intentionally weaker than a claim. The enrollment path may create only an **unowned** trusted `READY` or `BLOCKED` record and its discovery label. It cannot create a holder, active reservation, linked PR, REVIEW state, DONE state, or any merge/release/qualification authority.
+
+Initial state comes from the Work Contract, never from mutable `work:*` labels. A valid new `READY` contract must have a concrete branch and machine-checkable positive ownership, unless it uses an exact allow-listed no-source coordination form. A valid `BLOCKED` contract is enrolled as unowned `BLOCKED`.
+
+Automatic enrollment fails closed to unowned `BLOCKED` when the issue tries to start in `CLAIMED`, `REVIEW`, `DONE`, or `SUPERSEDED`; declares a holder or linked PR; or exposes invalid READY branch/ownership metadata. The blocker records that OWNER reconciliation is required. Automatic enrollment never publishes an active owner from issue-body declarations.
+
+Trusted status is written before discovery labels. If label reconciliation later fails, execution remains fail-closed because labels are not authority. Repeated `opened`/`reopened` delivery is idempotent: if trusted status already exists, the workflow preserves that status and only reconciles labels from it rather than creating another trusted record.
+
+`/roadmap-bootstrap` on coordination root #150 is therefore a **repair and migration operation**, not the normal path for new Work Contracts. It remains OWNER-only and is used to initialize legacy issues, reconcile pre-enrollment metadata, or repair deliberately supported migration cases. Ordinary coordination commands still fail closed if trusted status is missing.
+
+Adding the enrollment marker later through an arbitrary issue edit is not treated as automatic authority by this version. Such a migration requires the explicit OWNER reconciliation path.
 
 ## Discovery
 
@@ -18,7 +32,7 @@ Claimable work remains discoverable with:
 is:issue is:open label:agent-work label:work:ready
 ```
 
-The workflow maintains exactly one discovery label from `work:ready`, `work:claimed`, `work:blocked`, `work:review`, `work:done`, and `work:superseded`.
+The workflow maintains exactly one discovery label from `work:ready`, `work:claimed`, `work:blocked`, `work:review`, `work:done`, and `work:superseded`. The label is a view of trusted state, not a substitute for it.
 
 ## Authorization and identity
 
@@ -40,7 +54,7 @@ A separate narrow recovery command exists only for legacy bootstrap metadata-onl
 /recover-metadata <new-agent-id> <reason>
 ```
 
-`/recover-metadata` is OWNER-only and does not accept a branch argument. It applies only when the trusted lane is still bootstrap-derived with zero frozen source paths, zero transition history, no linked PR, an exact allow-listed no-source `Positive ownership` form, and the same non-concrete descriptive branch in trusted status and the Work Contract. The recorded descriptive branch is preserved verbatim; it is never reinterpreted as a Git branch. Source-owning lanes, concrete-branch lanes, transitioned lanes, and non-OWNER callers fail closed. After adoption, the owner may use ordinary holder commands such as `/release` without fabricating source ownership.
+`/recover-metadata` is OWNER-only and does not accept a branch argument. It applies only when the trusted lane is bootstrap-derived with zero frozen source paths, zero transition history, no linked PR, an exact allow-listed no-source `Positive ownership` form, and matching non-concrete descriptive branch metadata. Source-owning, concrete-branch, transitioned, or non-OWNER cases fail closed.
 
 ## Commands
 
@@ -61,78 +75,67 @@ The repository OWNER may run `/roadmap-bootstrap` only on #150.
 
 ## Deterministic command ordering
 
-GitHub Actions concurrency is non-cancelling but is not FIFO. The workflow therefore does not trust runner start order. Every invocation reads pending coordination comments for that issue and processes them in ascending comment-ID order after the last recorded command. A later event can drain an earlier pending command first, so rapid dependent commands such as `/claim` then `/release` are evaluated in authoring order rather than scheduler order.
+GitHub Actions concurrency is non-cancelling but is not FIFO. Every command invocation reads pending coordination comments for that issue and processes them in ascending comment-ID order after the last recorded command. Rapid dependent commands are therefore evaluated in authoring order rather than runner start order. Rejected commands are recorded as processed so they cannot replay indefinitely.
 
-Rejected commands are also recorded as processed so they cannot be replayed indefinitely.
+Issue enrollment and command processing share the same workflow-level concurrency group. A newly created issue cannot race a later `/claim` into two independent authority paths: enrollment publishes the initial trusted record, while the existing transition engine remains the only path that can create an active holder.
 
 ## Claim locking and parallelism
 
-Before accepting `/claim`, the workflow:
+Before accepting `/claim`, the transition engine:
 
-1. requires canonical state `READY`;
+1. requires trusted canonical state `READY`;
 2. requires the claimed branch to match a concrete Work Contract branch when one is declared;
 3. extracts machine-checkable backticked positive-ownership paths;
 4. rejects reuse of a branch already held by another active reservation;
 5. rejects ancestor/descendant or exact path overlap with active `CLAIMED`, `REVIEW`, or owner-held `BLOCKED` roadmap reservations;
 6. scans changed files of open PRs and rejects overlap, excluding only an existing PR on the candidate branch itself;
-7. freezes the accepted ownership paths into trusted status;
-8. commits the active global reservation before publishing the trusted local `CLAIMED` state or its discovery label.
+7. freezes accepted ownership paths into trusted status;
+8. commits the active global reservation before publishing trusted local `CLAIMED` state or its discovery label.
 
-Backticked ownership tokens may be root-level repository files such as `Dockerfile`, `Makefile`, `LICENSE`, or `CODEOWNERS`, as well as dotfiles and nested exact paths. Wildcard-bearing ownership is deliberately restricted to one terminal subtree suffix: a token such as `src/private/**` is valid, but every token containing `*` before that terminal suffix is invalid. Forms such as `src/*/private/**`, `src/**/private/**`, and `*.md/**` fail closed before local or global claim publication. This keeps accepted grammar identical to the prefix semantics implemented by `pathsOverlap()`.
+Backticked ownership tokens may be root-level repository files such as `Dockerfile`, `Makefile`, `LICENSE`, or `CODEOWNERS`, or nested exact paths. Wildcards are restricted to one terminal subtree suffix such as `src/private/**`. Whitespace-bearing prose, absolute paths, traversal, empty path segments, and unsupported wildcard forms fail closed.
 
-The parser also rejects whitespace-bearing prose, absolute paths, empty path segments, traversal segments (`.` or `..`), and any other unsupported wildcard form. The `Positive ownership` field is read without stripping the code-span delimiters from a single-path declaration, so a contract that owns only `Dockerfile` is still machine-checkable.
+Zero-path claims are exceptional and use an exact allow-list of GitHub-coordination-only ownership forms. One valid example is `this issue's comments/labels only`. Repository-editing prose does not qualify merely because it contains words such as “coordination” or “metadata”; for example, `coordination docs/tests only` must expose concrete repository paths and does not bypass locking.
 
-Zero-path claims are exceptional and use an exact allow-list of positive-ownership forms that describe GitHub coordination metadata only. A real rehearsal form such as `this issue's comments/labels only` remains claimable without repository paths. Repository-editing prose does not qualify merely because it contains words such as “coordination” or “metadata”: for example, `coordination docs/tests only` must expose concrete backticked repository paths or the claim fails closed. This prevents a docs/tests lane from bypassing the global path lock with an empty reservation.
+The current active roadmap reservations are mirrored in one trusted bot-authored `veritas-agent-work-reservations:v1` record on #150. Active entries use frozen ownership snapshots. Open-PR changed files remain a live claim-time reservation source, including legacy or automated PRs that are not `agent-work`.
 
-The current active roadmap reservations are mirrored in one trusted bot-authored `veritas-agent-work-reservations:v1` record on #150. Active entries are rebuilt from trusted frozen ownership snapshots, not mutable Work Contract text. Open-PR changed files remain a live claim-time reservation source rather than relying on a potentially stale registry snapshot.
-
-Claim publication is fail-closed across partial API failure. If the reservation write fails, trusted/local `CLAIMED` state is not published. If the reservation succeeds but the later trusted-status or label write fails, the reservation is intentionally left stale so an overlapping second claim remains blocked until reconciliation. This ordering prevents a locally visible active owner from existing without a corresponding global exclusion record.
-
-This locking serializes only short coordination transitions. Coding work on disjoint reservations remains parallel.
+Claim publication is fail-closed across partial API failure. If the reservation write fails, local `CLAIMED` state is not published. If the reservation succeeds but later status/label publication fails, the reservation is intentionally left stale so overlapping work stays blocked until reconciliation.
 
 ## Release and blocking
 
-A successful claim stores its release target in trusted status as `return_state`. `/release` uses that frozen trusted value rather than reparsing mutable issue-body `State` at release time, and clears the released ownership snapshot from active status.
+A successful claim stores its release target in trusted status as `return_state`. `/release` uses that frozen value rather than mutable Work Contract `State` and clears active ownership metadata.
 
-Active-to-inactive transitions may publish the local release/completion state before registry cleanup. If cleanup fails, the old reservation remains stale and conservative; partial failure can make work temporarily non-claimable but cannot make still-owned work look free.
+If registry cleanup fails after an active-to-inactive transition, the old reservation remains stale and conservative: work may be temporarily non-claimable, but still-owned work cannot appear free.
 
-`/blocked` preserves the current authenticated holder, branch, and frozen ownership reservation while making the lane non-claimable. Staleness alone never frees a lane; explicit `/release`, owner `/recover`, or the narrowly scoped owner `/recover-metadata` path is required.
+`/blocked` preserves the authenticated holder, branch, and frozen ownership reservation. Staleness alone never frees a lane; explicit `/release` or authorized recovery is required.
 
 ## Handoff and exact-head completion
 
-`/handoff` requires the authenticated CLAIMED holder and validates that the PR:
+`/handoff` requires the authenticated holder and validates that the PR exists in this repository, is open, uses the recorded branch, and references both the roadmap issue and primary Work ID. Handoff records the exact PR head SHA.
 
-- exists in this repository;
-- is open;
-- uses the recorded claimed branch;
-- references both the roadmap issue and primary Work ID.
+A corrected PR may be handed off again while already in REVIEW only for the same PR, refreshing exact-head evidence. It cannot silently switch REVIEW ownership to another PR.
 
-The handoff records the exact PR head SHA.
+`/done` requires the authenticated REVIEW holder, the exact linked merged PR, and the same PR head SHA most recently handed off. If the head moves, final handoff/review must be repeated.
 
-When a corrected PR head is pushed after independent review, the authenticated holder may issue `/handoff` again while already in REVIEW, but only for the same PR. This same PR re-handoff revalidates the PR/branch/work linkage and refreshes the exact `linked_pr_head`; it cannot switch REVIEW ownership to another PR.
+A narrow migration exception permits legacy REVIEW records created before `ownership_paths` existed to complete only when normal authenticated-holder, exact PR, merged-PR, and handed-off-head checks still pass. Other commands on active legacy records without frozen ownership remain fail-closed.
 
-`/done` requires the authenticated REVIEW holder, the exact linked PR, a merged PR, and the same PR head SHA that was most recently handed off. If the PR head moves after handoff, `/done` rejects and the final head must be handed off/reviewed again.
-
-A narrow migration exception exists for trusted `REVIEW` records created before the `ownership_paths` field existed. Such a record may execute `/done` without reopening the issue or broadening bootstrap, but it still must satisfy the normal authenticated-holder, exact linked PR, merged PR, and exact handed-off-head checks. All other commands on an active legacy record without `ownership_paths` remain fail-closed. Successful legacy completion materializes an inert empty ownership snapshot before the status becomes `DONE`; registry cleanup remains conservative, so a cleanup failure can leave a stale reservation but cannot free still-active work.
-
-This is still implementation-level completion only. Work-class-specific scientific, experiment, external/manual, convergence, and release completion rules remain stricter and must not be inferred from a merged PR.
+Implementation-level DONE does not imply scientific, Frontier, training, commercial, external/manual, convergence, release, or private-evidence completion.
 
 ## Bootstrap and reconciliation
 
-OWNER-only bootstrap:
+OWNER-only bootstrap remains available for migration and repair. It:
 
 1. creates missing coordination labels;
-2. scans all enrolled open issues;
+2. scans enrolled open issues;
 3. preserves existing trusted status records;
-4. computes missing trusted status from Work Contract migration data, never from mutable state labels;
-5. computes frozen ownership snapshots for legacy trusted statuses that predate that field;
-6. builds the complete active reservation set from the computed trusted states and publishes that registry on #150 before any new/migrated active trusted state is materialized locally;
-7. materializes or migrates the trusted status records;
+4. computes missing legacy trusted status from Work Contract migration data, never mutable state labels;
+5. computes frozen ownership snapshots for supported legacy statuses;
+6. publishes the complete active reservation registry on #150 before materializing newly migrated active local state;
+7. materializes/migrates trusted records;
 8. reconciles discovery labels from trusted state.
 
-If bootstrap cannot publish the reservation registry, it does not materialize new active trusted state. If registry publication succeeds and a later status or label write fails, the already-published reservation remains fail-closed and continues blocking overlapping claims. A later OWNER-only bootstrap can reconcile the stale reservation and local status.
+If bootstrap cannot publish the reservation registry, it does not materialize new active trusted state. If registry publication succeeds and later status/label publication fails, the reservation remains fail-closed until another OWNER reconciliation.
 
-Once bootstrap is complete, labels and Work Contract state/ownership are not execution authority for an already-active reservation.
+Bootstrap is not required for ordinary new authorized READY/BLOCKED Work Contracts after automatic enrollment is installed.
 
 ## Security boundary
 
@@ -146,15 +149,17 @@ pull-requests: read
 
 It has no Actions write, package, release, secret, payment, deployment, or model-training authority. Inputs are handled inside `actions/github-script`; no untrusted command text is interpolated into a shell.
 
+Automatic enrollment is additionally constrained by issue author association and cannot publish active ownership. Unsupported authors or active-state declarations remain outside autonomous coordination authority and require explicit OWNER reconciliation.
+
 ## Agent startup rule
 
 An agent must:
 
 1. read `AGENTS.md` and repository overlays;
 2. find a `work:ready` issue;
-3. inspect dependencies and positive/negative ownership;
+3. inspect the latest trusted status plus dependencies and positive/negative ownership;
 4. post `/claim <agent-id> <branch>`;
 5. wait for the accepted `CLAIMED` acknowledgement;
-6. only then edit the owned lane.
+6. only then edit the frozen owned lane.
 
-A claim grants coordination ownership only. It does not grant merge, release, sealed/private-data, paid-compute, external-account, or qualification authority.
+A claim grants coordination ownership only. It does not grant merge, release, sealed/private-data, paid-compute, external-account, deployment, or qualification authority.
