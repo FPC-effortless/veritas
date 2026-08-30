@@ -53,7 +53,9 @@ Provider and consumer trusted statuses must also bind to the exact roadmap Work
 ID. Consumer transition sequence metadata must be a non-negative integer, and
 the unowned predicate rejects any actor, agent, claim timestamps, branch,
 linked PR, or linked PR head. Missing or malformed decisive metadata is not
-defaulted or synthesized.
+defaulted or synthesized. A newest bot-authored status bearing the trusted
+marker but lacking valid JSON fails the run closed; it cannot fall back to an
+older status comment.
 
 This deliberately does **not** infer that non-coordination, evidence, manual, paid, sealed, external-authority, scientific, Frontier, training, or commercial dependencies are satisfied merely because code merged or a roadmap item says `DONE`. Those cases remain blocked until a future typed-authority reconciler has sufficient evidence.
 
@@ -73,6 +75,13 @@ valid JSON, schema identity, and an entries array. Malformed marked authority
 fails closed; the notifier never falls back to an older registry that could
 omit a newer active reservation.
 
+Every reservation entry is validated before collision checks. Issue identity
+must be a unique positive integer, the state must be `CLAIMED`, `REVIEW`, or
+holder-owned `BLOCKED`, holder/work/branch metadata must be concrete, linked-PR
+identity must be null or a positive integer, and every path must be a valid
+repository path. One malformed entry fails the entire run closed instead of
+silently disappearing from collision enforcement.
+
 Exact and ancestor/descendant path overlaps remain blocking. A collision leaves the item `BLOCKED` and posts one deterministic audit notice for that exact reason. Repeated runs do not spam duplicate collision comments.
 
 This check does not reserve the candidate. It only proves that dependency readiness can be published without immediately advertising work whose owned surface is already occupied.
@@ -91,7 +100,10 @@ The trusted status is written before the label, so a partial label failure canno
 Repair requires the event sequence to match trusted status, the recorded hard
 dependencies to exactly match the current roadmap edge list, and the recorded
 canonical base to be a concrete commit SHA. A schema string alone is not enough
-to authorize READY label or notification repair.
+to authorize READY label or notification repair. The READY record must also
+remain fully unowned: no actor, agent, branch, claim timestamps, linked PR/head,
+or frozen ownership paths. Holder-bearing READY metadata cannot publish or
+repair discovery state.
 
 The audit comment states that no claim or reservation was created. Optional `Watchers:` GitHub handles in the Work Contract are mentioned only in that notification; watchers never receive ownership automatically.
 
