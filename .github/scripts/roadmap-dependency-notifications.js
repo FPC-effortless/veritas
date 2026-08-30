@@ -101,7 +101,7 @@ function pathsOverlap(left, right) {
   return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
 }
 
-function parseStatusComment(comment, issueNumber) {
+function parseStatusComment(comment, issueNumber, expectedWorkId = null) {
   if (
     comment.user?.login !== 'github-actions[bot]' ||
     !comment.body?.includes(STATUS_MARKER)
@@ -118,7 +118,8 @@ function parseStatusComment(comment, issueNumber) {
   }
   if (
     status.schema_version !== 'veritas.agent-work-status.v1' ||
-    status.issue_number !== issueNumber
+    status.issue_number !== issueNumber ||
+    (expectedWorkId !== null && status.work_id !== expectedWorkId)
   ) {
     throw new Error(`issue #${issueNumber} has invalid trusted status identity`);
   }
@@ -133,19 +134,57 @@ function parseRegistryComment(comment) {
     return null;
   }
   const match = comment.body.match(/```json\s*([\s\S]*?)```/);
-  if (!match) return null;
+  if (!match) throw new Error('trusted reservation registry JSON is missing');
+  let registry;
   try {
-    const registry = JSON.parse(match[1]);
-    if (
-      registry.schema_version !== 'veritas.agent-work-reservations.v1' ||
-      !Array.isArray(registry.entries)
-    ) {
-      return null;
-    }
-    return registry;
+    registry = JSON.parse(match[1]);
   } catch {
-    return null;
+    throw new Error('trusted reservation registry JSON is malformed');
   }
+  if (
+    registry.schema_version !== 'veritas.agent-work-reservations.v1' ||
+    !Array.isArray(registry.entries)
+  ) {
+    throw new Error('trusted reservation registry identity is invalid');
+  }
+  return registry;
+}
+
+function validTransitionSequence(status) {
+  return Number.isInteger(status?.transition_seq) && status.transition_seq >= 0;
+}
+
+function hasValidReadyEvent(status, work) {
+  const event = status?.dependency_ready_event;
+  return Boolean(
+    status?.state === 'READY' &&
+      validTransitionSequence(status) &&
+      event?.schema_version === 'veritas.dependency-ready-event.v1' &&
+      event.transition_seq === status.transition_seq &&
+      Array.isArray(event.dependencies) &&
+      event.dependencies.length === work.hard_dependencies.length &&
+      event.dependencies.every(
+        (dependency, index) =>
+          dependency === work.hard_dependencies[index],
+      ) &&
+      /^[0-9a-f]{40}$/.test(String(event.canonical_base || '')),
+  );
+}
+
+function hasUnownedBlockedStatus(status) {
+  return Boolean(
+    status?.state === 'BLOCKED' &&
+      status.github_actor === null &&
+      status.agent_id === null &&
+      status.branch === null &&
+      status.claimed_at === null &&
+      status.heartbeat_at === null &&
+      status.linked_pr === null &&
+      status.linked_pr_head === null &&
+      Array.isArray(status.ownership_paths) &&
+      status.dependency_ready_event == null &&
+      validTransitionSequence(status),
+  );
 }
 
 function renderStatus(status) {
@@ -191,10 +230,14 @@ module.exports = async function reconcileDependencies({ github, context }) {
     });
   }
 
-  async function trustedStatus(issueNumber) {
+  async function trustedStatus(issueNumber, expectedWorkId) {
     const comments = await commentsFor(issueNumber);
     for (const comment of comments.slice().reverse()) {
-      const parsed = parseStatusComment(comment, issueNumber);
+      const parsed = parseStatusComment(
+        comment,
+        issueNumber,
+        expectedWorkId,
+      );
       if (parsed) return parsed;
     }
     return null;
@@ -304,8 +347,12 @@ module.exports = async function reconcileDependencies({ github, context }) {
         reason: `hard dependency ${workId} requires non-coordination authority`,
       };
     }
-    const current = await trustedStatus(provider.issue);
-    if (!current || current.status.state !== 'DONE') {
+    const current = await trustedStatus(provider.issue, workId);
+    if (
+      !current ||
+      current.status.state !== 'DONE' ||
+      !validTransitionSequence(current.status)
+    ) {
       return { ok: false, reason: `hard dependency ${workId} is not trusted DONE` };
     }
     const linkedPr = current.status.linked_pr;
@@ -365,14 +412,10 @@ module.exports = async function reconcileDependencies({ github, context }) {
     const issue = (
       await github.rest.issues.get({ owner, repo, issue_number: work.issue })
     ).data;
-    const current = await trustedStatus(work.issue);
+    const current = await trustedStatus(work.issue, work.work_id);
     if (!current) continue;
 
-    if (
-      current.status.state === 'READY' &&
-      current.status.dependency_ready_event?.schema_version ===
-        'veritas.dependency-ready-event.v1'
-    ) {
+    if (hasValidReadyEvent(current.status, work)) {
       await setReadyLabel(work.issue);
       const event = current.status.dependency_ready_event;
       const marker = readyKey(work.issue, event.transition_seq);
@@ -391,15 +434,7 @@ module.exports = async function reconcileDependencies({ github, context }) {
     }
 
     const status = current.status;
-    if (
-      status.state !== 'BLOCKED' ||
-      status.github_actor !== null ||
-      status.agent_id !== null ||
-      status.branch !== null ||
-      status.linked_pr !== null
-    ) {
-      continue;
-    }
+    if (!hasUnownedBlockedStatus(status)) continue;
 
     const proofs = [];
     let dependencyFailure = null;
@@ -458,7 +493,7 @@ module.exports = async function reconcileDependencies({ github, context }) {
       continue;
     }
 
-    const transitionSeq = Number(status.transition_seq || 0) + 1;
+    const transitionSeq = status.transition_seq + 1;
     const dependencyIds = proofs.map((proof) => proof.work_id);
     const nextStatus = {
       ...status,
@@ -500,9 +535,12 @@ module.exports = async function reconcileDependencies({ github, context }) {
 
 module.exports.__test = {
   branchIsConcrete,
+  hasUnownedBlockedStatus,
+  hasValidReadyEvent,
   isExplicitNoSourceOwnership,
   parseContract,
   parseStatusComment,
   pathsOverlap,
   repositoryPathToken,
+  validTransitionSequence,
 };
