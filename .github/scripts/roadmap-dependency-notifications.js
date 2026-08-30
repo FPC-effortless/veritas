@@ -6,6 +6,7 @@ const STATUS_MARKER = '<!-- veritas-agent-work-status:v1 -->';
 const RESERVATION_MARKER = '<!-- veritas-agent-work-reservations:v1 -->';
 const READY_MARKER = 'veritas-roadmap-dependency-ready:v1';
 const BLOCKED_MARKER = 'veritas-roadmap-dependency-blocked:v1';
+const ACTIVE_RESERVATION_STATES = new Set(['CLAIMED', 'REVIEW', 'BLOCKED']);
 const STATE_LABELS = new Set([
   'work:ready',
   'work:claimed',
@@ -109,7 +110,9 @@ function parseStatusComment(comment, issueNumber, expectedWorkId = null) {
     return null;
   }
   const match = comment.body.match(/```json\s*([\s\S]*?)```/);
-  if (!match) return null;
+  if (!match) {
+    throw new Error(`issue #${issueNumber} trusted status JSON is missing`);
+  }
   let status;
   try {
     status = JSON.parse(match[1]);
@@ -147,6 +150,36 @@ function parseRegistryComment(comment) {
   ) {
     throw new Error('trusted reservation registry identity is invalid');
   }
+  const issues = new Set();
+  for (const entry of registry.entries) {
+    const validLinkedPr =
+      entry?.linked_pr === null ||
+      (Number.isInteger(entry?.linked_pr) && entry.linked_pr > 0);
+    const validPaths =
+      Array.isArray(entry?.paths) &&
+      entry.paths.every(
+        (path) =>
+          typeof path === 'string' && repositoryPathToken(path) === path,
+      );
+    if (
+      !Number.isInteger(entry?.issue) ||
+      entry.issue <= 0 ||
+      issues.has(entry.issue) ||
+      typeof entry.work_id !== 'string' ||
+      !entry.work_id.trim() ||
+      !ACTIVE_RESERVATION_STATES.has(entry.state) ||
+      typeof entry.actor !== 'string' ||
+      !entry.actor.trim() ||
+      typeof entry.agent !== 'string' ||
+      !entry.agent.trim() ||
+      !branchIsConcrete(entry.branch) ||
+      !validLinkedPr ||
+      !validPaths
+    ) {
+      throw new Error('trusted reservation registry entry is invalid');
+    }
+    issues.add(entry.issue);
+  }
   return registry;
 }
 
@@ -154,10 +187,27 @@ function validTransitionSequence(status) {
   return Number.isInteger(status?.transition_seq) && status.transition_seq >= 0;
 }
 
+function hasNoActiveOwnership(status) {
+  return Boolean(
+    status?.github_actor === null &&
+      status.agent_id === null &&
+      status.branch === null &&
+      status.claimed_at === null &&
+      status.heartbeat_at === null &&
+      status.linked_pr === null &&
+      status.linked_pr_head === null &&
+      Array.isArray(status.ownership_paths) &&
+      status.ownership_paths.length === 0,
+  );
+}
+
 function hasValidReadyEvent(status, work) {
   const event = status?.dependency_ready_event;
   return Boolean(
     status?.state === 'READY' &&
+      hasNoActiveOwnership(status) &&
+      status.blocker === null &&
+      status.return_state === 'READY' &&
       validTransitionSequence(status) &&
       event?.schema_version === 'veritas.dependency-ready-event.v1' &&
       event.transition_seq === status.transition_seq &&
@@ -174,14 +224,7 @@ function hasValidReadyEvent(status, work) {
 function hasUnownedBlockedStatus(status) {
   return Boolean(
     status?.state === 'BLOCKED' &&
-      status.github_actor === null &&
-      status.agent_id === null &&
-      status.branch === null &&
-      status.claimed_at === null &&
-      status.heartbeat_at === null &&
-      status.linked_pr === null &&
-      status.linked_pr_head === null &&
-      Array.isArray(status.ownership_paths) &&
+      hasNoActiveOwnership(status) &&
       status.dependency_ready_event == null &&
       validTransitionSequence(status),
   );
@@ -466,7 +509,7 @@ module.exports = async function reconcileDependencies({ github, context }) {
 
     let collision = null;
     for (const reservation of registry.entries) {
-      if (reservation.issue === work.issue || !Array.isArray(reservation.paths)) continue;
+      if (reservation.issue === work.issue) continue;
       for (const candidate of contract.paths) {
         const reserved = reservation.paths.find((path) => pathsOverlap(candidate, path));
         if (reserved) {
