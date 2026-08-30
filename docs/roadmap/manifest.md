@@ -14,31 +14,35 @@ coordination completion state.
 Execution state is synchronized from GitHub:
 
 1. the issue must carry `agent-work`;
-2. exactly one `work:ready|blocked|claimed|review|done|superseded` label is required;
-3. for `CLAIMED` and `REVIEW`, the synchronizer requires the latest trusted
-   `<!-- veritas-agent-work-status:v1 -->` comment authored by `github-actions[bot]`
-   and requires its Work ID, issue number, state, holder, branch, and state-specific PR
-   linkage to agree with the canonical coordination state;
-4. trusted status lookup paginates the complete issue-comment history rather than
+2. the synchronizer searches the complete issue-comment history for the latest trusted
+   `<!-- veritas-agent-work-status:v1 -->` comment authored by `github-actions[bot]`;
+3. when a trusted status exists, it is the execution-state authority. Its Work ID,
+   issue number, state, holder, branch, and state-specific PR linkage must satisfy the
+   canonical coordination contract. `work:*` labels are discovery output and are not
+   allowed to override that trusted record;
+4. when no trusted status exists, exactly one
+   `work:ready|blocked|claimed|review|done|superseded` label supplies the fallback
+   execution state;
+5. trusted status lookup paginates the complete issue-comment history rather than
    assuming the authoritative status is present on the first 100-comment page;
-5. bot-authored status with malformed JSON, an unexpected schema, or an invalid
+6. bot-authored status with malformed JSON, an unexpected schema, or an invalid
    transition sequence fails closed rather than being ignored;
-6. if trusted status is missing for `CLAIMED`/`REVIEW`, synchronization fails closed
+7. `CLAIMED` and `REVIEW` require trusted status. If either state is reached only by
+   fallback label because no trusted status exists, synchronization fails closed
    instead of falling back to issue-body or stale manifest claimant/PR metadata;
-7. `BLOCKED` may be either unowned dependency-blocked work or work still held by an
-   active agent. When a blocked issue has comments, synchronization requires a trusted
-   bot status rather than guessing that the lane is unowned. Owner-held BLOCKED status
-   preserves holder/branch/PR and the corresponding path reservation; a released
-   BLOCKED status must clear active holder/branch/PR metadata;
-8. a pristine BLOCKED issue with no comments can remain unowned without a status
-   lookup, because it cannot yet contain a coordination transition record;
+8. `BLOCKED` may be either unowned dependency-blocked work or work still held by an
+   active agent. If a trusted BLOCKED status exists, synchronization validates and
+   consumes it: owner-held status preserves holder/branch/PR and the corresponding
+   path reservation, while a released/unowned status must clear active
+   holder/branch/PR metadata. If no trusted BLOCKED status exists, the item is treated
+   as unowned dependency-blocked work; ordinary comments are not ownership evidence;
 9. the issue Work Contract supplies Work ID, branch convention, dependency prose,
    positive/negative ownership, and fallback PR linkage only where trusted live
    status is not authoritative.
 
-This prevents stale issue-body text from overriding live coordination labels. It also
-means the checked-in file is a **snapshot**: run the explicit sync command before using
-it as a current planning view.
+This prevents stale issue-body text or mutable discovery labels from overriding trusted
+coordination state. It also means the checked-in file is a **snapshot**: run the
+explicit sync command before using it as a current planning view.
 
 ## Format
 
@@ -86,11 +90,11 @@ GITHUB_TOKEN=... python tools/roadmap/agent_roadmap.py sync
 ```
 
 A token is optional for the public repository but avoids unauthenticated API limits.
-The sync command is the only networked path. BLOCKED issues with no comments require
-no status-comment request because they cannot contain a coordination transition
-record. Once a BLOCKED issue has comments, trusted-status lookup follows all comment
-pages and synchronization fails closed if no authoritative bot status can establish
-whether the lane is held or released.
+The sync command is the only networked path. Trusted-status lookup follows all comment
+pages for every enrolled roadmap issue so an existing authoritative record cannot be
+hidden by pagination or by a drifted `work:*` label. Absence of trusted status is
+permitted for ordinary fallback states, including unowned dependency-blocked work;
+`CLAIMED` and `REVIEW` remain fail-closed without trusted status.
 
 ## Baseline validation
 
@@ -100,8 +104,8 @@ whether the lane is held or released.
 - dependencies that point to missing roadmap Work IDs;
 - dependency cycles;
 - missing trusted coordination status for live `CLAIMED`/`REVIEW` work;
-- ambiguous commented `BLOCKED` work with no trusted coordination status;
 - malformed/wrong-schema trusted status or invalid transition sequence;
+- trusted status whose Work ID, issue number, or state is invalid;
 - `CLAIMED`/`REVIEW` trusted status with no active holder/branch;
 - `REVIEW` trusted status with no linked PR, or `CLAIMED` status carrying one;
 - inconsistent owner-held/released BLOCKED active metadata;
