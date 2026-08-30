@@ -77,10 +77,17 @@ omit a newer active reservation.
 
 Every reservation entry is validated before collision checks. Issue identity
 must be a unique positive integer, the state must be `CLAIMED`, `REVIEW`, or
-holder-owned `BLOCKED`, holder/work/branch metadata must be concrete, linked-PR
+holder-owned `BLOCKED`, holder/work metadata must be concrete, linked-PR
 identity must be null or a positive integer, and every path must be a valid
-repository path. One malformed entry fails the entire run closed instead of
-silently disappearing from collision enforcement.
+repository path. The reservation `branch` field must be a non-empty string, but
+this read-only reconciler deliberately does not apply current claim-time branch
+grammar to legacy bootstrap reservations. Existing records such as #184/#185
+can retain descriptive bootstrap branch text because branch identity is not
+used by the notifier's path-collision decision; the canonical claim engine
+remains responsible for stricter concrete-branch validation on new claims.
+Open-PR changed files remain an independent live collision source. An empty,
+missing, or non-string reservation branch still fails the entire run closed,
+and one malformed decisive entry is never silently skipped.
 
 Exact and ancestor/descendant path overlaps remain blocking. A collision leaves the item `BLOCKED` and posts one deterministic audit notice for that exact reason. Repeated runs do not spam duplicate collision comments.
 
