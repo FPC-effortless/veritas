@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": true,
+      "preview-*": true
+    }
+  },
+  "ignoreCommand": "a=$VERCEL_GIT_PREVIOUS_SHA;b=$VERCEL_GIT_COMMIT_SHA;test -n \"$a$b\"&&git diff --quiet \"$a\" \"$b\" -- app components lib public 'package*.json' '*lock*' '*.config.*' 'tsconfig*.json' 'middleware.*' 'instrumentation.*' components.json vercel.json||exit 1"
+}
