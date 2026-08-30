@@ -1,0 +1,38 @@
+name: Roadmap Dependency Notifications
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  issues:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: agent-work-coordination
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: >-
+      github.event_name != 'issues' ||
+      (github.event.issue.pull_request == null &&
+       contains(github.event.issue.body, '<!-- veritas-agent-work -->'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Reconcile dependency-ready work
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const reconcile = require(
+              './.github/scripts/roadmap-dependency-notifications.js'
+            );
+            await reconcile({ github, context, core });
