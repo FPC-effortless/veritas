@@ -64,7 +64,9 @@ function parseStatusComment(comment, issueNumber) {
     return null;
   }
   const match = comment.body.match(/```json\s*([\s\S]*?)```/);
-  if (!match) return null;
+  if (!match) {
+    throw new Error(`issue #${issueNumber} trusted status JSON is missing`);
+  }
   let status;
   try {
     status = JSON.parse(match[1]);
@@ -92,21 +94,40 @@ function completionAuditMarker(issueNumber, evidenceCommentId) {
   return `<!-- ${COMPLETION_MARKER}:${issueNumber}:${evidenceCommentId} -->`;
 }
 
+function completionAuditBody(issue, contract, event) {
+  const marker = completionAuditMarker(issue.number, event.evidence_comment_id);
+  return (
+    `${marker}\n**${contract.workId}** completion synchronized to **DONE** ` +
+    `from OWNER evidence comment ${event.evidence_comment_id} ` +
+    `by @${event.evidence_actor}. ` +
+    'No PR, claim, merge/release authority, or qualification PASS was ' +
+    'fabricated.'
+  );
+}
+
 function validTransitionSequence(status) {
   return Number.isInteger(status?.transition_seq) && status.transition_seq >= 0;
+}
+
+function hasNoActiveOwnership(status) {
+  return Boolean(
+    status?.github_actor === null &&
+      status.agent_id === null &&
+      status.branch === null &&
+      status.claimed_at === null &&
+      status.heartbeat_at === null &&
+      status.linked_pr === null &&
+      status.linked_pr_head === null &&
+      Array.isArray(status.ownership_paths) &&
+      status.ownership_paths.length === 0,
+  );
 }
 
 function hasUnownedTerminalEligibleStatus(status) {
   return Boolean(
     status &&
       ['BLOCKED', 'READY'].includes(status.state) &&
-      status.github_actor === null &&
-      status.agent_id === null &&
-      status.branch === null &&
-      status.linked_pr === null &&
-      status.linked_pr_head === null &&
-      Array.isArray(status.ownership_paths) &&
-      status.ownership_paths.length === 0 &&
+      hasNoActiveOwnership(status) &&
       status.completion_evidence == null &&
       validTransitionSequence(status),
   );
@@ -132,6 +153,9 @@ function hasMatchingCompletionEvent(status, contract, evidence) {
   return Boolean(
     status?.state === 'DONE' &&
       status.work_id === contract.workId &&
+      hasNoActiveOwnership(status) &&
+      status.blocker === null &&
+      status.released_reason === null &&
       validTransitionSequence(status) &&
       event?.schema_version === 'veritas.owner-evidence-completion.v1' &&
       event.rule === 'OWNER_EVIDENCE' &&
@@ -196,19 +220,22 @@ module.exports = async function syncCompletion({ github, context }) {
   }
 
   async function ensureCompletionAudit(issue, contract, event, comments = null) {
-    const marker = completionAuditMarker(issue.number, event.evidence_comment_id);
+    const expectedBody = completionAuditBody(issue, contract, event);
     const issueComments = comments || (await commentsFor(issue.number));
-    if (issueComments.some((comment) => comment.body?.includes(marker))) return;
+    if (
+      issueComments.some(
+        (comment) =>
+          comment.user?.login === 'github-actions[bot]' &&
+          comment.body === expectedBody,
+      )
+    ) {
+      return;
+    }
     await github.rest.issues.createComment({
       owner,
       repo,
       issue_number: issue.number,
-      body:
-        `${marker}\n**${contract.workId}** completion synchronized to **DONE** ` +
-        `from OWNER evidence comment ${event.evidence_comment_id} ` +
-        `by @${event.evidence_actor}. ` +
-        'No PR, claim, merge/release authority, or qualification PASS was ' +
-        'fabricated.',
+      body: expectedBody,
     });
   }
 
@@ -297,6 +324,7 @@ module.exports = async function syncCompletion({ github, context }) {
 };
 
 module.exports.__test = {
+  completionAuditBody,
   completionAuditMarker,
   contractValue,
   hasMatchingCompletionEvent,
