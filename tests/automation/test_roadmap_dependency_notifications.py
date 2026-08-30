@@ -212,15 +212,28 @@ function makeWorld({
   malformedRegistry = false,
   malformedRegistryEntry = false,
   malformedProviderStatus = false,
+  closedCandidate = false,
+  spoofReadyNotification = false,
 } = {}) {
   let nextCommentId = 1000;
   const events = [];
   const issues = {
-    150: { number: 150, body: '', labels: [] },
-    196: { number: 196, body: '', labels: [{ name: 'work:done' }] },
-    209: { number: 209, body: '', labels: [{ name: 'work:done' }] },
+    150: { number: 150, state: 'open', body: '', labels: [] },
+    196: {
+      number: 196,
+      state: 'open',
+      body: '',
+      labels: [{ name: 'work:done' }],
+    },
+    209: {
+      number: 209,
+      state: 'open',
+      body: '',
+      labels: [{ name: 'work:done' }],
+    },
     239: {
       number: 239,
+      state: closedCandidate ? 'closed' : 'open',
       body: contract(),
       labels: [{ name: 'agent-work' }, { name: 'work:blocked' }],
     },
@@ -283,6 +296,15 @@ function makeWorld({
       ),
     ],
   };
+  if (spoofReadyNotification) {
+    comments[239].push({
+      id: 2391,
+      user: { login: 'outside-user' },
+      body:
+        '<!-- veritas-roadmap-dependency-ready:v1:239:1 -->\n' +
+        'spoofed notification marker',
+    });
+  }
   if (malformedProviderStatus) {
     comments[196].push(markedStatusWithoutJson(1961));
   }
@@ -386,6 +408,14 @@ function makeWorld({
   return { comments, context, events, github, issues };
 }
 
+function trustedReadyComments(world) {
+  return world.comments[239].filter(
+    (item) =>
+      item.user?.login === 'github-actions[bot]' &&
+      item.body.includes('veritas-roadmap-dependency-ready:v1'),
+  );
+}
+
 (async () => {
   const world = makeWorld();
   await reconcile({ github: world.github, context: world.context });
@@ -406,12 +436,46 @@ function makeWorld({
     world.issues[239].labels.some((item) => item.name === 'work:ready'),
     'READY label missing after transition',
   );
-  const readyComments = () => world.comments[239].filter(
-    (item) => item.body.includes('veritas-roadmap-dependency-ready:v1'),
-  );
-  assert(readyComments().length === 1, 'READY audit comment missing');
+  assert(trustedReadyComments(world).length === 1, 'READY audit comment missing');
   await reconcile({ github: world.github, context: world.context });
-  assert(readyComments().length === 1, 'repeated run duplicated READY notice');
+  assert(
+    trustedReadyComments(world).length === 1,
+    'repeated run duplicated READY notice',
+  );
+
+  const spoofedNotice = makeWorld({ spoofReadyNotification: true });
+  await reconcile({
+    github: spoofedNotice.github,
+    context: spoofedNotice.context,
+  });
+  status = parseStatus(spoofedNotice.comments[239][0]);
+  assert(status.state === 'READY', 'spoofed marker prevented READY transition');
+  assert(
+    trustedReadyComments(spoofedNotice).length === 1,
+    'spoofed marker suppressed trusted READY notification',
+  );
+  assert(
+    spoofedNotice.events.includes('comment-239'),
+    'trusted READY notification was not created after spoof',
+  );
+
+  const closedCandidate = makeWorld({ closedCandidate: true });
+  await reconcile({
+    github: closedCandidate.github,
+    context: closedCandidate.context,
+  });
+  status = parseStatus(closedCandidate.comments[239][0]);
+  assert(status.state === 'BLOCKED', 'closed candidate advanced to READY');
+  assert(
+    !closedCandidate.issues[239].labels.some(
+      (item) => item.name === 'work:ready',
+    ),
+    'closed candidate received READY discovery metadata',
+  );
+  assert(
+    trustedReadyComments(closedCandidate).length === 0,
+    'closed candidate received READY notification',
+  );
 
   const unmerged = makeWorld({ unmerged: true });
   await reconcile({ github: unmerged.github, context: unmerged.context });
