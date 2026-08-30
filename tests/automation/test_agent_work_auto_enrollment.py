@@ -47,7 +47,14 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function contract(workId, state, branch, ownership, holder = 'none', linkedPr = 'none') {
+function contract(
+  workId,
+  state,
+  branch,
+  ownership,
+  holder = 'none',
+  linkedPr = 'none',
+) {
   return `${ENROLL}
 ## Work Contract
 - **Work ID:** ${workId}
@@ -81,7 +88,9 @@ function makeWorld(issue) {
     rest: {
       issues: {
         get: async () => ({ data: issue }),
-        listLabelsForRepo: async () => [...createdLabels].map((name) => ({ name })),
+        listLabelsForRepo: async () => (
+          [...createdLabels].map((name) => ({ name }))
+        ),
         createLabel: async ({ name }) => {
           createdLabels.add(name);
           return { data: { name } };
@@ -97,11 +106,15 @@ function makeWorld(issue) {
           return { data: comment };
         },
         removeLabel: async ({ name }) => {
-          issue.labels = (issue.labels || []).filter((item) => item.name !== name);
+          issue.labels = (issue.labels || []).filter(
+            (item) => item.name !== name,
+          );
           return { data: {} };
         },
         addLabels: async ({ labels }) => {
-          const names = new Set((issue.labels || []).map((item) => item.name));
+          const names = new Set(
+            (issue.labels || []).map((item) => item.name),
+          );
           for (const name of labels) names.add(name);
           issue.labels = [...names].map((name) => ({ name }));
           return { data: {} };
@@ -137,64 +150,148 @@ function trustedStatuses(world) {
 (async () => {
   const ready = makeWorld({
     number: 10,
-    body: contract('AUTO-READY', 'READY', 'feat/auto-ready', '`src/auto/**`'),
+    body: contract(
+      'AUTO-READY',
+      'READY',
+      'feat/auto-ready',
+      '`src/auto/**`',
+    ),
     labels: [{ name: 'agent-work' }, { name: 'work:blocked' }],
   });
   await ready.trigger();
   let statuses = trustedStatuses(ready);
-  assert(statuses.length === 1, 'READY enrollment did not create exactly one trusted status');
-  assert(statuses[0].state === 'READY', 'valid READY contract did not enroll READY');
-  assert(statuses[0].agent_id === null && statuses[0].github_actor === null, 'automatic READY enrollment created an owner');
-  assert(JSON.stringify(statuses[0].ownership_paths) === JSON.stringify(['src/auto/**']), 'READY ownership was not frozen');
-  assert(ready.issue.labels.some((item) => item.name === 'work:ready'), 'READY discovery label missing');
-  assert(!ready.issue.labels.some((item) => item.name === 'work:blocked'), 'stale BLOCKED label survived READY enrollment');
+  assert(
+    statuses.length === 1,
+    'READY enrollment did not create exactly one trusted status',
+  );
+  assert(
+    statuses[0].state === 'READY',
+    'valid READY contract did not enroll READY',
+  );
+  assert(
+    statuses[0].agent_id === null && statuses[0].github_actor === null,
+    'automatic READY enrollment created an owner',
+  );
+  assert(
+    JSON.stringify(statuses[0].ownership_paths)
+      === JSON.stringify(['src/auto/**']),
+    'READY ownership was not frozen',
+  );
+  assert(
+    ready.issue.labels.some((item) => item.name === 'work:ready'),
+    'READY discovery label missing',
+  );
+  assert(
+    !ready.issue.labels.some((item) => item.name === 'work:blocked'),
+    'stale BLOCKED label survived READY enrollment',
+  );
 
   await ready.trigger('OWNER', 'reopened');
   statuses = trustedStatuses(ready);
-  assert(statuses.length === 1, 'duplicate enrollment created a second trusted status');
+  assert(
+    statuses.length === 1,
+    'duplicate enrollment created a second trusted status',
+  );
 
   const blocked = makeWorld({
     number: 11,
-    body: contract('AUTO-BLOCKED', 'BLOCKED', 'feat/blocked', '`src/blocked/**`'),
+    body: contract(
+      'AUTO-BLOCKED',
+      'BLOCKED',
+      'feat/blocked',
+      '`src/blocked/**`',
+    ),
     labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
   });
   await blocked.trigger();
   statuses = trustedStatuses(blocked);
-  assert(statuses.length === 1 && statuses[0].state === 'BLOCKED', 'BLOCKED contract did not remain BLOCKED');
-  assert(statuses[0].blocker === 'work-contract-blocked', 'BLOCKED enrollment missing explicit blocker');
-  assert(blocked.issue.labels.some((item) => item.name === 'work:blocked'), 'forged READY label was not corrected');
-  assert(!blocked.issue.labels.some((item) => item.name === 'work:ready'), 'forged READY label remained authoritative');
+  assert(
+    statuses.length === 1 && statuses[0].state === 'BLOCKED',
+    'BLOCKED contract did not remain BLOCKED',
+  );
+  assert(
+    statuses[0].blocker === 'work-contract-blocked',
+    'BLOCKED enrollment missing explicit blocker',
+  );
+  assert(
+    blocked.issue.labels.some((item) => item.name === 'work:blocked'),
+    'forged READY label was not corrected',
+  );
+  assert(
+    !blocked.issue.labels.some((item) => item.name === 'work:ready'),
+    'forged READY label remained authoritative',
+  );
 
   const invalidActive = makeWorld({
     number: 12,
-    body: contract('AUTO-ACTIVE', 'CLAIMED', 'feat/active', '`src/active/**`', 'some-agent', '#99'),
+    body: contract(
+      'AUTO-ACTIVE',
+      'CLAIMED',
+      'feat/active',
+      '`src/active/**`',
+      'some-agent',
+      '#99',
+    ),
     labels: [{ name: 'agent-work' }, { name: 'work:claimed' }],
   });
   await invalidActive.trigger();
   statuses = trustedStatuses(invalidActive);
-  assert(statuses.length === 1 && statuses[0].state === 'BLOCKED', 'active declaration did not fail closed');
-  assert(statuses[0].agent_id === null && statuses[0].linked_pr === null, 'automatic enrollment materialized active authority');
-  assert(statuses[0].blocker.includes('automatic enrollment failed closed'), 'fail-closed reason missing');
+  assert(
+    statuses.length === 1 && statuses[0].state === 'BLOCKED',
+    'active declaration did not fail closed',
+  );
+  assert(
+    statuses[0].agent_id === null && statuses[0].linked_pr === null,
+    'automatic enrollment materialized active authority',
+  );
+  assert(
+    statuses[0].blocker.includes('automatic enrollment failed closed'),
+    'fail-closed reason missing',
+  );
 
   const invalidOwnership = makeWorld({
     number: 13,
-    body: contract('AUTO-NOPATH', 'READY', 'feat/no-path', 'coordination docs/tests only'),
+    body: contract(
+      'AUTO-NOPATH',
+      'READY',
+      'feat/no-path',
+      'coordination docs/tests only',
+    ),
     labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
   });
   await invalidOwnership.trigger();
   statuses = trustedStatuses(invalidOwnership);
-  assert(statuses.length === 1 && statuses[0].state === 'BLOCKED', 'READY prose ownership did not fail closed');
-  assert(statuses[0].blocker.includes('machine-checkable positive ownership'), 'invalid ownership reason missing');
+  assert(
+    statuses.length === 1 && statuses[0].state === 'BLOCKED',
+    'READY prose ownership did not fail closed',
+  );
+  assert(
+    statuses[0].blocker.includes('machine-checkable positive ownership'),
+    'invalid ownership reason missing',
+  );
 
   const outsider = makeWorld({
     number: 14,
-    body: contract('AUTO-OUTSIDER', 'READY', 'feat/outsider', '`src/outsider/**`'),
+    body: contract(
+      'AUTO-OUTSIDER',
+      'READY',
+      'feat/outsider',
+      '`src/outsider/**`',
+    ),
     labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
   });
   await outsider.trigger('NONE');
   statuses = trustedStatuses(outsider);
-  assert(statuses.length === 0, 'unauthorized author received trusted status');
-  assert(outsider.comments.some((comment) => comment.body.includes('automatic enrollment skipped')), 'unauthorized enrollment was not audited');
+  assert(
+    statuses.length === 0,
+    'unauthorized author received trusted status',
+  );
+  assert(
+    outsider.comments.some(
+      (comment) => comment.body.includes('automatic enrollment skipped'),
+    ),
+    'unauthorized enrollment was not audited',
+  );
 })();
 """.replace("__SCRIPT__", script_path)
     _run_node(source)
