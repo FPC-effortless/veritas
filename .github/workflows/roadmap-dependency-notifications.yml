@@ -6,6 +6,9 @@ on:
     branches: [main]
   issues:
     types: [closed]
+  workflow_run:
+    workflows: ["Agent Work Claims"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -19,9 +22,11 @@ concurrency:
 jobs:
   reconcile:
     if: >-
-      github.event_name != 'issues' ||
-      (github.event.issue.pull_request == null &&
-       contains(github.event.issue.body, '<!-- veritas-agent-work -->'))
+      (github.event_name != 'issues' ||
+       (github.event.issue.pull_request == null &&
+        contains(github.event.issue.body, '<!-- veritas-agent-work -->'))) &&
+      (github.event_name != 'workflow_run' ||
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
