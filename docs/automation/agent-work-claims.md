@@ -26,13 +26,21 @@ Ordinary commands require GitHub `OWNER`, `MEMBER`, or `COLLABORATOR` associatio
 
 Ordinary holder commands require both the matching agent ID and the authenticated GitHub actor recorded by the claim. Bootstrap-derived holders use `github_actor: "bootstrap"` and cannot silently inherit ordinary holder authority.
 
-Repository owners may explicitly adopt a bootstrap-derived or stale held lane with:
+Repository owners may explicitly adopt a bootstrap-derived or stale held source lane with:
 
 ```text
 /recover <new-agent-id> <recorded-branch> <reason>
 ```
 
 Recovery requires `OWNER`, preserves the existing branch and frozen ownership paths, is accepted immediately for bootstrap-derived ownership, and otherwise requires the last heartbeat to be at least two hours old. It is an audited ownership recovery, not automatic expiry.
+
+A separate narrow recovery command exists only for legacy bootstrap metadata-only reservations whose recorded branch is descriptive prose rather than a repository branch:
+
+```text
+/recover-metadata <new-agent-id> <reason>
+```
+
+`/recover-metadata` is OWNER-only and does not accept a branch argument. It applies only when the trusted lane is still bootstrap-derived with zero frozen source paths, zero transition history, no linked PR, an exact allow-listed no-source `Positive ownership` form, and the same non-concrete descriptive branch in trusted status and the Work Contract. The recorded descriptive branch is preserved verbatim; it is never reinterpreted as a Git branch. Source-owning lanes, concrete-branch lanes, transitioned lanes, and non-OWNER callers fail closed. After adoption, the owner may use ordinary holder commands such as `/release` without fabricating source ownership.
 
 ## Commands
 
@@ -46,6 +54,7 @@ Commands are exact single lines:
 /handoff <agent-id> <pr-number>
 /done <agent-id> <pr-number>
 /recover <new-agent-id> <branch> <reason>
+/recover-metadata <new-agent-id> <reason>
 ```
 
 The repository OWNER may run `/roadmap-bootstrap` only on #150.
@@ -69,7 +78,9 @@ Before accepting `/claim`, the workflow:
 7. freezes the accepted ownership paths into trusted status;
 8. commits the active global reservation before publishing the trusted local `CLAIMED` state or its discovery label.
 
-Backticked ownership tokens may be root-level repository files such as `Dockerfile`, `Makefile`, `LICENSE`, or `CODEOWNERS`, as well as dotfiles, nested paths, and `/**` subtree globs. The parser rejects whitespace-bearing prose, absolute paths, empty path segments, traversal segments (`.` or `..`), and unsupported wildcard forms. The `Positive ownership` field is read without stripping the code-span delimiters from a single-path declaration, so a contract that owns only `Dockerfile` is still machine-checkable.
+Backticked ownership tokens may be root-level repository files such as `Dockerfile`, `Makefile`, `LICENSE`, or `CODEOWNERS`, as well as dotfiles and nested exact paths. Wildcard-bearing ownership is deliberately restricted to one terminal subtree suffix: a token such as `src/private/**` is valid, but every token containing `*` before that terminal suffix is invalid. Forms such as `src/*/private/**`, `src/**/private/**`, and `*.md/**` fail closed before local or global claim publication. This keeps accepted grammar identical to the prefix semantics implemented by `pathsOverlap()`.
+
+The parser also rejects whitespace-bearing prose, absolute paths, empty path segments, traversal segments (`.` or `..`), and any other unsupported wildcard form. The `Positive ownership` field is read without stripping the code-span delimiters from a single-path declaration, so a contract that owns only `Dockerfile` is still machine-checkable.
 
 Zero-path claims are exceptional and use an exact allow-list of positive-ownership forms that describe GitHub coordination metadata only. A real rehearsal form such as `this issue's comments/labels only` remains claimable without repository paths. Repository-editing prose does not qualify merely because it contains words such as “coordination” or “metadata”: for example, `coordination docs/tests only` must expose concrete backticked repository paths or the claim fails closed. This prevents a docs/tests lane from bypassing the global path lock with an empty reservation.
 
@@ -85,7 +96,7 @@ A successful claim stores its release target in trusted status as `return_state`
 
 Active-to-inactive transitions may publish the local release/completion state before registry cleanup. If cleanup fails, the old reservation remains stale and conservative; partial failure can make work temporarily non-claimable but cannot make still-owned work look free.
 
-`/blocked` preserves the current authenticated holder, branch, and frozen ownership reservation while making the lane non-claimable. Staleness alone never frees a lane; explicit `/release` or owner `/recover` is required.
+`/blocked` preserves the current authenticated holder, branch, and frozen ownership reservation while making the lane non-claimable. Staleness alone never frees a lane; explicit `/release`, owner `/recover`, or the narrowly scoped owner `/recover-metadata` path is required.
 
 ## Handoff and exact-head completion
 
@@ -101,6 +112,8 @@ The handoff records the exact PR head SHA.
 When a corrected PR head is pushed after independent review, the authenticated holder may issue `/handoff` again while already in REVIEW, but only for the same PR. This same PR re-handoff revalidates the PR/branch/work linkage and refreshes the exact `linked_pr_head`; it cannot switch REVIEW ownership to another PR.
 
 `/done` requires the authenticated REVIEW holder, the exact linked PR, a merged PR, and the same PR head SHA that was most recently handed off. If the PR head moves after handoff, `/done` rejects and the final head must be handed off/reviewed again.
+
+A narrow migration exception exists for trusted `REVIEW` records created before the `ownership_paths` field existed. Such a record may execute `/done` without reopening the issue or broadening bootstrap, but it still must satisfy the normal authenticated-holder, exact linked PR, merged PR, and exact handed-off-head checks. All other commands on an active legacy record without `ownership_paths` remain fail-closed. Successful legacy completion materializes an inert empty ownership snapshot before the status becomes `DONE`; registry cleanup remains conservative, so a cleanup failure can leave a stale reservation but cannot free still-active work.
 
 This is still implementation-level completion only. Work-class-specific scientific, experiment, external/manual, convergence, and release completion rules remain stricter and must not be inferred from a merged PR.
 

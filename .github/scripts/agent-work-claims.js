@@ -41,7 +41,7 @@ function repositoryPathToken(value) {
   const normalized = raw.replace(/^\.\//, '');
   if (!normalized || normalized.startsWith('/') || normalized.endsWith('/') || normalized.includes('//')) return null;
   if (!/^[A-Za-z0-9._/*+\-]+$/.test(normalized)) return null;
-  if (normalized.includes('*') && !normalized.endsWith('/**')) return null;
+  if (normalized.includes('*') && !/^[^*]+\/\*\*$/.test(normalized)) return null;
   if (normalized.split('/').some((segment) => segment === '.' || segment === '..')) return null;
   return normalized;
 }
@@ -84,12 +84,13 @@ function parseCommand(text) {
   if ((match = text.match(/^\/blocked ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) return { kind: 'blocked', agent: match[1], reason: match[2] };
   if ((match = text.match(/^\/handoff ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'handoff', agent: match[1], pr: Number(match[2]) };
   if ((match = text.match(/^\/done ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'done', agent: match[1], pr: Number(match[2]) };
+  if ((match = text.match(/^\/recover-metadata ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) return { kind: 'recover-metadata', agent: match[1], reason: match[2] };
   if ((match = text.match(/^\/recover ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}) (.{1,500})$/))) return { kind: 'recover', agent: match[1], branch: match[2], reason: match[3] };
   return text === '/roadmap-bootstrap' ? { kind: 'bootstrap' } : null;
 }
 
 function looksLikeCommand(text) {
-  return /^\/(claim|heartbeat|release|blocked|handoff|done|recover)(?:\s|$)/.test(text) || text === '/roadmap-bootstrap';
+  return /^\/(claim|heartbeat|release|blocked|handoff|done|recover|recover-metadata)(?:\s|$)/.test(text) || text === '/roadmap-bootstrap';
 }
 
 function branchIsConcrete(branch) {
@@ -118,6 +119,48 @@ function frozenOwnershipPaths(status) {
 
 function hasActiveReservation(status) {
   return Boolean(status && ACTIVE_STATES.has(status.state) && status.agent_id);
+}
+
+function canReconcileBootstrapReady(status, contract) {
+  return Boolean(
+    status &&
+    status.state === 'BLOCKED' &&
+    status.github_actor === null &&
+    status.agent_id === null &&
+    status.branch === null &&
+    status.claimed_at === null &&
+    status.heartbeat_at === null &&
+    status.linked_pr === null &&
+    status.linked_pr_head === null &&
+    Array.isArray(status.ownership_paths) &&
+    status.blocker === 'bootstrap/reconciliation required' &&
+    status.released_reason === null &&
+    status.return_state === 'BLOCKED' &&
+    Number(status.transition_seq || 0) === 0 &&
+    Number(status.last_command_comment_id || 0) === 0 &&
+    contract.initialState === 'READY'
+  );
+}
+
+function canRecoverMetadataOnly(status, contract, association) {
+  return Boolean(
+    association === 'OWNER' &&
+    status &&
+    ACTIVE_STATES.has(status.state) &&
+    status.agent_id &&
+    status.github_actor === 'bootstrap' &&
+    status.branch &&
+    !branchIsConcrete(status.branch) &&
+    status.linked_pr === null &&
+    status.linked_pr_head === null &&
+    Array.isArray(status.ownership_paths) &&
+    status.ownership_paths.length === 0 &&
+    Number(status.transition_seq || 0) === 0 &&
+    contract.paths.length === 0 &&
+    isExplicitNoSourceOwnership(contract.positiveOwnership) &&
+    contract.declaredBranch === status.branch &&
+    !branchIsConcrete(contract.declaredBranch)
+  );
 }
 
 function renderStatus(status) {
@@ -315,6 +358,15 @@ module.exports = async function coordinate({ github, context }) {
       if (!current) {
         status = bootstrapStatus(issue, contract);
         writeRequired = true;
+      } else if (canReconcileBootstrapReady(current.status, contract)) {
+        status = {
+          ...current.status,
+          state: 'READY',
+          blocker: null,
+          return_state: 'READY',
+          updated_at: now(),
+        };
+        writeRequired = true;
       } else if (!current.status.return_state || !Array.isArray(current.status.ownership_paths)) {
         status = {
           ...current.status,
@@ -362,7 +414,9 @@ module.exports = async function coordinate({ github, context }) {
     await audit(issueNumber, 'Rejected agent-work command: trusted status is missing. Run `/roadmap-bootstrap` on #150; labels and mutable Work Contract state are not execution authority.');
     return;
   }
-  if (ACTIVE_STATES.has(current.status.state) && current.status.agent_id && !Array.isArray(current.status.ownership_paths)) {
+  const legacyActiveWithoutOwnership = ACTIVE_STATES.has(current.status.state) && current.status.agent_id && !Array.isArray(current.status.ownership_paths);
+  const legacyDoneTrigger = triggerCommand?.kind === 'done' && current.status.state === 'REVIEW' && issue.state === 'closed';
+  if (legacyActiveWithoutOwnership && !legacyDoneTrigger) {
     await audit(issueNumber, 'Rejected agent-work command: trusted active status predates frozen ownership snapshots. Run `/roadmap-bootstrap` on #150 before further transitions.');
     return;
   }
@@ -394,6 +448,11 @@ module.exports = async function coordinate({ github, context }) {
 
     if (!command) { await reject('malformed command. Commands must be one exact single line.'); continue; }
     if (!ALLOWED_ASSOCIATIONS.has(association)) { await reject(`unauthorized actor association ${association || 'NONE'}.`); continue; }
+    const legacyDoneCommand = command.kind === 'done' && status.state === 'REVIEW' && issue.state === 'closed';
+    if (ACTIVE_STATES.has(status.state) && status.agent_id && !Array.isArray(status.ownership_paths) && !legacyDoneCommand) {
+      await reject('trusted active status predates frozen ownership snapshots; only exact merged REVIEW completion may proceed without migration');
+      continue;
+    }
 
     try {
       if (command.kind === 'claim') {
@@ -425,10 +484,24 @@ module.exports = async function coordinate({ github, context }) {
       } else if (command.kind === 'done') {
         if (status.state !== 'REVIEW' || !isHolder(command.agent)) throw new Error('done requires the current REVIEW authenticated holder');
         if (!status.linked_pr || status.linked_pr !== command.pr) throw new Error(`PR mismatch; handoff recorded PR #${status.linked_pr || 'none'}`);
+        const legacyDone = !Array.isArray(status.ownership_paths);
+        if (legacyDone && issue.state !== 'closed') throw new Error('legacy done requires the roadmap issue to already be closed');
+        if (legacyDone && !status.linked_pr_head) throw new Error('legacy done requires a recorded exact handed-off PR head');
         const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
         if (!pr.merged_at) throw new Error(`PR #${command.pr} is not merged; implementation work remains in REVIEW`);
         if (status.linked_pr_head && status.linked_pr_head !== pr.head.sha) throw new Error(`PR #${command.pr} head moved after handoff; re-handoff/review exact final head before DONE`);
+        if (legacyDone) status.ownership_paths = [];
         status.state = 'DONE'; status.linked_pr_head = pr.head.sha; status.heartbeat_at = timestamp;
+      } else if (command.kind === 'recover-metadata') {
+        if (association !== 'OWNER') throw new Error('metadata-only recovery requires repository OWNER authority');
+        if (!canRecoverMetadataOnly(status, contract, association)) {
+          throw new Error('metadata-only recovery requires a pristine bootstrap-derived zero-source lane with the exact descriptive Work Contract branch');
+        }
+        frozenOwnershipPaths(status);
+        status.github_actor = actor;
+        status.agent_id = command.agent;
+        status.heartbeat_at = timestamp;
+        status.released_reason = `owner metadata recovery: ${command.reason}`;
       } else if (command.kind === 'recover') {
         if (association !== 'OWNER') throw new Error('stale/bootstrap recovery requires repository OWNER authority');
         if (!ACTIVE_STATES.has(status.state) || !status.agent_id) throw new Error('recovery requires an active held lane');

@@ -101,6 +101,49 @@ def test_zero_path_claim_exemption_is_explicit_and_narrow() -> None:
     assert "coordination docs/tests only" not in script
 
 
+def test_ownership_path_wildcards_are_terminal_subtrees_only() -> None:
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const exportPathToken = '\nmodule.exports.__pathToken = repositoryPathToken;';
+const source = fs.readFileSync(__SCRIPT__, 'utf8') + exportPathToken;
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const pathToken = moduleObject.exports.__pathToken;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+const invalidPaths = ['src/*/private/**', 'src/**/private/**', '*.md/**'];
+for (const invalid of invalidPaths) {
+  assert(pathToken(invalid) === null, `unsupported wildcard accepted: ${invalid}`);
+}
+const validPaths = [
+  'Dockerfile',
+  '.github/workflows/file.yml',
+  'src/private/file.py',
+  'src/private/**',
+];
+for (const valid of validPaths) {
+  assert(pathToken(valid) === valid, `valid ownership rejected: ${valid}`);
+}
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
 def test_active_ownership_is_frozen_in_trusted_status() -> None:
     script = _script()
     claim_block = script.split("if (command.kind === 'claim') {", 1)[1].split(
@@ -551,6 +594,86 @@ async function runMalformedOwnershipToken() {
   );
 }
 
+async function runUnsupportedWildcardOwnership() {
+  const ownershipCases = [
+    '`src/*/private/**`',
+    '`src/**/private/**`',
+    '`*.md/**`',
+  ];
+  for (const [index, ownership] of ownershipCases.entries()) {
+    const issueNumber = index + 1;
+    const branch = `feat/wildcard-${index}`;
+    const issues = {
+      [issueNumber]: {
+        number: issueNumber,
+        body: contract(`WILDCARD-${index}`, branch, ownership),
+        labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
+      },
+    };
+    const claim = commandComment(2100 + index, `/claim wildcard-${index} ${branch}`);
+    const status = readyStatus(issueNumber, `WILDCARD-${index}`);
+    const comments = {
+      [issueNumber]: [statusComment(1100 + index, status), claim],
+      150: [registryComment([])],
+    };
+    const world = makeWorld({ issues, comments });
+    await coordinate({
+      github: world.github,
+      context: context(issueNumber, claim.body),
+    });
+    assert(
+      parseStatus(comments[issueNumber][0]).state === 'READY',
+      `${ownership} published CLAIMED`
+    );
+    assert(
+      parseStatus(comments[150][0]).entries.length === 0,
+      `${ownership} created a reservation`
+    );
+    assert(
+      world.audits.some(
+        (entry) => entry.body.includes('no machine-checkable positive-ownership path')
+      ),
+      `${ownership} did not fail closed`
+    );
+  }
+}
+
+async function runTerminalSubtreeOpenPrCollision() {
+  const issues = {
+    1: {
+      number: 1,
+      body: contract('TREE', 'feat/tree', '`src/private/**`'),
+      labels: [{ name: 'agent-work' }, { name: 'work:ready' }],
+    },
+  };
+  const claim = commandComment(2201, '/claim agent-tree feat/tree');
+  const comments = {
+    1: [statusComment(1201, readyStatus(1, 'TREE')), claim],
+    150: [registryComment([])],
+  };
+  const world = makeWorld({ issues, comments });
+  world.github.rest.pulls.list = async () => [
+    { number: 77, head: { ref: 'feat/other' } },
+  ];
+  world.github.rest.pulls.listFiles = async () => [
+    { filename: 'src/private/file.py' },
+  ];
+  await coordinate({
+    github: world.github,
+    context: context(1, claim.body),
+  });
+  assert(
+    parseStatus(comments[1][0]).state === 'READY',
+    'open-PR subtree collision was accepted'
+  );
+  assert(
+    world.audits.some(
+      (entry) => entry.body.includes('open PR #77 reserves src/private/file.py')
+    ),
+    'terminal subtree did not collide with open PR descendant'
+  );
+}
+
 async function runCoordinationRepositoryEditingProse() {
   const issues = {
     1: {
@@ -643,6 +766,8 @@ async function runRootFileCollision() {
   await runClaimLocalFailureThenOverlap();
   await runBootstrapFailureOrdering();
   await runMalformedOwnershipToken();
+  await runUnsupportedWildcardOwnership();
+  await runTerminalSubtreeOpenPrCollision();
   await runCoordinationRepositoryEditingProse();
   await runExplicitIssueOnlyOwnership();
   await runRootFileCollision();
@@ -671,8 +796,115 @@ def test_bootstrap_and_agent_startup_are_documented() -> None:
     assert "same PR" in doc
     assert "comment-ID order" in doc
     assert "/recover" in doc
+    assert "/recover-metadata" in doc
     assert "reservation" in doc.lower()
     assert "Dockerfile" in doc
     assert "issue's comments/labels only" in doc
     assert "coordination docs/tests only" in doc
     assert "does not grant merge, release" in doc
+
+
+def test_metadata_only_bootstrap_recovery_is_owner_only_and_zero_source() -> None:
+    script = _script()
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const exportHelpers =
+  '\nmodule.exports.__metadataRecovery = {' +
+  ' parseCommand, canRecoverMetadataOnly, branchIsConcrete };';
+const source = fs.readFileSync(__SCRIPT__, 'utf8') + exportHelpers;
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const helpers = moduleObject.exports.__metadataRecovery;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+const descriptiveBranch = 'no product branch; coordination metadata only';
+const status = {
+  state: 'CLAIMED',
+  github_actor: 'bootstrap',
+  agent_id: 'coordination-bootstrap',
+  branch: descriptiveBranch,
+  linked_pr: null,
+  linked_pr_head: null,
+  ownership_paths: [],
+  transition_seq: 0,
+};
+const contract = {
+  paths: [],
+  positiveOwnership: 'roadmap issue comments/labels/manifest metadata only',
+  declaredBranch: descriptiveBranch,
+};
+const metadataCommand = helpers.parseCommand(
+  '/recover-metadata agent-b adopt bootstrap metadata'
+);
+assert(
+  metadataCommand && metadataCommand.kind === 'recover-metadata',
+  'metadata command not parsed'
+);
+assert(metadataCommand.agent === 'agent-b', 'metadata agent not parsed');
+assert(
+  metadataCommand.reason === 'adopt bootstrap metadata',
+  'metadata reason not parsed'
+);
+const ordinary = helpers.parseCommand(
+  '/recover agent-b no product branch; coordination metadata only'
+);
+assert(
+  ordinary && ordinary.branch === 'no',
+  'ordinary recover grammar was loosened for prose branch'
+);
+assert(
+  ordinary.branch !== descriptiveBranch,
+  'ordinary recover accepted descriptive branch as repository branch'
+);
+assert(
+  helpers.canRecoverMetadataOnly(status, contract, 'OWNER'),
+  'valid metadata-only recovery rejected'
+);
+assert(
+  !helpers.canRecoverMetadataOnly(status, contract, 'MEMBER'),
+  'non-OWNER metadata recovery accepted'
+);
+const sourceStatus = { ...status, ownership_paths: ['src/owned.py'] };
+const sourceContract = {
+  ...contract,
+  paths: ['src/owned.py'],
+  positiveOwnership: '`src/owned.py`',
+};
+assert(
+  !helpers.canRecoverMetadataOnly(sourceStatus, sourceContract, 'OWNER'),
+  'source-owning metadata recovery accepted'
+);
+const concreteStatus = { ...status, branch: 'feat/concrete' };
+const concreteContract = { ...contract, declaredBranch: 'feat/concrete' };
+assert(
+  !helpers.canRecoverMetadataOnly(concreteStatus, concreteContract, 'OWNER'),
+  'concrete branch used metadata-only exception'
+);
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+    block = script.split(
+        "} else if (command.kind === 'recover-metadata') {", 1
+    )[1].split(
+        "} else if (command.kind === 'recover') {", 1
+    )[0]
+    assert "canRecoverMetadataOnly(status, contract, association)" in block
+    assert "status.branch =" not in block
+    assert "status.github_actor = actor" in block
+    assert "status.agent_id = command.agent" in block
