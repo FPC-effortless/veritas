@@ -117,6 +117,14 @@ function malformedRegistryComment() {
   };
 }
 
+function markedStatusWithoutJson(id) {
+  return {
+    id,
+    user: { login: 'github-actions[bot]' },
+    body: `${STATUS}\n**Agent work status**`,
+  };
+}
+
 function doneStatus(issue, workId, pr, head) {
   return {
     schema_version: 'veritas.agent-work-status.v1',
@@ -200,7 +208,10 @@ function makeWorld({
   invalidSequence = false,
   linkedHead = false,
   malformedReadyEvent = false,
+  heldReadyEvent = false,
   malformedRegistry = false,
+  malformedRegistryEntry = false,
+  malformedProviderStatus = false,
 } = {}) {
   let nextCommentId = 1000;
   const events = [];
@@ -217,10 +228,27 @@ function makeWorld({
   const registryEntries = reservationCollision
     ? [{
         issue: 999,
+        work_id: 'ACTIVE-WORK',
         state: 'CLAIMED',
+        actor: 'FPC-effortless',
+        agent: 'active-agent',
+        branch: 'feat/active-work',
+        linked_pr: null,
         paths: ['docs/roadmap/**'],
       }]
     : [];
+  if (malformedRegistryEntry) {
+    registryEntries.push({
+      issue: 998,
+      work_id: 'MALFORMED-ACTIVE-WORK',
+      state: 'CLAIMED',
+      actor: 'FPC-effortless',
+      agent: 'active-agent',
+      branch: 'feat/malformed-active-work',
+      linked_pr: null,
+      paths: 'docs/roadmap/**',
+    });
+  }
   const registryComments = [registryComment(registryEntries)];
   if (malformedRegistry) registryComments.push(malformedRegistryComment());
   const comments = {
@@ -255,6 +283,25 @@ function makeWorld({
       ),
     ],
   };
+  if (malformedProviderStatus) {
+    comments[196].push(markedStatusWithoutJson(1961));
+  }
+  if (heldReadyEvent) {
+    const status = blockedStatus({ holder: true });
+    Object.assign(status, {
+      state: 'READY',
+      blocker: null,
+      return_state: 'READY',
+      transition_seq: 1,
+      dependency_ready_event: {
+        schema_version: 'veritas.dependency-ready-event.v1',
+        transition_seq: 1,
+        dependencies: ['ROADMAP-002', 'ROADMAP-AUDIT-001'],
+        canonical_base: MAIN,
+      },
+    });
+    comments[239][0] = statusComment(2390, status);
+  }
   const prs = {
     262: {
       number: 262,
@@ -398,6 +445,8 @@ function makeWorld({
     ['transition sequence', { invalidSequence: true }, false],
     ['partial linked PR', { linkedHead: true }, false],
     ['reservation registry', { malformedRegistry: true }, true],
+    ['reservation entry', { malformedRegistryEntry: true }, true],
+    ['marked status', { malformedProviderStatus: true }, true],
   ];
   for (const [name, options, shouldReject] of malformedCases) {
     const malformed = makeWorld(options);
@@ -423,6 +472,22 @@ function makeWorld({
       `${name} did not follow the expected fail-closed path`,
     );
   }
+
+  const heldReady = makeWorld({ heldReadyEvent: true });
+  await reconcile({ github: heldReady.github, context: heldReady.context });
+  status = parseStatus(heldReady.comments[239][0]);
+  assert(status.state === 'READY', 'holder-bearing READY status was rewritten');
+  assert(status.agent_id === 'holder', 'holder-bearing READY lost its owner');
+  assert(
+    !heldReady.issues[239].labels.some((item) => item.name === 'work:ready'),
+    'holder-bearing READY repaired the discovery label',
+  );
+  assert(
+    !heldReady.comments[239].some(
+      (item) => item.body.includes('veritas-roadmap-dependency-ready:v1'),
+    ),
+    'holder-bearing READY produced an audit notification',
+  );
 
   const malformedReady = makeWorld({ malformedReadyEvent: true });
   await reconcile({
