@@ -326,13 +326,22 @@ module.exports = async function reconcileDependencies({ github, context }) {
   }
 
   async function ensureComment(issueNumber, marker, body) {
+    const expectedBody = `${marker}\n${body}`;
     const comments = await commentsFor(issueNumber);
-    if (comments.some((comment) => comment.body?.includes(marker))) return;
+    if (
+      comments.some(
+        (comment) =>
+          comment.user?.login === 'github-actions[bot]' &&
+          comment.body === expectedBody,
+      )
+    ) {
+      return;
+    }
     await github.rest.issues.createComment({
       owner,
       repo,
       issue_number: issueNumber,
-      body: `${marker}\n${body}`,
+      body: expectedBody,
     });
   }
 
@@ -455,6 +464,8 @@ module.exports = async function reconcileDependencies({ github, context }) {
     const issue = (
       await github.rest.issues.get({ owner, repo, issue_number: work.issue })
     ).data;
+    if (issue.state !== 'open') continue;
+
     const current = await trustedStatus(work.issue, work.work_id);
     if (!current) continue;
 
