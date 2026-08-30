@@ -1,6 +1,7 @@
 const STATUS_MARKER = '<!-- veritas-agent-work-status:v1 -->';
 const ENROLLMENT_MARKER = '<!-- veritas-agent-work -->';
 const COMPLETION_MARKER = 'veritas-roadmap-owner-evidence-completion:v1';
+const EVIDENCE_PREFIX = 'Completion evidence:';
 const STATES = new Set([
   'work:ready',
   'work:claimed',
@@ -21,7 +22,7 @@ const now = () => new Date().toISOString();
 function contractValue(text, field, unwrapSingleCodeSpan = true) {
   const escaped = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = String(text || '').match(
-    new RegExp(`^- \\*\\*${escaped}:\\*\\s*(.+)$`, 'mi'),
+    new RegExp(`^- \\*\\*${escaped}:\\*\\*\\s*(.+)$`, 'mi'),
   );
   if (!match) return null;
   const value = match[1].trim();
@@ -91,6 +92,10 @@ function completionAuditMarker(issueNumber, evidenceCommentId) {
   return `<!-- ${COMPLETION_MARKER}:${issueNumber}:${evidenceCommentId} -->`;
 }
 
+function validTransitionSequence(status) {
+  return Number.isInteger(status?.transition_seq) && status.transition_seq >= 0;
+}
+
 function hasUnownedTerminalEligibleStatus(status) {
   return Boolean(
     status &&
@@ -101,7 +106,40 @@ function hasUnownedTerminalEligibleStatus(status) {
       status.linked_pr === null &&
       status.linked_pr_head === null &&
       Array.isArray(status.ownership_paths) &&
-      status.ownership_paths.length === 0,
+      status.ownership_paths.length === 0 &&
+      status.completion_evidence == null &&
+      validTransitionSequence(status),
+  );
+}
+
+function isValidOwnerEvidence(comment, expectedId) {
+  if (!comment || comment.id !== expectedId) return false;
+  if (comment.author_association !== 'OWNER') return false;
+  if (!comment.user?.login) return false;
+  if (
+    typeof comment.created_at !== 'string' ||
+    !Number.isFinite(Date.parse(comment.created_at))
+  ) {
+    return false;
+  }
+  const body = String(comment.body || '');
+  return body.startsWith(EVIDENCE_PREFIX) &&
+    body.slice(EVIDENCE_PREFIX.length).trim().length > 0;
+}
+
+function hasMatchingCompletionEvent(status, contract, evidence) {
+  const event = status?.completion_evidence;
+  return Boolean(
+    status?.state === 'DONE' &&
+      status.work_id === contract.workId &&
+      validTransitionSequence(status) &&
+      event?.schema_version === 'veritas.owner-evidence-completion.v1' &&
+      event.rule === 'OWNER_EVIDENCE' &&
+      event.completion_class === 'COORDINATION_OPERATION' &&
+      event.evidence_comment_id === contract.evidenceCommentId &&
+      event.evidence_actor === evidence.user.login &&
+      event.evidence_created_at === evidence.created_at &&
+      event.transition_seq === status.transition_seq,
   );
 }
 
@@ -167,8 +205,10 @@ module.exports = async function syncCompletion({ github, context }) {
       issue_number: issue.number,
       body:
         `${marker}\n**${contract.workId}** completion synchronized to **DONE** ` +
-        `from OWNER evidence comment ${event.evidence_comment_id}. ` +
-        'No PR, claim, merge/release authority, or qualification PASS was fabricated.',
+        `from OWNER evidence comment ${event.evidence_comment_id} ` +
+        `by @${event.evidence_actor}. ` +
+        'No PR, claim, merge/release authority, or qualification PASS was ' +
+        'fabricated.',
     });
   }
 
@@ -183,7 +223,6 @@ module.exports = async function syncCompletion({ github, context }) {
     if (issue.pull_request || !issue.body?.includes(ENROLLMENT_MARKER)) continue;
     const contract = parseContract(issue.body);
     if (contract.completionRule !== 'OWNER_EVIDENCE') continue;
-
     if (
       contract.completionClass !== 'COORDINATION_OPERATION' ||
       contract.terminalState !== 'DONE' ||
@@ -196,15 +235,15 @@ module.exports = async function syncCompletion({ github, context }) {
 
     const comments = await commentsFor(issue.number);
     const current = await trustedStatus(issue.number, comments);
-    if (!current) continue;
+    if (!current || current.status.work_id !== contract.workId) continue;
 
-    if (
-      current.status.state === 'DONE' &&
-      current.status.completion_evidence?.schema_version ===
-        'veritas.owner-evidence-completion.v1'
-    ) {
+    const evidence = comments.find(
+      (comment) => comment.id === contract.evidenceCommentId,
+    );
+    if (!isValidOwnerEvidence(evidence, contract.evidenceCommentId)) continue;
+
+    if (hasMatchingCompletionEvent(current.status, contract, evidence)) {
       const event = current.status.completion_evidence;
-      if (event.evidence_comment_id !== contract.evidenceCommentId) continue;
       await setDoneLabel(issue.number);
       await ensureCompletionAudit(issue, contract, event, comments);
       await github.rest.issues.update({
@@ -219,22 +258,14 @@ module.exports = async function syncCompletion({ github, context }) {
 
     if (!hasUnownedTerminalEligibleStatus(current.status)) continue;
 
-    const evidence = comments.find(
-      (comment) => comment.id === contract.evidenceCommentId,
-    );
-    if (!evidence) continue;
-    if (evidence.author_association !== 'OWNER') continue;
-    if (!String(evidence.body || '').startsWith('Completion evidence:')) continue;
-    if (!evidence.user?.login) continue;
-
-    const transitionSeq = Number(current.status.transition_seq || 0) + 1;
+    const transitionSeq = current.status.transition_seq + 1;
     const event = {
       schema_version: 'veritas.owner-evidence-completion.v1',
       rule: 'OWNER_EVIDENCE',
       completion_class: 'COORDINATION_OPERATION',
       evidence_comment_id: evidence.id,
       evidence_actor: evidence.user.login,
-      evidence_created_at: evidence.created_at || null,
+      evidence_created_at: evidence.created_at,
       transition_seq: transitionSeq,
     };
     const nextStatus = {
@@ -242,7 +273,6 @@ module.exports = async function syncCompletion({ github, context }) {
       state: 'DONE',
       blocker: null,
       released_reason: null,
-      return_state: 'READY',
       transition_seq: transitionSeq,
       updated_at: now(),
       completion_evidence: event,
@@ -269,8 +299,10 @@ module.exports = async function syncCompletion({ github, context }) {
 module.exports.__test = {
   completionAuditMarker,
   contractValue,
+  hasMatchingCompletionEvent,
   hasUnownedTerminalEligibleStatus,
   isExplicitNoSourceOwnership,
+  isValidOwnerEvidence,
   parseContract,
   parseStatusComment,
 };
