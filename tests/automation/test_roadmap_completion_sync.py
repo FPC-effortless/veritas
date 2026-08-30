@@ -109,6 +109,14 @@ function statusComment(status) {
   };
 }
 
+function markedStatusWithoutJson() {
+  return {
+    id: 101,
+    user: { login: 'github-actions[bot]' },
+    body: `${STATUS}\n**Agent work status**`,
+  };
+}
+
 function parseStatus(comment) {
   const match = comment.body.match(/```json\s*([\s\S]*?)```/);
   return match ? JSON.parse(match[1]) : null;
@@ -126,6 +134,8 @@ function makeWorld({
   completionRule = 'OWNER_EVIDENCE',
   completionClass = 'COORDINATION_OPERATION',
   ownership = 'issue labels/comments for roadmap tickets only',
+  spoofAudit = false,
+  malformedNewestStatus = false,
 } = {}) {
   let nextCommentId = 1000;
   const events = [];
@@ -156,6 +166,16 @@ function makeWorld({
       body: evidenceBody,
     },
   ];
+  if (spoofAudit) {
+    comments.push({
+      id: 201,
+      user: { login: 'outside-user' },
+      author_association: 'NONE',
+      created_at: '2026-08-30T01:01:00Z',
+      body: `<!-- ${AUDIT}:216:200 -->`,
+    });
+  }
+  if (malformedNewestStatus) comments.push(markedStatusWithoutJson());
 
   const github = {
     rest: {
@@ -207,7 +227,11 @@ function makeWorld({
 }
 
 function audits(world) {
-  return world.comments.filter((item) => item.body.includes(AUDIT));
+  return world.comments.filter(
+    (item) =>
+      item.user?.login === 'github-actions[bot]' &&
+      item.body.includes(AUDIT),
+  );
 }
 
 (async () => {
@@ -256,6 +280,34 @@ function audits(world) {
   assert(audits(world).length === 1, 'reopen duplicated completion audit');
   assert(world.issue.state === 'closed', 'reopened DONE issue was not repaired');
   assert(!world.events.includes('status'), 'reopen rewrote trusted status');
+
+  const spoofedAudit = makeWorld({ spoofAudit: true });
+  await syncCompletion({
+    github: spoofedAudit.github,
+    context: spoofedAudit.context,
+  });
+  status = parseStatus(spoofedAudit.comments[0]);
+  assert(status.state === 'DONE', 'spoofed audit prevented DONE transition');
+  assert(audits(spoofedAudit).length === 1, 'trusted audit was not retained');
+  assert(
+    spoofedAudit.events.includes('audit'),
+    'outside marker suppressed trusted completion audit',
+  );
+
+  const malformedStatus = makeWorld({ malformedNewestStatus: true });
+  let malformedRejected = false;
+  try {
+    await syncCompletion({
+      github: malformedStatus.github,
+      context: malformedStatus.context,
+    });
+  } catch {
+    malformedRejected = true;
+  }
+  status = parseStatus(malformedStatus.comments[0]);
+  assert(malformedRejected, 'malformed newest trusted status did not reject');
+  assert(status.state === 'BLOCKED', 'malformed newest status completed work');
+  assert(malformedStatus.issue.state === 'open', 'malformed status closed issue');
 
   const invalidWorlds = [
     makeWorld({ evidenceId: 201 }),
