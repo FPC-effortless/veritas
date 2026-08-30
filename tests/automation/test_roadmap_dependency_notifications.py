@@ -109,6 +109,14 @@ function registryComment(entries) {
   };
 }
 
+function malformedRegistryComment() {
+  return {
+    id: 901,
+    user: { login: 'github-actions[bot]' },
+    body: `${REGISTRY}\n\`\`\`json\n{"entries":\n\`\`\``,
+  };
+}
+
 function doneStatus(issue, workId, pr, head) {
   return {
     schema_version: 'veritas.agent-work-status.v1',
@@ -132,28 +140,37 @@ function doneStatus(issue, workId, pr, head) {
   };
 }
 
-function blockedStatus(holder = false) {
+function blockedStatus({
+  holder = false,
+  workMismatch = false,
+  invalidSequence = false,
+  linkedHead = false,
+  malformedReadyEvent = false,
+} = {}) {
   return {
     schema_version: 'veritas.agent-work-status.v1',
-    work_id: 'ROADMAP-PROGRAM-001',
+    work_id: workMismatch ? 'OTHER-CONSUMER' : 'ROADMAP-PROGRAM-001',
     issue_number: 239,
-    state: 'BLOCKED',
+    state: malformedReadyEvent ? 'READY' : 'BLOCKED',
     github_actor: holder ? 'FPC-effortless' : null,
     agent_id: holder ? 'holder' : null,
     branch: holder ? 'audit/full-roadmap-coverage' : null,
     claimed_at: holder ? '2026-08-30T00:00:00Z' : null,
     heartbeat_at: holder ? '2026-08-30T00:01:00Z' : null,
     linked_pr: null,
-    linked_pr_head: null,
+    linked_pr_head: linkedHead ? HEAD_A : null,
     ownership_paths: holder
       ? ['docs/roadmap/full-roadmap-coverage-audit.md']
       : [],
     blocker: holder ? 'manual blocker' : 'bootstrap/reconciliation required',
     released_reason: null,
     return_state: 'BLOCKED',
-    transition_seq: 0,
+    transition_seq: invalidSequence ? '0' : 0,
     last_command_comment_id: 0,
     updated_at: '2026-08-30T00:00:00Z',
+    dependency_ready_event: malformedReadyEvent
+      ? { schema_version: 'veritas.dependency-ready-event.v1' }
+      : null,
   };
 }
 
@@ -178,6 +195,12 @@ function makeWorld({
   unmerged = false,
   reservationCollision = false,
   openPrCollision = false,
+  providerWorkMismatch = false,
+  consumerWorkMismatch = false,
+  invalidSequence = false,
+  linkedHead = false,
+  malformedReadyEvent = false,
+  malformedRegistry = false,
 } = {}) {
   let nextCommentId = 1000;
   const events = [];
@@ -198,12 +221,19 @@ function makeWorld({
         paths: ['docs/roadmap/**'],
       }]
     : [];
+  const registryComments = [registryComment(registryEntries)];
+  if (malformedRegistry) registryComments.push(malformedRegistryComment());
   const comments = {
-    150: [registryComment(registryEntries)],
+    150: registryComments,
     196: [
       statusComment(
         1960,
-        doneStatus(196, 'ROADMAP-002', 262, HEAD_A),
+        doneStatus(
+          196,
+          providerWorkMismatch ? 'OTHER-PROVIDER' : 'ROADMAP-002',
+          262,
+          HEAD_A,
+        ),
       ),
     ],
     209: [
@@ -212,7 +242,18 @@ function makeWorld({
         doneStatus(209, 'ROADMAP-AUDIT-001', 295, HEAD_B),
       ),
     ],
-    239: [statusComment(2390, blockedStatus(holder))],
+    239: [
+      statusComment(
+        2390,
+        blockedStatus({
+          holder,
+          workMismatch: consumerWorkMismatch,
+          invalidSequence,
+          linkedHead,
+          malformedReadyEvent,
+        }),
+      ),
+    ],
   };
   const prs = {
     262: {
@@ -350,6 +391,58 @@ function makeWorld({
   await reconcile({ github: prCollision.github, context: prCollision.context });
   status = parseStatus(prCollision.comments[239][0]);
   assert(status.state === 'BLOCKED', 'open PR path collision was ignored');
+
+  const malformedCases = [
+    ['provider Work ID', { providerWorkMismatch: true }, true],
+    ['consumer Work ID', { consumerWorkMismatch: true }, true],
+    ['transition sequence', { invalidSequence: true }, false],
+    ['partial linked PR', { linkedHead: true }, false],
+    ['reservation registry', { malformedRegistry: true }, true],
+  ];
+  for (const [name, options, shouldReject] of malformedCases) {
+    const malformed = makeWorld(options);
+    let rejected = false;
+    try {
+      await reconcile({
+        github: malformed.github,
+        context: malformed.context,
+      });
+    } catch {
+      rejected = true;
+    }
+    status = parseStatus(malformed.comments[239][0]);
+    assert(status.state === 'BLOCKED', `${name} produced READY`);
+    assert(
+      !malformed.issues[239].labels.some(
+        (item) => item.name === 'work:ready',
+      ),
+      `${name} published READY discovery metadata`,
+    );
+    assert(
+      rejected === shouldReject,
+      `${name} did not follow the expected fail-closed path`,
+    );
+  }
+
+  const malformedReady = makeWorld({ malformedReadyEvent: true });
+  await reconcile({
+    github: malformedReady.github,
+    context: malformedReady.context,
+  });
+  status = parseStatus(malformedReady.comments[239][0]);
+  assert(status.state === 'READY', 'malformed READY status was rewritten');
+  assert(
+    !malformedReady.issues[239].labels.some(
+      (item) => item.name === 'work:ready',
+    ),
+    'malformed READY event repaired the discovery label',
+  );
+  assert(
+    !malformedReady.comments[239].some(
+      (item) => item.body.includes('veritas-roadmap-dependency-ready:v1'),
+    ),
+    'malformed READY event produced an audit notification',
+  );
 })();
 """.replace("__SCRIPT__", script_path)
     _run_node(source)
