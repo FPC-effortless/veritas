@@ -136,7 +136,12 @@ function hasUnownedTerminalEligibleStatus(status) {
 function isValidOwnerEvidence(comment, expectedId) {
   if (!comment || comment.id !== expectedId) return false;
   if (comment.author_association !== 'OWNER') return false;
-  if (!comment.user?.login) return false;
+  if (
+    typeof comment.user?.login !== 'string' ||
+    !comment.user.login.trim()
+  ) {
+    return false;
+  }
   if (
     typeof comment.created_at !== 'string' ||
     !Number.isFinite(Date.parse(comment.created_at))
