@@ -172,7 +172,8 @@ function parseRegistryComment(comment) {
       !entry.actor.trim() ||
       typeof entry.agent !== 'string' ||
       !entry.agent.trim() ||
-      !branchIsConcrete(entry.branch) ||
+      typeof entry.branch !== 'string' ||
+      !entry.branch.trim() ||
       !validLinkedPr ||
       !validPaths
     ) {
