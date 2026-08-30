@@ -92,9 +92,9 @@ Before accepting `/claim`, the transition engine:
 7. freezes accepted ownership paths into trusted status;
 8. commits the active global reservation before publishing trusted local `CLAIMED` state or its discovery label.
 
-Backticked ownership tokens may be root-level repository files or nested exact paths. Wildcards are restricted to one terminal subtree suffix such as `src/private/**`. Whitespace-bearing prose, absolute paths, traversal, empty path segments, and unsupported wildcard forms fail closed.
+Backticked ownership tokens may be root-level repository files such as `Dockerfile`, `Makefile`, `LICENSE`, or `CODEOWNERS`, or nested exact paths. Wildcards are restricted to one terminal subtree suffix such as `src/private/**`. Whitespace-bearing prose, absolute paths, traversal, empty path segments, and unsupported wildcard forms fail closed.
 
-Zero-path claims are exceptional and use an exact allow-list of GitHub-coordination-only ownership forms. Repository-editing prose does not qualify merely because it contains words such as “coordination” or “metadata”.
+Zero-path claims are exceptional and use an exact allow-list of GitHub-coordination-only ownership forms. One valid example is `this issue's comments/labels only`. Repository-editing prose does not qualify merely because it contains words such as “coordination” or “metadata”; for example, `coordination docs/tests only` must expose concrete repository paths and does not bypass locking.
 
 The current active roadmap reservations are mirrored in one trusted bot-authored `veritas-agent-work-reservations:v1` record on #150. Active entries use frozen ownership snapshots. Open-PR changed files remain a live claim-time reservation source, including legacy or automated PRs that are not `agent-work`.
 
