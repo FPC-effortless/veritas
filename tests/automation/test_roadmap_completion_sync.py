@@ -125,6 +125,7 @@ function parseStatus(comment) {
 function makeWorld({
   evidenceId = 200,
   association = 'OWNER',
+  evidenceActor = 'FPC-effortless',
   evidenceBody = 'Completion evidence: bootstrap completed.',
   evidenceCreatedAt = '2026-08-30T01:00:00Z',
   holder = false,
@@ -160,7 +161,7 @@ function makeWorld({
     })),
     {
       id: 200,
-      user: { login: 'FPC-effortless' },
+      user: { login: evidenceActor },
       author_association: association,
       created_at: evidenceCreatedAt,
       body: evidenceBody,
@@ -312,6 +313,9 @@ function audits(world) {
   const invalidWorlds = [
     makeWorld({ evidenceId: 201 }),
     makeWorld({ association: 'MEMBER' }),
+    makeWorld({ evidenceActor: null }),
+    makeWorld({ evidenceActor: 42 }),
+    makeWorld({ evidenceActor: '   ' }),
     makeWorld({ evidenceBody: 'Completion evidence:' }),
     makeWorld({ evidenceBody: 'Looks complete.' }),
     makeWorld({ evidenceCreatedAt: null }),
