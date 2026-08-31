@@ -375,10 +375,10 @@ const pulls = {
       number: 246,
       state: 'closed',
       merged: true,
-      merged_at: '2026-08-28T09:35:00Z',
+      merged_at: '2026-08-28T09:25:49Z',
       head: { ref: 'feat/agent-work-claim-automation', sha: PR_HEAD },
       merge_commit_sha: MERGE,
-      body: 'Closes #151. Work ID: COORD-001.',
+      body: 'Implements COORD-001 (#151).\n\nWork ID: COORD-001\n',
     } };
   },
   list: async () => [],
