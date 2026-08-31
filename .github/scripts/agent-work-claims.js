@@ -432,7 +432,8 @@ module.exports = async function coordinate({ github, context }) {
   }
   const legacyActiveWithoutOwnership = ACTIVE_STATES.has(current.status.state) && current.status.agent_id && !Array.isArray(current.status.ownership_paths);
   const legacyDoneTrigger = triggerCommand?.kind === 'done' && current.status.state === 'REVIEW' && issue.state === 'closed';
-  if (legacyActiveWithoutOwnership && !legacyDoneTrigger) {
+  const legacyCompletedRecoveryTrigger = triggerCommand?.kind === 'recover-completed' && issue.state === 'closed';
+  if (legacyActiveWithoutOwnership && !legacyDoneTrigger && !legacyCompletedRecoveryTrigger) {
     await audit(issueNumber, 'Rejected agent-work command: trusted active status predates frozen ownership snapshots. Run `/roadmap-bootstrap` on #150 before further transitions.');
     return;
   }
