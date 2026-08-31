@@ -138,6 +138,22 @@ def test_malformed_agent_marker_fails_closed() -> None:
         )
 
 
+def test_duplicate_agent_markers_fail_closed() -> None:
+    marker = f"<!-- veritas-agent-review:v1 head={HEAD} verdict=clean -->"
+    duplicate = _review(
+        review_id=1,
+        login="implementer",
+        state="COMMENTED",
+        body=f"{marker}\n{marker}",
+    )
+    with pytest.raises(ProvenanceError, match="exactly one canonical marker"):
+        evaluate_reviews(
+            pr_author="implementer",
+            head_sha=HEAD,
+            reviews=[duplicate],
+        )
+
+
 def test_blocking_agent_review_vetoes_clean_review() -> None:
     reviews = [
         _agent_review(review_id=1, verdict="clean"),
