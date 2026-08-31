@@ -56,6 +56,14 @@ A separate narrow recovery command exists only for legacy bootstrap metadata-onl
 
 `/recover-metadata` is OWNER-only and does not accept a branch argument. It applies only when the trusted lane is bootstrap-derived with zero frozen source paths, zero transition history, no linked PR, an exact allow-listed no-source `Positive ownership` form, and matching non-concrete descriptive branch metadata. Source-owning, concrete-branch, transitioned, or non-OWNER cases fail closed.
 
+An even narrower completion-recovery command exists for closed legacy implementation issues whose bootstrap status predates exact PR handoff metadata:
+
+```text
+/recover-completed <recorded-agent-id> <merged-pr-number> <reason>
+```
+
+This command is OWNER-only. It preserves the recorded agent and concrete Work Contract branch, requires machine-checkable ownership, validates that the PR references the issue and Work ID, binds the exact PR head and merge commit, and proves that merge is present on current `main`. It records an explicit recovery event and moves the trusted state to DONE; it does not fabricate a historical independent review or ordinary handoff.
+
 ## Commands
 
 Commands are exact single lines:
@@ -67,6 +75,7 @@ Commands are exact single lines:
 /blocked <agent-id> <reason>
 /handoff <agent-id> <pr-number>
 /done <agent-id> <pr-number>
+/recover-completed <recorded-agent-id> <merged-pr-number> <reason>
 /recover <new-agent-id> <branch> <reason>
 /recover-metadata <new-agent-id> <reason>
 ```
@@ -119,6 +128,8 @@ A corrected PR may be handed off again while already in REVIEW only for the same
 A narrow migration exception permits legacy REVIEW records created before `ownership_paths` existed to complete only when normal authenticated-holder, exact PR, merged-PR, and handed-off-head checks still pass. Other commands on active legacy records without frozen ownership remain fail-closed.
 
 Implementation-level DONE does not imply scientific, Frontier, training, commercial, external/manual, convergence, release, or private-evidence completion.
+
+Dependency reconciliation normally requires this exact merged-PR identity. The only non-PR provider exception is a closed coordination issue whose Work Contract and trusted status both bind the same OWNER-authored `OWNER_EVIDENCE` / `COORDINATION_OPERATION` completion record. The reconciler re-fetches that exact comment and validates its owner association, actor, timestamp, completion class, and transition sequence; labels or an unbound DONE value are insufficient.
 
 ## Bootstrap and reconciliation
 
