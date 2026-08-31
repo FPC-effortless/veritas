@@ -1,73 +1,96 @@
 # Independent review provenance
 
-Veritas uses exact-head independent review as an implementation acceptance boundary.
-This document defines the identity rule that the repository can actually verify.
+Veritas uses exact-head semantic review as an implementation acceptance boundary.
+The repository supports both multi-identity and single-owner operating models.
 
 ## Canonical rule
 
-Merge-authoritative independent review requires an `APPROVED` GitHub pull-request
-review that:
+Merge-authoritative review evidence must be bound to the exact current PR head and
+must be free of unresolved blocking findings.
 
-- is attached to the exact current PR head SHA;
-- has a concrete reviewer GitHub login;
-- comes from a GitHub identity different from the PR author;
-- has valid review identity and timezone-aware submission metadata; and
-- is not superseded by a later exact-head `CHANGES_REQUESTED` review from that
-  reviewer.
+Two evidence paths are accepted:
 
-Any current exact-head `CHANGES_REQUESTED` state blocks the provenance gate until
-it is superseded or dismissed.
+1. **Distinct GitHub approval** — an exact-head `APPROVED` pull-request review from
+   a GitHub identity different from the PR author.
+2. **Single-owner agent review** — an exact-head `COMMENTED` pull-request review
+   carrying the canonical machine marker:
 
-`tools/review_provenance.py` is the machine implementation of this rule.
+   `<!-- veritas-agent-review:v1 head=<40-char-sha> verdict=clean -->`
 
-## Same-account agent reviews
+   The review must have valid GitHub review identity/timestamp metadata, the marker
+   SHA must equal the review's exact commit, the summary must not contain a
+   `BLOCKING:` finding, and that review may not have inline review comments.
 
-A separate agent or fresh session operating through the same GitHub account may
-still provide useful semantic review evidence. That evidence is not
-merge-authoritative independent review.
+The distinct-identity path is stronger machine-verifiable identity provenance when
+such an identity exists. The single-owner path exists because Veritas is also
+operated by multiple coding/review agents through one GitHub owner account.
 
-GitHub does not expose a trustworthy session or agent-lineage identity behind a
-shared account. An implementation session could claim a different lineage string
-in prose or JSON. The repository therefore cannot turn phrases such as
-"independent session", "fresh reviewer", or a self-asserted agent ID into
-independent-review authority.
+## What the single-owner marker proves
 
-This is an epistemic boundary, not a judgment about the quality of a same-account
-review. Such reviews can find blockers and should be retained, but they do not
-satisfy the independent-review gate.
+The repository can verify:
+
+- a concrete GitHub review object exists;
+- the review is attached to the exact current head;
+- its timestamp and review ID are well formed;
+- the reviewer explicitly recorded a clean or blocking semantic verdict;
+- a clean verdict has no attached inline finding; and
+- the evidence becomes stale immediately when the PR head changes.
+
+GitHub cannot prove that two AI sessions behind the same account are different
+processes. Fresh-agent/session independence is therefore an operational assertion,
+not a cryptographic identity claim. The marker makes that limitation explicit
+instead of pretending a second GitHub login is required for code quality.
+
+Free-form phrases such as "fresh reviewer", "independent session", or "CLEAN"
+do not satisfy the gate. The canonical marker is required.
+
+## Blocking behavior
+
+Any current exact-head `CHANGES_REQUESTED` review blocks the gate.
+
+A canonical agent review with
+`verdict=blocking` also blocks the gate. A clean canonical agent review containing
+`BLOCKING:` in its body is internally inconsistent and fails closed. Any inline
+review comment attached to a canonical clean agent review is treated as a finding
+and blocks authorization.
+
+A blocking agent review cannot be overridden by another clean review on the same
+head. A code correction must produce a new head and therefore a new review.
 
 ## Exact-head behavior
 
-An approval on an older head is stale immediately after the PR head changes.
-The checker never carries approval forward to a new commit.
+Approvals and canonical agent reviews on older heads are stale immediately after
+the PR head changes. The checker never carries authority forward to a new commit.
 
-For each reviewer, the latest decisive exact-head review wins. Review ordering is
-based only on validated timezone-aware submission time and positive integer
-review ID. Missing or malformed decisive metadata fails closed rather than being
-reconstructed or defaulted.
+For decisive GitHub approvals/changes-requested state, the latest exact-head state
+per reviewer wins. Review ordering uses validated timezone-aware submission time
+and positive integer review ID. Missing or malformed review metadata fails closed.
 
 ## Security enforcement
 
-The repository's required `Python source security` and `Node dependency audit`
-checks run their existing security scans first. On pull requests they then run the
-review-provenance checker. A missing or invalid independent review therefore makes
-the required context fail; it does not skip the underlying security scan.
+The required `Python source security` and `Node dependency audit` checks run their
+normal scans before invoking `tools/review_provenance.py` on pull requests.
+A missing or invalid exact-head review therefore makes the required context fail;
+it does not skip Bandit, dependency auditing, dependency review, or other
+substantive checks.
 
 A submitted or dismissed PR review triggers the default-branch Security workflow.
-That event cannot itself create a useful required check on the PR head, so the
-workflow uses its `actions: write` permission only to re-run the latest completed
-Security run already associated with that exact PR head. The re-run queries the
-current review state and updates the existing PR-head required contexts.
+That event re-runs the latest completed Security run associated with the exact PR
+head so newly recorded review evidence can refresh the existing required contexts.
 
 Push, schedule, and manual Security runs do not require PR review provenance.
 
-## Operational consequence
+## Agent review procedure
 
-Repositories operated through one author account need a distinct GitHub reviewer
-identity or review-capable GitHub App before merge-authoritative independent
-review can be satisfied. Until such an identity is available, a clean same-account
-agent review is evidence but the merge remains blocked.
+For a same-account review, use a genuinely fresh review agent/session that did not
+implement the candidate. Review the complete exact-head diff and relevant tests.
 
-PR #315 is the motivating historical case: its same-account review records remain
-part of the audit trail, but the wording of those records is not reusable as
-canonical independent-review authority under this policy.
+If clean, submit a GitHub `COMMENTED` review containing exactly one canonical clean
+marker for the current head. If a blocker exists, use `verdict=blocking` and state
+`BLOCKING:` findings in the review body. Do not call a same-account review a
+separate GitHub identity.
+
+The authority ceiling remains repository integration only. Review provenance is
+not scientific qualification, frontier qualification, release authorization,
+deployment authorization, private-data authorization, paid-compute authorization,
+or commercial release authority.

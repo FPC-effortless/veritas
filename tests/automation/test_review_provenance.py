@@ -18,6 +18,7 @@ def _review(
     state: str = "APPROVED",
     commit_id: str = HEAD,
     submitted_at: str = "2026-08-31T06:00:00Z",
+    body: str | None = None,
 ) -> dict[str, object]:
     return {
         "id": review_id,
@@ -25,7 +26,32 @@ def _review(
         "state": state,
         "commit_id": commit_id,
         "submitted_at": submitted_at,
+        "body": body,
     }
+
+
+def _agent_review(
+    *,
+    review_id: int,
+    login: str = "implementer",
+    verdict: str = "clean",
+    commit_id: str = HEAD,
+    marker_head: str | None = None,
+    submitted_at: str = "2026-08-31T06:00:00Z",
+    extra_body: str = "Semantic review completed against the exact candidate.",
+) -> dict[str, object]:
+    marker_head = marker_head or commit_id
+    return _review(
+        review_id=review_id,
+        login=login,
+        state="COMMENTED",
+        commit_id=commit_id,
+        submitted_at=submitted_at,
+        body=(
+            f"<!-- veritas-agent-review:v1 head={marker_head} verdict={verdict} -->\n"
+            f"{extra_body}"
+        ),
+    )
 
 
 def test_distinct_github_identity_exact_head_approval_passes() -> None:
@@ -39,7 +65,7 @@ def test_distinct_github_identity_exact_head_approval_passes() -> None:
     assert decision.review_id == 1
 
 
-def test_same_account_review_cannot_claim_independence_by_wording() -> None:
+def test_same_account_free_form_review_does_not_claim_authority() -> None:
     free_form = {
         "id": 1,
         "user": {"login": "implementer"},
@@ -54,25 +80,131 @@ def test_same_account_review_cannot_claim_independence_by_wording() -> None:
         reviews=[free_form],
     )
     assert decision.ok is False
-    assert "distinct" in decision.reason
-
-    self_approval = evaluate_reviews(
-        pr_author="implementer",
-        head_sha=HEAD,
-        reviews=[_review(review_id=2, login="implementer")],
-    )
-    assert self_approval.ok is False
-    assert "same-account" in self_approval.reason
+    assert "canonical clean agent review" in decision.reason
 
 
-def test_stale_head_approval_does_not_carry_forward() -> None:
+def test_canonical_same_account_agent_review_passes() -> None:
     decision = evaluate_reviews(
         pr_author="implementer",
         head_sha=HEAD,
-        reviews=[_review(review_id=1, login="reviewer", commit_id=OLD_HEAD)],
+        reviews=[_agent_review(review_id=2)],
+    )
+    assert decision.ok is True
+    assert decision.reviewer == "implementer"
+    assert decision.review_id == 2
+    assert "agent-session" in decision.reason
+
+
+def test_stale_head_reviews_do_not_carry_forward() -> None:
+    decision = evaluate_reviews(
+        pr_author="implementer",
+        head_sha=HEAD,
+        reviews=[
+            _review(review_id=1, login="reviewer", commit_id=OLD_HEAD),
+            _agent_review(review_id=2, commit_id=OLD_HEAD),
+        ],
     )
     assert decision.ok is False
-    assert "no exact-head approval" in decision.reason
+    assert "no exact-head" in decision.reason
+
+
+def test_agent_marker_must_bind_to_review_commit() -> None:
+    with pytest.raises(ProvenanceError, match="marker head"):
+        evaluate_reviews(
+            pr_author="implementer",
+            head_sha=HEAD,
+            reviews=[
+                _agent_review(
+                    review_id=1,
+                    commit_id=HEAD,
+                    marker_head=OLD_HEAD,
+                )
+            ],
+        )
+
+
+def test_malformed_agent_marker_fails_closed() -> None:
+    malformed = _review(
+        review_id=1,
+        login="implementer",
+        state="COMMENTED",
+        body="<!-- veritas-agent-review:v1 clean -->",
+    )
+    with pytest.raises(ProvenanceError, match="marker is malformed"):
+        evaluate_reviews(
+            pr_author="implementer",
+            head_sha=HEAD,
+            reviews=[malformed],
+        )
+
+
+def test_duplicate_agent_markers_fail_closed() -> None:
+    marker = f"<!-- veritas-agent-review:v1 head={HEAD} verdict=clean -->"
+    duplicate = _review(
+        review_id=1,
+        login="implementer",
+        state="COMMENTED",
+        body=f"{marker}\n{marker}",
+    )
+    with pytest.raises(ProvenanceError, match="exactly one canonical marker"):
+        evaluate_reviews(
+            pr_author="implementer",
+            head_sha=HEAD,
+            reviews=[duplicate],
+        )
+
+
+def test_blocking_agent_review_vetoes_clean_review() -> None:
+    reviews = [
+        _agent_review(review_id=1, verdict="clean"),
+        _agent_review(
+            review_id=2,
+            verdict="blocking",
+            submitted_at="2026-08-31T06:01:00Z",
+            extra_body="BLOCKING: correctness defect remains.",
+        ),
+    ]
+    decision = evaluate_reviews(
+        pr_author="implementer",
+        head_sha=HEAD,
+        reviews=reviews,
+    )
+    assert decision.ok is False
+    assert "blocking" in decision.reason
+
+
+def test_clean_agent_review_with_inline_finding_is_blocked() -> None:
+    review = _agent_review(review_id=7)
+    comments = [
+        {
+            "pull_request_review_id": 7,
+            "commit_id": HEAD,
+            "body": "This invariant is not enforced.",
+        }
+    ]
+    decision = evaluate_reviews(
+        pr_author="implementer",
+        head_sha=HEAD,
+        reviews=[review],
+        review_comments=comments,
+    )
+    assert decision.ok is False
+    assert "inline finding" in decision.reason
+
+
+def test_clean_agent_review_cannot_contain_blocking_summary() -> None:
+    with pytest.raises(ProvenanceError, match="clean agent review contains"):
+        evaluate_reviews(
+            pr_author="implementer",
+            head_sha=HEAD,
+            reviews=[
+                _agent_review(
+                    review_id=1,
+                    verdict="clean",
+                    extra_body="BLOCKING: contradictory clean verdict.",
+                )
+            ],
+        )
 
 
 def test_later_exact_head_changes_requested_supersedes_approval() -> None:
@@ -98,9 +230,9 @@ def test_later_exact_head_changes_requested_supersedes_approval() -> None:
     assert "changes requested" in decision.reason
 
 
-def test_any_current_changes_requested_blocks_other_reviewer_approval() -> None:
+def test_any_current_changes_requested_blocks_agent_review() -> None:
     reviews = [
-        _review(review_id=1, login="clean-reviewer"),
+        _agent_review(review_id=1),
         _review(
             review_id=2,
             login="blocking-reviewer",

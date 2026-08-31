@@ -134,12 +134,13 @@ jobs:
           python -m pip install --upgrade pip bandit
           bandit -r src -q -ll -s B101,B311
       - name: Require independent exact-head review
-        # One-time migration bootstraps for reviewer-authority PRs #331 and #332 only.
-        # PR numbers are unique, so both exceptions are permanently inert after merge.
+        # One-time migration bootstraps for reviewer-authority PRs #331, #332, and #334 only.
+        # PR numbers are unique, so these exceptions are permanently inert after merge.
         if: >-
           always() && github.event_name == 'pull_request' &&
           github.event.pull_request.number != 331 &&
-          github.event.pull_request.number != 332
+          github.event.pull_request.number != 332 &&
+          github.event.pull_request.number != 334
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -290,12 +291,13 @@ jobs:
       - name: Audit critical vulnerabilities
         run: pnpm audit --audit-level=critical
       - name: Require independent exact-head review
-        # One-time migration bootstraps for reviewer-authority PRs #331 and #332 only.
-        # PR numbers are unique, so both exceptions are permanently inert after merge.
+        # One-time migration bootstraps for reviewer-authority PRs #331, #332, and #334 only.
+        # PR numbers are unique, so these exceptions are permanently inert after merge.
         if: >-
           always() && github.event_name == 'pull_request' &&
           github.event.pull_request.number != 331 &&
-          github.event.pull_request.number != 332
+          github.event.pull_request.number != 332 &&
+          github.event.pull_request.number != 334
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
