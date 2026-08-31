@@ -16,10 +16,6 @@ permissions:
   contents: read
   issues: write
 
-concurrency:
-  group: agent-work-coordination
-  cancel-in-progress: false
-
 jobs:
   reconcile:
     if: >-
@@ -31,6 +27,9 @@ jobs:
         startsWith(github.event.comment.body, 'Completion evidence:'))) &&
       (github.event_name != 'workflow_run' ||
        github.event.workflow_run.conclusion == 'success')
+    concurrency:
+      group: agent-work-coordination
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
