@@ -58,6 +58,16 @@ def test_linked_recovery_is_owner_pr_bound_and_reservation_first() -> None:
     )[1].split(";", 1)[0]
 
 
+def test_linked_recovery_rejects_another_issue_reserving_the_concrete_branch() -> None:
+    script = _script()
+    recovery = script.split("} else if (command.kind === 'recover-linked') {", 1)[1].split(
+        "} else if (command.kind === 'recover') {", 1
+    )[0]
+    assert "const registry = await trustedRegistry()" in recovery
+    assert "entry.issue !== issue.number && entry.branch === command.branch" in recovery
+    assert "linked-PR recovery branch conflict with" in recovery
+
+
 def test_linked_recovery_repairs_mig_and_data_style_bootstrap_records() -> None:
     script_path = json.dumps(str(SCRIPT.resolve()))
     source = r"""
