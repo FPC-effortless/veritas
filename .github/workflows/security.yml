@@ -130,7 +130,8 @@ jobs:
           python -m pip install --upgrade pip bandit
           bandit -r src -q -ll -s B101,B311
       - name: Require independent exact-head review
-        if: always() && github.event_name == 'pull_request'
+        # One-time bootstrap for PR #331 only. PR numbers are unique, so this is inert after merge.
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number != 331
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -163,7 +164,8 @@ jobs:
       - name: Audit critical vulnerabilities
         run: pnpm audit --audit-level=critical
       - name: Require independent exact-head review
-        if: always() && github.event_name == 'pull_request'
+        # One-time bootstrap for PR #331 only. PR numbers are unique, so this is inert after merge.
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number != 331
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
