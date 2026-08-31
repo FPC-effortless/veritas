@@ -20,6 +20,13 @@ Lower layers may operationalize higher layers but may not weaken them.
 
 `request -> reconstruct repo/task context -> classify task -> define outcome + falsifier -> isolate branch/worktree -> implement/experiment minimally -> targeted verification -> broader verification -> domain/scientific gates -> independent review -> PR/proposal -> merge/release only when authorized`
 
+Merge-authoritative independent review is defined by
+`docs/automation/review-provenance.md` and enforced by
+`tools/review_provenance.py`. Same-account agent/session review may provide useful
+semantic evidence, but prose or a self-asserted lineage does not satisfy the
+independent-review gate. The authoritative review must be an exact-head GitHub
+approval from an identity different from the PR author.
+
 ## Hard stops
 
 - Never assume a PASS from missing evidence.
