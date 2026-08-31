@@ -16,7 +16,12 @@ from urllib.parse import urlencode
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 AGENT_REVIEW_MARKER_RE = re.compile(
-    r"<!-- veritas-agent-review:v1 head=([0-9a-f]{40}) verdict=(clean|blocking) -->"
+    r"^<!-- veritas-agent-review:v1 head=([0-9a-f]{40}) verdict=(clean|blocking) -->\s*$",
+    flags=re.MULTILINE,
+)
+AGENT_REVIEW_PREFIX_LINE_RE = re.compile(
+    r"^\s*<!--\s*veritas-agent-review:",
+    flags=re.MULTILINE,
 )
 RECOGNIZED_STATES = {
     "APPROVED",
@@ -93,13 +98,15 @@ def _agent_review(
 ) -> tuple[str, str, int, dt.datetime] | None:
     state = _validate_review_state(review)
     body = review.get("body")
-    if not isinstance(body, str) or "veritas-agent-review:" not in body:
+    if not isinstance(body, str) or AGENT_REVIEW_PREFIX_LINE_RE.search(body) is None:
         return None
-    if body.count("veritas-agent-review:") != 1:
-        raise ProvenanceError("agent review must contain exactly one canonical marker")
-    marker = AGENT_REVIEW_MARKER_RE.search(body)
-    if marker is None:
+    markers = AGENT_REVIEW_MARKER_RE.findall(body)
+    if len(markers) != 1:
+        if markers:
+            raise ProvenanceError("agent review must contain exactly one canonical marker")
         raise ProvenanceError("agent review marker is malformed")
+    marker = AGENT_REVIEW_MARKER_RE.search(body)
+    assert marker is not None
     if state != "COMMENTED":
         raise ProvenanceError("agent review marker requires COMMENTED review state")
     commit_id = review.get("commit_id")
