@@ -54,12 +54,19 @@ def build_queue_catalog(base_catalog: SourceCatalog, queue: dict[str, Any]) -> S
         expected_sha256 = entry.get("sha256")
         if expected_sha256 is not None and not isinstance(expected_sha256, str):
             raise QueuedAcquisitionError(f"invalid sha256 for {artifact_id!r}")
+        acquisition_url = entry.get("acquisition_url")
+        if acquisition_url is None:
+            acquisition_url = _required_string(entry, "source_url")
+        elif not isinstance(acquisition_url, str) or not acquisition_url.strip():
+            raise QueuedAcquisitionError(
+                f"acquisition_url must be a non-empty string for {artifact_id!r}"
+            )
         overlay.append(
             AcquisitionArtifact(
                 artifact_id=artifact_id,
                 label=f"Gold-10 final report for {_required_string(entry, 'case_id')}",
                 method=ArtifactMethod.HTTP_FILE,
-                url=_required_string(entry, "source_url"),
+                url=acquisition_url,
                 artifact_class=ArtifactClass.DOCUMENT,
                 filename=f"{artifact_id}.pdf",
                 expected_sha256=expected_sha256,
