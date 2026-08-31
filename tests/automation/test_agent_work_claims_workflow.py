@@ -274,6 +274,154 @@ if (command.reason !== 'bind historical merge') throw new Error('reason not pars
     _run_node(source)
 
 
+def test_closed_legacy_completion_recovery_bypasses_missing_ownership_preflight() -> None:
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const coordinate = require(__SCRIPT__);
+const ENROLL = '<!-- veritas-agent-work -->';
+const STATUS = '<!-- veritas-agent-work-status:v1 -->';
+const REGISTRY = '<!-- veritas-agent-work-reservations:v1 -->';
+const PR_HEAD = '1111111111111111111111111111111111111111';
+const MERGE = '2222222222222222222222222222222222222222';
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+const issue = {
+  number: 151,
+  state: 'closed',
+  labels: [{ name: 'agent-work' }, { name: 'work:done' }],
+  body: `${ENROLL}
+## Work Contract
+- **Work ID:** COORD-001
+- **State:** DONE
+- **Branch:** \`feat/agent-work-claim-automation\`
+- **Positive ownership:** \`.github/workflows/agent-work-claims.yml\`, \`docs/automation/agent-work-claims.md\`, \`tests/automation/test_agent_work_claims_workflow.py\`
+- **Claim holder:** none
+- **Linked PR:** #246`,
+};
+const legacyStatus = {
+  schema_version: 'veritas.agent-work-status.v1',
+  work_id: 'COORD-001',
+  issue_number: 151,
+  state: 'CLAIMED',
+  github_actor: 'bootstrap',
+  agent_id: 'coordination-bootstrap',
+  branch: 'feat/agent-work-claim-automation',
+  claimed_at: '2026-08-28T09:30:24.125Z',
+  heartbeat_at: '2026-08-28T09:30:24.125Z',
+  linked_pr: null,
+  linked_pr_head: null,
+  blocker: null,
+  released_reason: null,
+  transition_seq: 0,
+  last_command_comment_id: null,
+  updated_at: '2026-08-28T09:30:24.125Z',
+};
+let statusComment = {
+  id: 1001,
+  user: { login: 'github-actions[bot]' },
+  body: `${STATUS}\n**Agent work status**\n\n\`\`\`json\n${JSON.stringify(legacyStatus, null, 2)}\n\`\`\``,
+};
+const command = {
+  id: 2001,
+  user: { login: 'FPC-effortless' },
+  author_association: 'OWNER',
+  body: '/recover-completed coordination-bootstrap 246 bind historical merge',
+};
+let registryComment = {
+  id: 900,
+  user: { login: 'github-actions[bot]' },
+  body: `${REGISTRY}\n**Global agent-work reservations**\n\n\`\`\`json\n${JSON.stringify({
+    schema_version: 'veritas.agent-work-reservations.v1',
+    updated_at: '2026-08-31T00:00:00Z',
+    entries: [],
+  }, null, 2)}\n\`\`\``,
+};
+const audits = [];
+let pullGets = 0;
+const labels = [
+  'agent-work', 'work:ready', 'work:claimed', 'work:blocked',
+  'work:review', 'work:done', 'work:superseded',
+].map((name) => ({ name }));
+const issues = {
+  listLabelsForRepo: async () => labels,
+  createLabel: async () => ({ data: {} }),
+  get: async ({ issue_number }) => ({ data: issue_number === 151 ? issue : { number: 150, labels: [] } }),
+  listComments: async ({ issue_number }) => issue_number === 151 ? [statusComment, command] : [registryComment],
+  updateComment: async ({ comment_id, body }) => {
+    if (comment_id === statusComment.id) {
+      statusComment = { ...statusComment, body };
+      return { data: statusComment };
+    }
+    if (comment_id === registryComment.id) {
+      registryComment = { ...registryComment, body };
+      return { data: registryComment };
+    }
+    throw new Error(`unexpected comment ${comment_id}`);
+  },
+  createComment: async ({ issue_number, body }) => {
+    const created = { id: 5000 + audits.length, body, user: { login: 'github-actions[bot]' } };
+    audits.push({ issue_number, body });
+    return { data: created };
+  },
+  removeLabel: async () => ({ data: {} }),
+  addLabels: async () => ({ data: {} }),
+};
+const pulls = {
+  get: async ({ pull_number }) => {
+    pullGets += 1;
+    assert(pull_number === 246, 'wrong historical PR requested');
+    return { data: {
+      number: 246,
+      state: 'closed',
+      merged: true,
+      merged_at: '2026-08-28T09:35:00Z',
+      head: { ref: 'feat/agent-work-claim-automation', sha: PR_HEAD },
+      merge_commit_sha: MERGE,
+      body: 'Closes #151. Work ID: COORD-001.',
+    } };
+  },
+  list: async () => [],
+  listFiles: async () => [],
+};
+const repos = {
+  get: async () => ({ data: { default_branch: 'main' } }),
+  compareCommitsWithBasehead: async ({ basehead }) => {
+    assert(basehead === `${MERGE}...main`, 'wrong merge ancestry comparison');
+    return { data: { behind_by: 0, status: 'ahead' } };
+  },
+};
+const github = {
+  rest: { issues, pulls, repos },
+  paginate: async (fn, args) => fn(args),
+};
+const context = {
+  repo: { owner: 'FPC-effortless', repo: 'veritas' },
+  issue: { number: 151 },
+  actor: 'FPC-effortless',
+  payload: { comment: { body: command.body, author_association: 'OWNER' } },
+};
+(async () => {
+  await coordinate({ github, context });
+  assert(pullGets === 1, 'legacy preflight rejected recovery before PR proof');
+  const match = statusComment.body.match(/```json\s*([\s\S]*?)```/);
+  const finalStatus = JSON.parse(match[1]);
+  assert(finalStatus.state === 'DONE', 'completed recovery did not publish DONE');
+  assert(finalStatus.linked_pr === 246, 'completed recovery did not bind PR');
+  assert(finalStatus.linked_pr_head === PR_HEAD, 'completed recovery did not bind exact PR head');
+  assert(Array.isArray(finalStatus.ownership_paths), 'ownership snapshot was not frozen');
+  assert(finalStatus.ownership_paths.includes('.github/workflows/agent-work-claims.yml'), 'contract ownership was not frozen');
+  assert(finalStatus.completion_recovery?.schema_version === 'veritas.owner-exact-merge-recovery.v1', 'recovery evidence missing');
+  assert(!audits.some(({ body }) => body.includes('predates frozen ownership snapshots')), 'legacy preflight still rejected recovery');
+  process.stdout.write('ok\n');
+})().catch((error) => {
+  console.error(error.stack || String(error));
+  process.exit(1);
+});
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
 def test_pr_body_identity_references_are_exact_tokens() -> None:
     script_path = json.dumps(str(SCRIPT.resolve()))
     source = r"""
