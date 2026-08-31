@@ -85,12 +85,13 @@ function parseCommand(text) {
   if ((match = text.match(/^\/handoff ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'handoff', agent: match[1], pr: Number(match[2]) };
   if ((match = text.match(/^\/done ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'done', agent: match[1], pr: Number(match[2]) };
   if ((match = text.match(/^\/recover-metadata ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) return { kind: 'recover-metadata', agent: match[1], reason: match[2] };
+  if ((match = text.match(/^\/recover-linked ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}) ([1-9][0-9]*) (.{1,500})$/))) return { kind: 'recover-linked', agent: match[1], branch: match[2], pr: Number(match[3]), reason: match[4] };
   if ((match = text.match(/^\/recover ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}) (.{1,500})$/))) return { kind: 'recover', agent: match[1], branch: match[2], reason: match[3] };
   return text === '/roadmap-bootstrap' ? { kind: 'bootstrap' } : null;
 }
 
 function looksLikeCommand(text) {
-  return /^\/(claim|heartbeat|release|blocked|handoff|done|recover|recover-metadata)(?:\s|$)/.test(text) || text === '/roadmap-bootstrap';
+  return /^\/(claim|heartbeat|release|blocked|handoff|done|recover|recover-linked|recover-metadata)(?:\s|$)/.test(text) || text === '/roadmap-bootstrap';
 }
 
 function branchIsConcrete(branch) {
@@ -502,6 +503,32 @@ module.exports = async function coordinate({ github, context }) {
         status.agent_id = command.agent;
         status.heartbeat_at = timestamp;
         status.released_reason = `owner metadata recovery: ${command.reason}`;
+      } else if (command.kind === 'recover-linked') {
+        if (association !== 'OWNER') throw new Error('linked-PR recovery requires repository OWNER authority');
+        if (!ACTIVE_STATES.has(status.state) || !status.agent_id) throw new Error('linked-PR recovery requires an active held lane');
+        if (status.github_actor !== 'bootstrap') throw new Error('linked-PR recovery is restricted to bootstrap-derived legacy holders');
+        if (branchIsConcrete(status.branch)) throw new Error('linked-PR recovery requires a non-concrete legacy recorded branch');
+        if (!status.linked_pr || status.linked_pr !== command.pr) throw new Error(`linked-PR recovery must preserve recorded PR #${status.linked_pr || 'none'}`);
+        if (branchIsConcrete(contract.declaredBranch) && command.branch !== contract.declaredBranch) throw new Error(`linked-PR recovery branch must match Work Contract branch ${contract.declaredBranch}`);
+        frozenOwnershipPaths(status);
+        const registry = await trustedRegistry();
+        if (!registry) throw new Error('global reservation registry is missing; run /roadmap-bootstrap on #150');
+        const branchConflict = registry.registry.entries.find(
+          (entry) => entry.issue !== issue.number && entry.branch === command.branch
+        );
+        if (branchConflict) {
+          throw new Error(`linked-PR recovery branch conflict with ${branchConflict.work_id}/#${branchConflict.issue}: ${command.branch} is already reserved`);
+        }
+        const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
+        if (pr.state !== 'open') throw new Error(`PR #${command.pr} is not open`);
+        if (pr.head.ref !== command.branch) throw new Error(`PR #${command.pr} head ${pr.head.ref} does not prove recovery branch ${command.branch}`);
+        if (status.linked_pr_head && status.linked_pr_head !== pr.head.sha) throw new Error(`PR #${command.pr} head moved from recorded ${status.linked_pr_head}; legacy recovery refuses to rewrite exact-head evidence`);
+        status.github_actor = actor;
+        status.agent_id = command.agent;
+        Object.assign(status, { branch: command.branch });
+        status.heartbeat_at = timestamp;
+        status.linked_pr_head = status.linked_pr_head || pr.head.sha;
+        status.released_reason = `owner linked-PR metadata recovery: ${command.reason}`;
       } else if (command.kind === 'recover') {
         if (association !== 'OWNER') throw new Error('stale/bootstrap recovery requires repository OWNER authority');
         if (!ACTIVE_STATES.has(status.state) || !status.agent_id) throw new Error('recovery requires an active held lane');
@@ -523,14 +550,20 @@ module.exports = async function coordinate({ github, context }) {
     status.updated_at = timestamp;
 
     const reservationMustPrecedeLocal = !hasActiveReservation(previousStatus) && hasActiveReservation(status);
-    if (reservationMustPrecedeLocal) {
-      // Claim publication is two-phase: reserve globally, then publish trusted local state.
+    const activeReservationMetadataChanged =
+      command.kind === 'recover-linked' &&
+      hasActiveReservation(previousStatus) &&
+      hasActiveReservation(status);
+    const reservationOrRepairMustPrecedeLocal =
+      reservationMustPrecedeLocal || activeReservationMetadataChanged;
+    if (reservationOrRepairMustPrecedeLocal) {
+      // Claims and linked-PR identity repairs publish the global reservation first.
       // A local publication failure leaves a stale global reservation, which is fail-closed.
       await updateRegistryEntry(issue, contract, status);
     }
     current = await writeStatus(issue, current, status);
     await setStateLabels(issue.number, status.state);
-    if (!reservationMustPrecedeLocal) {
+    if (!reservationOrRepairMustPrecedeLocal) {
       // Releases/removals publish locally first. If registry cleanup then fails, the stale
       // reservation remains conservative rather than making active ownership look free.
       await updateRegistryEntry(issue, contract, status);
