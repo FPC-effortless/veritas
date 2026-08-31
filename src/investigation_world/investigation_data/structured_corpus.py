@@ -550,6 +550,47 @@ def audit_structured_investigation_corpus(
     }
 
 
+def _validate_distinct_output_paths(
+    *,
+    public_output: Path,
+    manifest_output: Path,
+    verifier_output: Path | None,
+) -> None:
+    outputs = [("public_output", public_output), ("manifest_output", manifest_output)]
+    if verifier_output is not None:
+        outputs.append(("verifier_output", verifier_output))
+
+    resolved: dict[Path, str] = {}
+    for label, path in outputs:
+        try:
+            canonical = path.resolve()
+        except OSError as exc:
+            raise StructuredCorpusError(f"could not resolve {label}: {path}") from exc
+        previous = resolved.get(canonical)
+        if previous is not None:
+            raise StructuredCorpusError(
+                f"output paths must be distinct: {previous} and {label} resolve to {canonical}"
+            )
+        resolved[canonical] = label
+
+    for index, (left_label, left_path) in enumerate(outputs):
+        if not left_path.exists():
+            continue
+        for right_label, right_path in outputs[index + 1 :]:
+            if not right_path.exists():
+                continue
+            try:
+                aliases = left_path.samefile(right_path)
+            except OSError as exc:
+                raise StructuredCorpusError(
+                    f"could not verify output path separation: {left_label}, {right_label}"
+                ) from exc
+            if aliases:
+                raise StructuredCorpusError(
+                    f"output paths must be distinct: {left_label} and {right_label} alias the same file"
+                )
+
+
 def write_structured_investigation_corpus(
     corpus: StructuredInvestigationCorpus,
     profile: StructuredSourceProfile,
@@ -561,6 +602,11 @@ def write_structured_investigation_corpus(
     audit = audit_structured_investigation_corpus(corpus, profile)
     if not audit["passed"]:
         raise StructuredCorpusError(f"structured corpus boundary audit failed: {audit}")
+    _validate_distinct_output_paths(
+        public_output=public_output,
+        manifest_output=manifest_output,
+        verifier_output=verifier_output,
+    )
 
     public_output.parent.mkdir(parents=True, exist_ok=True)
     manifest_output.parent.mkdir(parents=True, exist_ok=True)
