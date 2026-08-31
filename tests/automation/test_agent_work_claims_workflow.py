@@ -174,8 +174,8 @@ def test_handoff_and_done_bind_exact_final_pr_head_and_allow_same_pr_rehandoff()
     assert "['CLAIMED', 'REVIEW'].includes(status.state)" in handoff_block
     assert "status.state === 'REVIEW' && status.linked_pr !== command.pr" in handoff_block
     assert "pr.head.ref !== status.branch" in handoff_block
-    assert "prBody.includes(`#${issueNumber}`)" in handoff_block
-    assert "prBody.includes(primaryWorkId)" in handoff_block
+    assert "prBodyReferencesIssue(prBody, issueNumber)" in handoff_block
+    assert "prBodyReferencesWorkId(prBody, primaryWorkId)" in handoff_block
     assert "status.linked_pr_head = pr.head.sha" in handoff_block
     assert "!status.linked_pr || status.linked_pr !== command.pr" in script
     assert "status.linked_pr_head !== pr.head.sha" in script
@@ -234,8 +234,8 @@ def test_closed_legacy_completion_recovery_is_narrow_and_exact_merge_bound() -> 
     assert "status.github_actor !== 'bootstrap'" in block
     assert "status.agent_id !== command.agent" in block
     assert "pr.head?.ref !== status.branch" in block
-    assert "prBody.includes(`#${issueNumber}`)" in block
-    assert "prBody.includes(primaryWorkId)" in block
+    assert "prBodyReferencesIssue(prBody, issueNumber)" in block
+    assert "prBodyReferencesWorkId(prBody, primaryWorkId)" in block
     assert "compareCommitsWithBasehead" in block
     assert "comparison.behind_by !== 0" in block
     assert "status.linked_pr_head = pr.head.sha" in block
@@ -270,6 +270,43 @@ if (!command || command.kind !== 'recover-completed') throw new Error('command n
 if (command.agent !== 'coordination-bootstrap') throw new Error('agent not parsed');
 if (command.pr !== 246) throw new Error('PR not parsed');
 if (command.reason !== 'bind historical merge') throw new Error('reason not parsed');
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
+def test_pr_body_identity_references_are_exact_tokens() -> None:
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(__SCRIPT__, 'utf8') +
+  '\nmodule.exports.__identityReferences = { prBodyReferencesIssue, prBodyReferencesWorkId };';
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const { prBodyReferencesIssue, prBodyReferencesWorkId } =
+  moduleObject.exports.__identityReferences;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+assert(prBodyReferencesIssue('Closes #151.', 151), 'exact issue reference rejected');
+assert(!prBodyReferencesIssue('Closes #1510.', 151), 'longer issue number accepted');
+assert(!prBodyReferencesIssue('Closes #151suffix.', 151), 'issue token suffix accepted');
+assert(prBodyReferencesWorkId('Work ID: COORD-001', 'COORD-001'), 'exact work ID rejected');
+assert(!prBodyReferencesWorkId('Work ID: COORD-001-EXTRA', 'COORD-001'), 'longer work ID accepted');
+assert(!prBodyReferencesWorkId('Work ID: XCOORD-001', 'COORD-001'), 'work ID prefix accepted');
 """.replace("__SCRIPT__", script_path)
     _run_node(source)
 
