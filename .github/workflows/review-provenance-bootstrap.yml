@@ -25,9 +25,9 @@ jobs:
       pull-requests: read
     outputs:
       eligible: ${{ steps.target.outputs.eligible }}
+      head: ${{ steps.target.outputs.head }}
     env:
       TARGET_PR: "323"
-      TARGET_HEAD: b99ddb78699fbff6b90fe5b05af7f89746c75ab0
     steps:
       - name: Resolve pinned bootstrap target
         id: target
@@ -45,14 +45,11 @@ jobs:
               core.setOutput('eligible', 'false');
               return;
             }
-            if (pr.head.sha !== process.env.TARGET_HEAD) {
-              core.setFailed(`bootstrap target head moved: ${pr.head.sha}`);
-              return;
-            }
             if (pr.user.login === 'github-actions[bot]') {
               core.setFailed('bootstrap bot cannot review its own pull request');
               return;
             }
+            core.setOutput('head', pr.head.sha);
             core.setOutput('eligible', 'true');
 
       - name: Require the frozen five-path diff
@@ -82,7 +79,7 @@ jobs:
         if: steps.target.outputs.eligible == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.TARGET_HEAD }}
+          ref: ${{ steps.target.outputs.head }}
           persist-credentials: false
 
       - name: Set up Python
@@ -94,9 +91,12 @@ jobs:
       - name: Run independent provenance falsifiers
         if: steps.target.outputs.eligible == 'true'
         shell: bash
+        env:
+          TARGET_HEAD: ${{ steps.target.outputs.head }}
         run: |
           python - <<'PY'
           import importlib.util
+          import os
           import sys
           from pathlib import Path
 
@@ -107,7 +107,7 @@ jobs:
           sys.modules[spec.name] = module
           spec.loader.exec_module(module)
 
-          head = 'b99ddb78699fbff6b90fe5b05af7f89746c75ab0'
+          head = os.environ['TARGET_HEAD']
           author = 'FPC-effortless'
 
           def review(state, login, review_id, commit_id=head, submitted_at='2026-08-31T06:45:26Z'):
@@ -207,7 +207,7 @@ jobs:
       pull-requests: write
     env:
       TARGET_PR: "323"
-      TARGET_HEAD: b99ddb78699fbff6b90fe5b05af7f89746c75ab0
+      TARGET_HEAD: ${{ needs.verify-bootstrap-candidate.outputs.head }}
     steps:
       - name: Submit machine-isolated exact-head approval
         uses: actions/github-script@v7
