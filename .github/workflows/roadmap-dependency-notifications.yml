@@ -15,10 +15,6 @@ permissions:
   issues: write
   pull-requests: read
 
-concurrency:
-  group: agent-work-coordination
-  cancel-in-progress: false
-
 jobs:
   reconcile:
     if: >-
@@ -27,6 +23,9 @@ jobs:
         contains(github.event.issue.body, '<!-- veritas-agent-work -->'))) &&
       (github.event_name != 'workflow_run' ||
        github.event.workflow_run.conclusion == 'success')
+    concurrency:
+      group: agent-work-coordination
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
