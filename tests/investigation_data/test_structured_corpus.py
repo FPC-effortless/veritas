@@ -421,6 +421,62 @@ def test_public_outputs_omit_source_identity_row_and_verifier_hash(tmp_path) -> 
     assert "SECRET_SENTINEL" in verifier_path.read_text(encoding="utf-8")
 
 
+def test_public_and_verifier_outputs_cannot_alias(tmp_path) -> None:
+    input_path = tmp_path / "data.csv"
+    _write_csv(
+        input_path,
+        [("CASE-A", "Alpha", "2025-01-01", "public", "SECRET_SENTINEL")],
+    )
+    corpus = compile_structured_investigation_corpus(
+        _profile(),
+        input_path,
+        _catalog(),
+        dataset_id="dataset",
+        version="1",
+        as_of=date(2026, 8, 28),
+    )
+    shared_path = tmp_path / "shared.jsonl"
+
+    with pytest.raises(StructuredCorpusError, match="output paths must be distinct"):
+        write_structured_investigation_corpus(
+            corpus,
+            _profile(),
+            public_output=shared_path,
+            verifier_output=shared_path,
+            manifest_output=tmp_path / "manifest.json",
+        )
+
+    assert not shared_path.exists()
+
+
+def test_equivalent_output_paths_cannot_bypass_alias_check(tmp_path) -> None:
+    input_path = tmp_path / "data.csv"
+    _write_csv(
+        input_path,
+        [("CASE-A", "Alpha", "2025-01-01", "public", "SECRET_SENTINEL")],
+    )
+    corpus = compile_structured_investigation_corpus(
+        _profile(),
+        input_path,
+        _catalog(),
+        dataset_id="dataset",
+        version="1",
+        as_of=date(2026, 8, 28),
+    )
+    public_path = tmp_path / "public.jsonl"
+    equivalent_manifest = tmp_path / "nested" / ".." / "public.jsonl"
+
+    with pytest.raises(StructuredCorpusError, match="output paths must be distinct"):
+        write_structured_investigation_corpus(
+            corpus,
+            _profile(),
+            public_output=public_path,
+            manifest_output=equivalent_manifest,
+        )
+
+    assert not public_path.exists()
+
+
 def test_json_nested_values_preserve_structure_without_cross_partition_leak(tmp_path) -> None:
     path = tmp_path / "data.json"
     path.write_text(
