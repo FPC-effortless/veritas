@@ -10,7 +10,9 @@ All ten selected cases now have reviewed executable pilots under `docs/investiga
 
 `pilot_coverage.json` maps the canonical `index.json` case set to exactly one pilot per case. CI fails if coverage drops below 10/10, a mapping is duplicated, a pilot loses its review binding, private truth is introduced into a link-only public fragment, or source artifact bytes are checked into the pilot directories.
 
-This is implementation/provenance coverage only. It does not establish scientific qualification, frontier discrimination, exploit resistance, or training readiness.
+All ten official CSB final reports have also been acquired byte-for-byte on a GitHub-hosted runner, SHA-256 verified, and registered in `docs/investigation_data/verified_artifacts.json`. Raw report bytes were deleted before workflow artifact publication and are not committed to Git.
+
+This is implementation/provenance and artifact-verification coverage only. It does not establish scientific qualification, frontier discrimination, exploit resistance, or training readiness.
 
 ## Selected cases
 
@@ -93,18 +95,23 @@ Validation checks:
 
 Repository CI additionally validates `pilot_coverage.json` against every executable pilot and `report_acquisition.json` against the corpus, coverage registry, source policy, and verified-artifact registry.
 
-## Final-report acquisition wave
+## Final-report acquisition status
 
-`report_acquisition.json` is the machine-readable queue for the ten official CSB final reports. It deliberately distinguishes **official URL resolution** from **verified artifact acquisition**.
+`report_acquisition.json` is the machine-readable registry for the ten official CSB final reports. It distinguishes **official URL resolution**, **byte verification**, and **artifact-level use review** as separate states.
 
-Every report currently remains `pending_binary_acquisition`. A URL being reachable in a browser or renderable by a document service is not enough to mark the report verified. Verification requires:
+All ten report rows are now `verified`. Each is bound to a central verification record containing:
 
-1. byte-level acquisition through an allowlisted transport;
-2. SHA-256 hashing of the acquired bytes;
-3. a provenance receipt with source URL, resolved URL, byte count, retrieval time, and catalog digest;
-4. registration in `docs/investigation_data/verified_artifacts.json`;
-5. artifact-level review before redistribution or derived training artifacts where required.
+- source and resolved URLs;
+- retrieval timestamp;
+- exact byte count;
+- report SHA-256;
+- provenance-receipt SHA-256;
+- source-catalog SHA-256.
 
-Raw report bytes remain outside Git. The next substantive construction step is to acquire and verify these final reports, then perform safe text/layout extraction with page-level provenance. Report-derived facts and CSB conclusions must remain epistemically distinct, and videos stay downstream multimodal augmentation rather than the primary report-grounded evidence layer.
+The `CSB Gold-10 Report Acquisition` GitHub workflow performs networked re-acquisition with read-only repository permissions. Because the verified report SHA-256 values are fed back into the downloader as expected checksums, any future byte change behind the same CSB URL fails closed. Raw PDFs are deleted before workflow artifacts are uploaded; only receipt metadata is retained.
+
+Artifact verification is **not** artifact-use approval. Every report remains `pending_artifact_level_review` for redistribution or derived training artifacts. Report-derived facts and CSB conclusions must remain epistemically distinct.
+
+The next substantive construction step is safe text/layout extraction from the verified reports with page-level provenance, deterministic extraction manifests, and no raw PDFs committed to Git. Videos remain downstream multimodal augmentation rather than the primary report-grounded evidence layer.
 
 Do not mass-scrape current CSB pages and pretend current page text existed at historical cutoffs. Each historical release surface must remain individually dated and reviewed before it becomes time-gated agent evidence.
