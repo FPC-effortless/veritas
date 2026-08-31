@@ -1,0 +1,98 @@
+name: CSB Gold-10 Report Acquisition
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/csb-gold10-report-acquisition.yml"
+      - "docs/investigation_data/corpora/csb_gold_10/report_acquisition.json"
+      - "src/investigation_world/investigation_data/acquisition.py"
+      - "src/investigation_world/investigation_data/queued_acquisition.py"
+      - "src/investigation_world/investigation_data/source_catalog.json"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/csb-gold10-report-acquisition.yml"
+      - "docs/investigation_data/corpora/csb_gold_10/report_acquisition.json"
+      - "src/investigation_world/investigation_data/acquisition.py"
+      - "src/investigation_world/investigation_data/queued_acquisition.py"
+      - "src/investigation_world/investigation_data/source_catalog.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: csb-gold10-report-acquisition-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acquire-receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Veritas
+        run: python -m pip install -e .
+
+      - name: Acquire reports and retain receipts only
+        run: |
+          python -m investigation_world.investigation_data.queued_acquisition \
+            docs/investigation_data/corpora/csb_gold_10/report_acquisition.json \
+            --output .veritas-data \
+            --receipts-out artifacts/csb-gold10-report-receipts.json \
+            --effective-catalog-out artifacts/csb-gold10-effective-catalog.json \
+            --max-bytes 268435456 \
+            --timeout 120 \
+            --delay-seconds 1
+
+      - name: Verify receipt count, effective authority, and raw-payload cleanup
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          bundle_path = Path("artifacts/csb-gold10-report-receipts.json")
+          catalog_path = Path("artifacts/csb-gold10-effective-catalog.json")
+          bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+          catalog_bytes = catalog_path.read_bytes()
+          catalog_sha256 = hashlib.sha256(catalog_bytes).hexdigest()
+          catalog = json.loads(catalog_bytes)
+
+          assert len(bundle["artifacts"]) == 10
+          assert bundle["raw_payloads_retained"] is False
+          assert bundle["catalog_sha256"] == catalog_sha256
+          assert bundle["effective_catalog_sha256"] == catalog_sha256
+          assert {item["catalog_sha256"] for item in bundle["artifacts"]} == {catalog_sha256}
+
+          source = next(item for item in catalog["sources"] if item["source_id"] == "uscsb")
+          effective_ids = {item["artifact_id"] for item in source["artifacts"]}
+          receipt_ids = {item["artifact_id"] for item in bundle["artifacts"]}
+          assert receipt_ids <= effective_ids
+
+          unexpected = [
+              path
+              for path in Path(".veritas-data").rglob("*")
+              if path.is_file() and not path.name.endswith(".provenance.json")
+          ]
+          assert not unexpected, f"raw source payloads remain: {unexpected}"
+          PY
+
+      - name: Upload provenance receipts and effective acquisition authority only
+        uses: actions/upload-artifact@v4
+        with:
+          name: csb-gold10-report-receipts-${{ github.sha }}
+          path: |
+            artifacts/csb-gold10-report-receipts.json
+            artifacts/csb-gold10-effective-catalog.json
+            .veritas-data/**/*.provenance.json
+          if-no-files-found: error
+          retention-days: 30
