@@ -3,6 +3,8 @@ name: Review Provenance Bootstrap
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/review-provenance-bootstrap.yml
   pull_request_target:
     types: [labeled]
 
