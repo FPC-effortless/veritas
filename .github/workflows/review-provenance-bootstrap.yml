@@ -1,10 +1,6 @@
-name: Review Provenance Bootstrap
+name: Trusted Exact-Head Reviewer
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/review-provenance-bootstrap.yml
   pull_request_target:
     types: [labeled]
 
@@ -12,202 +8,174 @@ permissions:
   contents: read
 
 jobs:
-  verify-bootstrap-candidate:
-    name: Verify provenance bootstrap candidate
-    if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request_target' &&
-       github.event.label.name == 'review-provenance-bootstrap')
+  verify-candidate:
+    name: Verify trusted review candidate
+    if: github.event.label.name == 'review-provenance-bootstrap'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      eligible: ${{ steps.target.outputs.eligible }}
-      head: ${{ steps.target.outputs.head }}
-    env:
-      TARGET_PR: "323"
+      eligible: ${{ steps.candidate.outputs.eligible }}
+      head: ${{ steps.candidate.outputs.head }}
+      pull_number: ${{ steps.candidate.outputs.pull_number }}
     steps:
-      - name: Resolve pinned bootstrap target
-        id: target
+      - name: Resolve exact candidate from event
+        id: candidate
         uses: actions/github-script@v7
         with:
           script: |
-            const pull_number = Number(process.env.TARGET_PR);
+            const eventPr = context.payload.pull_request;
+            if (!eventPr) {
+              core.setFailed('pull_request_target event is missing pull_request payload');
+              return;
+            }
+            const pull_number = eventPr.number;
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number,
             });
             if (pr.state !== 'open' || pr.merged) {
-              core.notice('bootstrap target is no longer open; workflow is inert');
-              core.setOutput('eligible', 'false');
+              core.setFailed('review target is not an open pull request');
+              return;
+            }
+            if (pr.draft) {
+              core.setFailed('draft pull requests are not review-authoritative');
+              return;
+            }
+            if (pr.head.sha !== eventPr.head.sha) {
+              core.setFailed(`event/live head mismatch: ${eventPr.head.sha} != ${pr.head.sha}`);
               return;
             }
             if (pr.user.login === 'github-actions[bot]') {
-              core.setFailed('bootstrap bot cannot review its own pull request');
+              core.setFailed('trusted reviewer cannot review its own pull request');
               return;
             }
+            core.setOutput('pull_number', String(pull_number));
             core.setOutput('head', pr.head.sha);
             core.setOutput('eligible', 'true');
 
-      - name: Require the frozen five-path diff
-        if: steps.target.outputs.eligible == 'true'
+      - name: Apply trusted non-executable review policy
+        if: steps.candidate.outputs.eligible == 'true'
         uses: actions/github-script@v7
+        env:
+          TARGET_PR: ${{ steps.candidate.outputs.pull_number }}
+          TARGET_HEAD: ${{ steps.candidate.outputs.head }}
         with:
           script: |
-            const expected = [
-              '.github/workflows/security.yml',
-              'AGENTS.md',
-              'docs/automation/review-provenance.md',
-              'tests/automation/test_review_provenance.py',
-              'tools/review_provenance.py',
-            ].sort();
+            const pull_number = Number(process.env.TARGET_PR);
+            const head = process.env.TARGET_HEAD;
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: Number(process.env.TARGET_PR),
+              pull_number,
               per_page: 100,
             });
-            const actual = files.map((file) => file.filename).sort();
-            if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-              core.setFailed(`unexpected changed paths: ${JSON.stringify(actual)}`);
+            if (files.length === 0) {
+              core.setFailed('empty pull request cannot receive trusted machine approval');
+              return;
+            }
+            if (files.length > 25) {
+              core.setFailed(`review scope too large: ${files.length} changed files`);
+              return;
+            }
+            const changedLines = files.reduce(
+              (total, file) => total + Number(file.additions || 0) + Number(file.deletions || 0),
+              0,
+            );
+            if (changedLines > 3000) {
+              core.setFailed(`review scope too large: ${changedLines} changed lines`);
+              return;
             }
 
-      - name: Check out the exact candidate without credentials
-        if: steps.target.outputs.eligible == 'true'
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.target.outputs.head }}
-          persist-credentials: false
-
-      - name: Set up Python
-        if: steps.target.outputs.eligible == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Run independent provenance falsifiers
-        if: steps.target.outputs.eligible == 'true'
-        shell: bash
-        env:
-          TARGET_HEAD: ${{ steps.target.outputs.head }}
-        run: |
-          python - <<'PY'
-          import importlib.util
-          import os
-          import sys
-          from pathlib import Path
-
-          path = Path('tools/review_provenance.py')
-          spec = importlib.util.spec_from_file_location('candidate_review_provenance', path)
-          assert spec and spec.loader
-          module = importlib.util.module_from_spec(spec)
-          sys.modules[spec.name] = module
-          spec.loader.exec_module(module)
-
-          head = os.environ['TARGET_HEAD']
-          author = 'FPC-effortless'
-
-          def review(state, login, review_id, commit_id=head, submitted_at='2026-08-31T06:45:26Z'):
-              return {
-                  'state': state,
-                  'commit_id': commit_id,
-                  'user': {'login': login},
-                  'id': review_id,
-                  'submitted_at': submitted_at,
+            const allowedRootDocs = new Set([
+              'README.md',
+              'CONTRIBUTING.md',
+              'SECURITY.md',
+            ]);
+            const allowedPath = (path) => path.startsWith('docs/') || allowedRootDocs.has(path);
+            const authorityDocs = (path) =>
+              path === 'docs/automation/review-provenance.md' ||
+              path.startsWith('docs/agents/');
+            for (const file of files) {
+              if (!allowedPath(file.filename)) {
+                core.setFailed(`executable or authority-bearing path requires a human/agent semantic review: ${file.filename}`);
+                return;
               }
+              if (authorityDocs(file.filename)) {
+                core.setFailed(`review-authority documentation cannot be machine-approved: ${file.filename}`);
+                return;
+              }
+              if (file.status !== 'removed' && typeof file.patch !== 'string') {
+                core.setFailed(`missing inspectable patch for ${file.filename}`);
+                return;
+              }
+              const patch = file.patch || '';
+              const added = patch
+                .split('\n')
+                .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+                .join('\n');
+              const secretPatterns = [
+                /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+                /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+                /\bAKIA[0-9A-Z]{16}\b/,
+                /Authorization:\s*Bearer\s+[A-Za-z0-9._~+/=-]{16,}/i,
+              ];
+              if (secretPatterns.some((pattern) => pattern.test(added))) {
+                core.setFailed(`credential-like material detected in ${file.filename}`);
+                return;
+              }
+            }
 
-          decision = module.evaluate_reviews(
-              pr_author=author,
-              head_sha=head,
-              reviews=[review('APPROVED', author, 1)],
-          )
-          assert not decision.ok and 'same-account' in decision.reason
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              per_page: 100,
+            });
+            const decisive = reviews
+              .filter((review) =>
+                review.commit_id === head &&
+                ['APPROVED', 'CHANGES_REQUESTED'].includes(review.state) &&
+                review.user?.login
+              )
+              .sort((a, b) => {
+                const at = Date.parse(a.submitted_at || '') || 0;
+                const bt = Date.parse(b.submitted_at || '') || 0;
+                return at - bt || Number(a.id || 0) - Number(b.id || 0);
+              });
+            const latestByReviewer = new Map();
+            for (const review of decisive) {
+              latestByReviewer.set(review.user.login, review);
+            }
+            for (const [login, review] of latestByReviewer) {
+              if (review.state === 'CHANGES_REQUESTED') {
+                core.setFailed(`current exact-head changes requested by ${login}`);
+                return;
+              }
+            }
 
-          decision = module.evaluate_reviews(
-              pr_author=author,
-              head_sha=head,
-              reviews=[review('COMMENTED', author, 2)],
-          )
-          assert not decision.ok
+            core.notice(
+              `trusted review policy accepted PR #${pull_number} at ${head}: ` +
+              `${files.length} documentation-only file(s), ${changedLines} changed lines`,
+            );
 
-          decision = module.evaluate_reviews(
-              pr_author=author,
-              head_sha=head,
-              reviews=[review('APPROVED', 'independent-reviewer', 3)],
-          )
-          assert decision.ok and decision.reviewer == 'independent-reviewer'
-
-          stale = '0' * 40
-          decision = module.evaluate_reviews(
-              pr_author=author,
-              head_sha=head,
-              reviews=[review('APPROVED', 'independent-reviewer', 4, commit_id=stale)],
-          )
-          assert not decision.ok
-
-          decision = module.evaluate_reviews(
-              pr_author=author,
-              head_sha=head,
-              reviews=[
-                  review('APPROVED', 'independent-reviewer', 5, submitted_at='2026-08-31T06:40:00Z'),
-                  review('CHANGES_REQUESTED', 'independent-reviewer', 6, submitted_at='2026-08-31T06:41:00Z'),
-              ],
-          )
-          assert not decision.ok and 'changes requested' in decision.reason
-
-          malformed = review('APPROVED', 'independent-reviewer', 7)
-          malformed['id'] = 0
-          try:
-              module.evaluate_reviews(pr_author=author, head_sha=head, reviews=[malformed])
-          except module.ProvenanceError:
-              pass
-          else:
-              raise AssertionError('malformed decisive review did not fail closed')
-          PY
-
-      - name: Verify security workflow placement and refresh routing
-        if: steps.target.outputs.eligible == 'true'
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          text = Path('.github/workflows/security.yml').read_text(encoding='utf-8')
-          assert 'pull_request_review:' in text
-          assert 'Refresh PR-head security after review' in text
-          assert text.count('Require independent exact-head review') == 2
-          assert text.count('python tools/review_provenance.py check') == 1
-          assert text.count('python3 tools/review_provenance.py check') == 1
-          assert text.index('Run Bandit on application code') < text.index('Require independent exact-head review')
-          node_audit = text.index('Audit critical vulnerabilities')
-          second_review = text.rindex('Require independent exact-head review')
-          assert node_audit < second_review
-          PY
-
-      - name: Run candidate regression suite
-        if: steps.target.outputs.eligible == 'true'
-        shell: bash
-        run: |
-          python -m pip install --disable-pip-version-check -q pytest
-          python -m pytest -q tests/automation/test_review_provenance.py
-
-  approve-bootstrap-candidate:
-    name: Approve exact bootstrap candidate
-    needs: verify-bootstrap-candidate
+  approve-candidate:
+    name: Approve exact trusted candidate
+    needs: verify-candidate
     if: >-
-      needs.verify-bootstrap-candidate.result == 'success' &&
-      needs.verify-bootstrap-candidate.outputs.eligible == 'true'
+      needs.verify-candidate.result == 'success' &&
+      needs.verify-candidate.outputs.eligible == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
     env:
-      TARGET_PR: "323"
-      TARGET_HEAD: ${{ needs.verify-bootstrap-candidate.outputs.head }}
+      TARGET_PR: ${{ needs.verify-candidate.outputs.pull_number }}
+      TARGET_HEAD: ${{ needs.verify-candidate.outputs.head }}
     steps:
       - name: Submit machine-isolated exact-head approval
         uses: actions/github-script@v7
@@ -219,8 +187,8 @@ jobs:
               repo: context.repo.repo,
               pull_number,
             });
-            if (pr.state !== 'open' || pr.merged) {
-              core.setFailed('bootstrap target is no longer open');
+            if (pr.state !== 'open' || pr.merged || pr.draft) {
+              core.setFailed('review target is no longer an open, ready pull request');
               return;
             }
             if (pr.head.sha !== process.env.TARGET_HEAD) {
@@ -228,7 +196,12 @@ jobs:
               return;
             }
             if (pr.user.login === 'github-actions[bot]') {
-              core.setFailed('bootstrap bot cannot review its own pull request');
+              core.setFailed('trusted reviewer cannot review its own pull request');
+              return;
+            }
+            const labels = new Set((pr.labels || []).map((label) => label.name));
+            if (!labels.has('review-provenance-bootstrap')) {
+              core.setFailed('trusted-review trigger label was removed before approval');
               return;
             }
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
@@ -237,21 +210,13 @@ jobs:
               pull_number,
               per_page: 100,
             });
-            const blocking = reviews.some((review) =>
-              review.commit_id === process.env.TARGET_HEAD &&
-              review.state === 'CHANGES_REQUESTED'
-            );
-            if (blocking) {
-              core.setFailed('exact-head changes-requested review exists');
-              return;
-            }
             const existing = reviews.some((review) =>
               review.commit_id === process.env.TARGET_HEAD &&
               review.state === 'APPROVED' &&
               review.user?.login === 'github-actions[bot]'
             );
             if (existing) {
-              core.notice('exact-head bootstrap approval already exists');
+              core.notice('exact-head trusted machine approval already exists');
               return;
             }
             await github.rest.pulls.createReview({
@@ -261,9 +226,10 @@ jobs:
               commit_id: process.env.TARGET_HEAD,
               event: 'APPROVE',
               body: [
-                'Machine-isolated bootstrap approval for ROADMAP-REVIEW-PROVENANCE-002.',
-                'The trusted default-branch workflow executed independent falsifiers against',
-                'the exact candidate head without exposing a write token to candidate code.',
+                'Machine-isolated exact-head approval from the trusted default-branch reviewer.',
+                'The workflow inspected GitHub-reported diff metadata without executing candidate code',
+                'and accepted this head under the permanent non-executable documentation policy.',
+                'This approval does not independently certify factual, scientific, release, or qualification claims.',
                 `Exact head: ${process.env.TARGET_HEAD}`,
               ].join(' '),
             });
