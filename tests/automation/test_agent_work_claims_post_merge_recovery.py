@@ -15,102 +15,127 @@ def _recovery_job() -> str:
     return workflow.split("  recover-merged:\n", 1)[1]
 
 
-def test_recover_merged_is_separate_and_serialized_with_coordination() -> None:
+def _assert_contains(text: str, *needles: str) -> None:
+    for needle in needles:
+        assert needle in text
+
+
+def test_recovery_is_separate_and_serialized() -> None:
     workflow = _workflow()
     coordinate = workflow.split("  coordinate:\n", 1)[1].split(
         "  recover-merged:\n", 1
     )[0]
     recovery = _recovery_job()
 
-    assert "startsWith(github.event.comment.body, '/recover-merged ')" in recovery
+    _assert_contains(
+        recovery,
+        "startsWith(github.event.comment.body, '/recover-merged ')",
+        "group: agent-work-coordination",
+        "cancel-in-progress: false",
+        "actions: read",
+        "contents: read",
+        "issues: write",
+        "pull-requests: read",
+    )
     assert "/recover-merged" not in coordinate
-    assert "group: agent-work-coordination" in recovery
-    assert "cancel-in-progress: false" in recovery
-    assert "actions: read" in recovery
-    assert "contents: read" in recovery
-    assert "issues: write" in recovery
-    assert "pull-requests: read" in recovery
 
 
-def test_recover_merged_requires_owner_and_exact_trusted_review_holder() -> None:
+def test_recovery_requires_owner_and_review_holder() -> None:
     recovery = _recovery_job()
 
-    assert "association !== 'OWNER'" in recovery
-    assert "status.state !== 'REVIEW'" in recovery
-    assert "status.github_actor !== actor" in recovery
-    assert "status.agent_id !== command.agent" in recovery
-    assert "status.linked_pr !== command.pr" in recovery
-    assert "pr.head?.ref !== status.branch" in recovery
-    assert "previousHead === finalHead" in recovery
-    assert "ordinary /done owns exact-head completion" in recovery
-    assert "Array.isArray(status.ownership_paths)" in recovery
-
-
-def test_recover_merged_requires_exact_final_head_review_provenance() -> None:
-    recovery = _recovery_job()
-
-    assert "RECOGNIZED_REVIEW_STATES" in recovery
-    assert "DECISIVE_REVIEW_STATES" in recovery
-    assert "review.commit_id" in recovery
-    assert "decisive review has malformed commit identity" in recovery
-    assert "decisive review has no concrete reviewer login" in recovery
-    assert "decisive review has no positive integer review id" in recovery
-    assert "decisive review timestamp is not timezone-aware ISO-8601" in recovery
-    assert "review.login !== prAuthor" in recovery
-    assert "exact-head changes requested by" in recovery
-    assert (
-        "no exact-head approval from a GitHub identity distinct from the PR author"
-        in recovery
+    _assert_contains(
+        recovery,
+        "association !== 'OWNER'",
+        "status.state !== 'REVIEW'",
+        "status.github_actor !== actor",
+        "status.agent_id !== command.agent",
+        "status.linked_pr !== command.pr",
+        "pr.head?.ref !== status.branch",
+        "previousHead === finalHead",
+        "ordinary /done owns exact-head completion",
+        "Array.isArray(status.ownership_paths)",
     )
-    assert "github.rest.pulls.listReviews" in recovery
 
 
-def test_recover_merged_requires_exact_head_security_quality_and_ci() -> None:
+def test_recovery_requires_exact_head_review() -> None:
     recovery = _recovery_job()
 
-    assert (
-        "REQUIRED_WORKFLOWS = ['Security', 'Python Quality Ratchet', 'CI']"
-        in recovery
+    _assert_contains(
+        recovery,
+        "RECOGNIZED_REVIEW_STATES",
+        "DECISIVE_REVIEW_STATES",
+        "review.commit_id",
+        "decisive review has malformed commit identity",
+        "decisive review has no concrete reviewer login",
+        "decisive review has no positive integer review id",
+        (
+            "decisive review timestamp is not "
+            "timezone-aware ISO-8601"
+        ),
+        "review.login !== prAuthor",
+        "exact-head changes requested by",
+        (
+            "no exact-head approval from a GitHub identity "
+            "distinct from the PR author"
+        ),
+        "github.rest.pulls.listReviews",
     )
-    assert "github.rest.actions.listWorkflowRunsForRepo" in recovery
-    assert "run.head_sha === headSha" in recovery
-    assert "run.event === 'pull_request'" in recovery
-    assert "run.status !== 'completed' || run.conclusion !== 'success'" in recovery
-    assert "missing exact-head ${name} workflow run" in recovery
 
 
-def test_recover_merged_requires_merge_on_current_default_branch() -> None:
+def test_recovery_requires_exact_head_gates() -> None:
     recovery = _recovery_job()
 
-    assert "pr.state !== 'closed' || pr.merged !== true || !pr.merged_at" in recovery
-    assert "pr.merge_commit_sha" in recovery
-    assert "github.rest.repos.compareCommitsWithBasehead" in recovery
-    assert "basehead: `${mergeCommit}...${defaultBranch}`" in recovery
-    assert "comparison.behind_by !== 0" in recovery
-    assert "['ahead', 'identical'].includes(comparison.status)" in recovery
+    _assert_contains(
+        recovery,
+        (
+            "REQUIRED_WORKFLOWS = "
+            "['Security', 'Python Quality Ratchet', 'CI']"
+        ),
+        "github.rest.actions.listWorkflowRunsForRepo",
+        "run.head_sha === headSha",
+        "run.event === 'pull_request'",
+        "run.status !== 'completed' || run.conclusion !== 'success'",
+        "missing exact-head ${name} workflow run",
+    )
 
 
-def test_recovery_preserves_done_exact_head_invariant_and_audits_head_rewrite() -> None:
+def test_recovery_requires_merge_on_default_branch() -> None:
+    recovery = _recovery_job()
+
+    _assert_contains(
+        recovery,
+        "pr.state !== 'closed' || pr.merged !== true || !pr.merged_at",
+        "pr.merge_commit_sha",
+        "github.rest.repos.compareCommitsWithBasehead",
+        "basehead: `${mergeCommit}...${defaultBranch}`",
+        "comparison.behind_by !== 0",
+        "['ahead', 'identical'].includes(comparison.status)",
+    )
+
+
+def test_recovery_preserves_done_head_invariant() -> None:
     recovery = _recovery_job()
     coordinator = COORDINATOR.read_text(encoding="utf-8")
-
-    # Ordinary completion remains strict and cannot silently rewrite a handoff head.
-    assert (
-        "PR #${command.pr} head moved after handoff; re-handoff/review exact final head before DONE"
-        in coordinator
+    done_guard = (
+        "PR #${command.pr} head moved after handoff; "
+        "re-handoff/review exact final head before DONE"
     )
 
-    assert "schema_version: 'veritas.owner-post-merge-head-recovery.v1'" in recovery
-    assert "previous_handoff_head: previousHead" in recovery
-    assert "pr_head: finalHead" in recovery
-    assert "merge_commit: mergeCommit" in recovery
-    assert "review_id: approval.reviewId" in recovery
-    assert "required_workflows: gates" in recovery
-    assert "state: 'DONE'" in recovery
-    assert "linked_pr_head: finalHead" in recovery
+    assert done_guard in coordinator
+    _assert_contains(
+        recovery,
+        "schema_version: 'veritas.owner-post-merge-head-recovery.v1'",
+        "previous_handoff_head: previousHead",
+        "pr_head: finalHead",
+        "merge_commit: mergeCommit",
+        "review_id: approval.reviewId",
+        "required_workflows: gates",
+        "state: 'DONE'",
+        "linked_pr_head: finalHead",
+    )
 
 
-def test_terminal_local_state_is_published_before_registry_cleanup() -> None:
+def test_local_done_precedes_registry_cleanup() -> None:
     recovery = _recovery_job()
 
     local_write = recovery.index("comment_id: trusted.commentId")
@@ -119,12 +144,19 @@ def test_terminal_local_state_is_published_before_registry_cleanup() -> None:
     registry_write = recovery.index("comment_id: registry.commentId")
 
     assert local_write < done_label < registry_lookup < registry_write
-    assert "If later cleanup fails, a stale" in recovery
-    assert "global reservation remains fail-closed" in recovery
+    _assert_contains(
+        recovery,
+        "If later cleanup fails, a stale",
+        "global reservation remains fail-closed",
+    )
 
 
-def test_recovery_rejections_are_audited_and_fail_closed() -> None:
+def test_rejections_are_audited_and_fail_closed() -> None:
     recovery = _recovery_job()
+    rejection = (
+        "Rejected \\`recover-merged\\` from "
+        "@${actor}: ${message}"
+    )
 
-    assert "Rejected \\`recover-merged\\` from @${actor}: ${message}" in recovery
+    assert rejection in recovery
     assert "throw error;" in recovery
