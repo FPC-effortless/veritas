@@ -517,7 +517,7 @@ module.exports = async function coordinate({ github, context }) {
         if (status.linked_pr_head && status.linked_pr_head !== pr.head.sha) throw new Error(`PR #${command.pr} head moved from recorded ${status.linked_pr_head}; legacy recovery refuses to rewrite exact-head evidence`);
         status.github_actor = actor;
         status.agent_id = command.agent;
-        status.branch = command.branch;
+        Object.assign(status, { branch: command.branch });
         status.heartbeat_at = timestamp;
         status.linked_pr_head = status.linked_pr_head || pr.head.sha;
         status.released_reason = `owner linked-PR metadata recovery: ${command.reason}`;
