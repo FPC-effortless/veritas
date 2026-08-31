@@ -1,7 +1,6 @@
+from json import dumps, loads
 from pathlib import Path
-
-import json
-import subprocess
+from subprocess import run
 
 
 WORKFLOW = Path(".github/workflows/agent-work-claims.yml")
@@ -127,7 +126,7 @@ def _marked_comment(marker, value, comment_id):
     return {
         "id": comment_id,
         "user": {"login": "github-actions[bot]"},
-        "body": f"{marker}\n```json\n{json.dumps(value)}\n```",
+        "body": f"{marker}\n```json\n{dumps(value)}\n```",
     }
 
 
@@ -219,16 +218,16 @@ def _base_fixture():
 
 
 def _run_recovery(fixture):
-    completed = subprocess.run(
+    completed = run(
         ["node", "-e", NODE_HARNESS],
-        input=json.dumps(
+        input=dumps(
             {"script": _recovery_script(), "fixture": fixture}
         ),
         capture_output=True,
         check=True,
         text=True,
     )
-    result = json.loads(completed.stdout)
+    result = loads(completed.stdout)
     assert isinstance(result, dict)
     return result
 
