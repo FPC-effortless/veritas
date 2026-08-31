@@ -541,16 +541,21 @@ module.exports = async function coordinate({ github, context }) {
     status.last_command_comment_id = comment.id;
     status.updated_at = timestamp;
 
-    const activeReservationMetadataChanged = command.kind === 'recover-linked' && hasActiveReservation(previousStatus) && hasActiveReservation(status);
-    const reservationMustPrecedeLocal = (!hasActiveReservation(previousStatus) && hasActiveReservation(status)) || activeReservationMetadataChanged;
-    if (reservationMustPrecedeLocal) {
+    const reservationMustPrecedeLocal = !hasActiveReservation(previousStatus) && hasActiveReservation(status);
+    const activeReservationMetadataChanged =
+      command.kind === 'recover-linked' &&
+      hasActiveReservation(previousStatus) &&
+      hasActiveReservation(status);
+    const reservationOrRepairMustPrecedeLocal =
+      reservationMustPrecedeLocal || activeReservationMetadataChanged;
+    if (reservationOrRepairMustPrecedeLocal) {
       // Claims and linked-PR identity repairs publish the global reservation first.
       // A local publication failure leaves a stale global reservation, which is fail-closed.
       await updateRegistryEntry(issue, contract, status);
     }
     current = await writeStatus(issue, current, status);
     await setStateLabels(issue.number, status.state);
-    if (!reservationMustPrecedeLocal) {
+    if (!reservationOrRepairMustPrecedeLocal) {
       // Releases/removals publish locally first. If registry cleanup then fails, the stale
       // reservation remains conservative rather than making active ownership look free.
       await updateRegistryEntry(issue, contract, status);
