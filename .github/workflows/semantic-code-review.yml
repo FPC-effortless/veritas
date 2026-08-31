@@ -309,6 +309,10 @@ jobs:
               core.setFailed('no completed Copilot COMMENT review exists on the exact head');
               return;
             }
+            if (/\bBLOCKING:/i.test(copilotReview.body || '')) {
+              core.setFailed('Copilot semantic review contains a BLOCKING summary finding');
+              return;
+            }
 
             const comments = await github.paginate(github.rest.pulls.listReviewComments, {
               owner,
@@ -466,6 +470,10 @@ jobs:
               core.setFailed('exact-head Copilot semantic evidence disappeared');
               return;
             }
+            if (/\bBLOCKING:/i.test(copilot.body || '')) {
+              core.setFailed('Copilot BLOCKING summary finding appeared before approval');
+              return;
+            }
             const reviewComments = await github.paginate(github.rest.pulls.listReviewComments, {
               owner,
               repo,
@@ -496,7 +504,7 @@ jobs:
                 event: 'APPROVE',
                 body: [
                   'Machine-isolated exact-head semantic implementation approval.',
-                  `Copilot code review ${copilot.id} completed on this exact head with no inline findings,`,
+                  `Copilot code review ${copilot.id} completed on this exact head with no inline or BLOCKING summary findings,`,
                   `isolated CI Required check ${required.id} passed before approval` +
                     (quality ? `, and Python quality check ${quality.id} was green` : '') + '.',
                   'The trusted default-branch bridge revalidated head, protected paths, and decisive reviews.',
