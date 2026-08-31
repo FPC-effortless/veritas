@@ -95,6 +95,8 @@ def _agent_review(
     body = review.get("body")
     if not isinstance(body, str) or "veritas-agent-review:" not in body:
         return None
+    if body.count("veritas-agent-review:") != 1:
+        raise ProvenanceError("agent review must contain exactly one canonical marker")
     marker = AGENT_REVIEW_MARKER_RE.search(body)
     if marker is None:
         raise ProvenanceError("agent review marker is malformed")
