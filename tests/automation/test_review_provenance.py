@@ -83,6 +83,50 @@ def test_same_account_free_form_review_does_not_claim_authority() -> None:
     assert "canonical clean agent review" in decision.reason
 
 
+def test_quoted_marker_handoff_is_ignored_as_non_authoritative() -> None:
+    handoff = _review(
+        review_id=1,
+        login="implementer",
+        state="COMMENTED",
+        body=(
+            "Review handoff only — this is NOT merge-authoritative review evidence.\n\n"
+            f"`<!-- veritas-agent-review:v1 head={HEAD} verdict=clean -->`\n\n"
+            "If blocked, use `BLOCKING:` findings."
+        ),
+    )
+    clean = _agent_review(
+        review_id=2,
+        submitted_at="2026-08-31T06:01:00Z",
+    )
+    decision = evaluate_reviews(
+        pr_author="implementer",
+        head_sha=HEAD,
+        reviews=[handoff, clean],
+    )
+    assert decision.ok is True
+    assert decision.review_id == 2
+
+
+def test_fenced_marker_example_is_ignored_as_non_authoritative() -> None:
+    handoff = _review(
+        review_id=1,
+        login="implementer",
+        state="COMMENTED",
+        body=(
+            "Example only:\n```text\n"
+            f"<!-- veritas-agent-review:v1 head={HEAD} verdict=clean -->\n"
+            "```\nBLOCKING: appears here only as instructional prose."
+        ),
+    )
+    decision = evaluate_reviews(
+        pr_author="implementer",
+        head_sha=HEAD,
+        reviews=[handoff],
+    )
+    assert decision.ok is False
+    assert "no exact-head" in decision.reason
+
+
 def test_canonical_same_account_agent_review_passes() -> None:
     decision = evaluate_reviews(
         pr_author="implementer",
