@@ -108,17 +108,17 @@ class StructuredSourceProfile(StrictModel):
             self.event_month_field,
         )
         for field_name in (item for item in structural if item is not None):
-            rule = by_source.get(field_name)
-            if rule is None:
+            structural_rule = by_source.get(field_name)
+            if structural_rule is None:
                 raise ValueError(f"structural field is not classified: {field_name}")
-            if rule.exposure is not FieldExposure.PUBLIC:
+            if structural_rule.exposure is not FieldExposure.PUBLIC:
                 raise ValueError(f"structural field must be public: {field_name}")
 
         for field_name in self.source_case_id_fields:
-            rule = by_source.get(field_name)
-            if rule is None:
+            identity_rule = by_source.get(field_name)
+            if identity_rule is None:
                 raise ValueError(f"source identity field is not classified: {field_name}")
-            if rule.exposure is FieldExposure.VERIFIER:
+            if identity_rule.exposure is FieldExposure.VERIFIER:
                 raise ValueError(
                     f"source identity field cannot depend on verifier-only data: {field_name}"
                 )
