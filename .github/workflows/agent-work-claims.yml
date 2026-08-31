@@ -41,6 +41,7 @@ jobs:
        startsWith(github.event.comment.body, '/blocked ') ||
        startsWith(github.event.comment.body, '/handoff ') ||
        startsWith(github.event.comment.body, '/done ') ||
+       startsWith(github.event.comment.body, '/recover-completed ') ||
        startsWith(github.event.comment.body, '/recover ') ||
        startsWith(github.event.comment.body, '/recover-linked ') ||
        startsWith(github.event.comment.body, '/recover-metadata ') ||
