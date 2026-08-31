@@ -569,7 +569,8 @@ def _validate_distinct_output_paths(
         previous = resolved.get(canonical)
         if previous is not None:
             raise StructuredCorpusError(
-                f"output paths must be distinct: {previous} and {label} resolve to {canonical}"
+                f"output paths must be distinct: {previous} and {label} "
+                f"resolve to {canonical}"
             )
         resolved[canonical] = label
 
@@ -583,11 +584,13 @@ def _validate_distinct_output_paths(
                 aliases = left_path.samefile(right_path)
             except OSError as exc:
                 raise StructuredCorpusError(
-                    f"could not verify output path separation: {left_label}, {right_label}"
+                    "could not verify output path separation: "
+                    f"{left_label}, {right_label}"
                 ) from exc
             if aliases:
                 raise StructuredCorpusError(
-                    f"output paths must be distinct: {left_label} and {right_label} alias the same file"
+                    f"output paths must be distinct: {left_label} and {right_label} "
+                    "alias the same file"
                 )
 
 
