@@ -221,6 +221,133 @@ def test_bootstrap_holder_and_stale_recovery_require_owner_audit() -> None:
     assert "STALE_MS = 2 * 60 * 60 * 1000" in script
 
 
+def test_closed_legacy_completion_recovery_is_narrow_and_exact_merge_bound() -> None:
+    workflow = _workflow()
+    script = _script()
+    assert "startsWith(github.event.comment.body, '/recover-completed ')" in workflow
+    assert "command.kind === 'recover-completed'" in script
+    block = script.split("} else if (command.kind === 'recover-completed') {", 1)[1].split(
+        "} else if (command.kind === 'recover-metadata') {", 1
+    )[0]
+    assert "association !== 'OWNER'" in block
+    assert "issue.state !== 'closed'" in block
+    assert "status.github_actor !== 'bootstrap'" in block
+    assert "status.agent_id !== command.agent" in block
+    assert "pr.head?.ref !== status.branch" in block
+    assert "prBody.includes(`#${issueNumber}`)" in block
+    assert "prBody.includes(primaryWorkId)" in block
+    assert "compareCommitsWithBasehead" in block
+    assert "comparison.behind_by !== 0" in block
+    assert "status.linked_pr_head = pr.head.sha" in block
+    assert "status.ownership_paths = contract.paths.slice()" in block
+    assert "veritas.owner-exact-merge-recovery.v1" in block
+
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(__SCRIPT__, 'utf8') +
+  '\nmodule.exports.__completedRecoveryParser = { parseCommand };';
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const command = moduleObject.exports.__completedRecoveryParser.parseCommand(
+  '/recover-completed coordination-bootstrap 246 bind historical merge'
+);
+if (!command || command.kind !== 'recover-completed') throw new Error('command not parsed');
+if (command.agent !== 'coordination-bootstrap') throw new Error('agent not parsed');
+if (command.pr !== 246) throw new Error('PR not parsed');
+if (command.reason !== 'bind historical merge') throw new Error('reason not parsed');
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
+def test_owner_evidence_dependency_proof_is_exact_and_fail_closed() -> None:
+    dependency_script = Path(".github/scripts/roadmap-dependency-notifications.js")
+    script_path = json.dumps(str(dependency_script.resolve()))
+    source = r"""
+const helpers = require(__SCRIPT__).__test;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+const status = {
+  state: 'DONE',
+  transition_seq: 1,
+  completion_evidence: {
+    schema_version: 'veritas.owner-evidence-completion.v1',
+    rule: 'OWNER_EVIDENCE',
+    completion_class: 'COORDINATION_OPERATION',
+    evidence_comment_id: 99,
+    evidence_actor: 'repo-owner',
+    evidence_created_at: '2026-08-30T00:00:00Z',
+    transition_seq: 1,
+  },
+};
+const contract = {
+  completionRule: 'OWNER_EVIDENCE',
+  completionClass: 'COORDINATION_OPERATION',
+  evidenceCommentId: 99,
+  terminalState: 'DONE',
+};
+const issue = { state: 'closed' };
+const evidence = {
+  id: 99,
+  author_association: 'OWNER',
+  user: { login: 'repo-owner' },
+  created_at: '2026-08-30T00:00:00Z',
+  body: 'Completion evidence: bootstrap completed.',
+};
+assert(
+  helpers.validOwnerEvidenceDependency(status, contract, issue, evidence),
+  'valid owner evidence was rejected'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(
+    status,
+    { ...contract, completionClass: 'SCIENTIFIC_QUALIFICATION' },
+    issue,
+    evidence
+  ),
+  'wrong completion class was accepted'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(
+    status,
+    contract,
+    issue,
+    { ...evidence, author_association: 'MEMBER' }
+  ),
+  'non-owner evidence was accepted'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(
+    { ...status, transition_seq: 2 },
+    contract,
+    issue,
+    evidence
+  ),
+  'stale transition evidence was accepted'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(status, contract, { state: 'open' }, evidence),
+  'open provider issue was accepted'
+);
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
 def test_failure_injection_preserves_global_exclusion_and_root_file_locks() -> None:
     script_path = json.dumps(str(SCRIPT.resolve()))
     source = r"""
