@@ -1,0 +1,465 @@
+name: Trusted Semantic Code Reviewer
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semantic-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare semantic review candidate
+    if: github.event.label.name == 'review-provenance-semantic'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    outputs:
+      pr: ${{ steps.candidate.outputs.pr }}
+      head: ${{ steps.candidate.outputs.head }}
+      author: ${{ steps.candidate.outputs.author }}
+    steps:
+      - name: Resolve and bound exact candidate
+        id: candidate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const eventPr = context.payload.pull_request;
+            if (!eventPr) {
+              core.setFailed('missing pull_request payload');
+              return;
+            }
+            const pull_number = eventPr.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+            });
+            if (pr.state !== 'open' || pr.merged || pr.draft) {
+              core.setFailed('semantic review target must be an open non-draft PR');
+              return;
+            }
+            if (pr.head.sha !== eventPr.head.sha) {
+              core.setFailed(`event/live head mismatch: ${eventPr.head.sha} != ${pr.head.sha}`);
+              return;
+            }
+            if (pr.user?.login === 'github-actions[bot]') {
+              core.setFailed('semantic reviewer cannot review its own PR');
+              return;
+            }
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              per_page: 100,
+            });
+            if (files.length === 0) {
+              core.setFailed('empty PR cannot receive semantic approval');
+              return;
+            }
+            if (files.length > 100) {
+              core.setFailed(`semantic review scope too large: ${files.length} files`);
+              return;
+            }
+            const changedLines = files.reduce(
+              (total, file) => total + Number(file.additions || 0) + Number(file.deletions || 0),
+              0,
+            );
+            if (changedLines > 15000) {
+              core.setFailed(`semantic review scope too large: ${changedLines} changed lines`);
+              return;
+            }
+
+            const protectedPath = (path) =>
+              path === 'AGENTS.md' ||
+              path === 'tools/review_provenance.py' ||
+              path.startsWith('.github/workflows/') ||
+              path === '.github/copilot-instructions.md' ||
+              path.startsWith('.github/instructions/') ||
+              path.startsWith('.github/skills/') ||
+              path.startsWith('.github/agents/') ||
+              path.startsWith('.agents/') ||
+              path.startsWith('docs/automation/') ||
+              path.startsWith('docs/agents/');
+            for (const file of files) {
+              if (protectedPath(file.filename)) {
+                core.setFailed(
+                  `review/repository authority path requires genuinely independent manual review: ${file.filename}`,
+                );
+                return;
+              }
+              if (file.status !== 'removed' && typeof file.patch !== 'string') {
+                core.setFailed(`missing inspectable patch for ${file.filename}`);
+                return;
+              }
+              const added = (file.patch || '')
+                .split('\n')
+                .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+                .join('\n');
+              const secretPatterns = [
+                /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+                /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+                /\bAKIA[0-9A-Z]{16}\b/,
+                /Authorization:\s*Bearer\s+[A-Za-z0-9._~+/=-]{16,}/i,
+              ];
+              if (secretPatterns.some((pattern) => pattern.test(added))) {
+                core.setFailed(`credential-like material detected in ${file.filename}`);
+                return;
+              }
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              per_page: 100,
+            });
+            const latest = new Map();
+            for (const review of reviews) {
+              if (
+                review.commit_id !== pr.head.sha ||
+                !['APPROVED', 'CHANGES_REQUESTED'].includes(review.state) ||
+                !review.user?.login
+              ) continue;
+              const key = review.user.login;
+              const previous = latest.get(key);
+              const order = [Date.parse(review.submitted_at || '') || 0, Number(review.id || 0)];
+              if (!previous || order[0] > previous.order[0] ||
+                  (order[0] === previous.order[0] && order[1] > previous.order[1])) {
+                latest.set(key, { review, order });
+              }
+            }
+            for (const [login, value] of latest) {
+              if (value.review.state === 'CHANGES_REQUESTED') {
+                core.setFailed(`current exact-head changes requested by ${login}`);
+                return;
+              }
+            }
+
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              reviewers: ['copilot-pull-request-reviewer[bot]'],
+            });
+
+            core.setOutput('pr', String(pull_number));
+            core.setOutput('head', pr.head.sha);
+            core.setOutput('author', pr.user.login);
+            core.notice(
+              `semantic candidate accepted for review: PR #${pull_number} ${pr.head.sha}; ` +
+              `${files.length} files, ${changedLines} changed lines`,
+            );
+
+  verify:
+    name: Verify semantic findings and isolated execution
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    env:
+      TARGET_PR: ${{ needs.prepare.outputs.pr }}
+      TARGET_HEAD: ${{ needs.prepare.outputs.head }}
+    steps:
+      - name: Require exact-head CI and clean Copilot semantic review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pull_number = Number(process.env.TARGET_PR);
+            const head = process.env.TARGET_HEAD;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            const live = async () => (await github.rest.pulls.get({ owner, repo, pull_number })).data;
+            const ensureHead = async () => {
+              const pr = await live();
+              if (pr.state !== 'open' || pr.merged || pr.draft || pr.head.sha !== head) {
+                throw new Error('PR state/head changed during semantic verification');
+              }
+            };
+
+            let requiredCheck = null;
+            for (let attempt = 0; attempt < 120; attempt++) {
+              await ensureHead();
+              const checks = await github.paginate(github.rest.checks.listForRef, {
+                owner,
+                repo,
+                ref: head,
+                per_page: 100,
+              });
+              const candidates = checks
+                .filter((check) => check.name === 'Required')
+                .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+              requiredCheck = candidates[0] || null;
+              if (requiredCheck?.status === 'completed') break;
+              await sleep(5000);
+            }
+            if (!requiredCheck) {
+              core.setFailed('exact-head CI Required check was not found');
+              return;
+            }
+            if (requiredCheck.status !== 'completed' || requiredCheck.conclusion !== 'success') {
+              core.setFailed(
+                `exact-head CI Required is not green: ${requiredCheck.status}/${requiredCheck.conclusion}`,
+              );
+              return;
+            }
+
+            let copilotReview = null;
+            for (let attempt = 0; attempt < 120; attempt++) {
+              await ensureHead();
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner,
+                repo,
+                pull_number,
+                per_page: 100,
+              });
+              const matches = reviews
+                .filter((review) =>
+                  review.commit_id === head &&
+                  review.user?.login === 'copilot-pull-request-reviewer[bot]' &&
+                  review.state === 'COMMENTED'
+                )
+                .sort((a, b) => {
+                  const at = Date.parse(a.submitted_at || '') || 0;
+                  const bt = Date.parse(b.submitted_at || '') || 0;
+                  return bt - at || Number(b.id || 0) - Number(a.id || 0);
+                });
+              copilotReview = matches[0] || null;
+              if (copilotReview) break;
+              await sleep(5000);
+            }
+            if (!copilotReview) {
+              core.setFailed('no completed Copilot COMMENT review exists on the exact head');
+              return;
+            }
+
+            const comments = await github.paginate(github.rest.pulls.listReviewComments, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+            const findings = comments.filter((comment) =>
+              Number(comment.pull_request_review_id) === Number(copilotReview.id) &&
+              comment.user?.login === 'copilot-pull-request-reviewer[bot]' &&
+              (!comment.commit_id || comment.commit_id === head)
+            );
+            if (findings.length > 0) {
+              core.setFailed(
+                `Copilot semantic review produced ${findings.length} finding(s); ` +
+                'address them on a new head and request semantic review again',
+              );
+              return;
+            }
+
+            core.notice(
+              `semantic evidence clean on exact head ${head}: ` +
+              `Copilot review ${copilotReview.id}, CI Required ${requiredCheck.id}`,
+            );
+
+  approve:
+    name: Approve semantically verified exact head
+    needs: [prepare, verify]
+    if: needs.verify.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      checks: read
+      contents: read
+      pull-requests: write
+    env:
+      TARGET_PR: ${{ needs.prepare.outputs.pr }}
+      TARGET_HEAD: ${{ needs.prepare.outputs.head }}
+      TARGET_AUTHOR: ${{ needs.prepare.outputs.author }}
+    steps:
+      - name: Revalidate and submit exact-head approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pull_number = Number(process.env.TARGET_PR);
+            const head = process.env.TARGET_HEAD;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+            if (pr.state !== 'open' || pr.merged || pr.draft || pr.head.sha !== head) {
+              core.setFailed('semantic approval target moved or is no longer reviewable');
+              return;
+            }
+            if (pr.user?.login !== process.env.TARGET_AUTHOR || pr.user?.login === 'github-actions[bot]') {
+              core.setFailed('PR author identity changed or is not eligible');
+              return;
+            }
+            const labels = new Set((pr.labels || []).map((label) => label.name));
+            if (!labels.has('review-provenance-semantic')) {
+              core.setFailed('semantic-review trigger label was removed');
+              return;
+            }
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+            const protectedPath = (path) =>
+              path === 'AGENTS.md' ||
+              path === 'tools/review_provenance.py' ||
+              path.startsWith('.github/workflows/') ||
+              path === '.github/copilot-instructions.md' ||
+              path.startsWith('.github/instructions/') ||
+              path.startsWith('.github/skills/') ||
+              path.startsWith('.github/agents/') ||
+              path.startsWith('.agents/') ||
+              path.startsWith('docs/automation/') ||
+              path.startsWith('docs/agents/');
+            if (files.some((file) => protectedPath(file.filename))) {
+              core.setFailed('protected reviewer/repository authority path entered the candidate');
+              return;
+            }
+
+            const checks = await github.paginate(github.rest.checks.listForRef, {
+              owner,
+              repo,
+              ref: head,
+              per_page: 100,
+            });
+            const required = checks
+              .filter((check) => check.name === 'Required')
+              .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+            if (!required || required.status !== 'completed' || required.conclusion !== 'success') {
+              core.setFailed('exact-head CI Required is no longer green');
+              return;
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+            const latest = new Map();
+            for (const review of reviews) {
+              if (
+                review.commit_id !== head ||
+                !['APPROVED', 'CHANGES_REQUESTED'].includes(review.state) ||
+                !review.user?.login
+              ) continue;
+              const key = review.user.login;
+              const order = [Date.parse(review.submitted_at || '') || 0, Number(review.id || 0)];
+              const previous = latest.get(key);
+              if (!previous || order[0] > previous.order[0] ||
+                  (order[0] === previous.order[0] && order[1] > previous.order[1])) {
+                latest.set(key, { review, order });
+              }
+            }
+            for (const [login, value] of latest) {
+              if (value.review.state === 'CHANGES_REQUESTED') {
+                core.setFailed(`current exact-head changes requested by ${login}`);
+                return;
+              }
+            }
+
+            const copilotReviews = reviews
+              .filter((review) =>
+                review.commit_id === head &&
+                review.user?.login === 'copilot-pull-request-reviewer[bot]' &&
+                review.state === 'COMMENTED'
+              )
+              .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+            const copilot = copilotReviews[0];
+            if (!copilot) {
+              core.setFailed('exact-head Copilot semantic evidence disappeared');
+              return;
+            }
+            const reviewComments = await github.paginate(github.rest.pulls.listReviewComments, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+            const findings = reviewComments.filter((comment) =>
+              Number(comment.pull_request_review_id) === Number(copilot.id) &&
+              comment.user?.login === 'copilot-pull-request-reviewer[bot]' &&
+              (!comment.commit_id || comment.commit_id === head)
+            );
+            if (findings.length > 0) {
+              core.setFailed('Copilot semantic findings appeared before approval');
+              return;
+            }
+
+            const existing = reviews.some((review) =>
+              review.commit_id === head &&
+              review.state === 'APPROVED' &&
+              review.user?.login === 'github-actions[bot]'
+            );
+            if (!existing) {
+              await github.rest.pulls.createReview({
+                owner,
+                repo,
+                pull_number,
+                commit_id: head,
+                event: 'APPROVE',
+                body: [
+                  'Machine-isolated exact-head semantic implementation approval.',
+                  `Copilot code review ${copilot.id} completed on this exact head with no inline findings,`,
+                  `and isolated CI Required check ${required.id} passed before approval.`,
+                  'The trusted default-branch bridge revalidated head, protected paths, and decisive reviews.',
+                  'This approval authorizes implementation integration only; it does not certify scientific,',
+                  'frontier, qualification, release, sealed/private-data, deployment, paid-compute, or commercial claims.',
+                  `Exact head: ${head}`,
+                ].join(' '),
+              });
+            } else {
+              core.notice('exact-head semantic approval already exists');
+            }
+
+      - name: Refresh Security after semantic approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const head = process.env.TARGET_HEAD;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner,
+              repo,
+              workflow_id: 'security.yml',
+              event: 'pull_request',
+              head_sha: head,
+              per_page: 100,
+            });
+            const exact = runs
+              .filter((run) => run.head_sha === head && run.event === 'pull_request')
+              .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+            if (!exact) {
+              core.setFailed('no exact-head Security pull_request run exists to refresh');
+              return;
+            }
+            let current = exact;
+            for (let attempt = 0; attempt < 120 && current.status !== 'completed'; attempt++) {
+              await sleep(2000);
+              current = (await github.rest.actions.getWorkflowRun({ owner, repo, run_id: exact.id })).data;
+            }
+            if (current.status !== 'completed') {
+              core.setFailed('Security run did not complete before refresh');
+              return;
+            }
+            await github.rest.actions.reRunWorkflow({ owner, repo, run_id: exact.id });
+            core.notice(`requested Security rerun ${exact.id} for exact head ${head}`);
