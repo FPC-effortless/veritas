@@ -68,7 +68,10 @@ def test_recover_merged_requires_exact_final_head_review_provenance() -> None:
 def test_recover_merged_requires_exact_head_security_quality_and_ci() -> None:
     recovery = _recovery_job()
 
-    assert "REQUIRED_WORKFLOWS = ['Security', 'Python Quality Ratchet', 'CI']" in recovery
+    assert (
+        "REQUIRED_WORKFLOWS = ['Security', 'Python Quality Ratchet', 'CI']"
+        in recovery
+    )
     assert "github.rest.actions.listWorkflowRunsForRepo" in recovery
     assert "run.head_sha === headSha" in recovery
     assert "run.event === 'pull_request'" in recovery
@@ -116,11 +119,12 @@ def test_terminal_local_state_is_published_before_registry_cleanup() -> None:
     registry_write = recovery.index("comment_id: registry.commentId")
 
     assert local_write < done_label < registry_lookup < registry_write
-    assert "stale\n            // global reservation remains fail-closed" in recovery
+    assert "If later cleanup fails, a stale" in recovery
+    assert "global reservation remains fail-closed" in recovery
 
 
 def test_recovery_rejections_are_audited_and_fail_closed() -> None:
     recovery = _recovery_job()
 
-    assert "Rejected `recover-merged` from @${actor}: ${message}" in recovery
+    assert "Rejected \\`recover-merged\\` from @${actor}: ${message}" in recovery
     assert "throw error;" in recovery
