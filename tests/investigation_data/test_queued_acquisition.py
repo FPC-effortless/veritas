@@ -48,19 +48,26 @@ class FakeTransport:
         return FakeResponse(request.full_url, self.payloads[request.full_url])
 
 
-def write_queue(path: Path, *, source_url: str, sha256: str | None = None) -> None:
+def write_queue(
+    path: Path,
+    *,
+    source_url: str,
+    sha256: str | None = None,
+    acquisition_url: str | None = None,
+) -> None:
+    artifact = {
+        "case_id": "2005-04-I-TX",
+        "artifact_id": "csb-test-final-report",
+        "source_url": source_url,
+        "sha256": sha256,
+    }
+    if acquisition_url is not None:
+        artifact["acquisition_url"] = acquisition_url
     value = {
         "schema_version": "1.0",
         "corpus_id": "test-corpus",
         "source_id": "uscsb",
-        "artifacts": [
-            {
-                "case_id": "2005-04-I-TX",
-                "artifact_id": "csb-test-final-report",
-                "source_url": source_url,
-                "sha256": sha256,
-            }
-        ],
+        "artifacts": [artifact],
     }
     path.write_text(json.dumps(value), encoding="utf-8")
 
@@ -75,6 +82,31 @@ def test_queue_overlay_reuses_catalog_policy(tmp_path: Path) -> None:
 
     assert plan.allowed is True
     assert plan.source_url == "https://www.csb.gov/test-report.pdf"
+
+
+def test_queue_overlay_uses_separate_acquisition_url_without_changing_checksum(
+    tmp_path: Path,
+) -> None:
+    source_url = "https://www.csb.gov/file.aspx?DocumentId=5917"
+    acquisition_url = "https://www.csb.gov/assets/1/20/chevron-final.pdf"
+    canonical_sha256 = "5f3c9b829de0a0394448a9babaaeacae467ef810be16ce409c50e04115a454d1"
+    queue_path = tmp_path / "queue.json"
+    write_queue(
+        queue_path,
+        source_url=source_url,
+        acquisition_url=acquisition_url,
+        sha256=canonical_sha256,
+    )
+
+    catalog = build_queue_catalog(load_catalog(), load_acquisition_queue(queue_path))
+    source = find_source(catalog, "uscsb")
+    artifact = next(
+        item for item in source.artifacts if item.artifact_id == "csb-test-final-report"
+    )
+    plan = plan_artifact(catalog, "uscsb", "csb-test-final-report")
+
+    assert plan.source_url == acquisition_url
+    assert artifact.expected_sha256 == canonical_sha256
 
 
 def test_queue_overlay_preserves_declared_checksum_without_runtime_transition(
