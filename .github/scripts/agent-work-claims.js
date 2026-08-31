@@ -35,6 +35,20 @@ function contractValue(text, field, unwrapSingleCodeSpan = true) {
   return value;
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function prBodyReferencesIssue(text, issueNumber) {
+  const issue = escapeRegExp(issueNumber);
+  return new RegExp(`(^|[^A-Za-z0-9_])#${issue}(?=$|[^A-Za-z0-9_])`, 'm').test(String(text || ''));
+}
+
+function prBodyReferencesWorkId(text, workId) {
+  const id = escapeRegExp(workId);
+  return Boolean(id) && new RegExp(`(^|[^A-Za-z0-9._-])${id}(?=$|[^A-Za-z0-9._-])`, 'm').test(String(text || ''));
+}
+
 function repositoryPathToken(value) {
   const raw = String(value || '').trim();
   if (!raw || raw.startsWith('#') || /\s/.test(raw)) return null;
@@ -482,7 +496,7 @@ module.exports = async function coordinate({ github, context }) {
         if (status.branch && pr.head.ref !== status.branch) throw new Error(`PR #${command.pr} head ${pr.head.ref} does not match claimed branch ${status.branch}`);
         const primaryWorkId = String(contract.workId).split('/')[0].trim();
         const prBody = pr.body || '';
-        if (!prBody.includes(`#${issueNumber}`) || !prBody.includes(primaryWorkId)) throw new Error(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}`);
+        if (!prBodyReferencesIssue(prBody, issueNumber) || !prBodyReferencesWorkId(prBody, primaryWorkId)) throw new Error(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}`);
         status.state = 'REVIEW'; status.linked_pr = command.pr; status.linked_pr_head = pr.head.sha; status.heartbeat_at = timestamp;
       } else if (command.kind === 'done') {
         if (status.state !== 'REVIEW' || !isHolder(command.agent)) throw new Error('done requires the current REVIEW authenticated holder');
@@ -509,7 +523,7 @@ module.exports = async function coordinate({ github, context }) {
         if (!/^[0-9a-f]{40}$/.test(String(pr.head?.sha || '')) || !/^[0-9a-f]{40}$/.test(String(pr.merge_commit_sha || ''))) throw new Error(`PR #${command.pr} exact merge identity is missing`);
         const primaryWorkId = String(contract.workId).split('/')[0].trim();
         const prBody = pr.body || '';
-        if (!prBody.includes(`#${issueNumber}`) || !prBody.includes(primaryWorkId)) throw new Error(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}`);
+        if (!prBodyReferencesIssue(prBody, issueNumber) || !prBodyReferencesWorkId(prBody, primaryWorkId)) throw new Error(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}`);
         const repository = (await github.rest.repos.get({ owner, repo })).data;
         const defaultBranch = repository.default_branch;
         if (!defaultBranch) throw new Error('repository default branch is missing');
