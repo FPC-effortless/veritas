@@ -321,6 +321,17 @@ def test_review_required_redistribution_needs_explicit_review_reference(tmp_path
         as_of=date(2026, 8, 28),
     )
     assert corpus.redistribution_policy is RedistributionPolicy.REVIEW_REQUIRED
+    assert corpus.rights_review_id == "redistribution-review-001"
+
+    manifest_path = tmp_path / "manifest.json"
+    write_structured_investigation_corpus(
+        corpus,
+        _profile(rights_review_id="redistribution-review-001"),
+        public_output=tmp_path / "public.jsonl",
+        manifest_output=manifest_path,
+    )
+    rights = json.loads(manifest_path.read_text(encoding="utf-8"))["rights"]
+    assert rights["review_id"] == "redistribution-review-001"
 
 
 def test_attribution_obligation_is_retained_in_public_manifest(tmp_path) -> None:
@@ -353,6 +364,7 @@ def test_attribution_obligation_is_retained_in_public_manifest(tmp_path) -> None
         "attribution_required": True,
         "license_expression": "test-only",
         "redistribution": "attribution_required",
+        "review_id": None,
         "terms_url": "https://example.org/terms",
     }
 
