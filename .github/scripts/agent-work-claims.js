@@ -511,6 +511,14 @@ module.exports = async function coordinate({ github, context }) {
         if (!status.linked_pr || status.linked_pr !== command.pr) throw new Error(`linked-PR recovery must preserve recorded PR #${status.linked_pr || 'none'}`);
         if (branchIsConcrete(contract.declaredBranch) && command.branch !== contract.declaredBranch) throw new Error(`linked-PR recovery branch must match Work Contract branch ${contract.declaredBranch}`);
         frozenOwnershipPaths(status);
+        const registry = await trustedRegistry();
+        if (!registry) throw new Error('global reservation registry is missing; run /roadmap-bootstrap on #150');
+        const branchConflict = registry.registry.entries.find(
+          (entry) => entry.issue !== issue.number && entry.branch === command.branch
+        );
+        if (branchConflict) {
+          throw new Error(`linked-PR recovery branch conflict with ${branchConflict.work_id}/#${branchConflict.issue}: ${command.branch} is already reserved`);
+        }
         const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
         if (pr.state !== 'open') throw new Error(`PR #${command.pr} is not open`);
         if (pr.head.ref !== command.branch) throw new Error(`PR #${command.pr} head ${pr.head.ref} does not prove recovery branch ${command.branch}`);
