@@ -283,6 +283,11 @@ const STATUS = '<!-- veritas-agent-work-status:v1 -->';
 const REGISTRY = '<!-- veritas-agent-work-reservations:v1 -->';
 const PR_HEAD = '1111111111111111111111111111111111111111';
 const MERGE = '2222222222222222222222222222222222222222';
+const ownership = [
+  '`' + '.github/workflows/agent-work-claims.yml' + '`',
+  '`' + 'docs/automation/agent-work-claims.md' + '`',
+  '`' + 'tests/automation/test_agent_work_claims_workflow.py' + '`',
+].join(', ');
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -295,7 +300,7 @@ const issue = {
 - **Work ID:** COORD-001
 - **State:** DONE
 - **Branch:** \`feat/agent-work-claim-automation\`
-- **Positive ownership:** \`.github/workflows/agent-work-claims.yml\`, \`docs/automation/agent-work-claims.md\`, \`tests/automation/test_agent_work_claims_workflow.py\`
+- **Positive ownership:** ${ownership}
 - **Claim holder:** none
 - **Linked PR:** #246`,
 };
@@ -320,7 +325,9 @@ const legacyStatus = {
 let statusComment = {
   id: 1001,
   user: { login: 'github-actions[bot]' },
-  body: `${STATUS}\n**Agent work status**\n\n\`\`\`json\n${JSON.stringify(legacyStatus, null, 2)}\n\`\`\``,
+  body:
+    `${STATUS}\n**Agent work status**\n\n` +
+    `\`\`\`json\n${JSON.stringify(legacyStatus, null, 2)}\n\`\`\``,
 };
 const command = {
   id: 2001,
@@ -346,8 +353,12 @@ const labels = [
 const issues = {
   listLabelsForRepo: async () => labels,
   createLabel: async () => ({ data: {} }),
-  get: async ({ issue_number }) => ({ data: issue_number === 151 ? issue : { number: 150, labels: [] } }),
-  listComments: async ({ issue_number }) => issue_number === 151 ? [statusComment, command] : [registryComment],
+  get: async ({ issue_number }) => ({
+    data: issue_number === 151 ? issue : { number: 150, labels: [] },
+  }),
+  listComments: async ({ issue_number }) => (
+    issue_number === 151 ? [statusComment, command] : [registryComment]
+  ),
   updateComment: async ({ comment_id, body }) => {
     if (comment_id === statusComment.id) {
       statusComment = { ...statusComment, body };
@@ -408,11 +419,24 @@ const context = {
   const finalStatus = JSON.parse(match[1]);
   assert(finalStatus.state === 'DONE', 'completed recovery did not publish DONE');
   assert(finalStatus.linked_pr === 246, 'completed recovery did not bind PR');
-  assert(finalStatus.linked_pr_head === PR_HEAD, 'completed recovery did not bind exact PR head');
+  assert(
+    finalStatus.linked_pr_head === PR_HEAD,
+    'completed recovery did not bind exact PR head'
+  );
   assert(Array.isArray(finalStatus.ownership_paths), 'ownership snapshot was not frozen');
-  assert(finalStatus.ownership_paths.includes('.github/workflows/agent-work-claims.yml'), 'contract ownership was not frozen');
-  assert(finalStatus.completion_recovery?.schema_version === 'veritas.owner-exact-merge-recovery.v1', 'recovery evidence missing');
-  assert(!audits.some(({ body }) => body.includes('predates frozen ownership snapshots')), 'legacy preflight still rejected recovery');
+  assert(
+    finalStatus.ownership_paths.includes('.github/workflows/agent-work-claims.yml'),
+    'contract ownership was not frozen'
+  );
+  assert(
+    finalStatus.completion_recovery?.schema_version ===
+      'veritas.owner-exact-merge-recovery.v1',
+    'recovery evidence missing'
+  );
+  assert(
+    !audits.some(({ body }) => body.includes('predates frozen ownership snapshots')),
+    'legacy preflight still rejected recovery'
+  );
   process.stdout.write('ok\n');
 })().catch((error) => {
   console.error(error.stack || String(error));
