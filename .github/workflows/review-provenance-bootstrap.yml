@@ -97,7 +97,7 @@ jobs:
             ]);
             const allowedPath = (path) => path.startsWith('docs/') || allowedRootDocs.has(path);
             const authorityDocs = (path) =>
-              path === 'docs/automation/review-provenance.md' ||
+              path.startsWith('docs/automation/') ||
               path.startsWith('docs/agents/');
             for (const file of files) {
               if (!allowedPath(file.filename)) {
@@ -182,6 +182,7 @@ jobs:
         with:
           script: |
             const pull_number = Number(process.env.TARGET_PR);
+            const head = process.env.TARGET_HEAD;
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -191,7 +192,7 @@ jobs:
               core.setFailed('review target is no longer an open, ready pull request');
               return;
             }
-            if (pr.head.sha !== process.env.TARGET_HEAD) {
+            if (pr.head.sha !== head) {
               core.setFailed(`head moved: ${pr.head.sha}`);
               return;
             }
@@ -210,8 +211,28 @@ jobs:
               pull_number,
               per_page: 100,
             });
-            const existing = reviews.some((review) =>
-              review.commit_id === process.env.TARGET_HEAD &&
+            const decisive = reviews
+              .filter((review) =>
+                review.commit_id === head &&
+                ['APPROVED', 'CHANGES_REQUESTED'].includes(review.state) &&
+                review.user?.login
+              )
+              .sort((a, b) => {
+                const at = Date.parse(a.submitted_at || '') || 0;
+                const bt = Date.parse(b.submitted_at || '') || 0;
+                return at - bt || Number(a.id || 0) - Number(b.id || 0);
+              });
+            const latestByReviewer = new Map();
+            for (const review of decisive) {
+              latestByReviewer.set(review.user.login, review);
+            }
+            for (const [login, review] of latestByReviewer) {
+              if (review.state === 'CHANGES_REQUESTED') {
+                core.setFailed(`current exact-head changes requested by ${login}`);
+                return;
+              }
+            }
+            const existing = decisive.some((review) =>
               review.state === 'APPROVED' &&
               review.user?.login === 'github-actions[bot]'
             );
@@ -223,13 +244,13 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number,
-              commit_id: process.env.TARGET_HEAD,
+              commit_id: head,
               event: 'APPROVE',
               body: [
                 'Machine-isolated exact-head approval from the trusted default-branch reviewer.',
                 'The workflow inspected GitHub-reported diff metadata without executing candidate code',
                 'and accepted this head under the permanent non-executable documentation policy.',
                 'This approval does not independently certify factual, scientific, release, or qualification claims.',
-                `Exact head: ${process.env.TARGET_HEAD}`,
+                `Exact head: ${head}`,
               ].join(' '),
             });
