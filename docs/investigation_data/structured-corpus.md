@@ -6,7 +6,7 @@ The structured-corpus compiler converts already acquired CSV, JSON, JSONL, or XL
 
 `investigation_world.investigation_data.SourceCatalog` remains authoritative for source identity, acquisition policy, redistribution policy, AI-use policy, redaction requirements, truth semantics, and declared artifacts.
 
-A `StructuredSourceProfile` must bind to an existing canonical `source_id` and `source_artifact_id`. Compilation fails closed when either identity is absent from the catalog, acquisition, redistribution, or AI use is blocked, metadata-only policy is incompatible with the declared artifact, or a required rights/redaction review reference is missing. `REVIEW_REQUIRED` redistribution needs an explicit review reference; `ATTRIBUTION_REQUIRED` must have the canonical attribution flag and is retained in the public manifest with the license expression and terms URL.
+A `StructuredSourceProfile` must bind to an existing canonical `source_id` and `source_artifact_id`. Compilation fails closed when either identity is absent from the catalog, acquisition, redistribution, or AI use is blocked, metadata-only policy is incompatible with the declared artifact, or a required rights/redaction review reference is missing. `REVIEW_REQUIRED` redistribution needs an explicit review reference, and that exact reference is retained in the compiled corpus and public manifest so the authorization remains auditable after materialization. `ATTRIBUTION_REQUIRED` must have the canonical attribution flag and is retained in the public manifest with the license expression and terms URL.
 
 The compiler does not download data and does not reinterpret source rights. Acquisition continues through the canonical investigation-data acquisition layer.
 
