@@ -117,6 +117,10 @@ jobs:
     name: Python source security
     if: github.event_name != 'pull_request_review'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -277,7 +281,7 @@ jobs:
         with:
           version: 10
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
