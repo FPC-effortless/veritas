@@ -15,6 +15,7 @@ INDEX_PATH = CORPUS_ROOT / "index.json"
 COVERAGE_PATH = CORPUS_ROOT / "pilot_coverage.json"
 ACQUISITION_PATH = CORPUS_ROOT / "report_acquisition.json"
 VERIFIED_PATH = DATA_ROOT / "verified_artifacts.json"
+WORKFLOW_PATH = ROOT / ".github" / "workflows" / "csb-gold10-report-acquisition.yml"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -70,7 +71,7 @@ def test_report_queue_matches_csb_acquisition_policy_and_official_host() -> None
         }
 
 
-def test_unverified_reports_cannot_carry_fabricated_receipts() -> None:
+def test_report_verification_state_is_receipt_bound() -> None:
     acquisition = load_json(ACQUISITION_PATH)
     verified_registry = load_json(VERIFIED_PATH)
     entries = acquisition["artifacts"]
@@ -92,12 +93,32 @@ def test_unverified_reports_cannot_carry_fabricated_receipts() -> None:
         verified_artifact_id = entry["verified_artifact_id"]
         assert isinstance(verified_artifact_id, str)
         receipt = verified_by_id[verified_artifact_id]
+
+        assert entry["artifact_id"] == verified_artifact_id
         assert entry["sha256"] == receipt["sha256"]
         assert entry["byte_count"] == receipt["byte_count"]
+        assert entry["receipt_sha256"] == receipt["receipt_sha256"]
+        assert entry["source_url"] == receipt["source_url"]
+        assert entry["resolved_url"] == receipt["resolved_url"]
+        assert entry["retrieved_at"] == receipt["retrieved_at"]
+        assert entry["catalog_sha256"] == receipt["catalog_sha256"]
+        assert receipt["source_id"] == "uscsb"
+        assert receipt["content_type"] == "application/pdf"
+
         assert isinstance(entry["sha256"], str)
         assert SHA256_RE.fullmatch(entry["sha256"])
         assert isinstance(entry["receipt_sha256"], str)
         assert SHA256_RE.fullmatch(entry["receipt_sha256"])
+        assert isinstance(entry["catalog_sha256"], str)
+        assert SHA256_RE.fullmatch(entry["catalog_sha256"])
+
+
+def test_all_gold10_final_reports_are_now_byte_verified() -> None:
+    acquisition = load_json(ACQUISITION_PATH)
+    entries = acquisition["artifacts"]
+    assert isinstance(entries, list)
+    assert len(entries) == 10
+    assert {entry["verification_status"] for entry in entries} == {"verified"}
 
 
 def test_gold10_corpus_does_not_commit_report_bytes() -> None:
@@ -107,3 +128,12 @@ def test_gold10_corpus_does_not_commit_report_bytes() -> None:
         if path.is_file() and path.suffix.lower() == ".pdf"
     ]
     assert not committed_pdfs
+
+
+def test_acquisition_workflow_uses_only_the_bounded_queue_runner() -> None:
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "Fingerprint both T2 official byte variants" not in workflow
+    assert "urllib.request" not in workflow
+    assert "for sample in range" not in workflow
+    assert "investigation_world.investigation_data.queued_acquisition" in workflow
