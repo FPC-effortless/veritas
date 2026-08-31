@@ -83,6 +83,27 @@ def test_same_account_free_form_review_does_not_claim_authority() -> None:
     assert "canonical clean agent review" in decision.reason
 
 
+def test_quoted_handoff_marker_is_ignored() -> None:
+    handoff = _review(
+        review_id=1,
+        login="implementer",
+        state="COMMENTED",
+        body=(
+            "Review handoff only — this is NOT merge-authoritative review evidence.\n\n"
+            f"`<!-- veritas-agent-review:v1 head={HEAD} verdict=clean -->`\n\n"
+            "If a blocker exists, use verdict=blocking and state BLOCKING: findings."
+        ),
+    )
+    clean = _agent_review(review_id=2, submitted_at="2026-08-31T06:01:00Z")
+    decision = evaluate_reviews(
+        pr_author="implementer",
+        head_sha=HEAD,
+        reviews=[handoff, clean],
+    )
+    assert decision.ok is True
+    assert decision.review_id == 2
+
+
 def test_canonical_same_account_agent_review_passes() -> None:
     decision = evaluate_reviews(
         pr_author="implementer",
