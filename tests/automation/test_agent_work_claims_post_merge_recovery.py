@@ -2,7 +2,6 @@ from json import dumps, loads
 from pathlib import Path
 from subprocess import run
 
-
 WORKFLOW = Path(".github/workflows/agent-work-claims.yml")
 COORDINATOR = Path(".github/scripts/agent-work-claims.js")
 OLD_HEAD = "1" * 40
