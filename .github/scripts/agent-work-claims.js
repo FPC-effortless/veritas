@@ -84,6 +84,7 @@ function parseCommand(text) {
   if ((match = text.match(/^\/blocked ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) return { kind: 'blocked', agent: match[1], reason: match[2] };
   if ((match = text.match(/^\/handoff ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'handoff', agent: match[1], pr: Number(match[2]) };
   if ((match = text.match(/^\/done ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*)$/))) return { kind: 'done', agent: match[1], pr: Number(match[2]) };
+  if ((match = text.match(/^\/recover-completed ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*) (.{1,500})$/))) return { kind: 'recover-completed', agent: match[1], pr: Number(match[2]), reason: match[3] };
   if ((match = text.match(/^\/recover-metadata ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) (.{1,500})$/))) return { kind: 'recover-metadata', agent: match[1], reason: match[2] };
   if ((match = text.match(/^\/recover-linked ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}) ([1-9][0-9]*) (.{1,500})$/))) return { kind: 'recover-linked', agent: match[1], branch: match[2], pr: Number(match[3]), reason: match[4] };
   if ((match = text.match(/^\/recover ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([A-Za-z0-9][A-Za-z0-9._/-]{0,127}) (.{1,500})$/))) return { kind: 'recover', agent: match[1], branch: match[2], reason: match[3] };
@@ -91,7 +92,7 @@ function parseCommand(text) {
 }
 
 function looksLikeCommand(text) {
-  return /^\/(claim|heartbeat|release|blocked|handoff|done|recover|recover-linked|recover-metadata)(?:\s|$)/.test(text) || text === '/roadmap-bootstrap';
+  return /^\/(claim|heartbeat|release|blocked|handoff|done|recover|recover-completed|recover-linked|recover-metadata)(?:\s|$)/.test(text) || text === '/roadmap-bootstrap';
 }
 
 function branchIsConcrete(branch) {
@@ -450,7 +451,8 @@ module.exports = async function coordinate({ github, context }) {
     if (!command) { await reject('malformed command. Commands must be one exact single line.'); continue; }
     if (!ALLOWED_ASSOCIATIONS.has(association)) { await reject(`unauthorized actor association ${association || 'NONE'}.`); continue; }
     const legacyDoneCommand = command.kind === 'done' && status.state === 'REVIEW' && issue.state === 'closed';
-    if (ACTIVE_STATES.has(status.state) && status.agent_id && !Array.isArray(status.ownership_paths) && !legacyDoneCommand) {
+    const legacyCompletedRecovery = command.kind === 'recover-completed' && issue.state === 'closed';
+    if (ACTIVE_STATES.has(status.state) && status.agent_id && !Array.isArray(status.ownership_paths) && !legacyDoneCommand && !legacyCompletedRecovery) {
       await reject('trusted active status predates frozen ownership snapshots; only exact merged REVIEW completion may proceed without migration');
       continue;
     }
@@ -493,6 +495,41 @@ module.exports = async function coordinate({ github, context }) {
         if (status.linked_pr_head && status.linked_pr_head !== pr.head.sha) throw new Error(`PR #${command.pr} head moved after handoff; re-handoff/review exact final head before DONE`);
         if (legacyDone) status.ownership_paths = [];
         status.state = 'DONE'; status.linked_pr_head = pr.head.sha; status.heartbeat_at = timestamp;
+      } else if (command.kind === 'recover-completed') {
+        if (association !== 'OWNER') throw new Error('completed recovery requires repository OWNER authority');
+        if (issue.state !== 'closed') throw new Error('completed recovery requires an already closed legacy issue');
+        if (!['CLAIMED', 'REVIEW'].includes(status.state) || status.github_actor !== 'bootstrap') throw new Error('completed recovery requires a bootstrap-derived active legacy status');
+        if (!status.agent_id || status.agent_id !== command.agent) throw new Error('completed recovery must preserve the recorded legacy agent ID');
+        if (!branchIsConcrete(status.branch) || status.branch !== contract.declaredBranch) throw new Error('completed recovery requires the exact concrete Work Contract branch');
+        if (status.linked_pr && status.linked_pr !== command.pr) throw new Error(`completed recovery must preserve recorded PR #${status.linked_pr}`);
+        if (!contract.paths.length) throw new Error('completed recovery requires machine-checkable positive ownership');
+        const pr = (await github.rest.pulls.get({ owner, repo, pull_number: command.pr })).data;
+        if (pr.state !== 'closed' || pr.merged !== true || !pr.merged_at) throw new Error(`PR #${command.pr} is not merged`);
+        if (pr.head?.ref !== status.branch) throw new Error(`PR #${command.pr} head ${pr.head?.ref || 'missing'} does not match recorded branch ${status.branch}`);
+        if (!/^[0-9a-f]{40}$/.test(String(pr.head?.sha || '')) || !/^[0-9a-f]{40}$/.test(String(pr.merge_commit_sha || ''))) throw new Error(`PR #${command.pr} exact merge identity is missing`);
+        const primaryWorkId = String(contract.workId).split('/')[0].trim();
+        const prBody = pr.body || '';
+        if (!prBody.includes(`#${issueNumber}`) || !prBody.includes(primaryWorkId)) throw new Error(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}`);
+        const repository = (await github.rest.repos.get({ owner, repo })).data;
+        const defaultBranch = repository.default_branch;
+        if (!defaultBranch) throw new Error('repository default branch is missing');
+        const comparison = (await github.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${pr.merge_commit_sha}...${defaultBranch}` })).data;
+        if (comparison.behind_by !== 0 || !['ahead', 'identical'].includes(comparison.status)) throw new Error(`PR #${command.pr} merge is not on current ${defaultBranch}`);
+        status.state = 'DONE';
+        status.github_actor = actor;
+        status.linked_pr = command.pr;
+        status.linked_pr_head = pr.head.sha;
+        status.ownership_paths = contract.paths.slice();
+        status.heartbeat_at = timestamp;
+        status.blocker = null;
+        status.released_reason = `owner exact-merge completion recovery: ${command.reason}`;
+        status.completion_recovery = {
+          schema_version: 'veritas.owner-exact-merge-recovery.v1',
+          pr: command.pr,
+          pr_head: pr.head.sha,
+          merge_commit: pr.merge_commit_sha,
+          transition_seq: Number(status.transition_seq || 0) + 1,
+        };
       } else if (command.kind === 'recover-metadata') {
         if (association !== 'OWNER') throw new Error('metadata-only recovery requires repository OWNER authority');
         if (!canRecoverMetadataOnly(status, contract, association)) {
