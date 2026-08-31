@@ -16,8 +16,9 @@ from urllib.parse import urlencode
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 AGENT_REVIEW_MARKER_RE = re.compile(
-    r"<!-- veritas-agent-review:v1 head=([0-9a-f]{40}) verdict=(clean|blocking) -->"
+    r"^<!-- veritas-agent-review:v1 head=([0-9a-f]{40}) verdict=(clean|blocking) -->$"
 )
+AGENT_REVIEW_PREFIX = "<!-- veritas-agent-review:"
 RECOGNIZED_STATES = {
     "APPROVED",
     "CHANGES_REQUESTED",
@@ -88,16 +89,44 @@ def _decisive_review(review: dict[str, Any]) -> tuple[str, str, int, dt.datetime
     return state, login, review_id, submitted_at
 
 
+def _unquoted_agent_marker_lines(body: str) -> list[str]:
+    """Return standalone marker attempts outside Markdown quotation/code contexts."""
+    candidates: list[str] = []
+    fence: str | None = None
+    for raw_line in body.splitlines():
+        stripped = raw_line.strip()
+        if fence is not None:
+            if stripped.startswith(fence):
+                fence = None
+            continue
+        if stripped.startswith("```"):
+            fence = "```"
+            continue
+        if stripped.startswith("~~~"):
+            fence = "~~~"
+            continue
+        if not stripped or stripped.startswith(">"):
+            continue
+        if stripped.startswith("`") and stripped.endswith("`"):
+            continue
+        if stripped.startswith(AGENT_REVIEW_PREFIX):
+            candidates.append(stripped)
+    return candidates
+
+
 def _agent_review(
     review: dict[str, Any], *, head_sha: str
 ) -> tuple[str, str, int, dt.datetime] | None:
     state = _validate_review_state(review)
     body = review.get("body")
-    if not isinstance(body, str) or "veritas-agent-review:" not in body:
+    if not isinstance(body, str):
         return None
-    if body.count("veritas-agent-review:") != 1:
+    marker_lines = _unquoted_agent_marker_lines(body)
+    if not marker_lines:
+        return None
+    if len(marker_lines) != 1:
         raise ProvenanceError("agent review must contain exactly one canonical marker")
-    marker = AGENT_REVIEW_MARKER_RE.search(body)
+    marker = AGENT_REVIEW_MARKER_RE.fullmatch(marker_lines[0])
     if marker is None:
         raise ProvenanceError("agent review marker is malformed")
     if state != "COMMENTED":
