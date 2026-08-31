@@ -13,13 +13,18 @@ Two evidence paths are accepted:
 1. **Distinct GitHub approval** — an exact-head `APPROVED` pull-request review from
    a GitHub identity different from the PR author.
 2. **Single-owner agent review** — an exact-head `COMMENTED` pull-request review
-   carrying the canonical machine marker:
+   carrying the canonical machine marker as a standalone Markdown line:
 
    `<!-- veritas-agent-review:v1 head=<40-char-sha> verdict=clean -->`
 
    The review must have valid GitHub review identity/timestamp metadata, the marker
    SHA must equal the review's exact commit, the summary must not contain a
    `BLOCKING:` finding, and that review may not have inline review comments.
+
+Quoted, inline-code, fenced-code, and indented-code examples of the marker are
+non-authoritative and are ignored. Fenced examples remain ignored until a matching
+closing fence of the same marker character and at least the opening fence length.
+A malformed standalone marker attempt still fails closed.
 
 The distinct-identity path is stronger machine-verifiable identity provenance when
 such an identity exists. The single-owner path exists because Veritas is also
