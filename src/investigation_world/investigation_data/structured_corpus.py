@@ -184,6 +184,7 @@ class StructuredInvestigationCorpus(StrictModel):
     license_expression: str
     terms_url: str
     attribution_required: bool
+    rights_review_id: str | None = None
     cases: tuple[StructuredInvestigationCase, ...]
 
     def public_hash(self) -> str:
@@ -505,6 +506,7 @@ def compile_structured_investigation_corpus(
         license_expression=source.rights.license_expression,
         terms_url=source.rights.terms_url,
         attribution_required=source.rights.attribution_required,
+        rights_review_id=profile.rights_review_id,
         cases=cases,
     )
 
@@ -598,6 +600,7 @@ def write_structured_investigation_corpus(
             "license_expression": corpus.license_expression,
             "terms_url": corpus.terms_url,
             "attribution_required": corpus.attribution_required,
+            "review_id": corpus.rights_review_id,
         },
         "cases": len(corpus.cases),
         "split": profile.split.value,
