@@ -3,6 +3,8 @@ name: Trusted Semantic Code Reviewer
 on:
   pull_request_target:
     types: [labeled]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -12,9 +14,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ensure-label:
+    name: Ensure semantic-review trigger label
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create trigger label if absent
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'review-provenance-semantic',
+                color: '8250df',
+                description: 'Request trusted exact-head semantic implementation review',
+              });
+              core.notice('created review-provenance-semantic label');
+            } catch (error) {
+              if (Number(error?.status) !== 422) throw error;
+              core.notice('review-provenance-semantic label already exists');
+            }
+
   prepare:
     name: Prepare semantic review candidate
-    if: github.event.label.name == 'review-provenance-semantic'
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.label.name == 'review-provenance-semantic'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -80,11 +111,7 @@ jobs:
             const protectedPath = (path) =>
               path === 'AGENTS.md' ||
               path === 'tools/review_provenance.py' ||
-              path.startsWith('.github/workflows/') ||
-              path === '.github/copilot-instructions.md' ||
-              path.startsWith('.github/instructions/') ||
-              path.startsWith('.github/skills/') ||
-              path.startsWith('.github/agents/') ||
+              path.startsWith('.github/') ||
               path.startsWith('.agents/') ||
               path.startsWith('docs/automation/') ||
               path.startsWith('docs/agents/');
@@ -173,7 +200,7 @@ jobs:
       TARGET_PR: ${{ needs.prepare.outputs.pr }}
       TARGET_HEAD: ${{ needs.prepare.outputs.head }}
     steps:
-      - name: Require exact-head CI and clean Copilot semantic review
+      - name: Require exact-head CI, quality, and clean Copilot semantic review
         uses: actions/github-script@v7
         with:
           script: |
@@ -190,21 +217,44 @@ jobs:
                 throw new Error('PR state/head changed during semantic verification');
               }
             };
-
-            let requiredCheck = null;
-            for (let attempt = 0; attempt < 120; attempt++) {
-              await ensureHead();
-              const checks = await github.paginate(github.rest.checks.listForRef, {
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+            const pythonSensitive = files.some((file) =>
+              file.filename.endsWith('.py') ||
+              file.filename === 'pyproject.toml' ||
+              file.filename === 'requirements-quality.txt' ||
+              file.filename.startsWith('quality/')
+            );
+            const getChecks = async () => {
+              const { data } = await github.rest.checks.listForRef({
                 owner,
                 repo,
                 ref: head,
                 per_page: 100,
               });
-              const candidates = checks
-                .filter((check) => check.name === 'Required')
-                .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-              requiredCheck = candidates[0] || null;
-              if (requiredCheck?.status === 'completed') break;
+              return data.check_runs || [];
+            };
+
+            let requiredCheck = null;
+            let qualityCheck = null;
+            for (let attempt = 0; attempt < 120; attempt++) {
+              await ensureHead();
+              const checks = await getChecks();
+              requiredCheck = checks
+                .filter((check) => check.name === 'Required' && check.app?.slug === 'github-actions')
+                .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0] || null;
+              qualityCheck = checks
+                .filter((check) =>
+                  check.name === 'repository-python-quality' && check.app?.slug === 'github-actions'
+                )
+                .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0] || null;
+              const ciDone = requiredCheck?.status === 'completed';
+              const qualityDone = !pythonSensitive || qualityCheck?.status === 'completed';
+              if (ciDone && qualityDone) break;
               await sleep(5000);
             }
             if (!requiredCheck) {
@@ -214,6 +264,19 @@ jobs:
             if (requiredCheck.status !== 'completed' || requiredCheck.conclusion !== 'success') {
               core.setFailed(
                 `exact-head CI Required is not green: ${requiredCheck.status}/${requiredCheck.conclusion}`,
+              );
+              return;
+            }
+            if (pythonSensitive && !qualityCheck) {
+              core.setFailed('Python-sensitive change has no exact-head repository-python-quality check');
+              return;
+            }
+            if (
+              pythonSensitive &&
+              (qualityCheck.status !== 'completed' || qualityCheck.conclusion !== 'success')
+            ) {
+              core.setFailed(
+                `exact-head Python quality is not green: ${qualityCheck.status}/${qualityCheck.conclusion}`,
               );
               return;
             }
@@ -268,7 +331,8 @@ jobs:
 
             core.notice(
               `semantic evidence clean on exact head ${head}: ` +
-              `Copilot review ${copilotReview.id}, CI Required ${requiredCheck.id}`,
+              `Copilot review ${copilotReview.id}, CI Required ${requiredCheck.id}` +
+              (qualityCheck ? `, Python quality ${qualityCheck.id}` : ''),
             );
 
   approve:
@@ -320,11 +384,7 @@ jobs:
             const protectedPath = (path) =>
               path === 'AGENTS.md' ||
               path === 'tools/review_provenance.py' ||
-              path.startsWith('.github/workflows/') ||
-              path === '.github/copilot-instructions.md' ||
-              path.startsWith('.github/instructions/') ||
-              path.startsWith('.github/skills/') ||
-              path.startsWith('.github/agents/') ||
+              path.startsWith('.github/') ||
               path.startsWith('.agents/') ||
               path.startsWith('docs/automation/') ||
               path.startsWith('docs/agents/');
@@ -332,18 +392,37 @@ jobs:
               core.setFailed('protected reviewer/repository authority path entered the candidate');
               return;
             }
+            const pythonSensitive = files.some((file) =>
+              file.filename.endsWith('.py') ||
+              file.filename === 'pyproject.toml' ||
+              file.filename === 'requirements-quality.txt' ||
+              file.filename.startsWith('quality/')
+            );
 
-            const checks = await github.paginate(github.rest.checks.listForRef, {
+            const { data: checkData } = await github.rest.checks.listForRef({
               owner,
               repo,
               ref: head,
               per_page: 100,
             });
+            const checks = checkData.check_runs || [];
             const required = checks
-              .filter((check) => check.name === 'Required')
+              .filter((check) => check.name === 'Required' && check.app?.slug === 'github-actions')
               .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
             if (!required || required.status !== 'completed' || required.conclusion !== 'success') {
               core.setFailed('exact-head CI Required is no longer green');
+              return;
+            }
+            const quality = checks
+              .filter((check) =>
+                check.name === 'repository-python-quality' && check.app?.slug === 'github-actions'
+              )
+              .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
+            if (
+              pythonSensitive &&
+              (!quality || quality.status !== 'completed' || quality.conclusion !== 'success')
+            ) {
+              core.setFailed('exact-head Python quality is absent or no longer green');
               return;
             }
 
@@ -418,7 +497,8 @@ jobs:
                 body: [
                   'Machine-isolated exact-head semantic implementation approval.',
                   `Copilot code review ${copilot.id} completed on this exact head with no inline findings,`,
-                  `and isolated CI Required check ${required.id} passed before approval.`,
+                  `isolated CI Required check ${required.id} passed before approval` +
+                    (quality ? `, and Python quality check ${quality.id} was green` : '') + '.',
                   'The trusted default-branch bridge revalidated head, protected paths, and decisive reviews.',
                   'This approval authorizes implementation integration only; it does not certify scientific,',
                   'frontier, qualification, release, sealed/private-data, deployment, paid-compute, or commercial claims.',
@@ -437,7 +517,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+            const { data } = await github.rest.actions.listWorkflowRuns({
               owner,
               repo,
               workflow_id: 'security.yml',
@@ -445,7 +525,7 @@ jobs:
               head_sha: head,
               per_page: 100,
             });
-            const exact = runs
+            const exact = (data.workflow_runs || [])
               .filter((run) => run.head_sha === head && run.event === 'pull_request')
               .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0];
             if (!exact) {
