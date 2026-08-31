@@ -1,6 +1,7 @@
+from pathlib import Path
+
 import json
 import subprocess
-from pathlib import Path
 
 
 WORKFLOW = Path(".github/workflows/agent-work-claims.yml")
