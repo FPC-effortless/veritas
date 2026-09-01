@@ -6,6 +6,8 @@ import pytest
 
 import investigation_world.investigation_data.gold10_manifest as gold10_manifest
 from investigation_world.investigation_data.gold10_manifest import (
+    EXPECTED_TASK_OWNER_ROOT,
+    EXPECTED_VERIFIER_OWNER_ROOT,
     Gold10ManifestError,
     _report_task_eligible,
     build_gold10_manifest,
@@ -26,7 +28,6 @@ EXPECTED_CASES = {
 }
 
 
-
 def test_gold10_manifest_freezes_exact_case_set_and_split() -> None:
     manifest = build_gold10_manifest()
     cases = manifest["cases"]
@@ -44,7 +45,14 @@ def test_gold10_manifest_freezes_exact_case_set_and_split() -> None:
     verifier_paths = [case["verifier_owner_path"] for case in cases]
     assert len(task_paths) == len(set(task_paths)) == 10
     assert len(verifier_paths) == len(set(verifier_paths)) == 10
-
+    assert all(path.startswith(f"{EXPECTED_TASK_OWNER_ROOT}/") for path in task_paths)
+    assert all(path.startswith(f"{EXPECTED_VERIFIER_OWNER_ROOT}/") for path in verifier_paths)
+    assert all(path.endswith(".py") for path in task_paths + verifier_paths)
+    assert all(case["capability_targets"] for case in cases)
+    assert all(
+        all(isinstance(target, str) and target for target in case["capability_targets"])
+        for case in cases
+    )
 
 
 def test_gold10_manifest_retains_truth_rights_and_temporal_boundaries() -> None:
@@ -74,12 +82,10 @@ def test_gold10_manifest_retains_truth_rights_and_temporal_boundaries() -> None:
         assert rights["truth"]["official_findings_are_ground_truth"] is False
 
 
-
 def test_report_review_status_is_never_an_authority_token() -> None:
     assert _report_task_eligible("pending_artifact_level_review") is False
     assert _report_task_eligible("approved_for_task_use") is False
     assert _report_task_eligible("arbitrary-caller-value") is False
-
 
 
 def test_pending_report_review_never_becomes_task_authority() -> None:
@@ -160,6 +166,63 @@ def test_malformed_required_report_authority_field_fails_closed(
         build_gold10_manifest()
 
 
+@pytest.mark.parametrize("field", ["task_owner_root", "verifier_owner_root"])
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        None,
+        "",
+        True,
+        7,
+        "/absolute/owner",
+        "../owner",
+        "src/investigation_world/gold10/tasks/../verifiers",
+        "src\\investigation_world\\gold10\\tasks",
+        " src/investigation_world/gold10/tasks",
+        "src/investigation_world/gold10/other",
+    ],
+)
+def test_malformed_owner_root_fails_closed(monkeypatch, field: str, bad_value) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == "case_selection_v1.json":
+            value = deepcopy(value)
+            value[field] = bad_value
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError, match=field):
+        build_gold10_manifest()
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        None,
+        "causal-reconstruction",
+        [],
+        ["causal-reconstruction", ""],
+        ["causal-reconstruction", 7],
+        ["causal-reconstruction", " causal-reconstruction"],
+        ["causal-reconstruction", "causal-reconstruction"],
+    ],
+)
+def test_malformed_capability_targets_fail_closed(monkeypatch, bad_value) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == "index.json":
+            value = deepcopy(value)
+            value["cases"][0]["capability_tags"] = bad_value
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError, match="capability targets"):
+        build_gold10_manifest()
+
 
 def test_gold10_manifest_is_deterministic_and_content_bound() -> None:
     first = build_gold10_manifest()
@@ -196,7 +259,6 @@ def test_gold10_manifest_is_deterministic_and_content_bound() -> None:
 
     for mutated in mutations:
         assert manifest_digest(mutated) != baseline
-
 
 
 def test_gold10_modalities_respect_the_frozen_public_cut() -> None:
