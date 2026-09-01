@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -118,7 +119,9 @@ def acquire_queue_receipts(
         for index, entry in enumerate(queue_artifacts):
             artifact_id = _required_string(entry, "artifact_id")
             raw_path, receipt_path = _queue_output_paths(output_root, source_id, artifact_id)
-            _require_unclaimed_output_paths(artifact_id, raw_path, receipt_path)
+            _require_unclaimed_output_paths(
+                output_root.resolve(), artifact_id, raw_path, receipt_path
+            )
             try:
                 receipt = acquire_artifact(
                     expanded_catalog,
@@ -139,15 +142,19 @@ def acquire_queue_receipts(
                         f"byte verification failed immediately after acquiring {artifact_id!r}"
                     )
 
-                actual_raw_path = (output_root.resolve() / receipt.local_path).resolve()
-                if actual_raw_path != raw_path:
+                actual_raw_path = output_root.resolve() / receipt.local_path
+                if actual_raw_path != raw_path or actual_raw_path.resolve() != raw_path.resolve():
                     raise QueuedAcquisitionError(
                         f"unexpected raw output path for {artifact_id!r}: {receipt.local_path!r}"
                     )
                 actual_receipt_path = raw_path.with_name(raw_path.name + ".provenance.json")
-                if actual_receipt_path != receipt_path or not receipt_path.is_file():
+                if (
+                    actual_receipt_path != receipt_path
+                    or receipt_path.is_symlink()
+                    or not receipt_path.is_file()
+                ):
                     raise QueuedAcquisitionError(
-                        f"missing provenance receipt for {artifact_id!r}"
+                        f"missing or unsafe provenance receipt for {artifact_id!r}"
                     )
 
                 authority = _queue_artifact_authority(entry, source_id=source_id)
@@ -166,8 +173,12 @@ def acquire_queue_receipts(
                 item["receipt_sha256"] = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
                 receipts.append(item)
             finally:
-                # Only the exact raw path reserved for this queue artifact belongs to this
-                # invocation. Never recursively delete caller-owned files below output_root.
+                # Only this exact lexical raw path belongs to the invocation. It is never
+                # resolved through a caller-controlled final symlink before cleanup.
+                if raw_path.is_symlink():
+                    raise QueuedAcquisitionError(
+                        f"unsafe symlink appeared at raw output for {artifact_id!r}: {raw_path}"
+                    )
                 raw_path.unlink(missing_ok=True)
 
             if index + 1 < len(queue_artifacts) and delay_seconds > 0:
@@ -257,24 +268,49 @@ def _authority_digest(authority: dict[str, Any]) -> str:
 
 def _queue_output_paths(root: Path, source_id: str, artifact_id: str) -> tuple[Path, Path]:
     resolved_root = root.resolve()
-    raw_path = (
-        resolved_root / source_id / artifact_id / f"{artifact_id}.pdf"
-    ).resolve()
-    if resolved_root not in raw_path.parents:
+    target_dir = resolved_root / source_id / artifact_id
+    raw_path = target_dir / f"{artifact_id}.pdf"
+    resolved_parent = raw_path.parent.resolve(strict=False)
+    if resolved_root != resolved_parent and resolved_root not in resolved_parent.parents:
         raise QueuedAcquisitionError("queue output path escaped acquisition root")
     receipt_path = raw_path.with_name(raw_path.name + ".provenance.json")
     return raw_path, receipt_path
 
 
 def _require_unclaimed_output_paths(
+    resolved_root: Path,
     artifact_id: str,
     raw_path: Path,
     receipt_path: Path,
 ) -> None:
+    _reject_symlinked_output_ancestors(resolved_root, raw_path.parent, artifact_id)
     for path in (raw_path, receipt_path):
-        if path.exists():
+        if os.path.lexists(path):
             raise QueuedAcquisitionError(
                 f"refusing to overwrite pre-existing output for {artifact_id!r}: {path}"
+            )
+
+
+def _reject_symlinked_output_ancestors(
+    resolved_root: Path,
+    target_dir: Path,
+    artifact_id: str,
+) -> None:
+    try:
+        relative = target_dir.relative_to(resolved_root)
+    except ValueError as exc:
+        raise QueuedAcquisitionError("queue output path escaped acquisition root") from exc
+
+    current = resolved_root
+    for component in relative.parts:
+        current = current / component
+        if current.is_symlink():
+            raise QueuedAcquisitionError(
+                f"refusing symlinked output directory for {artifact_id!r}: {current}"
+            )
+        if os.path.lexists(current) and not current.is_dir():
+            raise QueuedAcquisitionError(
+                f"output ancestor is not a directory for {artifact_id!r}: {current}"
             )
 
 
