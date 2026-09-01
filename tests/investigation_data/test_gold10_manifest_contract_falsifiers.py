@@ -155,6 +155,32 @@ def test_pilot_source_case_identity_is_exact_and_case_disjoint(
         build_gold10_manifest()
 
 
+def test_pes_alias_requires_exact_reviewed_provenance(monkeypatch) -> None:
+    def mutate(value):
+        value["source_case_aliases"] = ["CSB-2019-04-I-PA"]
+
+    _with_corruption(
+        monkeypatch,
+        lambda path: (
+            path.name == "review_record.json"
+            and path.parent.name == "csb_pes_philadelphia_2019"
+        ),
+        mutate,
+    )
+    with pytest.raises(Gold10ManifestError, match="exact reviewed aliases"):
+        build_gold10_manifest()
+
+
+def test_unreviewed_alias_cannot_enter_pilot_case_ids(monkeypatch) -> None:
+    def mutate(value):
+        if value.get("source_case_ids") == ["CSB-2005-04-I-TX"]:
+            value["source_case_ids"].append("CSB-2005-99-I-TX")
+
+    _with_corruption(monkeypatch, lambda path: path.name == "manifest.json", mutate)
+    with pytest.raises(Gold10ManifestError, match="exact reviewed aliases"):
+        build_gold10_manifest()
+
+
 @pytest.mark.parametrize("bad_truth", [None, {}, ["private-claim"]])
 def test_private_truth_absence_must_be_explicit(monkeypatch, bad_truth) -> None:
     def mutate(value):
