@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import pytest
+
+import investigation_world.investigation_data.gold10_manifest as gold10_manifest
 from investigation_world.investigation_data.gold10_manifest import (
+    Gold10ManifestError,
     _report_task_eligible,
     build_gold10_manifest,
     manifest_digest,
@@ -22,6 +26,7 @@ EXPECTED_CASES = {
 }
 
 
+
 def test_gold10_manifest_freezes_exact_case_set_and_split() -> None:
     manifest = build_gold10_manifest()
     cases = manifest["cases"]
@@ -39,6 +44,7 @@ def test_gold10_manifest_freezes_exact_case_set_and_split() -> None:
     verifier_paths = [case["verifier_owner_path"] for case in cases]
     assert len(task_paths) == len(set(task_paths)) == 10
     assert len(verifier_paths) == len(set(verifier_paths)) == 10
+
 
 
 def test_gold10_manifest_retains_truth_rights_and_temporal_boundaries() -> None:
@@ -68,10 +74,12 @@ def test_gold10_manifest_retains_truth_rights_and_temporal_boundaries() -> None:
         assert rights["truth"]["official_findings_are_ground_truth"] is False
 
 
+
 def test_report_review_status_is_never_an_authority_token() -> None:
     assert _report_task_eligible("pending_artifact_level_review") is False
     assert _report_task_eligible("approved_for_task_use") is False
     assert _report_task_eligible("arbitrary-caller-value") is False
+
 
 
 def test_pending_report_review_never_becomes_task_authority() -> None:
@@ -90,6 +98,67 @@ def test_pending_report_review_never_becomes_task_authority() -> None:
         assert len(report["sha256"]) == 64
         assert len(report["receipt_sha256"]) == 64
         assert len(report["catalog_sha256"]) == 64
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "artifact_id",
+        "source_url",
+        "resolved_url",
+        "byte_count",
+        "sha256",
+        "receipt_sha256",
+        "catalog_sha256",
+    ],
+)
+def test_missing_required_report_authority_field_fails_closed(monkeypatch, field: str) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == "report_acquisition.json":
+            value = deepcopy(value)
+            value["artifacts"][0][field] = None
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError):
+        build_gold10_manifest()
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value", "message"),
+    [
+        ("artifact_id", "", "artifact_id"),
+        ("source_url", "", "canonical source URL"),
+        ("resolved_url", "", "acquisition URL"),
+        ("byte_count", 0, "positive integer"),
+        ("byte_count", True, "positive integer"),
+        ("sha256", "g" * 64, "64-hex SHA-256"),
+        ("receipt_sha256", "0" * 63, "64-hex SHA-256"),
+        ("catalog_sha256", "A" * 64, "64-hex SHA-256"),
+    ],
+)
+def test_malformed_required_report_authority_field_fails_closed(
+    monkeypatch,
+    field: str,
+    bad_value,
+    message: str,
+) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == "report_acquisition.json":
+            value = deepcopy(value)
+            value["artifacts"][0][field] = bad_value
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError, match=message):
+        build_gold10_manifest()
+
 
 
 def test_gold10_manifest_is_deterministic_and_content_bound() -> None:
@@ -127,6 +196,7 @@ def test_gold10_manifest_is_deterministic_and_content_bound() -> None:
 
     for mutated in mutations:
         assert manifest_digest(mutated) != baseline
+
 
 
 def test_gold10_modalities_respect_the_frozen_public_cut() -> None:
