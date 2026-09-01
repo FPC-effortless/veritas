@@ -23,6 +23,14 @@ REQUIRED_RESTRICTIONS = {
     "minimize_verbatim_reproduction",
     "no_commercial_frontier_scientific_or_training_value_claim",
 }
+REQUIRED_NON_AUTHORITIES = {
+    "raw_pdf_redistribution",
+    "public_package_redistribution",
+    "model_training_rights",
+    "commercial_release",
+    "scientific_qualification",
+    "frontier_qualification",
+}
 ALLOWED_DECISIONS = {APPROVED, "link_only", "excluded"}
 
 
@@ -64,13 +72,30 @@ def validate_authority(
         raise TaskUseAuthorityError("authority must remain bound to source_id uscsb")
     if authority.get("review_scope") != "internal_task_and_verifier_evidence_only":
         raise TaskUseAuthorityError("authority scope must remain internal-only")
+    non_authorities = authority.get("not_authorized")
+    if not isinstance(non_authorities, list) or set(non_authorities) != REQUIRED_NON_AUTHORITIES:
+        raise TaskUseAuthorityError("authority must preserve the complete non-authority boundary")
 
-    reports = _index(_objects(report_registry.get("artifacts"), "report artifacts"), "artifact_id", "report")
-    records = _index(_objects(authority.get("artifacts"), "authority artifacts"), "artifact_id", "authority record")
+    reports = _index(
+        _objects(report_registry.get("artifacts"), "report artifacts"),
+        "artifact_id",
+        "report",
+    )
+    records = _index(
+        _objects(authority.get("artifacts"), "authority artifacts"),
+        "artifact_id",
+        "authority record",
+    )
     if len(reports) != 10 or len(records) != 10 or set(records) != set(reports):
-        raise TaskUseAuthorityError("authority must cover exactly the ten current Gold report artifacts")
+        raise TaskUseAuthorityError(
+            "authority must cover exactly the ten current Gold report artifacts"
+        )
 
-    sources = _index(_objects(source_catalog.get("sources"), "source catalog sources"), "source_id", "source")
+    sources = _index(
+        _objects(source_catalog.get("sources"), "source catalog sources"),
+        "source_id",
+        "source",
+    )
     source = sources.get("uscsb")
     if source is None:
         raise TaskUseAuthorityError("canonical uscsb source policy is missing")
@@ -96,7 +121,17 @@ def validate_authority(
         "ai_use": "allowed_with_conditions",
         "attribution_required": True,
     }:
-        raise TaskUseAuthorityError("canonical uscsb policy no longer supports this review decision")
+        raise TaskUseAuthorityError(
+            "canonical uscsb policy no longer supports this review decision"
+        )
+    if source.get("contains_personal_data") is not True:
+        raise TaskUseAuthorityError(
+            "canonical uscsb personal-data boundary changed; re-review is required"
+        )
+    if source.get("requires_redaction_review") is not True:
+        raise TaskUseAuthorityError(
+            "canonical uscsb redaction boundary changed; re-review is required"
+        )
 
     for artifact_id, record in records.items():
         report = reports[artifact_id]
@@ -112,21 +147,36 @@ def validate_authority(
         }
         for key, expected in exact_fields.items():
             if not isinstance(expected, str) or not expected:
-                raise TaskUseAuthorityError(f"canonical report {artifact_id} is missing {key}")
+                raise TaskUseAuthorityError(
+                    f"canonical report {artifact_id} is missing {key}"
+                )
             if record.get(key) != expected:
-                raise TaskUseAuthorityError(f"stale authority for {artifact_id}: {key} mismatch")
+                raise TaskUseAuthorityError(
+                    f"stale authority for {artifact_id}: {key} mismatch"
+                )
 
         decision = record.get("decision")
         if decision not in ALLOWED_DECISIONS:
             raise TaskUseAuthorityError(f"invalid decision for {artifact_id}")
         if report.get("verification_status") != "verified":
-            raise TaskUseAuthorityError(f"report {artifact_id} is no longer byte-verified")
+            raise TaskUseAuthorityError(
+                f"report {artifact_id} is no longer byte-verified"
+            )
+        if not isinstance(record.get("review_basis"), str) or not record[
+            "review_basis"
+        ].strip():
+            raise TaskUseAuthorityError(
+                f"record {artifact_id} is missing review rationale"
+            )
         if decision == APPROVED:
             restrictions = record.get("restrictions")
-            if not isinstance(restrictions, list) or set(restrictions) != REQUIRED_RESTRICTIONS:
-                raise TaskUseAuthorityError(f"approved record {artifact_id} is missing required restrictions")
-            if not isinstance(record.get("review_basis"), str) or not record["review_basis"].strip():
-                raise TaskUseAuthorityError(f"approved record {artifact_id} is missing review rationale")
+            if (
+                not isinstance(restrictions, list)
+                or set(restrictions) != REQUIRED_RESTRICTIONS
+            ):
+                raise TaskUseAuthorityError(
+                    f"approved record {artifact_id} is missing required restrictions"
+                )
 
 
 def is_eligible_for_internal_task_evidence(
@@ -136,7 +186,11 @@ def is_eligible_for_internal_task_evidence(
     reports = _load(REPORT_REGISTRY_PATH)
     source_catalog = _load(SOURCE_CATALOG_PATH)
     validate_authority(authority, reports, source_catalog)
-    records = _index(_objects(authority["artifacts"], "authority artifacts"), "artifact_id", "authority record")
+    records = _index(
+        _objects(authority["artifacts"], "authority artifacts"),
+        "artifact_id",
+        "authority record",
+    )
     record = records.get(artifact_id)
     return bool(
         record
@@ -147,5 +201,9 @@ def is_eligible_for_internal_task_evidence(
 
 
 if __name__ == "__main__":
-    validate_authority(_load(AUTHORITY_PATH), _load(REPORT_REGISTRY_PATH), _load(SOURCE_CATALOG_PATH))
+    validate_authority(
+        _load(AUTHORITY_PATH),
+        _load(REPORT_REGISTRY_PATH),
+        _load(SOURCE_CATALOG_PATH),
+    )
     print("Gold-10 report task-use authority: valid")
