@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -73,9 +74,23 @@ def _find_source(catalog: dict[str, Any], source_id: str) -> dict[str, Any]:
     return matches[0]
 
 
+def _parse_timestamp(value: Any, *, label: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise Gold10ManifestError(f"{label} must be a timestamp string")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise Gold10ManifestError(f"{label} is not a valid ISO timestamp") from exc
+    if parsed.utcoffset() is None:
+        raise Gold10ManifestError(f"{label} must include a timezone offset")
+    return parsed
+
+
 def _report_task_eligible(review_status: str) -> bool:
-    # Fail closed. A future artifact-review lane must opt in with this exact state.
-    return review_status == "approved_for_task_use"
+    """Never derive task-use authority from a mutable status string alone."""
+
+    del review_status
+    return False
 
 
 def manifest_digest(manifest: dict[str, Any]) -> str:
@@ -189,6 +204,9 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         "truth": source.get("truth"),
     }
 
+    if freeze.get("report_usage_policy") != "exclude_until_artifact_level_review":
+        raise Gold10ManifestError("unexpected Gold-10 report usage policy")
+
     case_rows: list[dict[str, Any]] = []
     for case_id in sorted(expected_cases):
         frozen = freeze_cases[case_id]
@@ -220,22 +238,38 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             raise Gold10ManifestError(f"case {case_id} pilot is not approved for link-only use")
 
         fragments = _require_list(pilot_manifest.get("fragments"), label=f"{case_id} fragments")
-        modalities = sorted(
+        declared_modalities = sorted(
             {
                 str(fragment["modality"])
                 for fragment in fragments
                 if isinstance(fragment.get("modality"), str)
             }
         )
+        simulation_as_of = _parse_timestamp(
+            pilot_manifest.get("simulation_as_of"),
+            label=f"{case_id} simulation_as_of",
+        )
+        available_modalities: set[str] = set()
+        for fragment in fragments:
+            modality = fragment.get("modality")
+            if not isinstance(modality, str):
+                raise Gold10ManifestError(f"case {case_id} fragment has no modality")
+            if fragment.get("sensitivity") != "public":
+                continue
+            if fragment.get("timeless") is True:
+                available_modalities.add(modality)
+                continue
+            available_from = _parse_timestamp(
+                fragment.get("available_from"),
+                label=f"{case_id} fragment available_from",
+            )
+            if available_from <= simulation_as_of:
+                available_modalities.add(modality)
+
         review_status = report.get("artifact_review_status")
         if not isinstance(review_status, str):
             raise Gold10ManifestError(f"case {case_id} report has no artifact review status")
         report_task_eligible = _report_task_eligible(review_status)
-        if freeze.get("report_usage_policy") == "exclude_until_artifact_level_review":
-            if review_status != "approved_for_task_use":
-                report_task_eligible = False
-        else:
-            raise Gold10ManifestError("unexpected Gold-10 report usage policy")
 
         task_owner_root = str(freeze["task_owner_root"])
         verifier_owner_root = str(freeze["verifier_owner_root"])
@@ -272,6 +306,10 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                     "verification_status": report.get("verification_status"),
                     "artifact_review_status": review_status,
                     "eligible_for_task_evidence": report_task_eligible,
+                    "authority_note": (
+                        "CASE-001 never derives task-use authority from artifact_review_status; "
+                        "a future reviewed authority mechanism is required."
+                    ),
                 },
                 "rights": source_policy,
                 "truth_regime": "institutional_findings",
@@ -282,7 +320,8 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                     "simulation_as_of": pilot_manifest.get("simulation_as_of"),
                     "date_only_release_policy": index.get("date_only_availability_policy"),
                 },
-                "modalities": modalities,
+                "declared_modalities": declared_modalities,
+                "available_modalities_at_cut": sorted(available_modalities),
                 "capability_targets": canonical.get("capability_tags", []),
                 "split": frozen["split"],
                 "contamination_risk": "high_public_historical_nonsealed",
