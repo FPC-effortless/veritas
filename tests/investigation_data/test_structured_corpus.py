@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import date
 
@@ -21,9 +22,11 @@ from investigation_world.investigation_data.models import (
 )
 from investigation_world.investigation_data.structured_corpus import (
     FieldExposure,
+    ReviewScope,
     StructuredCorpusError,
     StructuredFieldRule,
     StructuredInputFormat,
+    StructuredRightsReviewEvidence,
     StructuredSourceProfile,
     compile_structured_investigation_corpus,
     read_structured_records,
@@ -33,9 +36,12 @@ from investigation_world.investigation_data.structured_corpus import (
 
 def _catalog(
     *,
+    acquisition: AcquisitionPolicy = AcquisitionPolicy.APPROVED,
     ai_use: AIUsePolicy = AIUsePolicy.ALLOWED,
     redistribution: RedistributionPolicy = RedistributionPolicy.ALLOWED,
     attribution_required: bool = False,
+    expected_sha256: str | None = None,
+    requires_redaction_review: bool = False,
 ) -> SourceCatalog:
     return SourceCatalog(
         schema_version="1.0",
@@ -49,7 +55,7 @@ def _catalog(
                 homepage="https://example.org/",
                 allowed_hosts=("example.org",),
                 rights=RightsPolicy(
-                    acquisition=AcquisitionPolicy.APPROVED,
+                    acquisition=acquisition,
                     redistribution=redistribution,
                     ai_use=ai_use,
                     license_expression="test-only",
@@ -69,10 +75,77 @@ def _catalog(
                         url="https://example.org/data.csv",
                         artifact_class=ArtifactClass.DATA,
                         filename="data.csv",
+                        expected_sha256=expected_sha256,
                     ),
                 ),
+                requires_redaction_review=requires_redaction_review,
             ),
         ),
+    )
+
+
+def _policy_sha256(catalog: SourceCatalog) -> str:
+    source = catalog.sources[0]
+    payload = {
+        "rights": source.rights.model_dump(mode="json"),
+        "requires_redaction_review": source.requires_redaction_review,
+    }
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _artifact_sha256(catalog: SourceCatalog) -> str:
+    artifact = catalog.sources[0].artifacts[0]
+    encoded = json.dumps(
+        artifact.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _required_scopes(catalog: SourceCatalog) -> tuple[ReviewScope, ...]:
+    source = catalog.sources[0]
+    scopes: list[ReviewScope] = []
+    if source.rights.acquisition is AcquisitionPolicy.REVIEW_REQUIRED:
+        scopes.append("acquisition")
+    if source.rights.redistribution is RedistributionPolicy.REVIEW_REQUIRED:
+        scopes.append("redistribution")
+    if source.rights.ai_use in {
+        AIUsePolicy.REVIEW_REQUIRED,
+        AIUsePolicy.ALLOWED_WITH_CONDITIONS,
+    }:
+        scopes.append("ai_use")
+    if source.requires_redaction_review:
+        scopes.append("redaction")
+    return tuple(scopes)
+
+
+def _review_evidence(
+    catalog: SourceCatalog,
+    *,
+    review_id: str = "review-test-001",
+    source_id: str = "test-source",
+    artifact_id: str = "fixture-csv",
+    scopes: tuple[ReviewScope, ...] | None = None,
+    policy_sha256: str | None = None,
+    artifact_sha256: str | None = None,
+) -> StructuredRightsReviewEvidence:
+    return StructuredRightsReviewEvidence(
+        review_id=review_id,
+        source_id=source_id,
+        source_artifact_id=artifact_id,
+        scopes=scopes if scopes is not None else _required_scopes(catalog),
+        policy_sha256=policy_sha256 or _policy_sha256(catalog),
+        artifact_sha256=artifact_sha256 or _artifact_sha256(catalog),
     )
 
 
@@ -254,32 +327,36 @@ def test_duplicate_target_field_is_rejected() -> None:
         )
 
 
-def test_conditional_ai_use_requires_explicit_review_reference(tmp_path) -> None:
+def test_conditional_ai_use_requires_scoped_review_evidence(tmp_path) -> None:
     path = tmp_path / "data.csv"
     _write_csv(
         path,
         [("CASE-A", "Alpha", "2025-01-01", "public", "secret")],
     )
+    catalog = _catalog(ai_use=AIUsePolicy.ALLOWED_WITH_CONDITIONS)
 
-    with pytest.raises(StructuredCorpusError, match="requires rights/redaction review"):
+    with pytest.raises(StructuredCorpusError, match="requires scoped rights/redaction review"):
         compile_structured_investigation_corpus(
             _profile(),
             path,
-            _catalog(ai_use=AIUsePolicy.ALLOWED_WITH_CONDITIONS),
+            catalog,
             dataset_id="dataset",
             version="1",
             as_of=date(2026, 8, 28),
         )
 
+    evidence = _review_evidence(catalog)
     compiled = compile_structured_investigation_corpus(
-        _profile(rights_review_id="review-test-001"),
+        _profile(rights_review_id=evidence.review_id),
         path,
-        _catalog(ai_use=AIUsePolicy.ALLOWED_WITH_CONDITIONS),
+        catalog,
         dataset_id="dataset",
         version="1",
         as_of=date(2026, 8, 28),
+        rights_reviews=(evidence,),
     )
     assert len(compiled.cases) == 1
+    assert compiled.rights_review == evidence
 
 
 def test_public_materialization_fails_closed_for_blocked_redistribution(tmp_path) -> None:
@@ -288,7 +365,7 @@ def test_public_materialization_fails_closed_for_blocked_redistribution(tmp_path
 
     with pytest.raises(StructuredCorpusError, match="blocked for public redistribution"):
         compile_structured_investigation_corpus(
-            _profile(rights_review_id="review-cannot-override-block"),
+            _profile(),
             path,
             _catalog(redistribution=RedistributionPolicy.BLOCKED),
             dataset_id="dataset",
@@ -297,7 +374,7 @@ def test_public_materialization_fails_closed_for_blocked_redistribution(tmp_path
         )
 
 
-def test_review_required_redistribution_needs_explicit_review_reference(tmp_path) -> None:
+def test_review_required_redistribution_retains_validated_review_evidence(tmp_path) -> None:
     path = tmp_path / "data.csv"
     _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
     catalog = _catalog(redistribution=RedistributionPolicy.REVIEW_REQUIRED)
@@ -312,26 +389,205 @@ def test_review_required_redistribution_needs_explicit_review_reference(tmp_path
             as_of=date(2026, 8, 28),
         )
 
+    evidence = _review_evidence(catalog, review_id="redistribution-review-001")
+    profile = _profile(rights_review_id=evidence.review_id)
     corpus = compile_structured_investigation_corpus(
-        _profile(rights_review_id="redistribution-review-001"),
+        profile,
         path,
         catalog,
         dataset_id="dataset",
         version="1",
         as_of=date(2026, 8, 28),
+        rights_reviews=(evidence,),
     )
     assert corpus.redistribution_policy is RedistributionPolicy.REVIEW_REQUIRED
-    assert corpus.rights_review_id == "redistribution-review-001"
+    assert corpus.rights_review == evidence
 
     manifest_path = tmp_path / "manifest.json"
     write_structured_investigation_corpus(
         corpus,
-        _profile(rights_review_id="redistribution-review-001"),
+        profile,
         public_output=tmp_path / "public.jsonl",
         manifest_output=manifest_path,
     )
     rights = json.loads(manifest_path.read_text(encoding="utf-8"))["rights"]
     assert rights["review_id"] == "redistribution-review-001"
+    assert rights["review"] == evidence.model_dump(mode="json")
+
+
+def test_review_id_must_resolve_to_supplied_evidence(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    catalog = _catalog(redistribution=RedistributionPolicy.REVIEW_REQUIRED)
+
+    with pytest.raises(StructuredCorpusError, match="must resolve to exactly one"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id="missing-review"),
+            path,
+            catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+        )
+
+
+def test_duplicate_review_id_fails_closed(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    catalog = _catalog(redistribution=RedistributionPolicy.REVIEW_REQUIRED)
+    evidence = _review_evidence(catalog, review_id="duplicate-review")
+
+    with pytest.raises(StructuredCorpusError, match="must resolve to exactly one"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id=evidence.review_id),
+            path,
+            catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+            rights_reviews=(evidence, evidence),
+        )
+
+
+def test_wrong_source_review_evidence_fails_closed(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    catalog = _catalog(redistribution=RedistributionPolicy.REVIEW_REQUIRED)
+    evidence = _review_evidence(catalog, source_id="other-source")
+
+    with pytest.raises(StructuredCorpusError, match="scoped to source"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id=evidence.review_id),
+            path,
+            catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+            rights_reviews=(evidence,),
+        )
+
+
+def test_wrong_artifact_review_evidence_fails_closed(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    catalog = _catalog(redistribution=RedistributionPolicy.REVIEW_REQUIRED)
+    evidence = _review_evidence(catalog, artifact_id="other-artifact")
+
+    with pytest.raises(StructuredCorpusError, match="scoped to artifact"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id=evidence.review_id),
+            path,
+            catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+            rights_reviews=(evidence,),
+        )
+
+
+def test_wrong_artifact_definition_review_evidence_fails_closed(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    catalog = _catalog(redistribution=RedistributionPolicy.REVIEW_REQUIRED)
+    evidence = _review_evidence(catalog, artifact_sha256="0" * 64)
+
+    with pytest.raises(StructuredCorpusError, match="current canonical artifact definition"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id=evidence.review_id),
+            path,
+            catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+            rights_reviews=(evidence,),
+        )
+
+
+def test_wrong_policy_review_evidence_fails_closed(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    reviewed_catalog = _catalog(ai_use=AIUsePolicy.ALLOWED_WITH_CONDITIONS)
+    current_catalog = _catalog(ai_use=AIUsePolicy.REVIEW_REQUIRED)
+    evidence = _review_evidence(reviewed_catalog)
+
+    with pytest.raises(StructuredCorpusError, match="current canonical rights/redaction policy"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id=evidence.review_id),
+            path,
+            current_catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+            rights_reviews=(evidence,),
+        )
+
+
+def test_wrong_review_scope_fails_closed(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    catalog = _catalog(redistribution=RedistributionPolicy.REVIEW_REQUIRED)
+    evidence = _review_evidence(catalog, scopes=("ai_use",))
+
+    with pytest.raises(StructuredCorpusError, match="required scopes"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id=evidence.review_id),
+            path,
+            catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+            rights_reviews=(evidence,),
+        )
+
+
+def test_unsolicited_review_evidence_is_rejected(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    no_review_catalog = _catalog()
+    evidence_catalog = _catalog(ai_use=AIUsePolicy.ALLOWED_WITH_CONDITIONS)
+    evidence = _review_evidence(evidence_catalog)
+
+    with pytest.raises(StructuredCorpusError, match="unsolicited rights_review_id"):
+        compile_structured_investigation_corpus(
+            _profile(rights_review_id=evidence.review_id),
+            path,
+            no_review_catalog,
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+            rights_reviews=(evidence,),
+        )
+
+
+def test_canonical_expected_sha256_must_match_local_artifact(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+
+    with pytest.raises(StructuredCorpusError, match="does not match canonical expected_sha256"):
+        compile_structured_investigation_corpus(
+            _profile(),
+            path,
+            _catalog(expected_sha256="0" * 64),
+            dataset_id="dataset",
+            version="1",
+            as_of=date(2026, 8, 28),
+        )
+
+
+def test_matching_canonical_expected_sha256_is_retained(tmp_path) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "public", "secret")])
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    corpus = compile_structured_investigation_corpus(
+        _profile(),
+        path,
+        _catalog(expected_sha256=digest),
+        dataset_id="dataset",
+        version="1",
+        as_of=date(2026, 8, 28),
+    )
+    assert corpus.source_artifact_sha256 == digest
 
 
 def test_attribution_obligation_is_retained_in_public_manifest(tmp_path) -> None:
@@ -364,6 +620,7 @@ def test_attribution_obligation_is_retained_in_public_manifest(tmp_path) -> None
         "attribution_required": True,
         "license_expression": "test-only",
         "redistribution": "attribution_required",
+        "review": None,
         "review_id": None,
         "terms_url": "https://example.org/terms",
     }

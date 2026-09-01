@@ -12,6 +12,7 @@ from openpyxl import load_workbook  # type: ignore[import-untyped]
 from pydantic import Field, model_validator
 
 from .models import (
+    AcquisitionArtifact,
     AcquisitionPolicy,
     AIUsePolicy,
     ArtifactClass,
@@ -43,6 +44,26 @@ class CorpusSplit(str, Enum):
     TRAIN_REFERENCE = "train_reference"
     CALIBRATION = "calibration"
     HOLDOUT_CANDIDATE = "holdout_candidate"
+
+
+ReviewScope = Literal["acquisition", "redistribution", "ai_use", "redaction"]
+
+
+class StructuredRightsReviewEvidence(StrictModel):
+    review_id: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    source_artifact_id: str = Field(min_length=1)
+    scopes: tuple[ReviewScope, ...] = Field(min_length=1)
+    policy_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_review(self) -> "StructuredRightsReviewEvidence":
+        if self.review_id != self.review_id.strip():
+            raise ValueError("review_id must not contain leading or trailing whitespace")
+        if len(self.scopes) != len(set(self.scopes)):
+            raise ValueError("rights review scopes must be unique")
+        return self
 
 
 class StructuredFieldRule(StrictModel):
@@ -125,8 +146,13 @@ class StructuredSourceProfile(StrictModel):
 
         if not any(rule.exposure is FieldExposure.VERIFIER for rule in self.field_rules):
             raise ValueError("structured source profile must define at least one verifier field")
-        if self.rights_review_id is not None and not self.rights_review_id.strip():
-            raise ValueError("rights_review_id must be non-empty when supplied")
+        if self.rights_review_id is not None:
+            if not self.rights_review_id.strip():
+                raise ValueError("rights_review_id must be non-empty when supplied")
+            if self.rights_review_id != self.rights_review_id.strip():
+                raise ValueError(
+                    "rights_review_id must not contain leading or trailing whitespace"
+                )
         return self
 
 
@@ -184,7 +210,7 @@ class StructuredInvestigationCorpus(StrictModel):
     license_expression: str
     terms_url: str
     attribution_required: bool
-    rights_review_id: str | None = None
+    rights_review: StructuredRightsReviewEvidence | None = None
     cases: tuple[StructuredInvestigationCase, ...]
 
     def public_hash(self) -> str:
@@ -237,17 +263,114 @@ def _find_source(catalog: SourceCatalog, source_id: str) -> SourceSpec:
     raise StructuredCorpusError(f"source is absent from canonical catalog: {source_id}")
 
 
-def _validate_policy(profile: StructuredSourceProfile, catalog: SourceCatalog) -> SourceSpec:
-    source = _find_source(catalog, profile.source_id)
-    artifact = next(
-        (item for item in source.artifacts if item.artifact_id == profile.source_artifact_id),
-        None,
-    )
+def _find_artifact(source: SourceSpec, artifact_id: str) -> AcquisitionArtifact:
+    artifact = next((item for item in source.artifacts if item.artifact_id == artifact_id), None)
     if artifact is None:
         raise StructuredCorpusError(
-            f"artifact {profile.source_artifact_id!r} is not declared by canonical source "
-            f"{profile.source_id!r}"
+            f"artifact {artifact_id!r} is not declared by canonical source {source.source_id!r}"
         )
+    return artifact
+
+
+def _review_policy_payload(source: SourceSpec) -> dict[str, Any]:
+    return {
+        "rights": source.rights.model_dump(mode="json"),
+        "requires_redaction_review": source.requires_redaction_review,
+    }
+
+
+def _review_policy_sha256(source: SourceSpec) -> str:
+    return _stable_hash(_review_policy_payload(source))
+
+
+def _artifact_authority_sha256(artifact: AcquisitionArtifact) -> str:
+    return _stable_hash(artifact.model_dump(mode="json"))
+
+
+def _required_review_scopes(source: SourceSpec) -> tuple[ReviewScope, ...]:
+    scopes: list[ReviewScope] = []
+    if source.rights.acquisition is AcquisitionPolicy.REVIEW_REQUIRED:
+        scopes.append("acquisition")
+    if source.rights.redistribution is RedistributionPolicy.REVIEW_REQUIRED:
+        scopes.append("redistribution")
+    if source.rights.ai_use in {
+        AIUsePolicy.REVIEW_REQUIRED,
+        AIUsePolicy.ALLOWED_WITH_CONDITIONS,
+    }:
+        scopes.append("ai_use")
+    if source.requires_redaction_review:
+        scopes.append("redaction")
+    return tuple(scopes)
+
+
+def _validate_review_evidence(
+    profile: StructuredSourceProfile,
+    source: SourceSpec,
+    artifact: AcquisitionArtifact,
+    rights_reviews: tuple[StructuredRightsReviewEvidence, ...],
+) -> StructuredRightsReviewEvidence | None:
+    required_scopes = _required_review_scopes(source)
+    review_id = profile.rights_review_id
+
+    if not required_scopes:
+        if review_id is not None:
+            raise StructuredCorpusError(
+                f"source {source.source_id!r} requires no rights/redaction review; "
+                "unsolicited rights_review_id is not authoritative"
+            )
+        return None
+
+    if review_id is None:
+        raise StructuredCorpusError(
+            f"source {source.source_id!r} requires scoped rights/redaction review "
+            "before public corpus use"
+        )
+
+    matches = [evidence for evidence in rights_reviews if evidence.review_id == review_id]
+    if len(matches) != 1:
+        raise StructuredCorpusError(
+            f"rights_review_id {review_id!r} must resolve to exactly one supplied "
+            f"review evidence record; found {len(matches)}"
+        )
+    evidence = matches[0]
+    if evidence.source_id != source.source_id:
+        raise StructuredCorpusError(
+            f"rights review {evidence.review_id!r} is scoped to source "
+            f"{evidence.source_id!r}, not {source.source_id!r}"
+        )
+    if evidence.source_artifact_id != profile.source_artifact_id:
+        raise StructuredCorpusError(
+            f"rights review {evidence.review_id!r} is scoped to artifact "
+            f"{evidence.source_artifact_id!r}, not {profile.source_artifact_id!r}"
+        )
+    if set(evidence.scopes) != set(required_scopes):
+        raise StructuredCorpusError(
+            f"rights review {evidence.review_id!r} has scopes {sorted(evidence.scopes)!r}; "
+            f"required scopes are {sorted(required_scopes)!r}"
+        )
+    expected_policy_sha256 = _review_policy_sha256(source)
+    if evidence.policy_sha256 != expected_policy_sha256:
+        raise StructuredCorpusError(
+            f"rights review {evidence.review_id!r} does not bind the current canonical "
+            "rights/redaction policy"
+        )
+    expected_artifact_sha256 = _artifact_authority_sha256(artifact)
+    if evidence.artifact_sha256 != expected_artifact_sha256:
+        raise StructuredCorpusError(
+            f"rights review {evidence.review_id!r} does not bind the current canonical "
+            "artifact definition"
+        )
+    return evidence
+
+
+def _validate_policy(
+    profile: StructuredSourceProfile,
+    catalog: SourceCatalog,
+    rights_reviews: tuple[StructuredRightsReviewEvidence, ...],
+) -> tuple[SourceSpec, AcquisitionArtifact, StructuredRightsReviewEvidence | None]:
+    source = _find_source(catalog, profile.source_id)
+    artifact = _find_artifact(source, profile.source_artifact_id)
+
     if source.rights.acquisition is AcquisitionPolicy.BLOCKED:
         raise StructuredCorpusError(f"source {source.source_id!r} is blocked for acquisition")
     if source.rights.ai_use is AIUsePolicy.BLOCKED:
@@ -271,18 +394,9 @@ def _validate_policy(profile: StructuredSourceProfile, catalog: SourceCatalog) -
             f"source {source.source_id!r} permits metadata-only acquisition, but artifact "
             f"{artifact.artifact_id!r} is {artifact.artifact_class.value!r}"
         )
-    requires_review = (
-        source.rights.acquisition is AcquisitionPolicy.REVIEW_REQUIRED
-        or source.rights.redistribution is RedistributionPolicy.REVIEW_REQUIRED
-        or source.rights.ai_use
-        in {AIUsePolicy.REVIEW_REQUIRED, AIUsePolicy.ALLOWED_WITH_CONDITIONS}
-        or source.requires_redaction_review
-    )
-    if requires_review and profile.rights_review_id is None:
-        raise StructuredCorpusError(
-            f"source {source.source_id!r} requires rights/redaction review before public corpus use"
-        )
-    return source
+
+    evidence = _validate_review_evidence(profile, source, artifact, rights_reviews)
+    return source, artifact, evidence
 
 
 def _normalize_value(value: Any) -> Any:
@@ -417,7 +531,10 @@ def _joined_fields(row: dict[str, Any], fields: tuple[str, ...]) -> str | None:
     return " — ".join(nonempty) if nonempty else None
 
 
-def _source_identity(row: dict[str, Any], profile: StructuredSourceProfile) -> tuple[str, ...]:
+def _source_identity(
+    row: dict[str, Any],
+    profile: StructuredSourceProfile,
+) -> tuple[str, ...]:
     values = tuple(str(row.get(field, "")).strip() for field in profile.source_case_id_fields)
     if any(not value for value in values):
         raise StructuredCorpusError("source case identity fields must all be non-empty")
@@ -483,8 +600,21 @@ def compile_structured_investigation_corpus(
     dataset_id: str,
     version: str,
     as_of: date,
+    rights_reviews: tuple[StructuredRightsReviewEvidence, ...] = (),
 ) -> StructuredInvestigationCorpus:
-    source = _validate_policy(profile, catalog)
+    source, artifact, rights_review = _validate_policy(profile, catalog, rights_reviews)
+
+    source_artifact_sha256 = _file_sha256(input_path)
+    if (
+        artifact.expected_sha256 is not None
+        and source_artifact_sha256 != artifact.expected_sha256
+    ):
+        raise StructuredCorpusError(
+            f"local artifact SHA-256 {source_artifact_sha256} does not match canonical "
+            f"expected_sha256 {artifact.expected_sha256} for "
+            f"{source.source_id}/{artifact.artifact_id}"
+        )
+
     rows = read_structured_records(input_path, profile)
     cases = tuple(
         _classify_row(row, profile, row_number=index)
@@ -500,13 +630,13 @@ def compile_structured_investigation_corpus(
         profile_id=profile.profile_id,
         source_id=profile.source_id,
         source_artifact_id=profile.source_artifact_id,
-        source_artifact_sha256=_file_sha256(input_path),
+        source_artifact_sha256=source_artifact_sha256,
         catalog_sha256=_catalog_sha256(catalog),
         redistribution_policy=source.rights.redistribution,
         license_expression=source.rights.license_expression,
         terms_url=source.rights.terms_url,
         attribution_required=source.rights.attribution_required,
-        rights_review_id=profile.rights_review_id,
+        rights_review=rights_review,
         cases=cases,
     )
 
@@ -634,6 +764,11 @@ def write_structured_investigation_corpus(
         verifier_hash = corpus.verifier_hash()
         verifier_path = str(verifier_output)
 
+    review_payload = (
+        corpus.rights_review.model_dump(mode="json")
+        if corpus.rights_review is not None
+        else None
+    )
     manifest = {
         "schema_version": corpus.schema_version,
         "dataset_id": corpus.dataset_id,
@@ -649,7 +784,12 @@ def write_structured_investigation_corpus(
             "license_expression": corpus.license_expression,
             "terms_url": corpus.terms_url,
             "attribution_required": corpus.attribution_required,
-            "review_id": corpus.rights_review_id,
+            "review_id": (
+                corpus.rights_review.review_id
+                if corpus.rights_review is not None
+                else None
+            ),
+            "review": review_payload,
         },
         "cases": len(corpus.cases),
         "split": profile.split.value,

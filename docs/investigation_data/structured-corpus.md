@@ -6,9 +6,17 @@ The structured-corpus compiler converts already acquired CSV, JSON, JSONL, or XL
 
 `investigation_world.investigation_data.SourceCatalog` remains authoritative for source identity, acquisition policy, redistribution policy, AI-use policy, redaction requirements, truth semantics, and declared artifacts.
 
-A `StructuredSourceProfile` must bind to an existing canonical `source_id` and `source_artifact_id`. Compilation fails closed when either identity is absent from the catalog, acquisition, redistribution, or AI use is blocked, metadata-only policy is incompatible with the declared artifact, or a required rights/redaction review reference is missing. `REVIEW_REQUIRED` redistribution needs an explicit review reference, and that exact reference is retained in the compiled corpus and public manifest so the authorization remains auditable after materialization. `ATTRIBUTION_REQUIRED` must have the canonical attribution flag and is retained in the public manifest with the license expression and terms URL.
+A `StructuredSourceProfile` must bind to an existing canonical `source_id` and `source_artifact_id`. Compilation fails closed when either identity is absent from the catalog, acquisition, redistribution, or AI use is blocked, metadata-only policy is incompatible with the declared artifact, a canonical `expected_sha256` does not match the exact local bytes, or required rights/redaction review evidence cannot be validated.
 
-The compiler does not download data and does not reinterpret source rights. Acquisition continues through the canonical investigation-data acquisition layer.
+When a source policy requires review, `rights_review_id` is only a reference. It must resolve to exactly one separately supplied `StructuredRightsReviewEvidence` record. That record must bind the same source and artifact IDs, the complete set of applicable review scopes, a SHA-256 digest of the current canonical rights/redaction policy, and a SHA-256 digest of the selected canonical artifact definition. Wrong-source, wrong-artifact, stale/wrong-policy, incomplete-scope, duplicate/missing, and unsolicited review references fail closed. The exact validated review record is retained in the compiled corpus and public manifest so the authorization remains auditable after materialization. Supplying a review reference does not itself create review authority.
+
+`REVIEW_REQUIRED` redistribution therefore needs validated review evidence. `ATTRIBUTION_REQUIRED` must have the canonical attribution flag and is retained in the public manifest with the license expression and terms URL.
+
+The compiler does not download data, does not issue rights approvals, and does not reinterpret source rights. Acquisition continues through the canonical investigation-data acquisition layer. Review-evidence authenticity and issuance remain an external operator/repository authority boundary; this compiler validates the supplied record against the selected canonical source/artifact/policy before using it.
+
+## Canonical artifact identity
+
+If the selected canonical `AcquisitionArtifact` declares `expected_sha256`, the compiler hashes `input_path` before parsing and requires an exact digest match. Modified or substituted local bytes therefore cannot be materialized while claiming the canonical artifact identity. When no expected digest is declared, the exact observed local SHA-256 is still retained as provenance but is not treated as a canonical byte-identity proof.
 
 ## Fail-closed field classification
 
@@ -37,12 +45,13 @@ Each compiled corpus records:
 - SHA-256 of the exact local source artifact;
 - digest of the canonical source catalog;
 - canonical redistribution policy, attribution obligation, license expression, and terms URL;
+- the complete validated rights-review evidence record when review is required;
 - deterministic public corpus hash.
 
 The public manifest never contains the verifier hash. A verifier projection is optional and must be requested explicitly by the operator.
 
 ## Qualification boundary
 
-Successful compilation proves only deterministic projection and the declared policy/schema boundary. It is not verifier qualification, scientific qualification, Frontier qualification, training-value evidence, or commercial release authorization.
+Successful compilation proves only deterministic projection and the declared policy/schema/provenance boundary. It is not verifier qualification, scientific qualification, Frontier qualification, training-value evidence, rights-review issuance, or commercial release authorization.
 
 Before a compiled corpus becomes a Veritas environment, downstream construction still needs temporal information cuts, evidence provenance, public/private leakage tests, verifier falsifiers, contamination/duplicate analysis, executable semantics, quality scoring, and the applicable maturity/qualification gates.
