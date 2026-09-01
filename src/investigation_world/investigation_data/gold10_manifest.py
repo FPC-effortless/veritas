@@ -23,6 +23,7 @@ EXPECTED_CONTAMINATION_POLICY = "public_historical_nonsealed"
 EXPECTED_DATE_ONLY_RELEASE_POLICY = "next_day_12z"
 EXPECTED_TRUTH_REGIME = "institutional_findings"
 EXPECTED_CONTAMINATION_RISK = "high_public_historical_nonsealed"
+EXPECTED_PILOT_REVIEW_STATUS = "approved_for_link_only_pilot"
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -71,6 +72,12 @@ def _require_list(value: Any, *, label: str) -> list[dict[str, Any]]:
     return value
 
 
+def _require_object(value: Any, *, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise Gold10ManifestError(f"{label} must be an object")
+    return value
+
+
 def _find_source(catalog: dict[str, Any], source_id: str) -> dict[str, Any]:
     sources = _require_list(catalog.get("sources"), label="source catalog sources")
     matches = [item for item in sources if item.get("source_id") == source_id]
@@ -99,17 +106,30 @@ def _require_nonempty_string(value: Any, *, label: str) -> str:
     return value
 
 
+def _require_trimmed_string(value: Any, *, label: str) -> str:
+    text = _require_nonempty_string(value, label=label)
+    if text != text.strip():
+        raise Gold10ManifestError(f"{label} must not contain surrounding whitespace")
+    return text
+
+
 def _require_exact_string(value: Any, *, label: str, expected: str) -> str:
-    actual = _require_nonempty_string(value, label=label)
+    actual = _require_trimmed_string(value, label=label)
     if actual != expected:
-        raise Gold10ManifestError(f"{label} must remain frozen at {expected!r}; got {actual!r}")
+        raise Gold10ManifestError(
+            f"{label} must remain frozen at {expected!r}; got {actual!r}"
+        )
     return actual
 
 
 def _require_sha256(value: Any, *, label: str) -> str:
-    digest = _require_nonempty_string(value, label=label)
-    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
-        raise Gold10ManifestError(f"{label} must be a lowercase 64-hex SHA-256 digest")
+    digest = _require_trimmed_string(value, label=label)
+    if len(digest) != 64 or any(
+        character not in "0123456789abcdef" for character in digest
+    ):
+        raise Gold10ManifestError(
+            f"{label} must be a lowercase 64-hex SHA-256 digest"
+        )
     return digest
 
 
@@ -125,30 +145,36 @@ def _require_bool(value: Any, *, label: str) -> bool:
     return value
 
 
+def _require_safe_component(value: Any, *, label: str) -> str:
+    component = _require_trimmed_string(value, label=label)
+    if component in {".", ".."} or "/" in component or "\\" in component or ".." in component:
+        raise Gold10ManifestError(f"{label} must be a safe repository path component")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+    if any(character not in allowed for character in component):
+        raise Gold10ManifestError(f"{label} must be a safe repository path component")
+    return component
+
+
 def _require_owner_root(value: Any, *, label: str, expected: str) -> str:
-    root = _require_nonempty_string(value, label=label)
-    if root != root.strip():
-        raise Gold10ManifestError(f"{label} must not contain surrounding whitespace")
+    root = _require_trimmed_string(value, label=label)
     if "\\" in root or root.startswith("/") or root.endswith("/"):
-        raise Gold10ManifestError(f"{label} must be a normalized repository-relative path")
+        raise Gold10ManifestError(
+            f"{label} must be a normalized repository-relative path"
+        )
     parts = root.split("/")
     if any(part in {"", ".", ".."} for part in parts):
-        raise Gold10ManifestError(f"{label} must be a normalized repository-relative path")
+        raise Gold10ManifestError(
+            f"{label} must be a normalized repository-relative path"
+        )
     if root != expected:
-        raise Gold10ManifestError(f"{label} must remain frozen at {expected!r}; got {root!r}")
+        raise Gold10ManifestError(
+            f"{label} must remain frozen at {expected!r}; got {root!r}"
+        )
     return root
 
 
 def _require_safe_slug(value: Any, *, label: str) -> str:
-    slug = _require_nonempty_string(value, label=label)
-    if slug != slug.strip() or slug in {".", ".."}:
-        raise Gold10ManifestError(f"{label} must be a safe repository path component")
-    if "/" in slug or "\\" in slug or ".." in slug:
-        raise Gold10ManifestError(f"{label} must be a safe repository path component")
-    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
-    if any(character not in allowed for character in slug):
-        raise Gold10ManifestError(f"{label} must be a safe repository path component")
-    return slug
+    return _require_safe_component(value, label=label)
 
 
 def _require_capability_targets(value: Any, *, label: str) -> list[str]:
@@ -157,14 +183,25 @@ def _require_capability_targets(value: Any, *, label: str) -> list[str]:
     targets: list[str] = []
     seen: set[str] = set()
     for index, item in enumerate(value):
-        target = _require_nonempty_string(item, label=f"{label}[{index}]")
-        if target != target.strip():
-            raise Gold10ManifestError(f"{label}[{index}] must not contain surrounding whitespace")
+        target = _require_trimmed_string(item, label=f"{label}[{index}]")
         if target in seen:
-            raise Gold10ManifestError(f"{label} must not contain duplicate capability targets")
+            raise Gold10ManifestError(
+                f"{label} must not contain duplicate capability targets"
+            )
         seen.add(target)
         targets.append(target)
     return targets
+
+
+def _require_exact_single_string(
+    value: Any,
+    *,
+    label: str,
+    expected: str,
+) -> list[str]:
+    if not isinstance(value, list) or value != [expected]:
+        raise Gold10ManifestError(f"{label} must be exactly [{expected!r}]")
+    return value
 
 
 def _report_task_eligible(review_status: str) -> bool:
@@ -180,6 +217,124 @@ def manifest_digest(manifest: dict[str, Any]) -> str:
     payload = dict(manifest)
     payload.pop("manifest_sha256", None)
     return _stable_hash(payload)
+
+
+def _validated_source_policy(
+    source: dict[str, Any],
+    report_policy: dict[str, Any],
+    *,
+    source_id: str,
+) -> dict[str, Any]:
+    rights = _require_object(source.get("rights"), label="canonical Gold-10 source rights")
+    validated_rights = dict(rights)
+    for field in ("acquisition", "redistribution", "ai_use"):
+        source_value = _require_trimmed_string(
+            rights.get(field), label=f"canonical source rights {field}"
+        )
+        report_value = _require_trimmed_string(
+            report_policy.get(field), label=f"Gold-10 report policy {field}"
+        )
+        if report_value != source_value:
+            raise Gold10ManifestError(
+                f"Gold-10 report policy {field!r} disagrees with canonical source rights"
+            )
+        validated_rights[field] = source_value
+
+    validated_rights["attribution_required"] = _require_bool(
+        rights.get("attribution_required"),
+        label="canonical source rights attribution_required",
+    )
+    if report_policy.get("raw_bytes_committed_to_git") is not False:
+        raise Gold10ManifestError("Gold-10 report bytes must not be committed to Git")
+
+    contains_personal_data = _require_bool(
+        source.get("contains_personal_data"),
+        label="canonical source contains_personal_data",
+    )
+    requires_redaction_review = _require_bool(
+        source.get("requires_redaction_review"),
+        label="canonical source requires_redaction_review",
+    )
+    truth = _require_object(source.get("truth"), label="canonical Gold-10 source truth")
+    validated_truth = dict(truth)
+    validated_truth["strength"] = _require_trimmed_string(
+        truth.get("strength"), label="canonical source truth strength"
+    )
+    validated_truth["basis"] = _require_trimmed_string(
+        truth.get("basis"), label="canonical source truth basis"
+    )
+    if _require_bool(
+        truth.get("official_findings_are_ground_truth"),
+        label="canonical source truth official_findings_are_ground_truth",
+    ):
+        raise Gold10ManifestError(
+            "canonical source truth cannot promote institutional findings to ground truth"
+        )
+    validated_truth["official_findings_are_ground_truth"] = False
+    validated_truth["verifier_use"] = _require_exact_string(
+        truth.get("verifier_use"),
+        label="canonical source truth verifier_use",
+        expected="evidence_reference",
+    )
+
+    return {
+        "source_id": source_id,
+        "rights": validated_rights,
+        "contains_personal_data": contains_personal_data,
+        "requires_redaction_review": requires_redaction_review,
+        "truth": validated_truth,
+    }
+
+
+def _validated_fragment(
+    fragment: dict[str, Any],
+    *,
+    case_id: str,
+    expected_source_case_id: str,
+    source_id: str,
+    review_id: str,
+) -> tuple[str, bool, bool, Any]:
+    fragment_id = _require_trimmed_string(
+        fragment.get("fragment_id"), label=f"case {case_id} fragment_id"
+    )
+    if fragment.get("source_id") != source_id:
+        raise Gold10ManifestError(
+            f"case {case_id} fragment {fragment_id} source mismatch"
+        )
+    _require_exact_single_string(
+        fragment.get("case_ids"),
+        label=f"case {case_id} fragment {fragment_id} case_ids",
+        expected=expected_source_case_id,
+    )
+    modality = _require_trimmed_string(
+        fragment.get("modality"),
+        label=f"case {case_id} fragment {fragment_id} modality",
+    )
+    sensitivity = _require_trimmed_string(
+        fragment.get("sensitivity"),
+        label=f"case {case_id} fragment {fragment_id} sensitivity",
+    )
+    if sensitivity != "public":
+        return modality, False, False, None
+
+    if fragment.get("rights_review_id") != review_id:
+        raise Gold10ManifestError(
+            f"case {case_id} fragment {fragment_id} is not bound to the exact pilot review"
+        )
+    _require_trimmed_string(
+        fragment.get("locator"),
+        label=f"case {case_id} fragment {fragment_id} locator",
+    )
+    _require_trimmed_string(
+        fragment.get("content_ref"),
+        label=f"case {case_id} fragment {fragment_id} content_ref",
+    )
+    timeless_raw = fragment.get("timeless", False)
+    timeless = _require_bool(
+        timeless_raw,
+        label=f"case {case_id} fragment {fragment_id} timeless",
+    )
+    return modality, True, timeless, fragment.get("available_from")
 
 
 def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
@@ -247,7 +402,9 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         ("reports", set(report_cases)),
     ):
         if candidate != expected_cases:
-            raise Gold10ManifestError(f"{label} case set does not equal canonical Gold-10 index")
+            raise Gold10ManifestError(
+                f"{label} case set does not equal canonical Gold-10 index"
+            )
 
     split_counts = {"train": 0, "dev": 0, "eval": 0}
     calibration_by_case: dict[str, bool] = {}
@@ -286,30 +443,18 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         expected=EXPECTED_DATE_ONLY_RELEASE_POLICY,
     )
 
-    source_id = str(index["source_id"])
+    source_id = _require_trimmed_string(
+        index.get("source_id"), label="Gold-10 source_id"
+    )
     source = _find_source(source_catalog, source_id)
-    rights = source.get("rights")
-    if not isinstance(rights, dict):
-        raise Gold10ManifestError("canonical Gold-10 source has no rights policy")
-
-    report_policy = reports.get("policy")
-    if not isinstance(report_policy, dict):
-        raise Gold10ManifestError("Gold-10 report registry has no policy object")
-    for policy_field in ("acquisition", "redistribution", "ai_use"):
-        if report_policy.get(policy_field) != rights.get(policy_field):
-            raise Gold10ManifestError(
-                f"Gold-10 report policy {policy_field!r} disagrees with canonical source rights"
-            )
-    if report_policy.get("raw_bytes_committed_to_git") is not False:
-        raise Gold10ManifestError("Gold-10 report bytes must not be committed to Git")
-
-    source_policy = {
-        "source_id": source_id,
-        "rights": rights,
-        "contains_personal_data": bool(source.get("contains_personal_data")),
-        "requires_redaction_review": bool(source.get("requires_redaction_review")),
-        "truth": source.get("truth"),
-    }
+    report_policy = _require_object(
+        reports.get("policy"), label="Gold-10 report registry policy"
+    )
+    source_policy = _validated_source_policy(
+        source,
+        report_policy,
+        source_id=source_id,
+    )
 
     task_owner_root = _require_owner_root(
         freeze.get("task_owner_root"),
@@ -328,22 +473,27 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         canonical = index_cases[case_id]
         coverage_row = coverage_cases[case_id]
         report = report_cases[case_id]
-        pilot_dir = coverage_row.get("pilot_dir")
-        if not isinstance(pilot_dir, str) or not pilot_dir:
-            raise Gold10ManifestError(f"case {case_id} has no pilot_dir")
+
+        pilot_dir = _require_safe_component(
+            coverage_row.get("pilot_dir"),
+            label=f"case {case_id} pilot_dir",
+        )
         if report.get("pilot_dir") != pilot_dir:
-            raise Gold10ManifestError(f"case {case_id} report/pilot directory mismatch")
+            raise Gold10ManifestError(
+                f"case {case_id} report/pilot directory mismatch"
+            )
         if report.get("verification_status") != "verified":
             raise Gold10ManifestError(f"case {case_id} report bytes are not verified")
 
-        artifact_id = _require_nonempty_string(
-            report.get("artifact_id"), label=f"case {case_id} report artifact_id"
+        artifact_id = _require_trimmed_string(
+            report.get("artifact_id"),
+            label=f"case {case_id} report artifact_id",
         )
-        canonical_source_url = _require_nonempty_string(
+        canonical_source_url = _require_trimmed_string(
             report.get("canonical_source_url", report.get("source_url")),
             label=f"case {case_id} report canonical source URL",
         )
-        acquisition_url = _require_nonempty_string(
+        acquisition_url = _require_trimmed_string(
             report.get("acquisition_url", report.get("resolved_url")),
             label=f"case {case_id} report acquisition URL",
         )
@@ -354,7 +504,8 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             report.get("sha256"), label=f"case {case_id} report sha256"
         )
         receipt_sha256 = _require_sha256(
-            report.get("receipt_sha256"), label=f"case {case_id} report receipt_sha256"
+            report.get("receipt_sha256"),
+            label=f"case {case_id} report receipt_sha256",
         )
         catalog_sha256 = _require_sha256(
             report.get("effective_catalog_sha256", report.get("catalog_sha256")),
@@ -363,28 +514,40 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
 
         pilot_root = pilots_root / pilot_dir
         pilot_manifest, pilot_manifest_sha = _read_json(pilot_root / "manifest.json")
-        review_record, review_record_sha = _read_json(pilot_root / "review_record.json")
+        review_record, review_record_sha = _read_json(
+            pilot_root / "review_record.json"
+        )
         expected_source_case_id = f"CSB-{case_id}"
-        source_case_ids = pilot_manifest.get("source_case_ids")
-        if not isinstance(source_case_ids, list) or expected_source_case_id not in source_case_ids:
-            raise Gold10ManifestError(f"case {case_id} pilot lost canonical source-case identity")
-        if pilot_manifest.get("ground_truth_claims") not in ([], None):
-            raise Gold10ManifestError(f"case {case_id} unexpectedly contains private ground truth")
+        _require_exact_single_string(
+            pilot_manifest.get("source_case_ids"),
+            label=f"case {case_id} pilot source_case_ids",
+            expected=expected_source_case_id,
+        )
+        if pilot_manifest.get("ground_truth_claims") != []:
+            raise Gold10ManifestError(
+                f"case {case_id} must explicitly contain zero private ground-truth claims"
+            )
+
+        review_id = _require_trimmed_string(
+            review_record.get("review_id"),
+            label=f"case {case_id} pilot review_id",
+        )
         if review_record.get("source_id") != source_id:
             raise Gold10ManifestError(f"case {case_id} pilot review source mismatch")
         if review_record.get("case_id") != expected_source_case_id:
             raise Gold10ManifestError(f"case {case_id} pilot review case mismatch")
-        if review_record.get("status") != "approved_for_link_only_pilot":
-            raise Gold10ManifestError(f"case {case_id} pilot is not approved for link-only use")
-
-        fragments = _require_list(pilot_manifest.get("fragments"), label=f"{case_id} fragments")
-        declared_modalities = sorted(
-            {
-                str(fragment["modality"])
-                for fragment in fragments
-                if isinstance(fragment.get("modality"), str)
-            }
+        _require_exact_string(
+            review_record.get("status"),
+            label=f"case {case_id} pilot review status",
+            expected=EXPECTED_PILOT_REVIEW_STATUS,
         )
+
+        fragments = _require_list(
+            pilot_manifest.get("fragments"), label=f"{case_id} fragments"
+        )
+        if not fragments:
+            raise Gold10ManifestError(f"case {case_id} must retain reviewed fragments")
+
         simulation_start_raw = pilot_manifest.get("simulation_start")
         simulation_as_of_raw = pilot_manifest.get("simulation_as_of")
         simulation_start = _parse_timestamp(
@@ -398,32 +561,51 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 f"case {case_id} simulation_start must not be later than simulation_as_of"
             )
 
+        declared_modalities: set[str] = set()
         available_modalities: set[str] = set()
+        fragment_ids: set[str] = set()
         for fragment in fragments:
-            modality = fragment.get("modality")
-            if not isinstance(modality, str):
-                raise Gold10ManifestError(f"case {case_id} fragment has no modality")
-            if fragment.get("sensitivity") != "public":
+            fragment_id = _require_trimmed_string(
+                fragment.get("fragment_id"),
+                label=f"case {case_id} fragment_id",
+            )
+            if fragment_id in fragment_ids:
+                raise Gold10ManifestError(
+                    f"case {case_id} has duplicate fragment_id {fragment_id!r}"
+                )
+            fragment_ids.add(fragment_id)
+            modality, is_public, timeless, available_from_raw = _validated_fragment(
+                fragment,
+                case_id=case_id,
+                expected_source_case_id=expected_source_case_id,
+                source_id=source_id,
+                review_id=review_id,
+            )
+            declared_modalities.add(modality)
+            if not is_public:
                 continue
-            if fragment.get("timeless") is True:
+            if timeless:
                 available_modalities.add(modality)
                 continue
             available_from = _parse_timestamp(
-                fragment.get("available_from"), label=f"{case_id} fragment available_from"
+                available_from_raw,
+                label=f"case {case_id} fragment {fragment_id} available_from",
             )
             if available_from <= simulation_as_of:
                 available_modalities.add(modality)
 
-        review_status = report.get("artifact_review_status")
-        if not isinstance(review_status, str):
-            raise Gold10ManifestError(f"case {case_id} report has no artifact review status")
+        review_status = _require_trimmed_string(
+            report.get("artifact_review_status"),
+            label=f"case {case_id} report artifact review status",
+        )
         report_task_eligible = _report_task_eligible(review_status)
 
         slug = _require_safe_slug(
             canonical.get("slug"), label=f"case {case_id} canonical slug"
         )
         capability_targets = _require_capability_targets(
-            canonical.get("capability_tags"), label=f"case {case_id} capability targets"
+            canonical.get("capability_tags"),
+            label=f"case {case_id} capability targets",
         )
 
         case_rows.append(
@@ -434,7 +616,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 "pilot_dir": pilot_dir,
                 "pilot_manifest_sha256": pilot_manifest_sha,
                 "pilot_review_sha256": review_record_sha,
-                "pilot_review_id": review_record.get("review_id"),
+                "pilot_review_id": review_id,
                 "report": {
                     "artifact_id": artifact_id,
                     "canonical_source_url": canonical_source_url,
@@ -443,7 +625,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                     "sha256": report_sha256,
                     "receipt_sha256": receipt_sha256,
                     "catalog_sha256": catalog_sha256,
-                    "verification_status": report.get("verification_status"),
+                    "verification_status": "verified",
                     "artifact_review_status": review_status,
                     "eligible_for_task_evidence": report_task_eligible,
                     "authority_note": (
@@ -460,7 +642,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                     "simulation_as_of": simulation_as_of_raw,
                     "date_only_release_policy": date_only_release_policy,
                 },
-                "declared_modalities": declared_modalities,
+                "declared_modalities": sorted(declared_modalities),
                 "available_modalities_at_cut": sorted(available_modalities),
                 "capability_targets": capability_targets,
                 "split": frozen["split"],
@@ -493,7 +675,10 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     return manifest
 
 
-def write_gold10_manifest(output_path: Path, root: Path | None = None) -> dict[str, Any]:
+def write_gold10_manifest(
+    output_path: Path,
+    root: Path | None = None,
+) -> dict[str, Any]:
     manifest = build_gold10_manifest(root)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
