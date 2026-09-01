@@ -18,6 +18,11 @@ SOURCE_CATALOG_REL = Path("src/investigation_world/investigation_data/source_cat
 FREEZE_REL = Path("data/gold10/case_selection_v1.json")
 EXPECTED_TASK_OWNER_ROOT = "src/investigation_world/gold10/tasks"
 EXPECTED_VERIFIER_OWNER_ROOT = "src/investigation_world/gold10/verifiers"
+EXPECTED_TRUTH_POLICY = "institutional_findings_are_evidence_not_private_truth"
+EXPECTED_CONTAMINATION_POLICY = "public_historical_nonsealed"
+EXPECTED_DATE_ONLY_RELEASE_POLICY = "next_day_12z"
+EXPECTED_TRUTH_REGIME = "institutional_findings"
+EXPECTED_CONTAMINATION_RISK = "high_public_historical_nonsealed"
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -94,6 +99,13 @@ def _require_nonempty_string(value: Any, *, label: str) -> str:
     return value
 
 
+def _require_exact_string(value: Any, *, label: str, expected: str) -> str:
+    actual = _require_nonempty_string(value, label=label)
+    if actual != expected:
+        raise Gold10ManifestError(f"{label} must remain frozen at {expected!r}; got {actual!r}")
+    return actual
+
+
 def _require_sha256(value: Any, *, label: str) -> str:
     digest = _require_nonempty_string(value, label=label)
     if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
@@ -104,6 +116,12 @@ def _require_sha256(value: Any, *, label: str) -> str:
 def _require_positive_int(value: Any, *, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise Gold10ManifestError(f"{label} must be a positive integer")
+    return value
+
+
+def _require_bool(value: Any, *, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise Gold10ManifestError(f"{label} must be a JSON boolean")
     return value
 
 
@@ -119,6 +137,18 @@ def _require_owner_root(value: Any, *, label: str, expected: str) -> str:
     if root != expected:
         raise Gold10ManifestError(f"{label} must remain frozen at {expected!r}; got {root!r}")
     return root
+
+
+def _require_safe_slug(value: Any, *, label: str) -> str:
+    slug = _require_nonempty_string(value, label=label)
+    if slug != slug.strip() or slug in {".", ".."}:
+        raise Gold10ManifestError(f"{label} must be a safe repository path component")
+    if "/" in slug or "\\" in slug or ".." in slug:
+        raise Gold10ManifestError(f"{label} must be a safe repository path component")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+    if any(character not in allowed for character in slug):
+        raise Gold10ManifestError(f"{label} must be a safe repository path component")
+    return slug
 
 
 def _require_capability_targets(value: Any, *, label: str) -> list[str]:
@@ -220,15 +250,41 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             raise Gold10ManifestError(f"{label} case set does not equal canonical Gold-10 index")
 
     split_counts = {"train": 0, "dev": 0, "eval": 0}
-    for frozen in freeze_cases.values():
+    calibration_by_case: dict[str, bool] = {}
+    for case_id, frozen in freeze_cases.items():
         split = frozen.get("split")
         if split not in split_counts:
             raise Gold10ManifestError(f"invalid Gold-10 split: {split!r}")
         split_counts[split] += 1
+        calibration_by_case[case_id] = _require_bool(
+            frozen.get("calibration_required"),
+            label=f"case {case_id} calibration_required",
+        )
     if split_counts != {"train": 6, "dev": 2, "eval": 2}:
         raise Gold10ManifestError(f"Gold-10 split must remain 6/2/2; got {split_counts}")
-    if not any(bool(item.get("calibration_required")) for item in freeze_cases.values()):
+    if not any(calibration_by_case.values()):
         raise Gold10ManifestError("Gold-10 must retain at least one calibration task")
+
+    truth_policy = _require_exact_string(
+        freeze.get("truth_policy"),
+        label="Gold-10 truth_policy",
+        expected=EXPECTED_TRUTH_POLICY,
+    )
+    contamination_policy = _require_exact_string(
+        freeze.get("contamination_policy"),
+        label="Gold-10 contamination_policy",
+        expected=EXPECTED_CONTAMINATION_POLICY,
+    )
+    _require_exact_string(
+        freeze.get("report_usage_policy"),
+        label="Gold-10 report_usage_policy",
+        expected="exclude_until_artifact_level_review",
+    )
+    date_only_release_policy = _require_exact_string(
+        index.get("date_only_availability_policy"),
+        label="Gold-10 date_only_availability_policy",
+        expected=EXPECTED_DATE_ONLY_RELEASE_POLICY,
+    )
 
     source_id = str(index["source_id"])
     source = _find_source(source_catalog, source_id)
@@ -254,9 +310,6 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         "requires_redaction_review": bool(source.get("requires_redaction_review")),
         "truth": source.get("truth"),
     }
-
-    if freeze.get("report_usage_policy") != "exclude_until_artifact_level_review":
-        raise Gold10ManifestError("unexpected Gold-10 report usage policy")
 
     task_owner_root = _require_owner_root(
         freeze.get("task_owner_root"),
@@ -284,8 +337,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             raise Gold10ManifestError(f"case {case_id} report bytes are not verified")
 
         artifact_id = _require_nonempty_string(
-            report.get("artifact_id"),
-            label=f"case {case_id} report artifact_id",
+            report.get("artifact_id"), label=f"case {case_id} report artifact_id"
         )
         canonical_source_url = _require_nonempty_string(
             report.get("canonical_source_url", report.get("source_url")),
@@ -296,16 +348,13 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             label=f"case {case_id} report acquisition URL",
         )
         byte_count = _require_positive_int(
-            report.get("byte_count"),
-            label=f"case {case_id} report byte_count",
+            report.get("byte_count"), label=f"case {case_id} report byte_count"
         )
         report_sha256 = _require_sha256(
-            report.get("sha256"),
-            label=f"case {case_id} report sha256",
+            report.get("sha256"), label=f"case {case_id} report sha256"
         )
         receipt_sha256 = _require_sha256(
-            report.get("receipt_sha256"),
-            label=f"case {case_id} report receipt_sha256",
+            report.get("receipt_sha256"), label=f"case {case_id} report receipt_sha256"
         )
         catalog_sha256 = _require_sha256(
             report.get("effective_catalog_sha256", report.get("catalog_sha256")),
@@ -336,10 +385,19 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 if isinstance(fragment.get("modality"), str)
             }
         )
-        simulation_as_of = _parse_timestamp(
-            pilot_manifest.get("simulation_as_of"),
-            label=f"{case_id} simulation_as_of",
+        simulation_start_raw = pilot_manifest.get("simulation_start")
+        simulation_as_of_raw = pilot_manifest.get("simulation_as_of")
+        simulation_start = _parse_timestamp(
+            simulation_start_raw, label=f"{case_id} simulation_start"
         )
+        simulation_as_of = _parse_timestamp(
+            simulation_as_of_raw, label=f"{case_id} simulation_as_of"
+        )
+        if simulation_start > simulation_as_of:
+            raise Gold10ManifestError(
+                f"case {case_id} simulation_start must not be later than simulation_as_of"
+            )
+
         available_modalities: set[str] = set()
         for fragment in fragments:
             modality = fragment.get("modality")
@@ -351,8 +409,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 available_modalities.add(modality)
                 continue
             available_from = _parse_timestamp(
-                fragment.get("available_from"),
-                label=f"{case_id} fragment available_from",
+                fragment.get("available_from"), label=f"{case_id} fragment available_from"
             )
             if available_from <= simulation_as_of:
                 available_modalities.add(modality)
@@ -362,12 +419,11 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             raise Gold10ManifestError(f"case {case_id} report has no artifact review status")
         report_task_eligible = _report_task_eligible(review_status)
 
-        slug = canonical.get("slug")
-        if not isinstance(slug, str) or not slug:
-            raise Gold10ManifestError(f"case {case_id} has no canonical slug")
+        slug = _require_safe_slug(
+            canonical.get("slug"), label=f"case {case_id} canonical slug"
+        )
         capability_targets = _require_capability_targets(
-            canonical.get("capability_tags"),
-            label=f"case {case_id} capability targets",
+            canonical.get("capability_tags"), label=f"case {case_id} capability targets"
         )
 
         case_rows.append(
@@ -396,19 +452,19 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                     ),
                 },
                 "rights": source_policy,
-                "truth_regime": "institutional_findings",
+                "truth_regime": EXPECTED_TRUTH_REGIME,
                 "controlled_private_truth_available": False,
-                "calibration_required": bool(frozen.get("calibration_required")),
+                "calibration_required": calibration_by_case[case_id],
                 "public_temporal_cut": {
-                    "simulation_start": pilot_manifest.get("simulation_start"),
-                    "simulation_as_of": pilot_manifest.get("simulation_as_of"),
-                    "date_only_release_policy": index.get("date_only_availability_policy"),
+                    "simulation_start": simulation_start_raw,
+                    "simulation_as_of": simulation_as_of_raw,
+                    "date_only_release_policy": date_only_release_policy,
                 },
                 "declared_modalities": declared_modalities,
                 "available_modalities_at_cut": sorted(available_modalities),
                 "capability_targets": capability_targets,
                 "split": frozen["split"],
-                "contamination_risk": "high_public_historical_nonsealed",
+                "contamination_risk": EXPECTED_CONTAMINATION_RISK,
                 "task_owner_path": f"{task_owner_root}/{slug}.py",
                 "verifier_owner_path": f"{verifier_owner_root}/{slug}.py",
             }
@@ -419,6 +475,8 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         "manifest_id": freeze["manifest_id"],
         "corpus_id": index["corpus_id"],
         "source_id": source_id,
+        "truth_policy": truth_policy,
+        "contamination_policy": contamination_policy,
         "cases": case_rows,
         "split_counts": split_counts,
         "controlled_private_truth_available": False,
