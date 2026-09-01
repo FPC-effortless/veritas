@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from investigation_world.investigation_data.gold10_manifest import (
+    _report_task_eligible,
     build_gold10_manifest,
     manifest_digest,
 )
@@ -54,6 +55,7 @@ def test_gold10_manifest_retains_truth_rights_and_temporal_boundaries() -> None:
         assert case["pilot_review_id"]
         assert len(case["pilot_manifest_sha256"]) == 64
         assert len(case["pilot_review_sha256"]) == 64
+        assert set(case["available_modalities_at_cut"]) <= set(case["declared_modalities"])
 
         rights = case["rights"]
         assert rights["source_id"] == "uscsb"
@@ -66,6 +68,12 @@ def test_gold10_manifest_retains_truth_rights_and_temporal_boundaries() -> None:
         assert rights["truth"]["official_findings_are_ground_truth"] is False
 
 
+def test_report_review_status_is_never_an_authority_token() -> None:
+    assert _report_task_eligible("pending_artifact_level_review") is False
+    assert _report_task_eligible("approved_for_task_use") is False
+    assert _report_task_eligible("arbitrary-caller-value") is False
+
+
 def test_pending_report_review_never_becomes_task_authority() -> None:
     manifest = build_gold10_manifest()
 
@@ -74,6 +82,7 @@ def test_pending_report_review_never_becomes_task_authority() -> None:
         assert report["verification_status"] == "verified"
         assert report["artifact_review_status"] == "pending_artifact_level_review"
         assert report["eligible_for_task_evidence"] is False
+        assert "never derives task-use authority" in report["authority_note"]
         assert report["artifact_id"]
         assert report["canonical_source_url"]
         assert report["acquisition_url"]
@@ -120,9 +129,19 @@ def test_gold10_manifest_is_deterministic_and_content_bound() -> None:
         assert manifest_digest(mutated) != baseline
 
 
-def test_gold10_manifest_binds_multiple_public_evidence_modalities() -> None:
+def test_gold10_modalities_respect_the_frozen_public_cut() -> None:
     manifest = build_gold10_manifest()
-    modalities = {modality for case in manifest["cases"] for modality in case["modalities"]}
+    by_case = {case["case_id"]: case for case in manifest["cases"]}
+    texas_city = by_case["2005-04-I-TX"]
 
-    assert "document" in modalities
-    assert "video" in modalities
+    assert "document" in texas_city["declared_modalities"]
+    assert "video" in texas_city["declared_modalities"]
+    assert texas_city["available_modalities_at_cut"] == ["document"]
+
+    declared = {
+        modality
+        for case in manifest["cases"]
+        for modality in case["declared_modalities"]
+    }
+    assert "document" in declared
+    assert "video" in declared
