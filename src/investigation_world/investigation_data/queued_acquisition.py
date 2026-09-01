@@ -270,6 +270,7 @@ def _queue_output_paths(root: Path, source_id: str, artifact_id: str) -> tuple[P
     resolved_root = root.resolve()
     target_dir = resolved_root / source_id / artifact_id
     raw_path = target_dir / f"{artifact_id}.pdf"
+    _reject_symlinked_output_ancestors(resolved_root, raw_path.parent, artifact_id)
     resolved_parent = raw_path.parent.resolve(strict=False)
     if resolved_root != resolved_parent and resolved_root not in resolved_parent.parents:
         raise QueuedAcquisitionError("queue output path escaped acquisition root")
