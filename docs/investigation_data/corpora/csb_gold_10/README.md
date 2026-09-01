@@ -108,7 +108,9 @@ All ten report rows are now `verified`. Each is bound to a central verification 
 - provenance-receipt SHA-256;
 - source-catalog SHA-256.
 
-The `CSB Gold-10 Report Acquisition` GitHub workflow performs networked re-acquisition with read-only repository permissions. Because the verified report SHA-256 values are fed back into the downloader as expected checksums, any future byte change behind the same CSB URL fails closed. Raw PDFs are deleted before workflow artifacts are uploaded; only receipt metadata is retained.
+Some historical CSB report locators are dispatcher URLs while stable static PDF URLs are used for byte re-acquisition. Queue receipts therefore retain both identities: `canonical_source_url` preserves the checked-in official locator and `acquisition_url` records the bounded transport URL actually fetched. Each receipt also carries the queue digest and an `acquisition_spec_sha256` over the source ID, case ID, artifact ID, canonical source URL, acquisition URL, and expected SHA-256, so changing either URL changes the retained acquisition authority.
+
+The `CSB Gold-10 Report Acquisition` GitHub workflow performs networked re-acquisition with read-only repository permissions. Because the verified report SHA-256 values are fed back into the downloader as expected checksums, any future byte change behind the same CSB URL fails closed. Raw PDFs are deleted before workflow artifacts are uploaded; only receipt metadata is retained. Cleanup is scoped to the exact raw artifact path owned by the current invocation, and acquisition refuses to overwrite a pre-existing raw or provenance target rather than recursively deleting caller-owned files under the output root.
 
 Artifact verification is **not** artifact-use approval. Every report remains `pending_artifact_level_review` for redistribution or derived training artifacts. Report-derived facts and CSB conclusions must remain epistemically distinct.
 
