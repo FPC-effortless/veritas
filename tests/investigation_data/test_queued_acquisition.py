@@ -11,6 +11,7 @@ import pytest
 from investigation_world.investigation_data.acquisition import AcquisitionError, plan_artifact
 from investigation_world.investigation_data.catalog import find_source, load_catalog
 from investigation_world.investigation_data.queued_acquisition import (
+    QueuedAcquisitionError,
     acquire_queue_receipts,
     build_queue_catalog,
     load_acquisition_queue,
@@ -148,6 +149,9 @@ def test_receipt_only_acquisition_binds_retained_effective_catalog(tmp_path: Pat
     output_root = tmp_path / "raw"
     receipts_out = tmp_path / "receipts" / "bundle.json"
     effective_catalog_out = tmp_path / "receipts" / "effective-catalog.json"
+    sentinel = output_root / "caller-owned.txt"
+    output_root.mkdir(parents=True)
+    sentinel.write_text("preserve me", encoding="utf-8")
     write_queue(queue_path, source_url=source_url)
 
     bundle = acquire_queue_receipts(
@@ -174,11 +178,14 @@ def test_receipt_only_acquisition_binds_retained_effective_catalog(tmp_path: Pat
     assert bundle["raw_payloads_retained"] is False
     assert receipts_out.is_file()
     assert effective_catalog_out.is_file()
+    assert sentinel.read_text(encoding="utf-8") == "preserve me"
 
     raw_files = [
         path
         for path in output_root.rglob("*")
-        if path.is_file() and not path.name.endswith(".provenance.json")
+        if path.is_file()
+        and not path.name.endswith(".provenance.json")
+        and path != sentinel
     ]
     assert raw_files == []
     provenance_files = list(output_root.rglob("*.provenance.json"))
@@ -186,6 +193,104 @@ def test_receipt_only_acquisition_binds_retained_effective_catalog(tmp_path: Pat
     assert artifact["receipt_sha256"] == hashlib.sha256(
         provenance_files[0].read_bytes()
     ).hexdigest()
+
+
+def test_queue_receipt_preserves_and_binds_canonical_and_acquisition_urls(
+    tmp_path: Path,
+) -> None:
+    canonical_url = "https://www.csb.gov/file.aspx?DocumentId=5917"
+    acquisition_url = "https://www.csb.gov/assets/1/20/chevron-final.pdf"
+    payload = b"%PDF-1.7\ncanonical-and-transport\n"
+    payload_sha256 = hashlib.sha256(payload).hexdigest()
+    queue_path = tmp_path / "queue.json"
+    output_root = tmp_path / "raw"
+    receipts_out = tmp_path / "receipts" / "bundle.json"
+    write_queue(
+        queue_path,
+        source_url=canonical_url,
+        acquisition_url=acquisition_url,
+        sha256=payload_sha256,
+    )
+
+    bundle = acquire_queue_receipts(
+        queue_path,
+        output_root,
+        receipts_out,
+        delay_seconds=0,
+        transport=FakeTransport({acquisition_url: payload}),
+    )
+
+    artifact = bundle["artifacts"][0]
+    provenance_path = next(output_root.rglob("*.provenance.json"))
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    authority = {
+        "source_id": "uscsb",
+        "case_id": "2005-04-I-TX",
+        "artifact_id": "csb-test-final-report",
+        "canonical_source_url": canonical_url,
+        "acquisition_url": acquisition_url,
+        "expected_sha256": payload_sha256,
+    }
+    expected_spec_sha256 = hashlib.sha256(
+        json.dumps(
+            authority,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+    for retained in (artifact, provenance):
+        assert retained["source_url"] == acquisition_url
+        assert retained["canonical_source_url"] == canonical_url
+        assert retained["acquisition_url"] == acquisition_url
+        assert retained["expected_sha256"] == payload_sha256
+        assert retained["queue_sha256"] == bundle["queue_sha256"]
+        assert retained["acquisition_spec_sha256"] == expected_spec_sha256
+
+    assert artifact["sha256"] == payload_sha256
+
+
+def test_acquisition_spec_identity_changes_when_canonical_source_changes(
+    tmp_path: Path,
+) -> None:
+    acquisition_url = "https://www.csb.gov/assets/1/20/stable-report.pdf"
+    payload = b"%PDF-1.7\nstable-transport-bytes\n"
+    payload_sha256 = hashlib.sha256(payload).hexdigest()
+    catalog_digests: list[str] = []
+    spec_digests: list[str] = []
+
+    for index, canonical_url in enumerate(
+        (
+            "https://www.csb.gov/file.aspx?DocumentId=1001",
+            "https://www.csb.gov/file.aspx?DocumentId=1002",
+        )
+    ):
+        run_root = tmp_path / f"run-{index}"
+        queue_path = run_root / "queue.json"
+        receipts_out = run_root / "receipts" / "bundle.json"
+        effective_catalog_out = run_root / "receipts" / "effective-catalog.json"
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        write_queue(
+            queue_path,
+            source_url=canonical_url,
+            acquisition_url=acquisition_url,
+            sha256=payload_sha256,
+        )
+
+        bundle = acquire_queue_receipts(
+            queue_path,
+            run_root / "raw",
+            receipts_out,
+            effective_catalog_out=effective_catalog_out,
+            delay_seconds=0,
+            transport=FakeTransport({acquisition_url: payload}),
+        )
+        catalog_digests.append(bundle["effective_catalog_sha256"])
+        spec_digests.append(bundle["artifacts"][0]["acquisition_spec_sha256"])
+
+    assert catalog_digests[0] == catalog_digests[1]
+    assert spec_digests[0] != spec_digests[1]
 
 
 def test_effective_catalog_identity_changes_on_material_queue_mutation(tmp_path: Path) -> None:
@@ -221,12 +326,15 @@ def test_effective_catalog_identity_changes_on_material_queue_mutation(tmp_path:
     assert digests[0] != digests[1]
 
 
-def test_known_hash_mismatch_fails_and_leaves_no_raw_payload(tmp_path: Path) -> None:
+def test_known_hash_mismatch_preserves_unrelated_caller_file(tmp_path: Path) -> None:
     source_url = "https://www.csb.gov/test-report.pdf"
     queue_path = tmp_path / "queue.json"
     output_root = tmp_path / "raw"
     receipts_out = tmp_path / "receipts" / "bundle.json"
     effective_catalog_out = tmp_path / "receipts" / "effective-catalog.json"
+    sentinel = output_root / "caller-owned.txt"
+    output_root.mkdir(parents=True)
+    sentinel.write_text("preserve me", encoding="utf-8")
     write_queue(queue_path, source_url=source_url, sha256="0" * 64)
 
     with pytest.raises(AcquisitionError, match="checksum mismatch"):
@@ -239,6 +347,39 @@ def test_known_hash_mismatch_fails_and_leaves_no_raw_payload(tmp_path: Path) -> 
             transport=FakeTransport({source_url: b"different bytes"}),
         )
 
-    assert [path for path in output_root.rglob("*") if path.is_file()] == []
+    assert sentinel.read_text(encoding="utf-8") == "preserve me"
+    assert [
+        path
+        for path in output_root.rglob("*")
+        if path.is_file() and path != sentinel
+    ] == []
     assert not receipts_out.exists()
     assert not effective_catalog_out.exists()
+
+
+def test_queue_acquisition_refuses_to_overwrite_existing_owned_target(tmp_path: Path) -> None:
+    source_url = "https://www.csb.gov/test-report.pdf"
+    queue_path = tmp_path / "queue.json"
+    output_root = tmp_path / "raw"
+    receipts_out = tmp_path / "receipts" / "bundle.json"
+    raw_target = (
+        output_root
+        / "uscsb"
+        / "csb-test-final-report"
+        / "csb-test-final-report.pdf"
+    )
+    raw_target.parent.mkdir(parents=True)
+    raw_target.write_bytes(b"caller-owned-existing-bytes")
+    write_queue(queue_path, source_url=source_url)
+
+    with pytest.raises(QueuedAcquisitionError, match="refusing to overwrite pre-existing"):
+        acquire_queue_receipts(
+            queue_path,
+            output_root,
+            receipts_out,
+            delay_seconds=0,
+            transport=FakeTransport({source_url: b"new bytes"}),
+        )
+
+    assert raw_target.read_bytes() == b"caller-owned-existing-bytes"
+    assert not receipts_out.exists()
