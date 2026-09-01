@@ -16,7 +16,7 @@ The compiler does not download data, does not issue rights approvals, and does n
 
 ## Canonical artifact identity
 
-If the selected canonical `AcquisitionArtifact` declares `expected_sha256`, the compiler hashes `input_path` before parsing and requires an exact digest match. Modified or substituted local bytes therefore cannot be materialized while claiming the canonical artifact identity. When no expected digest is declared, the exact observed local SHA-256 is still retained as provenance but is not treated as a canonical byte-identity proof.
+The compiler reads `input_path` exactly once into an immutable in-memory byte snapshot. It hashes that snapshot and parses that same snapshot for CSV, JSON, JSONL, or XLSX input; it never reopens the pathname between byte-identity validation and parsing. If the selected canonical `AcquisitionArtifact` declares `expected_sha256`, the snapshot digest must match exactly before parsing. A pathname rewrite or replacement after the snapshot is acquired therefore cannot change the compiled cases while retaining an earlier approved digest. When no expected digest is declared, the exact snapshot SHA-256 is still retained as provenance but is not treated as a canonical byte-identity proof.
 
 ## Fail-closed field classification
 

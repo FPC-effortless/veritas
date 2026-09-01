@@ -7,6 +7,7 @@ from datetime import date
 import pytest
 from openpyxl import Workbook
 
+import investigation_world.investigation_data.structured_corpus as structured_corpus_module
 from investigation_world.investigation_data.models import (
     AcquisitionArtifact,
     AcquisitionPolicy,
@@ -588,6 +589,50 @@ def test_matching_canonical_expected_sha256_is_retained(tmp_path) -> None:
         as_of=date(2026, 8, 28),
     )
     assert corpus.source_artifact_sha256 == digest
+
+
+def test_canonical_hash_and_parse_share_one_immutable_snapshot(
+    tmp_path, monkeypatch
+) -> None:
+    path = tmp_path / "data.csv"
+    _write_csv(path, [("CASE-A", "Alpha", "2025-01-01", "approved", "secret")])
+    approved_snapshot = path.read_bytes()
+    approved_digest = hashlib.sha256(approved_snapshot).hexdigest()
+
+    original_snapshot_reader = structured_corpus_module._read_input_snapshot
+    snapshot_reads = 0
+
+    def snapshot_then_swap(candidate):
+        nonlocal snapshot_reads
+        snapshot_reads += 1
+        snapshot = original_snapshot_reader(candidate)
+        if snapshot_reads == 1:
+            _write_csv(
+                path,
+                [("CASE-B", "Tampered", "2025-02-02", "substituted", "other-secret")],
+            )
+        return snapshot
+
+    monkeypatch.setattr(
+        structured_corpus_module,
+        "_read_input_snapshot",
+        snapshot_then_swap,
+    )
+
+    corpus = compile_structured_investigation_corpus(
+        _profile(),
+        path,
+        _catalog(expected_sha256=approved_digest),
+        dataset_id="dataset",
+        version="1",
+        as_of=date(2026, 8, 28),
+    )
+
+    assert snapshot_reads == 1
+    assert corpus.source_artifact_sha256 == approved_digest
+    assert [case.title for case in corpus.cases] == ["Alpha"]
+    assert corpus.cases[0].public_payload["evidence"] == "approved"
+    assert "Tampered" in path.read_text(encoding="utf-8")
 
 
 def test_attribution_obligation_is_retained_in_public_manifest(tmp_path) -> None:

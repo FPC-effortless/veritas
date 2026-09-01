@@ -5,6 +5,7 @@ import hashlib
 import json
 from datetime import date, datetime
 from enum import Enum
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, Literal
 
@@ -241,15 +242,13 @@ def _stable_hash(value: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
+def _read_input_snapshot(path: Path) -> bytes:
+    """Read the source artifact once so validation and parsing share identical bytes."""
+    return path.read_bytes()
+
+
+def _snapshot_sha256(snapshot: bytes) -> str:
+    return hashlib.sha256(snapshot).hexdigest()
 
 
 def _catalog_sha256(catalog: SourceCatalog) -> str:
@@ -411,18 +410,20 @@ def _normalize_value(value: Any) -> Any:
     return str(value)
 
 
-def _read_csv(path: Path) -> list[dict[str, Any]]:
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None:
-            raise StructuredCorpusError("CSV input has no header row")
-        if len(reader.fieldnames) != len(set(reader.fieldnames)):
-            raise StructuredCorpusError("CSV input contains duplicate header names")
-        return [dict(row) for row in reader]
+def _read_csv_snapshot(snapshot: bytes) -> list[dict[str, Any]]:
+    handle = StringIO(snapshot.decode("utf-8-sig"), newline="")
+    reader = csv.DictReader(handle)
+    if reader.fieldnames is None:
+        raise StructuredCorpusError("CSV input has no header row")
+    if len(reader.fieldnames) != len(set(reader.fieldnames)):
+        raise StructuredCorpusError("CSV input contains duplicate header names")
+    return [dict(row) for row in reader]
 
 
-def _read_json(path: Path, records_key: str | None) -> list[dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def _read_json_snapshot(
+    snapshot: bytes, records_key: str | None
+) -> list[dict[str, Any]]:
+    payload = json.loads(snapshot.decode("utf-8"))
     if records_key is not None:
         if not isinstance(payload, dict):
             raise StructuredCorpusError("JSON records_key requires an object root")
@@ -432,9 +433,11 @@ def _read_json(path: Path, records_key: str | None) -> list[dict[str, Any]]:
     return [dict(row) for row in payload]
 
 
-def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _read_jsonl_snapshot(snapshot: bytes) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for line_number, line in enumerate(
+        snapshot.decode("utf-8").splitlines(), start=1
+    ):
         if not line.strip():
             continue
         payload = json.loads(line)
@@ -444,8 +447,10 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _read_xlsx(path: Path, sheet_name: str | None) -> list[dict[str, Any]]:
-    workbook = load_workbook(path, read_only=True, data_only=True)
+def _read_xlsx_snapshot(
+    snapshot: bytes, sheet_name: str | None
+) -> list[dict[str, Any]]:
+    workbook = load_workbook(BytesIO(snapshot), read_only=True, data_only=True)
     try:
         worksheet = workbook[sheet_name] if sheet_name is not None else workbook.active
         if worksheet is None:
@@ -471,19 +476,26 @@ def _read_xlsx(path: Path, sheet_name: str | None) -> list[dict[str, Any]]:
         workbook.close()
 
 
+def _read_structured_records_snapshot(
+    snapshot: bytes,
+    profile: StructuredSourceProfile,
+) -> list[dict[str, Any]]:
+    if profile.input_format is StructuredInputFormat.CSV:
+        return _read_csv_snapshot(snapshot)
+    if profile.input_format is StructuredInputFormat.JSON:
+        return _read_json_snapshot(snapshot, profile.json_records_key)
+    if profile.input_format is StructuredInputFormat.JSONL:
+        return _read_jsonl_snapshot(snapshot)
+    if profile.input_format is StructuredInputFormat.XLSX:
+        return _read_xlsx_snapshot(snapshot, profile.sheet_name)
+    raise StructuredCorpusError(f"unsupported structured input format: {profile.input_format}")
+
+
 def read_structured_records(
     path: Path,
     profile: StructuredSourceProfile,
 ) -> list[dict[str, Any]]:
-    if profile.input_format is StructuredInputFormat.CSV:
-        return _read_csv(path)
-    if profile.input_format is StructuredInputFormat.JSON:
-        return _read_json(path, profile.json_records_key)
-    if profile.input_format is StructuredInputFormat.JSONL:
-        return _read_jsonl(path)
-    if profile.input_format is StructuredInputFormat.XLSX:
-        return _read_xlsx(path, profile.sheet_name)
-    raise StructuredCorpusError(f"unsupported structured input format: {profile.input_format}")
+    return _read_structured_records_snapshot(_read_input_snapshot(path), profile)
 
 
 def _nonempty(value: Any) -> bool:
@@ -604,7 +616,8 @@ def compile_structured_investigation_corpus(
 ) -> StructuredInvestigationCorpus:
     source, artifact, rights_review = _validate_policy(profile, catalog, rights_reviews)
 
-    source_artifact_sha256 = _file_sha256(input_path)
+    input_snapshot = _read_input_snapshot(input_path)
+    source_artifact_sha256 = _snapshot_sha256(input_snapshot)
     if (
         artifact.expected_sha256 is not None
         and source_artifact_sha256 != artifact.expected_sha256
@@ -615,7 +628,7 @@ def compile_structured_investigation_corpus(
             f"{source.source_id}/{artifact.artifact_id}"
         )
 
-    rows = read_structured_records(input_path, profile)
+    rows = _read_structured_records_snapshot(input_snapshot, profile)
     cases = tuple(
         _classify_row(row, profile, row_number=index)
         for index, row in enumerate(rows, start=1)
