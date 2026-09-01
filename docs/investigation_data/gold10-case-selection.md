@@ -25,17 +25,21 @@ The case-disjoint split is fixed before model results:
 
 Chevron Richmond (`2012-03-I-CA`) is explicitly designated for calibration/uncertainty behavior because the canonical case has useful pre-final public evidence. This designation is part of the frozen identity rather than a post-result choice.
 
-## Truth and contamination
+## Truth, temporal availability, and contamination
 
 All ten cases are public historical CSB investigations. They are classified as high-contamination, non-sealed evidence. Current pilot manifests contain no private ground-truth claims. CSB findings remain institutional findings/evidence and are never promoted to omniscient truth by CASE-001.
 
 Controlled/private truth is explicitly unavailable for this historical ten-case set. Gold-10 must not manufacture it.
 
+The reconstructed manifest distinguishes all modalities declared anywhere in a pilot from modalities that are actually public at that pilot's frozen `simulation_as_of` cut. Evidence released after the cut cannot become available merely because it exists in the same pilot manifest.
+
 ## Report-byte authority
 
 All ten final reports have byte-level acquisition verification and provenance receipts, but the current report registry marks every report `pending_artifact_level_review`. Verification of bytes is not authorization for redistribution, extraction, training, or task evidence.
 
-CASE-001 therefore binds each report's artifact ID, URLs, byte count, report SHA-256, receipt SHA-256, and catalog identity while setting `eligible_for_task_evidence` to false unless a future authority record changes the exact review state to `approved_for_task_use`.
+CASE-001 therefore binds each report's artifact ID, URLs, byte count, report SHA-256, receipt SHA-256, catalog identity, and observed review status, while always setting `eligible_for_task_evidence` to false. A mutable status string is not an authorization token.
+
+A future artifact-use lane must introduce and validate an authority record that binds the exact artifact and applicable source-policy/redaction scopes, then change the eligibility boundary on a new independently reviewed head. CASE-001 itself never promotes report bytes into task evidence.
 
 The existing `approved_for_link_only_pilot` review records authorize the current external-link pilot only. They do not authorize report-byte use.
 
@@ -46,7 +50,7 @@ CASE-001 records future #152 task and verifier paths under:
 - `src/investigation_world/gold10/tasks/**`;
 - `src/investigation_world/gold10/verifiers/**`.
 
-Those files are not implemented by CASE-001. Task/verifier implementation remains blocked until the case-selection freeze is merged, and any task that consumes final-report bytes additionally requires exact artifact-level use authority.
+Those files are not implemented by CASE-001. Task/verifier implementation remains blocked until the case-selection freeze is merged. #152 may use only evidence already authorized by the frozen manifest; any future use of final-report bytes additionally requires a separately validated artifact-use authority.
 
 ## Evidence ceiling
 
