@@ -137,3 +137,8 @@ def test_acquisition_workflow_uses_only_the_bounded_queue_runner() -> None:
     assert "urllib.request" not in workflow
     assert "for sample in range" not in workflow
     assert "investigation_world.investigation_data.queued_acquisition" in workflow
+    assert ".veritas-data/**/*.provenance.json" in workflow
+    assert "include-hidden-files: true" in workflow
+    assert 'rglob("*.provenance.json")' in workflow
+    assert "len(sidecar_paths) == 10" in workflow
+    assert 'item["receipt_sha256"]' in workflow
