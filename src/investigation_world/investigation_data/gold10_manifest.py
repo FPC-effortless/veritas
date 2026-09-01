@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -194,15 +193,7 @@ def _require_capability_targets(value: Any, *, label: str) -> list[str]:
     return targets
 
 
-def _normalize_csb_case_id(value: str) -> str:
-    match = re.fullmatch(r"CSB-(\d{4})-(\d{1,2})-I-([A-Z]{2})", value)
-    if match is None:
-        return value
-    year, sequence, state = match.groups()
-    return f"CSB-{year}-{int(sequence):02d}-I-{state}"
-
-
-def _require_same_case_ids(
+def _require_case_ids(
     value: Any,
     *,
     label: str,
@@ -217,13 +208,41 @@ def _require_same_case_ids(
         if case_id in seen:
             raise Gold10ManifestError(f"{label} must not contain duplicate case IDs")
         seen.add(case_id)
-        if _normalize_csb_case_id(case_id) != expected:
-            raise Gold10ManifestError(
-                f"{label} contains cross-case identity {case_id!r}; expected {expected!r}"
-            )
         case_ids.append(case_id)
     if expected not in seen:
         raise Gold10ManifestError(f"{label} must retain canonical case ID {expected!r}")
+    return case_ids
+
+
+def _reviewed_case_aliases(
+    review_record: dict[str, Any],
+    *,
+    case_id: str,
+    expected: str,
+) -> set[str]:
+    aliases_raw = review_record.get("source_case_aliases")
+    if aliases_raw is None:
+        return {expected}
+    aliases = _require_case_ids(
+        aliases_raw,
+        label=f"case {case_id} pilot review source_case_aliases",
+        expected=expected,
+    )
+    return set(aliases)
+
+
+def _require_exact_reviewed_case_ids(
+    value: Any,
+    *,
+    label: str,
+    expected: str,
+    reviewed_aliases: set[str],
+) -> list[str]:
+    case_ids = _require_case_ids(value, label=label, expected=expected)
+    if set(case_ids) != reviewed_aliases:
+        raise Gold10ManifestError(
+            f"{label} must equal exact reviewed aliases {sorted(reviewed_aliases)!r}"
+        )
     return case_ids
 
 
@@ -316,6 +335,7 @@ def _validated_fragment(
     expected_source_case_id: str,
     source_id: str,
     review_id: str,
+    reviewed_aliases: set[str],
 ) -> tuple[str, bool, bool, Any]:
     fragment_id = _require_trimmed_string(
         fragment.get("fragment_id"), label=f"case {case_id} fragment_id"
@@ -324,10 +344,11 @@ def _validated_fragment(
         raise Gold10ManifestError(
             f"case {case_id} fragment {fragment_id} source mismatch"
         )
-    _require_same_case_ids(
+    _require_exact_reviewed_case_ids(
         fragment.get("case_ids"),
         label=f"case {case_id} fragment {fragment_id} case_ids",
         expected=expected_source_case_id,
+        reviewed_aliases=reviewed_aliases,
     )
     modality = _require_trimmed_string(
         fragment.get("modality"),
@@ -541,15 +562,6 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             pilot_root / "review_record.json"
         )
         expected_source_case_id = f"CSB-{case_id}"
-        _require_same_case_ids(
-            pilot_manifest.get("source_case_ids"),
-            label=f"case {case_id} pilot source_case_ids",
-            expected=expected_source_case_id,
-        )
-        if pilot_manifest.get("ground_truth_claims") != []:
-            raise Gold10ManifestError(
-                f"case {case_id} must explicitly contain zero private ground-truth claims"
-            )
 
         review_id = _require_trimmed_string(
             review_record.get("review_id"),
@@ -564,6 +576,21 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             label=f"case {case_id} pilot review status",
             expected=EXPECTED_PILOT_REVIEW_STATUS,
         )
+        reviewed_aliases = _reviewed_case_aliases(
+            review_record,
+            case_id=case_id,
+            expected=expected_source_case_id,
+        )
+        _require_exact_reviewed_case_ids(
+            pilot_manifest.get("source_case_ids"),
+            label=f"case {case_id} pilot source_case_ids",
+            expected=expected_source_case_id,
+            reviewed_aliases=reviewed_aliases,
+        )
+        if pilot_manifest.get("ground_truth_claims") != []:
+            raise Gold10ManifestError(
+                f"case {case_id} must explicitly contain zero private ground-truth claims"
+            )
 
         fragments = _require_list(
             pilot_manifest.get("fragments"), label=f"{case_id} fragments"
@@ -603,6 +630,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 expected_source_case_id=expected_source_case_id,
                 source_id=source_id,
                 review_id=review_id,
+                reviewed_aliases=reviewed_aliases,
             )
             declared_modalities.add(modality)
             if not is_public:
