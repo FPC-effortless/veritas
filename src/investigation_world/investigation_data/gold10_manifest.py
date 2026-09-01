@@ -40,7 +40,12 @@ def _read_json(path: Path) -> tuple[dict[str, Any], str]:
     return value, _sha256_bytes(raw)
 
 
-def _unique_by(items: list[dict[str, Any]], key: str, *, label: str) -> dict[str, dict[str, Any]]:
+def _unique_by(
+    items: list[dict[str, Any]],
+    key: str,
+    *,
+    label: str,
+) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for item in items:
         value = item.get(key)
@@ -96,9 +101,22 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
 
     if freeze.get("manifest_id") != "gold10-case-selection-v1":
         raise Gold10ManifestError("unexpected Gold-10 freeze manifest_id")
-    if freeze.get("corpus_id") != index.get("corpus_id") != coverage.get("corpus_id"):
+
+    corpus_ids = {
+        freeze.get("corpus_id"),
+        index.get("corpus_id"),
+        coverage.get("corpus_id"),
+        reports.get("corpus_id"),
+    }
+    if None in corpus_ids or len(corpus_ids) != 1:
         raise Gold10ManifestError("Gold-10 corpus identities disagree")
-    if freeze.get("source_id") != index.get("source_id") != reports.get("source_id"):
+
+    source_ids = {
+        freeze.get("source_id"),
+        index.get("source_id"),
+        reports.get("source_id"),
+    }
+    if None in source_ids or len(source_ids) != 1:
         raise Gold10ManifestError("Gold-10 source identities disagree")
 
     freeze_cases = _unique_by(
@@ -125,6 +143,8 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     expected_cases = set(index_cases)
     if len(expected_cases) != 10 or index.get("target_cases") != 10:
         raise Gold10ManifestError("canonical Gold-10 index must contain exactly 10 cases")
+    if coverage.get("coverage_target") != 10:
+        raise Gold10ManifestError("Gold-10 pilot coverage target must remain 10")
     for label, candidate in (
         ("freeze", set(freeze_cases)),
         ("coverage", set(coverage_cases)),
@@ -149,6 +169,18 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     rights = source.get("rights")
     if not isinstance(rights, dict):
         raise Gold10ManifestError("canonical Gold-10 source has no rights policy")
+
+    report_policy = reports.get("policy")
+    if not isinstance(report_policy, dict):
+        raise Gold10ManifestError("Gold-10 report registry has no policy object")
+    for policy_field in ("acquisition", "redistribution", "ai_use"):
+        if report_policy.get(policy_field) != rights.get(policy_field):
+            raise Gold10ManifestError(
+                f"Gold-10 report policy {policy_field!r} disagrees with canonical source rights"
+            )
+    if report_policy.get("raw_bytes_committed_to_git") is not False:
+        raise Gold10ManifestError("Gold-10 report bytes must not be committed to Git")
+
     source_policy = {
         "source_id": source_id,
         "rights": rights,
@@ -202,6 +234,8 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         if freeze.get("report_usage_policy") == "exclude_until_artifact_level_review":
             if review_status != "approved_for_task_use":
                 report_task_eligible = False
+        else:
+            raise Gold10ManifestError("unexpected Gold-10 report usage policy")
 
         task_owner_root = str(freeze["task_owner_root"])
         verifier_owner_root = str(freeze["verifier_owner_root"])
@@ -220,12 +254,21 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 "pilot_review_id": review_record.get("review_id"),
                 "report": {
                     "artifact_id": report.get("artifact_id"),
-                    "canonical_source_url": report.get("canonical_source_url", report.get("source_url")),
-                    "acquisition_url": report.get("acquisition_url", report.get("resolved_url")),
+                    "canonical_source_url": report.get(
+                        "canonical_source_url",
+                        report.get("source_url"),
+                    ),
+                    "acquisition_url": report.get(
+                        "acquisition_url",
+                        report.get("resolved_url"),
+                    ),
                     "byte_count": report.get("byte_count"),
                     "sha256": report.get("sha256"),
                     "receipt_sha256": report.get("receipt_sha256"),
-                    "catalog_sha256": report.get("effective_catalog_sha256", report.get("catalog_sha256")),
+                    "catalog_sha256": report.get(
+                        "effective_catalog_sha256",
+                        report.get("catalog_sha256"),
+                    ),
                     "verification_status": report.get("verification_status"),
                     "artifact_review_status": review_status,
                     "eligible_for_task_evidence": report_task_eligible,
