@@ -54,13 +54,7 @@ def build_queue_catalog(base_catalog: SourceCatalog, queue: dict[str, Any]) -> S
         expected_sha256 = entry.get("sha256")
         if expected_sha256 is not None and not isinstance(expected_sha256, str):
             raise QueuedAcquisitionError(f"invalid sha256 for {artifact_id!r}")
-        acquisition_url = entry.get("acquisition_url")
-        if acquisition_url is None:
-            acquisition_url = _required_string(entry, "source_url")
-        elif not isinstance(acquisition_url, str) or not acquisition_url.strip():
-            raise QueuedAcquisitionError(
-                f"acquisition_url must be a non-empty string for {artifact_id!r}"
-            )
+        acquisition_url = _acquisition_url(entry)
         overlay.append(
             AcquisitionArtifact(
                 artifact_id=artifact_id,
@@ -101,6 +95,7 @@ def acquire_queue_receipts(
     transport: HTTPTransport | None = None,
 ) -> dict[str, Any]:
     queue_bytes = queue_path.read_bytes()
+    queue_sha256 = hashlib.sha256(queue_bytes).hexdigest()
     queue = load_acquisition_queue(queue_path)
     base_catalog = load_catalog()
     expanded_catalog = build_queue_catalog(base_catalog, queue)
@@ -120,9 +115,11 @@ def acquire_queue_receipts(
     with tempfile.TemporaryDirectory(prefix="veritas-effective-catalog-") as temp_dir:
         effective_catalog_path = Path(temp_dir) / "source_catalog.json"
         effective_catalog_path.write_bytes(effective_catalog_bytes)
-        try:
-            for index, entry in enumerate(queue_artifacts):
-                artifact_id = _required_string(entry, "artifact_id")
+        for index, entry in enumerate(queue_artifacts):
+            artifact_id = _required_string(entry, "artifact_id")
+            raw_path, receipt_path = _queue_output_paths(output_root, source_id, artifact_id)
+            _require_unclaimed_output_paths(artifact_id, raw_path, receipt_path)
+            try:
                 receipt = acquire_artifact(
                     expanded_catalog,
                     source_id,
@@ -142,19 +139,39 @@ def acquire_queue_receipts(
                         f"byte verification failed immediately after acquiring {artifact_id!r}"
                     )
 
-                raw_path = (output_root.resolve() / receipt.local_path).resolve()
-                receipt_path = raw_path.with_name(raw_path.name + ".provenance.json")
-                receipt_sha256 = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
-                item = receipt.model_dump(mode="json")
-                item["case_id"] = _required_string(entry, "case_id")
-                item["receipt_sha256"] = receipt_sha256
-                receipts.append(item)
+                actual_raw_path = (output_root.resolve() / receipt.local_path).resolve()
+                if actual_raw_path != raw_path:
+                    raise QueuedAcquisitionError(
+                        f"unexpected raw output path for {artifact_id!r}: {receipt.local_path!r}"
+                    )
+                actual_receipt_path = raw_path.with_name(raw_path.name + ".provenance.json")
+                if actual_receipt_path != receipt_path or not receipt_path.is_file():
+                    raise QueuedAcquisitionError(
+                        f"missing provenance receipt for {artifact_id!r}"
+                    )
 
-                raw_path.unlink()
-                if index + 1 < len(queue_artifacts) and delay_seconds > 0:
-                    time.sleep(delay_seconds)
-        finally:
-            _delete_raw_payloads(output_root)
+                authority = _queue_artifact_authority(entry, source_id=source_id)
+                item = receipt.model_dump(mode="json")
+                item["canonical_source_url"] = authority["canonical_source_url"]
+                item["acquisition_url"] = authority["acquisition_url"]
+                item["expected_sha256"] = authority["expected_sha256"]
+                item["queue_sha256"] = queue_sha256
+                item["acquisition_spec_sha256"] = _authority_digest(authority)
+                item["case_id"] = authority["case_id"]
+
+                receipt_path.write_text(
+                    json.dumps(item, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                item["receipt_sha256"] = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+                receipts.append(item)
+            finally:
+                # Only the exact raw path reserved for this queue artifact belongs to this
+                # invocation. Never recursively delete caller-owned files below output_root.
+                raw_path.unlink(missing_ok=True)
+
+            if index + 1 < len(queue_artifacts) and delay_seconds > 0:
+                time.sleep(delay_seconds)
 
     effective_catalog_target.write_bytes(effective_catalog_bytes)
     retained_catalog_sha256 = hashlib.sha256(effective_catalog_target.read_bytes()).hexdigest()
@@ -162,10 +179,10 @@ def acquire_queue_receipts(
         raise QueuedAcquisitionError("retained effective catalog identity changed after write")
 
     bundle = {
-        "bundle_version": "1.1",
+        "bundle_version": "1.2",
         "corpus_id": _required_string(queue, "corpus_id"),
         "source_id": source_id,
-        "queue_sha256": hashlib.sha256(queue_bytes).hexdigest(),
+        "queue_sha256": queue_sha256,
         "base_catalog_sha256": catalog_digest(),
         "catalog_sha256": effective_catalog_sha256,
         "effective_catalog_sha256": effective_catalog_sha256,
@@ -200,17 +217,70 @@ def _required_string(value: dict[str, Any], key: str) -> str:
     return item
 
 
+def _acquisition_url(entry: dict[str, Any]) -> str:
+    acquisition_url = entry.get("acquisition_url")
+    if acquisition_url is None:
+        return _required_string(entry, "source_url")
+    if not isinstance(acquisition_url, str) or not acquisition_url.strip():
+        artifact_id = _required_string(entry, "artifact_id")
+        raise QueuedAcquisitionError(
+            f"acquisition_url must be a non-empty string for {artifact_id!r}"
+        )
+    return acquisition_url
+
+
+def _queue_artifact_authority(entry: dict[str, Any], *, source_id: str) -> dict[str, Any]:
+    expected_sha256 = entry.get("sha256")
+    if expected_sha256 is not None and not isinstance(expected_sha256, str):
+        raise QueuedAcquisitionError(
+            f"invalid sha256 for {_required_string(entry, 'artifact_id')!r}"
+        )
+    return {
+        "source_id": source_id,
+        "case_id": _required_string(entry, "case_id"),
+        "artifact_id": _required_string(entry, "artifact_id"),
+        "canonical_source_url": _required_string(entry, "source_url"),
+        "acquisition_url": _acquisition_url(entry),
+        "expected_sha256": expected_sha256,
+    }
+
+
+def _authority_digest(authority: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        authority,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _queue_output_paths(root: Path, source_id: str, artifact_id: str) -> tuple[Path, Path]:
+    resolved_root = root.resolve()
+    raw_path = (
+        resolved_root / source_id / artifact_id / f"{artifact_id}.pdf"
+    ).resolve()
+    if resolved_root not in raw_path.parents:
+        raise QueuedAcquisitionError("queue output path escaped acquisition root")
+    receipt_path = raw_path.with_name(raw_path.name + ".provenance.json")
+    return raw_path, receipt_path
+
+
+def _require_unclaimed_output_paths(
+    artifact_id: str,
+    raw_path: Path,
+    receipt_path: Path,
+) -> None:
+    for path in (raw_path, receipt_path):
+        if path.exists():
+            raise QueuedAcquisitionError(
+                f"refusing to overwrite pre-existing output for {artifact_id!r}: {path}"
+            )
+
+
 def _catalog_bytes(catalog: SourceCatalog) -> bytes:
     encoded = json.dumps(catalog.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
     return encoded.encode("utf-8")
-
-
-def _delete_raw_payloads(root: Path) -> None:
-    if not root.exists():
-        return
-    for path in root.rglob("*"):
-        if path.is_file() and not path.name.endswith(".provenance.json"):
-            path.unlink()
 
 
 def _build_parser() -> argparse.ArgumentParser:
