@@ -144,6 +144,15 @@ OWNER-only bootstrap remains available for migration and repair. It:
 7. materializes/migrates trusted records;
 8. reconciles discovery labels from trusted state.
 
+Bootstrap may reconcile an otherwise pristine, holderless
+`bootstrap/reconciliation required` placeholder to a READY Work Contract after
+rejected commands have advanced its replay cursor. The cursor must remain a
+nonnegative safe integer, `transition_seq` must remain zero, and all holder,
+branch, timing, linked-PR, blocker, and release fields must still match the
+original placeholder. Rejected commands therefore remain processed and are not
+replayed, while transitioned, held, explicitly blocked, or malformed records
+remain fail-closed.
+
 If bootstrap cannot publish the reservation registry, it does not materialize new active trusted state. If registry publication succeeds and later status/label publication fails, the reservation remains fail-closed until another OWNER reconciliation.
 
 Bootstrap is not required for ordinary new authorized READY/BLOCKED Work Contracts after automatic enrollment is installed.

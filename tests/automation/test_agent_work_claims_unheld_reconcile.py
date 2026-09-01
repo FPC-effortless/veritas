@@ -173,6 +173,22 @@ class BootstrapUnheldReconciliationTests(unittest.TestCase):
         self.assertNotIn("work:blocked", result["labels"])
         self.assertEqual(result["registry"]["entries"], [])
 
+    def test_rejected_command_cursor_still_reconciles_to_ready(self):
+        result = self.run_case({"last_command_comment_id": 5490536946})
+        self.assertEqual(result["status"]["state"], "READY")
+        self.assertEqual(result["status"]["last_command_comment_id"], 5490536946)
+        self.assertIsNone(result["status"]["blocker"])
+
+    def test_malformed_or_negative_command_cursor_is_not_reconciled(self):
+        for cursor in (-1, 1.5, "5490536946", None):
+            with self.subTest(cursor=cursor):
+                result = self.run_case({"last_command_comment_id": cursor})
+                self.assertEqual(result["status"]["state"], "BLOCKED")
+                self.assertEqual(
+                    result["status"]["blocker"],
+                    "bootstrap/reconciliation required",
+                )
+
     def test_transitioned_blocker_is_not_reconciled(self):
         result = self.run_case({"transition_seq": 1})
         self.assertEqual(result["status"]["state"], "BLOCKED")
