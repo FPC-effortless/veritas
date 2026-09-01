@@ -73,6 +73,13 @@ def write_queue(
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def _make_symlink(link: Path, target: Path, *, target_is_directory: bool = False) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=target_is_directory)
+    except (NotImplementedError, OSError) as exc:
+        pytest.skip(f"symlinks unavailable in this test environment: {exc}")
+
+
 def test_queue_overlay_reuses_catalog_policy(tmp_path: Path) -> None:
     queue_path = tmp_path / "queue.json"
     write_queue(queue_path, source_url="https://www.csb.gov/test-report.pdf")
@@ -382,4 +389,95 @@ def test_queue_acquisition_refuses_to_overwrite_existing_owned_target(tmp_path: 
         )
 
     assert raw_target.read_bytes() == b"caller-owned-existing-bytes"
+    assert not receipts_out.exists()
+
+
+def test_queue_acquisition_rejects_dangling_raw_symlink(tmp_path: Path) -> None:
+    source_url = "https://www.csb.gov/test-report.pdf"
+    queue_path = tmp_path / "queue.json"
+    output_root = tmp_path / "raw"
+    receipts_out = tmp_path / "receipts" / "bundle.json"
+    raw_target = (
+        output_root
+        / "uscsb"
+        / "csb-test-final-report"
+        / "csb-test-final-report.pdf"
+    )
+    outside_target = tmp_path / "outside-raw.pdf"
+    raw_target.parent.mkdir(parents=True)
+    _make_symlink(raw_target, outside_target)
+    assert raw_target.is_symlink()
+    assert not raw_target.exists()
+    write_queue(queue_path, source_url=source_url)
+
+    with pytest.raises(QueuedAcquisitionError, match="refusing to overwrite pre-existing"):
+        acquire_queue_receipts(
+            queue_path,
+            output_root,
+            receipts_out,
+            delay_seconds=0,
+            transport=FakeTransport({source_url: b"new bytes"}),
+        )
+
+    assert raw_target.is_symlink()
+    assert not outside_target.exists()
+    assert not receipts_out.exists()
+
+
+def test_queue_acquisition_rejects_dangling_provenance_symlink(tmp_path: Path) -> None:
+    source_url = "https://www.csb.gov/test-report.pdf"
+    queue_path = tmp_path / "queue.json"
+    output_root = tmp_path / "raw"
+    receipts_out = tmp_path / "receipts" / "bundle.json"
+    raw_target = (
+        output_root
+        / "uscsb"
+        / "csb-test-final-report"
+        / "csb-test-final-report.pdf"
+    )
+    receipt_target = raw_target.with_name(raw_target.name + ".provenance.json")
+    outside_target = tmp_path / "outside-provenance.json"
+    receipt_target.parent.mkdir(parents=True)
+    _make_symlink(receipt_target, outside_target)
+    assert receipt_target.is_symlink()
+    assert not receipt_target.exists()
+    write_queue(queue_path, source_url=source_url)
+
+    with pytest.raises(QueuedAcquisitionError, match="refusing to overwrite pre-existing"):
+        acquire_queue_receipts(
+            queue_path,
+            output_root,
+            receipts_out,
+            delay_seconds=0,
+            transport=FakeTransport({source_url: b"new bytes"}),
+        )
+
+    assert receipt_target.is_symlink()
+    assert not outside_target.exists()
+    assert not receipts_out.exists()
+
+
+def test_queue_acquisition_rejects_symlinked_output_ancestor(tmp_path: Path) -> None:
+    source_url = "https://www.csb.gov/test-report.pdf"
+    queue_path = tmp_path / "queue.json"
+    output_root = tmp_path / "raw"
+    receipts_out = tmp_path / "receipts" / "bundle.json"
+    outside_dir = tmp_path / "outside-dir"
+    source_dir = output_root / "uscsb"
+    output_root.mkdir(parents=True)
+    outside_dir.mkdir()
+    _make_symlink(source_dir, outside_dir, target_is_directory=True)
+    write_queue(queue_path, source_url=source_url)
+
+    with pytest.raises(QueuedAcquisitionError, match="refusing symlinked output directory"):
+        acquire_queue_receipts(
+            queue_path,
+            output_root,
+            receipts_out,
+            delay_seconds=0,
+            transport=FakeTransport({source_url: b"new bytes"}),
+        )
+
+    assert source_dir.is_symlink()
+    assert list(outside_dir.iterdir()) == []
     assert not receipts_out.exists()
