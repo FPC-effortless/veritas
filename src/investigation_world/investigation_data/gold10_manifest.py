@@ -18,8 +18,10 @@ SOURCE_CATALOG_REL = Path("src/investigation_world/investigation_data/source_cat
 FREEZE_REL = Path("data/gold10/case_selection_v1.json")
 
 
+
 def _sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
 
 
 def _stable_hash(value: Any) -> str:
@@ -33,12 +35,14 @@ def _stable_hash(value: Any) -> str:
     return _sha256_bytes(payload)
 
 
+
 def _read_json(path: Path) -> tuple[dict[str, Any], str]:
     raw = path.read_bytes()
     value = json.loads(raw)
     if not isinstance(value, dict):
         raise Gold10ManifestError(f"expected object JSON at {path}")
     return value, _sha256_bytes(raw)
+
 
 
 def _unique_by(
@@ -58,10 +62,12 @@ def _unique_by(
     return result
 
 
+
 def _require_list(value: Any, *, label: str) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise Gold10ManifestError(f"{label} must be a list of objects")
     return value
+
 
 
 def _find_source(catalog: dict[str, Any], source_id: str) -> dict[str, Any]:
@@ -72,6 +78,7 @@ def _find_source(catalog: dict[str, Any], source_id: str) -> dict[str, Any]:
             f"source_id {source_id!r} must resolve exactly once; found {len(matches)}"
         )
     return matches[0]
+
 
 
 def _parse_timestamp(value: Any, *, label: str) -> datetime:
@@ -86,11 +93,35 @@ def _parse_timestamp(value: Any, *, label: str) -> datetime:
     return parsed
 
 
+
+def _require_nonempty_string(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise Gold10ManifestError(f"{label} must be a non-empty string")
+    return value
+
+
+
+def _require_sha256(value: Any, *, label: str) -> str:
+    digest = _require_nonempty_string(value, label=label)
+    if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+        raise Gold10ManifestError(f"{label} must be a lowercase 64-hex SHA-256 digest")
+    return digest
+
+
+
+def _require_positive_int(value: Any, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise Gold10ManifestError(f"{label} must be a positive integer")
+    return value
+
+
+
 def _report_task_eligible(review_status: str) -> bool:
     """Never derive task-use authority from a mutable status string alone."""
 
     del review_status
     return False
+
 
 
 def manifest_digest(manifest: dict[str, Any]) -> str:
@@ -99,6 +130,7 @@ def manifest_digest(manifest: dict[str, Any]) -> str:
     payload = dict(manifest)
     payload.pop("manifest_sha256", None)
     return _stable_hash(payload)
+
 
 
 def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
@@ -221,6 +253,35 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         if report.get("verification_status") != "verified":
             raise Gold10ManifestError(f"case {case_id} report bytes are not verified")
 
+        artifact_id = _require_nonempty_string(
+            report.get("artifact_id"),
+            label=f"case {case_id} report artifact_id",
+        )
+        canonical_source_url = _require_nonempty_string(
+            report.get("canonical_source_url", report.get("source_url")),
+            label=f"case {case_id} report canonical source URL",
+        )
+        acquisition_url = _require_nonempty_string(
+            report.get("acquisition_url", report.get("resolved_url")),
+            label=f"case {case_id} report acquisition URL",
+        )
+        byte_count = _require_positive_int(
+            report.get("byte_count"),
+            label=f"case {case_id} report byte_count",
+        )
+        report_sha256 = _require_sha256(
+            report.get("sha256"),
+            label=f"case {case_id} report sha256",
+        )
+        receipt_sha256 = _require_sha256(
+            report.get("receipt_sha256"),
+            label=f"case {case_id} report receipt_sha256",
+        )
+        catalog_sha256 = _require_sha256(
+            report.get("effective_catalog_sha256", report.get("catalog_sha256")),
+            label=f"case {case_id} report catalog_sha256",
+        )
+
         pilot_root = pilots_root / pilot_dir
         pilot_manifest, pilot_manifest_sha = _read_json(pilot_root / "manifest.json")
         review_record, review_record_sha = _read_json(pilot_root / "review_record.json")
@@ -287,22 +348,13 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 "pilot_review_sha256": review_record_sha,
                 "pilot_review_id": review_record.get("review_id"),
                 "report": {
-                    "artifact_id": report.get("artifact_id"),
-                    "canonical_source_url": report.get(
-                        "canonical_source_url",
-                        report.get("source_url"),
-                    ),
-                    "acquisition_url": report.get(
-                        "acquisition_url",
-                        report.get("resolved_url"),
-                    ),
-                    "byte_count": report.get("byte_count"),
-                    "sha256": report.get("sha256"),
-                    "receipt_sha256": report.get("receipt_sha256"),
-                    "catalog_sha256": report.get(
-                        "effective_catalog_sha256",
-                        report.get("catalog_sha256"),
-                    ),
+                    "artifact_id": artifact_id,
+                    "canonical_source_url": canonical_source_url,
+                    "acquisition_url": acquisition_url,
+                    "byte_count": byte_count,
+                    "sha256": report_sha256,
+                    "receipt_sha256": receipt_sha256,
+                    "catalog_sha256": catalog_sha256,
                     "verification_status": report.get("verification_status"),
                     "artifact_review_status": review_status,
                     "eligible_for_task_evidence": report_task_eligible,
@@ -349,6 +401,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     }
     manifest["manifest_sha256"] = manifest_digest(manifest)
     return manifest
+
 
 
 def write_gold10_manifest(output_path: Path, root: Path | None = None) -> dict[str, Any]:
