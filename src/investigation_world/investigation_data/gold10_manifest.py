@@ -16,12 +16,12 @@ CORPUS_REL = Path("docs/investigation_data/corpora/csb_gold_10")
 PILOTS_REL = Path("docs/investigation_data/pilots")
 SOURCE_CATALOG_REL = Path("src/investigation_world/investigation_data/source_catalog.json")
 FREEZE_REL = Path("data/gold10/case_selection_v1.json")
-
+EXPECTED_TASK_OWNER_ROOT = "src/investigation_world/gold10/tasks"
+EXPECTED_VERIFIER_OWNER_ROOT = "src/investigation_world/gold10/verifiers"
 
 
 def _sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
-
 
 
 def _stable_hash(value: Any) -> str:
@@ -35,14 +35,12 @@ def _stable_hash(value: Any) -> str:
     return _sha256_bytes(payload)
 
 
-
 def _read_json(path: Path) -> tuple[dict[str, Any], str]:
     raw = path.read_bytes()
     value = json.loads(raw)
     if not isinstance(value, dict):
         raise Gold10ManifestError(f"expected object JSON at {path}")
     return value, _sha256_bytes(raw)
-
 
 
 def _unique_by(
@@ -62,12 +60,10 @@ def _unique_by(
     return result
 
 
-
 def _require_list(value: Any, *, label: str) -> list[dict[str, Any]]:
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise Gold10ManifestError(f"{label} must be a list of objects")
     return value
-
 
 
 def _find_source(catalog: dict[str, Any], source_id: str) -> dict[str, Any]:
@@ -78,7 +74,6 @@ def _find_source(catalog: dict[str, Any], source_id: str) -> dict[str, Any]:
             f"source_id {source_id!r} must resolve exactly once; found {len(matches)}"
         )
     return matches[0]
-
 
 
 def _parse_timestamp(value: Any, *, label: str) -> datetime:
@@ -93,12 +88,10 @@ def _parse_timestamp(value: Any, *, label: str) -> datetime:
     return parsed
 
 
-
 def _require_nonempty_string(value: Any, *, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise Gold10ManifestError(f"{label} must be a non-empty string")
     return value
-
 
 
 def _require_sha256(value: Any, *, label: str) -> str:
@@ -108,12 +101,40 @@ def _require_sha256(value: Any, *, label: str) -> str:
     return digest
 
 
-
 def _require_positive_int(value: Any, *, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise Gold10ManifestError(f"{label} must be a positive integer")
     return value
 
+
+def _require_owner_root(value: Any, *, label: str, expected: str) -> str:
+    root = _require_nonempty_string(value, label=label)
+    if root != root.strip():
+        raise Gold10ManifestError(f"{label} must not contain surrounding whitespace")
+    if "\\" in root or root.startswith("/") or root.endswith("/"):
+        raise Gold10ManifestError(f"{label} must be a normalized repository-relative path")
+    parts = root.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise Gold10ManifestError(f"{label} must be a normalized repository-relative path")
+    if root != expected:
+        raise Gold10ManifestError(f"{label} must remain frozen at {expected!r}; got {root!r}")
+    return root
+
+
+def _require_capability_targets(value: Any, *, label: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise Gold10ManifestError(f"{label} must be a non-empty list of strings")
+    targets: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        target = _require_nonempty_string(item, label=f"{label}[{index}]")
+        if target != target.strip():
+            raise Gold10ManifestError(f"{label}[{index}] must not contain surrounding whitespace")
+        if target in seen:
+            raise Gold10ManifestError(f"{label} must not contain duplicate capability targets")
+        seen.add(target)
+        targets.append(target)
+    return targets
 
 
 def _report_task_eligible(review_status: str) -> bool:
@@ -123,14 +144,12 @@ def _report_task_eligible(review_status: str) -> bool:
     return False
 
 
-
 def manifest_digest(manifest: dict[str, Any]) -> str:
     """Hash a Gold-10 manifest while excluding its self-referential digest field."""
 
     payload = dict(manifest)
     payload.pop("manifest_sha256", None)
     return _stable_hash(payload)
-
 
 
 def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
@@ -239,6 +258,17 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     if freeze.get("report_usage_policy") != "exclude_until_artifact_level_review":
         raise Gold10ManifestError("unexpected Gold-10 report usage policy")
 
+    task_owner_root = _require_owner_root(
+        freeze.get("task_owner_root"),
+        label="Gold-10 task_owner_root",
+        expected=EXPECTED_TASK_OWNER_ROOT,
+    )
+    verifier_owner_root = _require_owner_root(
+        freeze.get("verifier_owner_root"),
+        label="Gold-10 verifier_owner_root",
+        expected=EXPECTED_VERIFIER_OWNER_ROOT,
+    )
+
     case_rows: list[dict[str, Any]] = []
     for case_id in sorted(expected_cases):
         frozen = freeze_cases[case_id]
@@ -332,11 +362,13 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             raise Gold10ManifestError(f"case {case_id} report has no artifact review status")
         report_task_eligible = _report_task_eligible(review_status)
 
-        task_owner_root = str(freeze["task_owner_root"])
-        verifier_owner_root = str(freeze["verifier_owner_root"])
         slug = canonical.get("slug")
         if not isinstance(slug, str) or not slug:
             raise Gold10ManifestError(f"case {case_id} has no canonical slug")
+        capability_targets = _require_capability_targets(
+            canonical.get("capability_tags"),
+            label=f"case {case_id} capability targets",
+        )
 
         case_rows.append(
             {
@@ -374,7 +406,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 },
                 "declared_modalities": declared_modalities,
                 "available_modalities_at_cut": sorted(available_modalities),
-                "capability_targets": canonical.get("capability_tags", []),
+                "capability_targets": capability_targets,
                 "split": frozen["split"],
                 "contamination_risk": "high_public_historical_nonsealed",
                 "task_owner_path": f"{task_owner_root}/{slug}.py",
@@ -401,7 +433,6 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     }
     manifest["manifest_sha256"] = manifest_digest(manifest)
     return manifest
-
 
 
 def write_gold10_manifest(output_path: Path, root: Path | None = None) -> dict[str, Any]:
