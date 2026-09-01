@@ -53,7 +53,7 @@ jobs:
             --timeout 120 \
             --delay-seconds 1
 
-      - name: Verify receipt count, dual URL provenance, authority, and raw cleanup
+      - name: Verify receipt count, dual URL provenance, authority, sidecars, and raw cleanup
         run: |
           python - <<'PY'
           import hashlib
@@ -88,6 +88,7 @@ jobs:
           assert receipt_ids == set(queue_by_id)
 
           distinct_source_transport = 0
+          sidecar_paths = []
           for item in bundle["artifacts"]:
               queue_item = queue_by_id[item["artifact_id"]]
               canonical_source_url = queue_item["source_url"]
@@ -117,7 +118,32 @@ jobs:
               if canonical_source_url != acquisition_url:
                   distinct_source_transport += 1
 
+              sidecar_path = Path(".veritas-data") / f'{item["local_path"]}.provenance.json'
+              assert sidecar_path.is_file(), f"missing retained sidecar: {sidecar_path}"
+              assert not sidecar_path.is_symlink(), f"unsafe retained sidecar: {sidecar_path}"
+              sidecar_bytes = sidecar_path.read_bytes()
+              assert hashlib.sha256(sidecar_bytes).hexdigest() == item["receipt_sha256"]
+              sidecar = json.loads(sidecar_bytes)
+              for key in (
+                  "source_id",
+                  "artifact_id",
+                  "source_url",
+                  "canonical_source_url",
+                  "acquisition_url",
+                  "expected_sha256",
+                  "queue_sha256",
+                  "acquisition_spec_sha256",
+                  "case_id",
+                  "sha256",
+                  "catalog_sha256",
+              ):
+                  assert sidecar[key] == item[key]
+              sidecar_paths.append(sidecar_path)
+
           assert distinct_source_transport > 0
+          assert len(sidecar_paths) == 10
+          assert len(set(sidecar_paths)) == 10
+          assert len(list(Path(".veritas-data").rglob("*.provenance.json"))) == 10
 
           unexpected = [
               path
@@ -135,5 +161,6 @@ jobs:
             artifacts/csb-gold10-report-receipts.json
             artifacts/csb-gold10-effective-catalog.json
             .veritas-data/**/*.provenance.json
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 30
