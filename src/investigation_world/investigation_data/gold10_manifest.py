@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -193,15 +194,37 @@ def _require_capability_targets(value: Any, *, label: str) -> list[str]:
     return targets
 
 
-def _require_exact_single_string(
+def _normalize_csb_case_id(value: str) -> str:
+    match = re.fullmatch(r"CSB-(\d{4})-(\d{1,2})-I-([A-Z]{2})", value)
+    if match is None:
+        return value
+    year, sequence, state = match.groups()
+    return f"CSB-{year}-{int(sequence):02d}-I-{state}"
+
+
+def _require_same_case_ids(
     value: Any,
     *,
     label: str,
     expected: str,
 ) -> list[str]:
-    if not isinstance(value, list) or value != [expected]:
-        raise Gold10ManifestError(f"{label} must be exactly [{expected!r}]")
-    return value
+    if not isinstance(value, list) or not value:
+        raise Gold10ManifestError(f"{label} must be a non-empty list of case IDs")
+    case_ids: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        case_id = _require_trimmed_string(item, label=f"{label}[{index}]")
+        if case_id in seen:
+            raise Gold10ManifestError(f"{label} must not contain duplicate case IDs")
+        seen.add(case_id)
+        if _normalize_csb_case_id(case_id) != expected:
+            raise Gold10ManifestError(
+                f"{label} contains cross-case identity {case_id!r}; expected {expected!r}"
+            )
+        case_ids.append(case_id)
+    if expected not in seen:
+        raise Gold10ManifestError(f"{label} must retain canonical case ID {expected!r}")
+    return case_ids
 
 
 def _report_task_eligible(review_status: str) -> bool:
@@ -301,7 +324,7 @@ def _validated_fragment(
         raise Gold10ManifestError(
             f"case {case_id} fragment {fragment_id} source mismatch"
         )
-    _require_exact_single_string(
+    _require_same_case_ids(
         fragment.get("case_ids"),
         label=f"case {case_id} fragment {fragment_id} case_ids",
         expected=expected_source_case_id,
@@ -518,7 +541,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             pilot_root / "review_record.json"
         )
         expected_source_case_id = f"CSB-{case_id}"
-        _require_exact_single_string(
+        _require_same_case_ids(
             pilot_manifest.get("source_case_ids"),
             label=f"case {case_id} pilot source_case_ids",
             expected=expected_source_case_id,
