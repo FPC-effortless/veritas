@@ -153,7 +153,8 @@ function canReconcileBootstrapReady(status, contract) {
     status.released_reason === null &&
     status.return_state === 'BLOCKED' &&
     Number(status.transition_seq || 0) === 0 &&
-    Number(status.last_command_comment_id || 0) === 0 &&
+    Number.isSafeInteger(status.last_command_comment_id) &&
+    status.last_command_comment_id >= 0 &&
     contract.initialState === 'READY'
   );
 }
