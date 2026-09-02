@@ -16,6 +16,11 @@ on:
           - portability-convergence
           - portability-validation
           - projectworld-qualification
+      ref:
+        description: Repository branch ref to validate
+        required: false
+        default: main
+        type: string
 
 permissions:
   actions: write
@@ -41,16 +46,19 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           MANUAL_WORKFLOW: ${{ inputs.workflow }}
+          MANUAL_REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             alias="$MANUAL_WORKFLOW"
+            target_ref="${MANUAL_REF:-main}"
           else
             first_line="$(printf '%s\n' "$COMMENT_BODY" | sed -n '1{s/\r$//;p;q;}')"
-            read -r command alias extra <<< "$first_line"
+            read -r command alias target_ref extra <<< "$first_line"
             test "$command" = "/veritas-dispatch"
             test -n "${alias:-}"
             test -z "${extra:-}"
+            target_ref="${target_ref:-main}"
           fi
 
           case "$alias" in
@@ -63,14 +71,20 @@ jobs:
             *) echo "Workflow alias is not allow-listed" >&2; exit 2 ;;
           esac
 
+          git check-ref-format --branch "$target_ref" >/dev/null
+          encoded_ref="$(jq -rn --arg value "$target_ref" '$value|@uri')"
+          gh api "repos/$GITHUB_REPOSITORY/branches/$encoded_ref" >/dev/null
+
           echo "alias=$alias" >> "$GITHUB_OUTPUT"
           echo "workflow=$workflow" >> "$GITHUB_OUTPUT"
+          echo "target_ref=$target_ref" >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch exact main workflow
+      - name: Dispatch exact repository ref workflow
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_WORKFLOW: ${{ steps.command.outputs.workflow }}
-        run: gh workflow run "$TARGET_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main
+          TARGET_REF: ${{ steps.command.outputs.target_ref }}
+        run: gh workflow run "$TARGET_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref "$TARGET_REF"
 
       - name: Record issue acknowledgement
         if: github.event_name == 'issue_comment'
@@ -78,8 +92,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           WORKFLOW_ALIAS: ${{ steps.command.outputs.alias }}
+          TARGET_REF: ${{ steps.command.outputs.target_ref }}
         run: >-
           gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY"
-          --body "Accepted authorized dispatch for \`$WORKFLOW_ALIAS\` on \`main\`.
+          --body "Accepted authorized dispatch for \`$WORKFLOW_ALIAS\` on \`$TARGET_REF\`.
           Inspect the target Actions run for its exact commit and result; this acknowledgement is
           not qualification evidence."
