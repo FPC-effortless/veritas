@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[5]
 HERE = Path(__file__).resolve().parent
 AUTHORITY_PATH = HERE / "task_use_authority_v1.json"
