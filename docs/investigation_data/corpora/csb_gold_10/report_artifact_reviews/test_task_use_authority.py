@@ -7,7 +7,6 @@ from pathlib import Path
 
 from validate_task_use_authority import TaskUseAuthorityError, validate_authority
 
-
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[5]
 
