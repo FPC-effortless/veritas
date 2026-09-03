@@ -7,6 +7,8 @@ import pytest
 import investigation_world.investigation_data.gold10_manifest as gold10_manifest
 from investigation_world.investigation_data.gold10_manifest import (
     EXPECTED_TASK_OWNER_ROOT,
+    EXPECTED_TASK_USE_DECISION,
+    EXPECTED_TASK_USE_RESTRICTIONS,
     EXPECTED_VERIFIER_OWNER_ROOT,
     Gold10ManifestError,
     _report_task_eligible,
@@ -88,15 +90,20 @@ def test_report_review_status_is_never_an_authority_token() -> None:
     assert _report_task_eligible("arbitrary-caller-value") is False
 
 
-def test_pending_report_review_never_becomes_task_authority() -> None:
+def test_exact_content_bound_authority_controls_report_task_eligibility() -> None:
     manifest = build_gold10_manifest()
 
     for case in manifest["cases"]:
         report = case["report"]
         assert report["verification_status"] == "verified"
         assert report["artifact_review_status"] == "pending_artifact_level_review"
-        assert report["eligible_for_task_evidence"] is False
-        assert "never derives task-use authority" in report["authority_note"]
+        assert report["eligible_for_task_evidence"] is True
+        assert "artifact_review_status remains non-authoritative" in report["authority_note"]
+        authority = report["task_use_authority"]
+        assert authority["decision"] == EXPECTED_TASK_USE_DECISION
+        assert set(authority["restrictions"]) == EXPECTED_TASK_USE_RESTRICTIONS
+        assert authority["authority_id"] == "gold10-report-task-use-v1"
+        assert authority["review_scope"] == "internal_task_and_verifier_evidence_only"
         assert report["artifact_id"]
         assert report["canonical_source_url"]
         assert report["acquisition_url"]
@@ -104,6 +111,26 @@ def test_pending_report_review_never_becomes_task_authority() -> None:
         assert len(report["sha256"]) == 64
         assert len(report["receipt_sha256"]) == 64
         assert len(report["catalog_sha256"]) == 64
+
+
+def test_mutable_report_review_status_cannot_grant_or_revoke_authority(monkeypatch) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == "report_acquisition.json":
+            value = deepcopy(value)
+            for artifact in value["artifacts"]:
+                artifact["artifact_review_status"] = "arbitrary_mutable_status"
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    manifest = build_gold10_manifest()
+    assert all(
+        case["report"]["artifact_review_status"] == "arbitrary_mutable_status"
+        and case["report"]["eligible_for_task_evidence"] is True
+        for case in manifest["cases"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -231,6 +258,7 @@ def test_gold10_manifest_is_deterministic_and_content_bound() -> None:
     assert first == second
     assert first["manifest_sha256"] == manifest_digest(first)
     assert all(len(value) == 64 for value in first["selection_inputs"].values())
+    assert "task_use_authority_sha256" in first["selection_inputs"]
 
     baseline = manifest_digest(first)
     mutations = []
@@ -252,6 +280,10 @@ def test_gold10_manifest_is_deterministic_and_content_bound() -> None:
     changed_rights = deepcopy(first)
     changed_rights["cases"][0]["rights"]["rights"]["ai_use"] = "allowed"
     mutations.append(changed_rights)
+
+    changed_authority = deepcopy(first)
+    changed_authority["cases"][0]["report"]["task_use_authority"]["decision"] = "denied"
+    mutations.append(changed_authority)
 
     changed_pilot = deepcopy(first)
     changed_pilot["cases"][0]["pilot_manifest_sha256"] = "f" * 64
