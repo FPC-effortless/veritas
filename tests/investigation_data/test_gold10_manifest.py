@@ -84,6 +84,34 @@ def test_gold10_manifest_retains_truth_rights_and_temporal_boundaries() -> None:
         assert rights["truth"]["official_findings_are_ground_truth"] is False
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["attribution_required", "contains_personal_data", "requires_redaction_review"],
+)
+def test_source_policy_true_boundaries_fail_closed_on_false(
+    monkeypatch,
+    field: str,
+) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == "source_catalog.json":
+            value = deepcopy(value)
+            source = next(
+                item for item in value["sources"] if item["source_id"] == "uscsb"
+            )
+            if field == "attribution_required":
+                source["rights"][field] = False
+            else:
+                source[field] = False
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError, match=field):
+        build_gold10_manifest()
+
+
 def test_report_review_status_is_never_an_authority_token() -> None:
     assert _report_task_eligible("pending_artifact_level_review") is False
     assert _report_task_eligible("approved_for_task_use") is False
