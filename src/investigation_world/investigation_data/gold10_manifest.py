@@ -16,6 +16,9 @@ CORPUS_REL = Path("docs/investigation_data/corpora/csb_gold_10")
 PILOTS_REL = Path("docs/investigation_data/pilots")
 SOURCE_CATALOG_REL = Path("src/investigation_world/investigation_data/source_catalog.json")
 FREEZE_REL = Path("data/gold10/case_selection_v1.json")
+TASK_USE_AUTHORITY_REL = (
+    CORPUS_REL / "report_artifact_reviews" / "task_use_authority_v1.json"
+)
 EXPECTED_TASK_OWNER_ROOT = "src/investigation_world/gold10/tasks"
 EXPECTED_VERIFIER_OWNER_ROOT = "src/investigation_world/gold10/verifiers"
 EXPECTED_TRUTH_POLICY = "institutional_findings_are_evidence_not_private_truth"
@@ -24,6 +27,34 @@ EXPECTED_DATE_ONLY_RELEASE_POLICY = "next_day_12z"
 EXPECTED_TRUTH_REGIME = "institutional_findings"
 EXPECTED_CONTAMINATION_RISK = "high_public_historical_nonsealed"
 EXPECTED_PILOT_REVIEW_STATUS = "approved_for_link_only_pilot"
+EXPECTED_REPORT_USAGE_POLICY = "require_exact_content_bound_task_use_authority"
+EXPECTED_TASK_USE_AUTHORITY_ID = "gold10-report-task-use-v1"
+EXPECTED_TASK_USE_SCOPE = "internal_task_and_verifier_evidence_only"
+EXPECTED_TASK_USE_DECISION = "approved_for_internal_task_evidence_with_conditions"
+EXPECTED_TASK_USE_NOT_AUTHORIZED = frozenset(
+    {
+        "raw_pdf_redistribution",
+        "public_package_redistribution",
+        "model_training_rights",
+        "commercial_release",
+        "scientific_qualification",
+        "frontier_qualification",
+    }
+)
+EXPECTED_TASK_USE_RESTRICTIONS = frozenset(
+    {
+        "internal_extraction_and_normalization_only",
+        "no_raw_pdf_git_commit",
+        "no_raw_pdf_public_or_exported_redistribution",
+        "exclude_or_separately_review_embedded_third_party_media",
+        "retain_csb_attribution_and_source_locator_provenance",
+        "institutional_findings_are_not_private_ground_truth",
+        "respect_frozen_temporal_cut",
+        "apply_personal_data_and_redaction_review_before_agent_visibility",
+        "minimize_verbatim_reproduction",
+        "no_commercial_frontier_scientific_or_training_value_claim",
+    }
+)
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -120,6 +151,25 @@ def _require_exact_string(value: Any, *, label: str, expected: str) -> str:
             f"{label} must remain frozen at {expected!r}; got {actual!r}"
         )
     return actual
+
+
+def _require_exact_string_set(
+    value: Any,
+    *,
+    label: str,
+    expected: frozenset[str],
+) -> list[str]:
+    if not isinstance(value, list):
+        raise Gold10ManifestError(f"{label} must be a list of strings")
+    items = [
+        _require_trimmed_string(item, label=f"{label}[{index}]")
+        for index, item in enumerate(value)
+    ]
+    if len(items) != len(set(items)):
+        raise Gold10ManifestError(f"{label} must not contain duplicates")
+    if set(items) != expected:
+        raise Gold10ManifestError(f"{label} does not preserve the exact authority boundary")
+    return items
 
 
 def _require_sha256(value: Any, *, label: str) -> str:
@@ -328,6 +378,126 @@ def _validated_source_policy(
     }
 
 
+def _validated_task_use_authority(
+    authority: dict[str, Any],
+    *,
+    expected_cases: set[str],
+    source_id: str,
+) -> dict[str, dict[str, Any]]:
+    _require_exact_string(
+        authority.get("authority_id"),
+        label="Gold-10 task-use authority_id",
+        expected=EXPECTED_TASK_USE_AUTHORITY_ID,
+    )
+    _require_exact_string(
+        authority.get("source_id"),
+        label="Gold-10 task-use authority source_id",
+        expected=source_id,
+    )
+    _require_exact_string(
+        authority.get("review_scope"),
+        label="Gold-10 task-use authority review_scope",
+        expected=EXPECTED_TASK_USE_SCOPE,
+    )
+    _require_exact_string_set(
+        authority.get("not_authorized"),
+        label="Gold-10 task-use authority not_authorized",
+        expected=EXPECTED_TASK_USE_NOT_AUTHORIZED,
+    )
+    source_policy = _require_object(
+        authority.get("source_policy"), label="Gold-10 task-use authority source_policy"
+    )
+    _require_exact_string(
+        source_policy.get("acquisition"),
+        label="task-use authority source_policy acquisition",
+        expected="approved",
+    )
+    _require_exact_string(
+        source_policy.get("redistribution"),
+        label="task-use authority source_policy redistribution",
+        expected="review_required",
+    )
+    _require_exact_string(
+        source_policy.get("ai_use"),
+        label="task-use authority source_policy ai_use",
+        expected="allowed_with_conditions",
+    )
+    if source_policy.get("attribution_required") is not True:
+        raise Gold10ManifestError(
+            "task-use authority source_policy attribution_required must remain true"
+        )
+    _require_nonempty_string(
+        source_policy.get("personal_data_redaction_rule"),
+        label="task-use authority personal_data_redaction_rule",
+    )
+    _require_nonempty_string(
+        authority.get("staleness_rule"), label="Gold-10 task-use authority staleness_rule"
+    )
+
+    records = _unique_by(
+        _require_list(authority.get("artifacts"), label="task-use authority artifacts"),
+        "case_id",
+        label="task-use authority case",
+    )
+    if len(records) != 10 or set(records) != expected_cases:
+        raise Gold10ManifestError(
+            "task-use authority must cover exactly the canonical ten Gold-10 cases"
+        )
+    return records
+
+
+def _validated_task_use_record(
+    record: dict[str, Any],
+    *,
+    case_id: str,
+    artifact_id: str,
+    report_sha256: str,
+    receipt_sha256: str,
+    catalog_sha256: str,
+    canonical_url: str,
+    acquisition_url: str,
+) -> dict[str, Any]:
+    expected_fields = {
+        "case_id": case_id,
+        "artifact_id": artifact_id,
+        "report_sha256": report_sha256,
+        "receipt_sha256": receipt_sha256,
+        "catalog_sha256": catalog_sha256,
+        "canonical_url": canonical_url,
+        "acquisition_url": acquisition_url,
+    }
+    for field, expected in expected_fields.items():
+        actual = _require_trimmed_string(
+            record.get(field), label=f"case {case_id} task-use authority {field}"
+        )
+        if actual != expected:
+            raise Gold10ManifestError(
+                f"case {case_id} task-use authority {field} does not match canonical report identity"
+            )
+
+    decision = _require_exact_string(
+        record.get("decision"),
+        label=f"case {case_id} task-use authority decision",
+        expected=EXPECTED_TASK_USE_DECISION,
+    )
+    restrictions = _require_exact_string_set(
+        record.get("restrictions"),
+        label=f"case {case_id} task-use authority restrictions",
+        expected=EXPECTED_TASK_USE_RESTRICTIONS,
+    )
+    review_basis = _require_nonempty_string(
+        record.get("review_basis"),
+        label=f"case {case_id} task-use authority review_basis",
+    )
+    return {
+        "authority_id": EXPECTED_TASK_USE_AUTHORITY_ID,
+        "review_scope": EXPECTED_TASK_USE_SCOPE,
+        "decision": decision,
+        "restrictions": restrictions,
+        "review_basis": review_basis,
+    }
+
+
 def _validated_fragment(
     fragment: dict[str, Any],
     *,
@@ -393,6 +563,9 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     coverage, coverage_sha = _read_json(corpus_root / "pilot_coverage.json")
     reports, reports_sha = _read_json(corpus_root / "report_acquisition.json")
     source_catalog, source_catalog_sha = _read_json(repo_root / SOURCE_CATALOG_REL)
+    task_use_authority, task_use_authority_sha = _read_json(
+        repo_root / TASK_USE_AUTHORITY_REL
+    )
 
     if freeze.get("manifest_id") != "gold10-case-selection-v1":
         raise Gold10ManifestError("unexpected Gold-10 freeze manifest_id")
@@ -410,6 +583,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         freeze.get("source_id"),
         index.get("source_id"),
         reports.get("source_id"),
+        task_use_authority.get("source_id"),
     }
     if None in source_ids or len(source_ids) != 1:
         raise Gold10ManifestError("Gold-10 source identities disagree")
@@ -450,6 +624,15 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                 f"{label} case set does not equal canonical Gold-10 index"
             )
 
+    source_id = _require_trimmed_string(
+        index.get("source_id"), label="Gold-10 source_id"
+    )
+    authority_cases = _validated_task_use_authority(
+        task_use_authority,
+        expected_cases=expected_cases,
+        source_id=source_id,
+    )
+
     split_counts = {"train": 0, "dev": 0, "eval": 0}
     calibration_by_case: dict[str, bool] = {}
     for case_id, frozen in freeze_cases.items():
@@ -479,7 +662,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     _require_exact_string(
         freeze.get("report_usage_policy"),
         label="Gold-10 report_usage_policy",
-        expected="exclude_until_artifact_level_review",
+        expected=EXPECTED_REPORT_USAGE_POLICY,
     )
     date_only_release_policy = _require_exact_string(
         index.get("date_only_availability_policy"),
@@ -487,9 +670,6 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         expected=EXPECTED_DATE_ONLY_RELEASE_POLICY,
     )
 
-    source_id = _require_trimmed_string(
-        index.get("source_id"), label="Gold-10 source_id"
-    )
     source = _find_source(source_catalog, source_id)
     report_policy = _require_object(
         reports.get("policy"), label="Gold-10 report registry policy"
@@ -554,6 +734,16 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         catalog_sha256 = _require_sha256(
             report.get("effective_catalog_sha256", report.get("catalog_sha256")),
             label=f"case {case_id} report catalog_sha256",
+        )
+        validated_task_use = _validated_task_use_record(
+            authority_cases[case_id],
+            case_id=case_id,
+            artifact_id=artifact_id,
+            report_sha256=report_sha256,
+            receipt_sha256=receipt_sha256,
+            catalog_sha256=catalog_sha256,
+            canonical_url=canonical_source_url,
+            acquisition_url=acquisition_url,
         )
 
         pilot_root = pilots_root / pilot_dir
@@ -649,7 +839,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             report.get("artifact_review_status"),
             label=f"case {case_id} report artifact review status",
         )
-        report_task_eligible = _report_task_eligible(review_status)
+        report_task_eligible = True
 
         slug = _require_safe_slug(
             canonical.get("slug"), label=f"case {case_id} canonical slug"
@@ -679,9 +869,10 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
                     "verification_status": "verified",
                     "artifact_review_status": review_status,
                     "eligible_for_task_evidence": report_task_eligible,
+                    "task_use_authority": validated_task_use,
                     "authority_note": (
-                        "CASE-001 never derives task-use authority from artifact_review_status; "
-                        "a future reviewed authority mechanism is required."
+                        "Eligibility derives only from the exact content-bound Gold-10 "
+                        "task-use authority; artifact_review_status remains non-authoritative."
                     ),
                 },
                 "rights": source_policy,
@@ -720,6 +911,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
             "report_acquisition_sha256": reports_sha,
             "source_catalog_sha256": source_catalog_sha,
             "source_policy_sha256": _stable_hash(source_policy),
+            "task_use_authority_sha256": task_use_authority_sha,
         },
     }
     manifest["manifest_sha256"] = manifest_digest(manifest)
