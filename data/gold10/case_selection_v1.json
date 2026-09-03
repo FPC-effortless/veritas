@@ -3,7 +3,7 @@
   "manifest_id": "gold10-case-selection-v1",
   "corpus_id": "csb-gold-10",
   "source_id": "uscsb",
-  "report_usage_policy": "exclude_until_artifact_level_review",
+  "report_usage_policy": "require_exact_content_bound_task_use_authority",
   "truth_policy": "institutional_findings_are_evidence_not_private_truth",
   "contamination_policy": "public_historical_nonsealed",
   "task_owner_root": "src/investigation_world/gold10/tasks",
