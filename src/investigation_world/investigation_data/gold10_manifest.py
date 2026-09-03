@@ -472,7 +472,7 @@ def _validated_task_use_record(
         )
         if actual != expected:
             raise Gold10ManifestError(
-                f"case {case_id} task-use authority {field} does not match canonical report identity"
+                f"case {case_id} authority {field} mismatches canonical report identity"
             )
 
     decision = _require_exact_string(
@@ -586,7 +586,9 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         task_use_authority.get("source_id"),
     }
     if None in source_ids or len(source_ids) != 1:
-        raise Gold10ManifestError("Gold-10 source identities disagree")
+        raise Gold10ManifestError(
+            "Gold-10 source identities disagree with task-use authority"
+        )
 
     freeze_cases = _unique_by(
         _require_list(freeze.get("cases"), label="freeze cases"),
