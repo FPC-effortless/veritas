@@ -355,3 +355,142 @@ def test_frozen_policies_and_temporal_order_are_emitted_from_validated_inputs() 
         assert case["rights"]["contains_personal_data"] is True
         assert case["rights"]["requires_redaction_review"] is True
         assert case["rights"]["truth"]["official_findings_are_ground_truth"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [
+        ("authority_id", None),
+        ("authority_id", "other-authority"),
+        ("source_id", "other-source"),
+        ("review_scope", None),
+        ("review_scope", "public_release"),
+        ("not_authorized", None),
+        ("not_authorized", []),
+    ],
+)
+def test_task_use_authority_top_level_boundary_fails_closed(
+    monkeypatch,
+    field: str,
+    bad_value,
+) -> None:
+    _with_corruption(
+        monkeypatch,
+        lambda path: path.name == "task_use_authority_v1.json",
+        lambda value: value.__setitem__(field, bad_value),
+    )
+    with pytest.raises(Gold10ManifestError, match="task-use authority"):
+        build_gold10_manifest()
+
+
+def test_task_use_authority_missing_case_fails_closed(monkeypatch) -> None:
+    def mutate(value):
+        value["artifacts"].pop()
+
+    _with_corruption(
+        monkeypatch,
+        lambda path: path.name == "task_use_authority_v1.json",
+        mutate,
+    )
+    with pytest.raises(Gold10ManifestError, match="exactly the canonical ten"):
+        build_gold10_manifest()
+
+
+def test_task_use_authority_extra_case_fails_closed(monkeypatch) -> None:
+    def mutate(value):
+        extra = deepcopy(value["artifacts"][0])
+        extra["case_id"] = "2099-01-I-XX"
+        value["artifacts"].append(extra)
+
+    _with_corruption(
+        monkeypatch,
+        lambda path: path.name == "task_use_authority_v1.json",
+        mutate,
+    )
+    with pytest.raises(Gold10ManifestError, match="exactly the canonical ten"):
+        build_gold10_manifest()
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "artifact_id",
+        "report_sha256",
+        "receipt_sha256",
+        "catalog_sha256",
+        "canonical_url",
+        "acquisition_url",
+    ],
+)
+def test_task_use_authority_identity_drift_fails_closed(monkeypatch, field: str) -> None:
+    def mutate(value):
+        value["artifacts"][0][field] = "0" * 64 if field.endswith("sha256") else "drift"
+
+    _with_corruption(
+        monkeypatch,
+        lambda path: path.name == "task_use_authority_v1.json",
+        mutate,
+    )
+    with pytest.raises(Gold10ManifestError, match=field):
+        build_gold10_manifest()
+
+
+def test_task_use_authority_wrong_decision_fails_closed(monkeypatch) -> None:
+    def mutate(value):
+        value["artifacts"][0]["decision"] = "link_only"
+
+    _with_corruption(
+        monkeypatch,
+        lambda path: path.name == "task_use_authority_v1.json",
+        mutate,
+    )
+    with pytest.raises(Gold10ManifestError, match="decision"):
+        build_gold10_manifest()
+
+
+def test_task_use_authority_missing_restriction_fails_closed(monkeypatch) -> None:
+    def mutate(value):
+        value["artifacts"][0]["restrictions"].pop()
+
+    _with_corruption(
+        monkeypatch,
+        lambda path: path.name == "task_use_authority_v1.json",
+        mutate,
+    )
+    with pytest.raises(Gold10ManifestError, match="restrictions"):
+        build_gold10_manifest()
+
+
+@pytest.mark.parametrize("bad_value", [None, {}, "restriction", ["", "x"]])
+def test_task_use_authority_malformed_restrictions_fail_closed(
+    monkeypatch,
+    bad_value,
+) -> None:
+    def mutate(value):
+        value["artifacts"][0]["restrictions"] = bad_value
+
+    _with_corruption(
+        monkeypatch,
+        lambda path: path.name == "task_use_authority_v1.json",
+        mutate,
+    )
+    with pytest.raises(Gold10ManifestError, match="restrictions"):
+        build_gold10_manifest()
+
+
+def test_task_use_authority_raw_digest_participates_in_manifest_identity(
+    monkeypatch,
+) -> None:
+    baseline = build_gold10_manifest()
+    original_read_json = gold10_manifest._read_json
+
+    def changed_digest_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == "task_use_authority_v1.json":
+            digest = "0" * 64
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", changed_digest_read_json)
+    changed = build_gold10_manifest()
+    assert changed["selection_inputs"]["task_use_authority_sha256"] == "0" * 64
+    assert changed["manifest_sha256"] != baseline["manifest_sha256"]
