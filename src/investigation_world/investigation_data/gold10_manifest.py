@@ -332,10 +332,15 @@ def _validated_source_policy(
             )
         validated_rights[field] = source_value
 
-    validated_rights["attribution_required"] = _require_bool(
+    attribution_required = _require_bool(
         rights.get("attribution_required"),
         label="canonical source rights attribution_required",
     )
+    if not attribution_required:
+        raise Gold10ManifestError(
+            "canonical source rights attribution_required changed; task-use re-review is required"
+        )
+    validated_rights["attribution_required"] = True
     if report_policy.get("raw_bytes_committed_to_git") is not False:
         raise Gold10ManifestError("Gold-10 report bytes must not be committed to Git")
 
@@ -343,10 +348,18 @@ def _validated_source_policy(
         source.get("contains_personal_data"),
         label="canonical source contains_personal_data",
     )
+    if not contains_personal_data:
+        raise Gold10ManifestError(
+            "canonical source contains_personal_data changed; task-use re-review is required"
+        )
     requires_redaction_review = _require_bool(
         source.get("requires_redaction_review"),
         label="canonical source requires_redaction_review",
     )
+    if not requires_redaction_review:
+        raise Gold10ManifestError(
+            "canonical source requires_redaction_review changed; task-use re-review is required"
+        )
     truth = _require_object(source.get("truth"), label="canonical Gold-10 source truth")
     validated_truth = dict(truth)
     validated_truth["strength"] = _require_trimmed_string(
