@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from hashlib import sha256
-import json
 from pathlib import Path
 
 import investigation_world.gold10.targets as gold_targets
@@ -94,7 +94,11 @@ def _missing_evidence(reference: Gold10Submission) -> Gold10Submission:
     missing_id = reference.claims[0].evidence_ids[0]
     if missing_id not in reference.evidence_ids:
         raise ValueError("reference claim evidence is absent from cited evidence")
-    cited = tuple(evidence_id for evidence_id in reference.evidence_ids if evidence_id != missing_id)
+    cited = tuple(
+        evidence_id
+        for evidence_id in reference.evidence_ids
+        if evidence_id != missing_id
+    )
     if not cited:
         raise ValueError("missing-evidence falsifier requires another cited evidence item")
     return reference.model_copy(update={"evidence_ids": cited})
