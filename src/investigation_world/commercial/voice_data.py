@@ -84,7 +84,6 @@ _ABCD_FLOW_FAMILY: dict[str, VoiceScenarioFamily] = {
     "refund_duplicate": VoiceScenarioFamily.DUPLICATE_REFUND,
     "authentication_incomplete": VoiceScenarioFamily.INCOMPLETE_AUTHENTICATION,
     "account_restricted": VoiceScenarioFamily.RESTRICTED_ACCOUNT,
-    "appointment_management": VoiceScenarioFamily.APPOINTMENT_MANAGEMENT,
     "subscription_change": VoiceScenarioFamily.SUBSCRIPTION_CHANGE,
     "escalation_required": VoiceScenarioFamily.ESCALATION_REQUIRED,
 }
@@ -95,9 +94,6 @@ _ABCD_ACTION_MAP: dict[str, str] = {
     "inspect_account": "inspect_account",
     "issue_refund": "issue_refund",
     "deny_refund": "deny_refund",
-    "change_appointment": "change_appointment",
-    "schedule_appointment": "schedule_appointment",
-    "cancel_appointment": "cancel_appointment",
     "change_subscription": "change_subscription",
     "create_escalation": "create_escalation",
     "close_case": "close_case",
@@ -141,14 +137,13 @@ def adapt_abcd_record(
     if family is None:
         raise ValueError(f"unsupported ABCD-style flow: {record.flow}")
 
-    expected = _EXPECTED_ABCD_WORKFLOWS.get(record.flow)
-    if expected is not None:
-        observed = _canonicalize_source_actions(record.action_sequence)
-        if observed != expected:
-            raise ValueError(
-                "source action sequence does not match trusted flow mapping: "
-                f"expected {expected}, observed {observed}"
-            )
+    expected = _EXPECTED_ABCD_WORKFLOWS[record.flow]
+    observed = _canonicalize_source_actions(record.action_sequence)
+    if observed != expected:
+        raise ValueError(
+            "source action sequence does not match trusted flow mapping: "
+            f"expected {expected}, observed {observed}"
+        )
 
     return VoiceScenarioSpec(
         scenario_id=record.scenario_id,
@@ -261,7 +256,6 @@ def _source_record(spec: VoiceScenarioSpec, episode: OperationalEpisode) -> Oper
         for record in episode.records
         if record.record_type == "customer_account"
     )
-    provenance = spec.source.model_dump(mode="json")
     return OperationalRecord(
         record_id=f"source-{spec.scenario_id}",
         system="SUPPORT",
@@ -275,12 +269,8 @@ def _source_record(spec: VoiceScenarioSpec, episode: OperationalEpisode) -> Oper
         },
         searchable_text=spec.customer_utterance,
         provenance_ids=[spec.source.record_id],
-        source_authority="source",
-        freshness="source_snapshot",
-        metadata={
-            "voice_source_provenance": provenance,
-            "source_metadata": spec.source_metadata,
-        },
+        source_authority="medium",
+        freshness="unknown",
     )
 
 
@@ -338,12 +328,7 @@ def compile_voice_scenario(
     episode_metadata.update(
         {
             "source_scenario_id": spec.scenario_id,
-            "source_name": spec.source.source_name,
-            "source_version": spec.source.source_version,
-            "source_record_id": spec.source.record_id,
-            "source_license_id": spec.source.license_id,
-            "source_use_policy": spec.source.use_policy.value,
-            "source_attribution_required": spec.source.attribution_required,
+            "voice_source_provenance": spec.source.model_dump(mode="json"),
             "schema_variant": spec.schema_variant,
             "locale": spec.locale,
             "voice_data_compiler": COMPILER_VERSION,
