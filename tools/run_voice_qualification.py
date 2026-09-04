@@ -6,8 +6,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any
-from urllib import error as urllib_error
-from urllib import request as urllib_request
+from urllib import error as urllib_error, request as urllib_request
 from urllib.parse import urlparse
 
 from investigation_world.commercial.voice_qualification import (
