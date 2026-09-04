@@ -6,7 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.foundry.models import stable_hash
 from investigation_world.qualification.maturity import GateOutcome
-from investigation_world.qualification.verifier_suite import VerifierQualificationReport
+from investigation_world.qualification.verifier_suite import (
+    VerifierQualificationReport,
+)
 
 
 class Applicability(StrEnum):
