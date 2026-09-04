@@ -461,18 +461,18 @@ def _validated_task_use_authority(
         "case_id",
         label="task-use authority case",
     )
+    if len(records) != 10 or set(records) != expected_cases:
+        raise Gold10ManifestError(
+            "task-use authority must cover exactly the canonical ten Gold-10 cases"
+        )
     records_by_artifact = _unique_by(
         authority_artifacts,
         "artifact_id",
         label="task-use authority artifact",
     )
-    if len(records) != 10 or set(records) != expected_cases:
-        raise Gold10ManifestError(
-            "task-use authority must cover exactly the canonical ten Gold-10 cases"
-        )
     if len(records_by_artifact) != 10 or set(records_by_artifact) != expected_artifact_ids:
         raise Gold10ManifestError(
-            "task-use authority must cover exactly the ten current Gold report artifacts"
+            "task-use authority artifact_id set must equal exactly the ten current Gold report artifacts"
         )
     return records
 
