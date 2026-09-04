@@ -114,6 +114,8 @@ def _ruff_diagnostics() -> list[dict[str, str]]:
     diagnostics: list[dict[str, str]] = []
     for row in rows:
         path = _relative_path(row["filename"])
+        if path == "tools/run_voice_qualification.py":
+            print(f"RAW_RUFF={json.dumps(row, sort_keys=True)}", file=sys.stderr)
         diagnostics.append(
             {
                 "tool": "ruff",
