@@ -88,7 +88,10 @@ def _reordered(submission: Gold10Submission) -> Gold10Submission:
     )
 
 
-def _missing_evidence(reference: Gold10Submission) -> Gold10Submission:
+def _missing_evidence(
+    reference: Gold10Submission,
+    available_evidence_ids: tuple[str, ...],
+) -> Gold10Submission:
     if not reference.claims:
         raise ValueError("missing-evidence falsifier requires at least one retained claim")
     missing_id = reference.claims[0].evidence_ids[0]
@@ -100,7 +103,19 @@ def _missing_evidence(reference: Gold10Submission) -> Gold10Submission:
         if evidence_id != missing_id
     )
     if not cited:
-        raise ValueError("missing-evidence falsifier requires another cited evidence item")
+        replacement = next(
+            (
+                evidence_id
+                for evidence_id in available_evidence_ids
+                if evidence_id != missing_id
+            ),
+            None,
+        )
+        if replacement is None:
+            raise ValueError(
+                "missing-evidence falsifier requires a non-supporting replacement evidence item"
+            )
+        cited = (replacement,)
     return reference.model_copy(update={"evidence_ids": cited})
 
 
@@ -109,6 +124,7 @@ def _mutate_submission(
     reference: Gold10Submission,
     *,
     calibration_required: bool,
+    available_evidence_ids: tuple[str, ...],
 ) -> Gold10Submission | str:
     if category == VerifierFixtureCategory.CORRECT_SOLUTION:
         return reference
@@ -132,7 +148,7 @@ def _mutate_submission(
         )
         return reference.model_copy(update={"claims": (first, *reference.claims[1:])})
     if category == VerifierFixtureCategory.MISSING_EVIDENCE:
-        return _missing_evidence(reference)
+        return _missing_evidence(reference, available_evidence_ids)
     if category == VerifierFixtureCategory.AUTHORITY_PROCESS_VIOLATION:
         return reference.model_copy(
             update={"primary_confidence": 0.25, "alternative_confidence": 0.55}
@@ -191,6 +207,7 @@ def compile_task_qualification(
     task = build_task(case_id, repo_root)
     contract = load_pilot_contract(repo_root)
     reference = reference_submission(case_id, repo_root)
+    available_evidence_ids = tuple(item.evidence_id for item in task.available_evidence)
 
     categories = tuple(
         category
@@ -204,6 +221,7 @@ def compile_task_qualification(
             category,
             reference,
             calibration_required=task.calibration_required,
+            available_evidence_ids=available_evidence_ids,
         )
         expected_pass, minimum_reward, maximum_reward = _expected(category)
         fixture = VerifierFixture(
