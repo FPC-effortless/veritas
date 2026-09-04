@@ -443,7 +443,6 @@ class VoiceChannelRuntime:
         reason: str,
         *,
         at_ms: int,
-        continuity_ok: bool | None = None,
     ) -> VoiceHandoffSnapshot:
         unresolved = set(self._unknown_calls) | set(self._pending_calls)
         snapshot = VoiceHandoffSnapshot(
@@ -455,14 +454,10 @@ class VoiceChannelRuntime:
             unresolved_tool_calls=sorted(unresolved),
             observed_object_ids=sorted(self._observed_object_ids),
         )
-        harness_payload: dict[str, Any] = {}
-        if continuity_ok is not None:
-            harness_payload["state_continuity_ok"] = continuity_ok
         self._emit(
             VoiceEventKind.HUMAN_HANDOFF,
             at_ms=at_ms,
             payload=snapshot.model_dump(mode="json"),
-            harness_payload=harness_payload,
         )
         return snapshot
 
@@ -602,6 +597,94 @@ def replay_voice_events(
     return runtime
 
 
+def _last_utterance(
+    events: list[VoiceChannelEvent],
+    speaker: VoiceSpeaker,
+) -> str | None:
+    if speaker == VoiceSpeaker.USER:
+        eligible = [
+            event
+            for event in events
+            if event.kind == VoiceEventKind.SPEECH_FINAL
+            and event.speaker == VoiceSpeaker.USER
+            and event.text is not None
+        ]
+    else:
+        eligible = [
+            event
+            for event in events
+            if event.speaker == VoiceSpeaker.AGENT
+            and event.text is not None
+            and event.kind
+            in {
+                VoiceEventKind.AGENT_SPEECH_STARTED,
+                VoiceEventKind.SPEECH_FINAL,
+            }
+        ]
+    return eligible[-1].text if eligible else None
+
+
+def verify_handoff_continuity(
+    events: list[VoiceChannelEvent],
+    handoff: VoiceChannelEvent,
+    *,
+    expected_task_id: str | None = None,
+) -> bool:
+    """Independently reconstruct a handoff snapshot from prior public events."""
+    if handoff.kind != VoiceEventKind.HUMAN_HANDOFF:
+        raise ValueError("handoff continuity requires a HumanHandoff event")
+    try:
+        snapshot = VoiceHandoffSnapshot.model_validate(handoff.payload)
+    except ValueError:
+        return False
+    if not snapshot.reason.strip() or not snapshot.task_id.strip():
+        return False
+    if expected_task_id is not None and snapshot.task_id != expected_task_id:
+        return False
+
+    prior = [
+        event
+        for event in events
+        if event.sequence < handoff.sequence
+    ]
+    pending: set[str] = set()
+    completed: set[str] = set()
+    unknown: set[str] = set()
+    observed_object_ids: set[str] = set()
+
+    try:
+        for event in prior:
+            if event.kind == VoiceEventKind.TOOL_CALL_STARTED:
+                call_id, _, parameters = _tool_event_identity(event)
+                pending.add(call_id)
+                for name, value in parameters.items():
+                    if name.endswith("_id") and isinstance(value, str):
+                        observed_object_ids.add(value)
+            elif event.kind == VoiceEventKind.TOOL_CALL_COMPLETED:
+                call_id, _, _ = _tool_event_identity(event)
+                pending.discard(call_id)
+                completed.add(call_id)
+            elif event.kind == VoiceEventKind.TOOL_CALL_UNKNOWN_OUTCOME:
+                call_id, _, _ = _tool_event_identity(event)
+                pending.discard(call_id)
+                unknown.add(call_id)
+    except ValueError:
+        return False
+
+    unresolved = pending | unknown
+    return all(
+        (
+            snapshot.last_user_utterance
+            == _last_utterance(prior, VoiceSpeaker.USER),
+            snapshot.last_agent_utterance
+            == _last_utterance(prior, VoiceSpeaker.AGENT),
+            snapshot.completed_tool_calls == sorted(completed),
+            snapshot.unresolved_tool_calls == sorted(unresolved),
+            snapshot.observed_object_ids == sorted(observed_object_ids),
+        )
+    )
+
+
 def _percentile(values: list[int], percentile: float) -> float | None:
     if not values:
         return None
@@ -610,7 +693,11 @@ def _percentile(values: list[int], percentile: float) -> float | None:
     return float(ordered[index])
 
 
-def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetrics:
+def measure_voice_channel(
+    events: list[VoiceChannelEvent],
+    *,
+    expected_task_id: str | None = None,
+) -> VoiceChannelMetrics:
     interruptions = [
         event
         for event in events
@@ -668,14 +755,13 @@ def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetric
         for event in events
         if event.kind == VoiceEventKind.HUMAN_HANDOFF
     ]
-    scored_handoffs = [
-        event
-        for event in handoffs
-        if "state_continuity_ok" in event.harness_payload
-    ]
     continuous_handoffs = sum(
-        bool(event.harness_payload.get("state_continuity_ok"))
-        for event in scored_handoffs
+        verify_handoff_continuity(
+            events,
+            event,
+            expected_task_id=expected_task_id,
+        )
+        for event in handoffs
     )
 
     disconnects = [
@@ -752,8 +838,8 @@ def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetric
             else 0.0
         ),
         handoff_state_continuity_rate=(
-            continuous_handoffs / len(scored_handoffs)
-            if scored_handoffs
+            continuous_handoffs / len(handoffs)
+            if handoffs
             else 1.0
         ),
         disconnect_recovery_rate=(
