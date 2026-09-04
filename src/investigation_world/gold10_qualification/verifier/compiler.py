@@ -111,7 +111,9 @@ def _mutate_submission(
             update={"primary_hypothesis": "A plausible but target-unbound causal story."}
         )
     if category == VerifierFixtureCategory.INVALID_STATE_MUTATION:
-        first = reference.claims[0].model_copy(update={"statement": "Mutated canonical state."})
+        first = reference.claims[0].model_copy(
+            update={"statement": "Mutated canonical state."}
+        )
         return reference.model_copy(update={"claims": (first, *reference.claims[1:])})
     if category == VerifierFixtureCategory.MISSING_EVIDENCE:
         cited = reference.evidence_ids[1:] or reference.evidence_ids
@@ -207,7 +209,9 @@ def compile_task_qualification(
         fixtures.append(fixture)
         for repetition in range(2):
             passed, reward, component_scores, output_sha256 = _execute(
-                case_id, payload, repo_root
+                case_id,
+                payload,
+                repo_root,
             )
             replays.append(
                 VerifierReplay(
@@ -264,7 +268,9 @@ def compile_gold10_verifier_qualification(
     repo_root = (root or ROOT).resolve()
     contract = load_pilot_contract(repo_root)
     tasks = build_taskset(repo_root)
-    records = tuple(compile_task_qualification(task.case_id, repo_root) for task in tasks)
+    records = tuple(
+        compile_task_qualification(task.case_id, repo_root) for task in tasks
+    )
     statuses = tuple(record.effective_status for record in records)
     status = (
         GateOutcome.FAIL
