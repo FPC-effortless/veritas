@@ -21,7 +21,6 @@ from investigation_world.commercial.voice_runner import (
 )
 from investigation_world.operational.models import EpisodeSubmission
 
-
 SYSTEM_PROMPT = """You are operating a customer-service workflow in an executable world.
 Return exactly one JSON object per turn. Never invent hidden state.
 
