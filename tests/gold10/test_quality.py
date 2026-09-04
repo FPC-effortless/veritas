@@ -30,6 +30,8 @@ def test_contamination_and_coverage_are_reported_without_overclaim() -> None:
     assert coverage["source_counts"]["uscsb"] > 0
     assert coverage["modality_diversity_count"] >= 2
     assert coverage["calibration_cases"] == ["2012-03-I-CA"]
+    assert coverage["task_structure"]["case_specific_hypothesis_targets_required"] is True
+    assert coverage["task_structure"]["calibration_uncertainty_target_required"] is True
 
 
 def test_exploit_policy_falsifies_known_shortcuts() -> None:
@@ -41,8 +43,31 @@ def test_exploit_policy_falsifies_known_shortcuts() -> None:
         exploit["probes"]["arbitrary_hypothesis_without_canonical_target"]["reward"]
         == 0.0
     )
+    assert (
+        exploit["probes"]["nonsense_hypotheses_with_valid_factual_target"]["reward"]
+        == 0.0
+    )
     assert exploit["probes"]["canonical_target_statement_mismatch"]["reward"] == 0.0
     assert exploit["probes"]["hindsight_evidence"]["reward"] == 0.0
+    assert exploit["probes"]["collapsed_calibration_uncertainty"]["reward"] == 0.0
+    assert (
+        exploit["probes"]["structured_meaningless_calibration_with_valid_target"][
+            "reward"
+        ]
+        == 0.0
+    )
+
+
+def test_reference_solvability_is_target_bound_not_capability_evidence() -> None:
+    report = build_pilot_gate_report()
+    reference = report["reference_scripted_solvability"]
+    assert reference["status"] == "pass"
+    assert all(
+        item["reward"] == 0.75 and item["hard_failures"] == []
+        for item in reference["reference_scores"].values()
+    )
+    assert "target-bound scripted protocol solvability" in reference["interpretation"]
+    assert "not model capability" in reference["interpretation"]
 
 
 def test_vq_uses_canonical_multidimensional_scorecard_without_scalar_promotion() -> None:
