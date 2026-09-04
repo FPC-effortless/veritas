@@ -11,6 +11,7 @@ from investigation_world.commercial.voice_channel import (
     VoiceSpeaker,
     measure_voice_channel,
     replay_voice_events,
+    verify_handoff_continuity,
 )
 from investigation_world.commercial.voice_qualification import (
     VoiceScenarioFamily,
@@ -328,7 +329,6 @@ def test_handoff_contains_pending_and_unknown_calls_without_hidden_state() -> No
     snapshot = channel.handoff(
         "restricted_account",
         at_ms=70,
-        continuity_ok=True,
     )
     public_event = channel.public_events()[-1]
     serialized = json.dumps(public_event, sort_keys=True)
@@ -340,8 +340,58 @@ def test_handoff_contains_pending_and_unknown_calls_without_hidden_state() -> No
     assert "oracle" not in serialized
     assert "initial_state" not in serialized
     assert "state_continuity_ok" not in serialized
-    metrics = measure_voice_channel(channel.events)
+    metrics = measure_voice_channel(
+        channel.events,
+        expected_task_id=episode.task.task_id,
+    )
     assert metrics.handoff_state_continuity_rate == 1.0
+
+
+def test_handoff_continuity_rejects_forged_snapshot() -> None:
+    episode = build_voice_qualification_episode(
+        VoiceScenarioFamily.RESTRICTED_ACCOUNT,
+        variant=0,
+    )
+    customer_id = _object_id(episode, "customer_account")
+    channel = VoiceChannelRuntime(episode)
+
+    channel.speech_final(
+        VoiceSpeaker.USER,
+        "I need help with this restricted account.",
+        at_ms=10,
+    )
+    channel.tool_call(
+        "call-inspect",
+        "inspect_account",
+        {"customer_id": customer_id},
+        started_at_ms=20,
+        completed_at_ms=30,
+    )
+    forged = VoiceChannelEvent(
+        sequence=len(channel.events) + 1,
+        at_ms=40,
+        kind=VoiceEventKind.HUMAN_HANDOFF,
+        payload={
+            "reason": "restricted_account",
+            "task_id": episode.task.task_id,
+            "last_user_utterance": "I need help with this restricted account.",
+            "last_agent_utterance": None,
+            "completed_tool_calls": ["call-made-up"],
+            "unresolved_tool_calls": [],
+            "observed_object_ids": [customer_id],
+        },
+    )
+
+    assert verify_handoff_continuity(
+        [*channel.events, forged],
+        forged,
+        expected_task_id=episode.task.task_id,
+    ) is False
+    forged_metrics = measure_voice_channel(
+        [*channel.events, forged],
+        expected_task_id=episode.task.task_id,
+    )
+    assert forged_metrics.handoff_state_continuity_rate == 0.0
 
 
 def test_resolution_timestamp_requires_actual_verifier_success() -> None:
