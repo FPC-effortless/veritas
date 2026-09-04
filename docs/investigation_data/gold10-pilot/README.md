@@ -75,10 +75,11 @@ Hindsight or invented evidence is a zero-reward hard failure. Missing hypothesis
 bindings, missing canonical targets, unknown canonical targets, target-kind drift,
 target-statement drift, and target-evidence drift are also fail-closed conditions.
 
-Because this deterministic verifier does not establish open-ended semantic
-correctness of arbitrary prose, the pilot contract applies a `0.75` multiplicative
-reward ceiling. A structurally perfect scripted reference therefore scores `0.75`,
-not `1.0`. The ceiling is a pilot safety boundary, not a scientific threshold.
+The verifier does not claim to establish open-ended semantic correctness or
+plausibility of arbitrary free-form hypothesis prose. The pilot contract therefore
+applies a `0.75` multiplicative reward ceiling. A structurally complete scripted
+reference scores `0.75`, not `1.0`. This is a pilot safety boundary, not a
+scientific threshold or a capability score.
 
 For the calibration case, residual probability mass alone is insufficient.
 Calibration credit also requires an explicit `uncertainty` claim whose statement
@@ -109,7 +110,7 @@ its own SHA-256 identity and covers every required pilot-level gate:
 4. case/source/causal/task-structure coverage;
 5. reference/scripted solvability;
 6. exploit/shortcut probes;
-7. a multidimensional VQ scorecard.
+7. the canonical multidimensional Veritas environment-quality scorecard.
 
 The report can be materialized with:
 
@@ -152,7 +153,7 @@ The executable report records:
 - explicit causal-edge counts by case;
 - supported task/claim structure.
 
-Single-source USCSB coverage is visible rather than scored as broad source
+Single-source USCSB coverage is visible rather than presented as broad source
 diversity.
 
 ### Exploit and shortcut policy
@@ -166,25 +167,30 @@ The report executes adversarial probes and fails its exploit gate unless all pas
 - calibration boilerplate without structured uncertainty must score below the
   valid calibration reference.
 
-Residual risks are retained in the report. In particular, canonical target
-binding is not open-ended semantic-verifier qualification.
+Residual risks are retained in the report. Canonical target and provenance binding
+is not open-ended semantic-verifier qualification, and public historical material
+remains contamination-prone.
 
-### VQ multidimensional scorecard
+### Canonical VQ multidimensional scorecard
 
-The pilot-level VQ scorecard reports separate dimensions for:
+ROADMAP-001 does not define a parallel quality formula. The gate report projects
+its evidence through the existing canonical
+`veritas.environment-quality-scorecard.v1` implementation in
+`investigation_world.qualification.quality_scorecard`.
 
-- task integrity;
-- provenance/rights integrity;
-- temporal integrity;
-- replay/scripted solvability;
-- coverage diversity;
-- verifier robustness;
-- contamination resilience.
+That canonical scorecard contains all 18 fixed dimensions and uses separate
+`PASS`, `FAIL`, and `UNKNOWN` outcomes. It deliberately does not average quality
+into a scalar score.
 
-Verifier robustness is capped by the unqualified reward ceiling. Contamination
-resilience is explicitly discounted for public historical material. Coverage
-diversity exposes the single-source limitation. The overall value is diagnostic
-only and carries no scientific, Frontier, training-value, or commercial authority.
+Gold-10's own pilot-gate evidence is emitted only as `OBSERVED`, because this lane
+is not a qualification authority. The observations cover reward-hack probing,
+reset/rebuild determinism, task ambiguity/calibration, structural diversity,
+reproducibility, and provenance completeness. Under the canonical scorecard,
+`OBSERVED` is still `UNKNOWN`, and dimensions without qualifying evidence also
+remain `UNKNOWN`.
+
+The scorecard therefore cannot self-promote this pilot. Scientific, Frontier,
+training-value, and commercial qualification authority remain false.
 
 ## Falsifiers
 
@@ -203,7 +209,9 @@ The owned tests fail if:
 - deterministic task/report identity changes across identical rebuilds;
 - the exploit/shortcut gate does not pass;
 - the contamination report claims this public corpus is clean;
-- the VQ scorecard grants qualification authority;
+- the VQ projection omits canonical dimensions or invents a scalar aggregate;
+- ROADMAP-001 observations are promoted to VQ PASS evidence;
+- the VQ projection grants scientific/Frontier/training/commercial authority;
 - E0 MachineExperience capture widens private visibility.
 
 ## Remaining qualification work
