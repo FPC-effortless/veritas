@@ -113,29 +113,29 @@ def _canonical_target_failure(
 
     if target_id.startswith("hypothesis:"):
         hypothesis_targets = (targets.primary, targets.alternative)
-        target = next(
+        hypothesis_target = next(
             (item for item in hypothesis_targets if item.target_id == target_id),
             None,
         )
-        if target is None:
+        if hypothesis_target is None:
             return f"canonical_target_unknown:{claim.claim_id}"
         if claim.kind is not EpistemicClaimKind.HYPOTHESIS:
             return f"canonical_target_kind_mismatch:{claim.claim_id}"
-        if claim.statement.strip() != target.statement:
+        if claim.statement.strip() != hypothesis_target.statement:
             return f"canonical_target_statement_mismatch:{claim.claim_id}"
-        if set(claim.evidence_ids) != set(target.evidence_ids):
+        if set(claim.evidence_ids) != set(hypothesis_target.evidence_ids):
             return f"canonical_target_evidence_mismatch:{claim.claim_id}"
         return None
 
     if target_id.startswith("uncertainty:"):
-        target = targets.uncertainty
-        if target is None or target.target_id != target_id:
+        uncertainty_target = targets.uncertainty
+        if uncertainty_target is None or uncertainty_target.target_id != target_id:
             return f"canonical_target_unknown:{claim.claim_id}"
         if claim.kind is not EpistemicClaimKind.UNCERTAINTY:
             return f"canonical_target_kind_mismatch:{claim.claim_id}"
-        if claim.statement.strip() != target.statement:
+        if claim.statement.strip() != uncertainty_target.statement:
             return f"canonical_target_statement_mismatch:{claim.claim_id}"
-        if set(claim.evidence_ids) != set(target.evidence_ids):
+        if set(claim.evidence_ids) != set(uncertainty_target.evidence_ids):
             return f"canonical_target_evidence_mismatch:{claim.claim_id}"
         return None
 
