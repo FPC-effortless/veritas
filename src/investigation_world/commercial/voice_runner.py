@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +10,7 @@ from investigation_world.commercial.voice_qualification import (
     VoiceQualificationRun,
     VoiceQualificationSummary,
     VoiceScenarioFamily,
+    classify_voice_failure,
     summarize_voice_qualification,
     validate_voice_episode,
 )
@@ -49,7 +50,11 @@ class VoiceAgentSession:
     ) -> list[dict[str, Any]]:
         return self.__runtime.search(system, query, limit)
 
-    def search_all(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+    def search_all(
+        self,
+        query: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
         return self.__runtime.search_all(query, limit)
 
     def open_record(self, record_id: str) -> dict[str, Any]:
@@ -66,9 +71,6 @@ class VoiceAgentDriver(Protocol):
     def __call__(self, session: VoiceAgentSession) -> VoiceAgentResult: ...
 
 
-CostResolver = Callable[[VoiceAgentResult], float | None]
-
-
 def evaluate_voice_configuration(
     episodes: Iterable[OperationalEpisode],
     driver: VoiceAgentDriver,
@@ -76,7 +78,7 @@ def evaluate_voice_configuration(
     configuration_id: str,
     attempts: int = 1,
 ) -> list[VoiceQualificationRun]:
-    """Evaluate one agent configuration against a fixed validated episode set."""
+    """Evaluate one configuration and retain evaluator-side trace evidence."""
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
 
@@ -90,11 +92,18 @@ def evaluate_voice_configuration(
     for episode in suite:
         family = VoiceScenarioFamily(str(episode.metadata["scenario_family"]))
         pressure = VoicePressure(str(episode.metadata["pressure"]))
-        recovery_required = bool(episode.oracle.metadata.get("recovery_required", False))
+        recovery_required = bool(
+            episode.oracle.metadata.get("recovery_required", False)
+        )
         for attempt in range(1, attempts + 1):
             runtime = OperationalRuntime(episode)
             result = driver(VoiceAgentSession(runtime))
             verification = runtime.submit(result.submission)
+            trace = runtime.trace()
+            failure_classes, failure_evidence = classify_voice_failure(
+                verification,
+                trace,
+            )
             runs.append(
                 VoiceQualificationRun(
                     configuration_id=configuration_id,
@@ -105,6 +114,9 @@ def evaluate_voice_configuration(
                     attempt=attempt,
                     verification=verification,
                     cost_usd=result.cost_usd,
+                    trace=trace,
+                    failure_classes=failure_classes,
+                    failure_evidence=failure_evidence,
                 )
             )
     return runs
