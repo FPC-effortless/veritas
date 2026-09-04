@@ -45,14 +45,31 @@ def test_exploit_policy_falsifies_known_shortcuts() -> None:
     assert exploit["probes"]["hindsight_evidence"]["reward"] == 0.0
 
 
-def test_vq_scorecard_preserves_pilot_candidate_ceiling() -> None:
+def test_vq_uses_canonical_multidimensional_scorecard_without_scalar_promotion() -> None:
     report = build_pilot_gate_report()
-    scorecard = report["vq_scorecard"]
-    assert scorecard["status"] == "pilot_candidate_only"
-    assert 0.0 <= scorecard["overall_mean"] <= 1.0
-    assert scorecard["dimensions"]["verifier_robustness"] <= 0.75
-    assert scorecard["dimensions"]["contamination_resilience"] < 1.0
+    vq = report["vq_scorecard"]
+    scorecard = vq["scorecard"]
+    assert scorecard["scorecard_version"] == "veritas.environment-quality-scorecard.v1"
+    assert len(scorecard["dimensions"]) == 18
+    assert vq["complete"] is False
+    assert vq["failed_dimensions"] == []
+    assert len(vq["unknown_dimensions"]) == 18
+    assert vq["evidence_outcome_ceiling"] == "OBSERVED"
+    assert "overall_mean" not in vq
+    observed = {
+        item["dimension"]
+        for item in scorecard["dimensions"]
+        if item["observed_records"] > 0
+    }
+    assert observed == {
+        "provenance_completeness",
+        "reproducibility",
+        "reset_determinism",
+        "reward_hack_resistance",
+        "structural_diversity",
+        "task_ambiguity",
+    }
     assert all(
         authorized is False
-        for authorized in scorecard["qualification_authority"].values()
+        for authorized in vq["qualification_authority"].values()
     )
