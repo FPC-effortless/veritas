@@ -179,11 +179,11 @@ def test_partial_failure_recovery_requires_recovery_before_refund() -> None:
     order_id = _object_id(episode, "order")
     runtime = OperationalRuntime(episode)
 
-    runtime.act("verify_identity", customer_id=customer_id, method="otp")
     blocked = runtime.act("issue_refund", order_id=order_id, amount_usd=95)
     assert blocked["accepted"] is False
 
     runtime.act("retry_tool", system="BILLING")
+    runtime.act("verify_identity", customer_id=customer_id, method="otp")
     runtime.act("issue_refund", order_id=order_id, amount_usd=95)
     runtime.act("close_case", customer_id=customer_id)
     result = runtime.submit(qualification_submission(episode))
