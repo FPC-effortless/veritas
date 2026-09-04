@@ -15,21 +15,51 @@ commercial qualification.
 
 Per-task evidence is mandatory. The candidate cannot pass by averaging a failed or
 required-UNKNOWN task away. A material change to a Gold-10 task manifest, verifier
-identity, or verifier-target contract invalidates the bound qualification record.
+source, target source, or verifier-target contract changes the bound qualification
+identity and invalidates stale evidence.
+
+## Deterministic compiler
+
+`compile_task_qualification(case_id)` constructs canonical verifier fixtures and two
+replays per fixture for one frozen Gold-10 task. `compile_gold10_verifier_qualification()`
+executes the same protocol across exactly ten unique tasks and emits the fail-closed
+candidate aggregate.
+
+Every applicable generic falsifier category is exercised. The suite includes the
+scripted reference, a semantically equivalent reordered valid submission, partial and
+plausible-invalid submissions, unrelated-target reward laundering, target/state drift,
+missing cited evidence, confidence-role inversion, deterministic perturbation,
+malformed JSON, and an adversarial edge case. On the calibration case the adversarial
+fixture specifically uses unbound generic uncertainty; on non-calibration cases it
+uses a duplicate-claim attack.
+
+Valid reference and equivalent-strategy fixtures are predeclared to score exactly at
+the frozen pilot reward ceiling (`0.75`). Negative fixtures are predeclared to fail at
+zero reward. The compiler does not derive its expected ranges from observed outputs.
+That makes a changed verifier behavior a qualification failure rather than an updated
+expectation.
 
 ## Applicability
 
-The generic verifier suite intentionally contains broad operational categories. A
-Gold-10 task may not expose every category, for example a mutable side-effect surface.
-Such a dimension must remain explicit as `NOT_APPLICABLE` with a rationale. It cannot
-be used to erase an observed failure. Any unclassified UNKNOWN remains required and
-therefore keeps that task and the whole candidate UNKNOWN.
+Gold-10 is a read-only investigation submission protocol. It has no mutable operational
+side-effect surface, so `forbidden_side_effect` is not fabricated as a fake fixture.
+The generic `falsifier_fixture_coverage` and `side_effect_sensitivity` gates therefore
+remain `UNKNOWN` in the underlying generic report and are explicitly classified as
+`NOT_APPLICABLE` by the Gold-10 wrapper. The compiler verifies that every other generic
+falsifier category is present. `NOT_APPLICABLE` can never erase an observed FAIL.
+Any other UNKNOWN remains required and keeps the task and candidate UNKNOWN.
 
-## Next implementation step
+## Evidence identities
 
-The fixture compiler must produce deterministic canonical `VerifierFixtureManifest`
-and `VerifierReplay` evidence for every one of the ten frozen tasks. It must retain
-permanent exploit fixtures covering the shortcut classes discovered while PR #354 was
-reviewed, including unrelated-target hypothesis laundering, arbitrary structured
-calibration, confidence-role inversion, target/evidence drift, hindsight evidence,
-and malformed/unsupported claims.
+Per-task environment identity includes the complete reconstructed Gold-10 task and its
+manifest SHA-256. Verifier identity binds the verifier ID/version, verifier-target
+contract SHA-256, and SHA-256 digests of the exact imported Gold-10 verifier and target
+source files. Fixture payloads, replay outputs, generic reports, per-task records, and
+the ten-task candidate are all content-bound.
+
+## Downstream use
+
+A clean exact-head run of this lane is the input to independent Gold-10 red-team work.
+Scientific qualification must still consume the same frozen task/verifier identities,
+retain all red-team findings, and treat missing scientific evidence as UNKNOWN. This
+lane provides no authority to skip #178 or promote directly to Frontier/training use.
