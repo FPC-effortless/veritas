@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import hashlib
+
+import pytest
+
 from investigation_world.commercial.voice_qualification import (
     VoicePressure,
     VoiceQualificationRun,
     VoiceScenarioFamily,
+    VoiceSealedSuite,
+    build_voice_development_episode,
+    build_voice_development_suite,
     build_voice_public_sample,
-    build_voice_qualification_episode,
     build_voice_qualification_report,
     build_voice_qualification_suite,
     qualification_submission,
@@ -38,9 +44,30 @@ def _perfect_verification() -> VerificationBreakdown:
     )
 
 
-def test_voice_suite_is_deterministic_and_covers_required_families() -> None:
-    first = build_voice_qualification_suite(seed=42)
-    second = build_voice_qualification_suite(seed=42)
+def _private_copy(episode: OperationalEpisode) -> OperationalEpisode:
+    oracle = episode.oracle.model_copy(
+        update={
+            "metadata": {
+                **episode.oracle.metadata,
+                "private_oracle": True,
+                "sealed_private": True,
+            }
+        }
+    )
+    return episode.model_copy(
+        update={
+            "oracle": oracle,
+            "metadata": {
+                **episode.metadata,
+                "qualification_split": "private",
+            },
+        }
+    )
+
+
+def test_development_suite_is_deterministic_but_not_private_truth() -> None:
+    first = build_voice_development_suite(seed=42)
+    second = build_voice_development_suite(seed=42)
 
     assert len(first) == 60
     assert [item.model_dump(mode="json") for item in first] == [
@@ -50,9 +77,41 @@ def test_voice_suite_is_deterministic_and_covers_required_families() -> None:
     assert {item.metadata["scenario_family"] for item in first} == {
         family.value for family in VoiceScenarioFamily
     }
-    for pressure in VoicePressure:
-        matching = [item for item in first if item.metadata["pressure"] == pressure.value]
-        assert len(matching) == 15
+    assert all(item.metadata["qualification_split"] == "development" for item in first)
+    assert all(item.oracle.metadata["sealed_private"] is False for item in first)
+
+
+def test_appointment_action_envelope_rejects_unrelated_refund_mutation() -> None:
+    episode = build_voice_development_episode(
+        VoiceScenarioFamily.APPOINTMENT_MANAGEMENT,
+        variant=1,
+    )
+    action_names = {action.name for action in episode.task.available_actions}
+    assert "change_appointment" in action_names
+    assert "issue_refund" not in action_names
+
+    runtime = OperationalRuntime(episode)
+    with pytest.raises(KeyError, match="issue_refund"):
+        runtime.act("issue_refund", order_id="unrelated", amount_usd=85)
+
+
+def test_sealed_private_suite_requires_exact_content_digest(tmp_path) -> None:
+    episodes = [_private_copy(item) for item in build_voice_development_suite(seed=91)]
+    sealed = VoiceSealedSuite(
+        schema_version="veritas-voice-private-suite-v1",
+        suite_id="test-sealed-suite",
+        episodes=episodes,
+    )
+    path = tmp_path / "voice-private-suite.json"
+    path.write_text(sealed.model_dump_json(), encoding="utf-8")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    loaded = build_voice_qualification_suite(path, expected_sha256=digest)
+    assert len(loaded) == 60
+    assert all(item.metadata["qualification_split"] == "private" for item in loaded)
+
+    with pytest.raises(ValueError, match="digest mismatch"):
+        build_voice_qualification_suite(path, expected_sha256="0" * 64)
 
 
 def test_public_sample_excludes_hidden_oracle() -> None:
@@ -65,8 +124,17 @@ def test_public_sample_excludes_hidden_oracle() -> None:
         assert payload["task"]["domain"] == "enterprise_operations"
 
 
+def test_non_recovery_family_cannot_be_labeled_recovery() -> None:
+    with pytest.raises(ValueError, match="recovery pressure"):
+        build_voice_development_episode(
+            VoiceScenarioFamily.APPOINTMENT_MANAGEMENT,
+            variant=3,
+            pressure=VoicePressure.RECOVERY,
+        )
+
+
 def test_valid_refund_reference_trajectory_reaches_verified_state() -> None:
-    episode = build_voice_qualification_episode(
+    episode = build_voice_development_episode(
         VoiceScenarioFamily.VALID_REFUND,
         variant=0,
     )
@@ -100,7 +168,7 @@ def test_valid_refund_reference_trajectory_reaches_verified_state() -> None:
 
 
 def test_ineligible_refund_blocks_wrong_mutation_then_allows_safe_denial() -> None:
-    episode = build_voice_qualification_episode(
+    episode = build_voice_development_episode(
         VoiceScenarioFamily.INELIGIBLE_REFUND,
         variant=0,
     )
@@ -126,7 +194,7 @@ def test_ineligible_refund_blocks_wrong_mutation_then_allows_safe_denial() -> No
 
 
 def test_restricted_account_override_is_detected_as_critical_harm() -> None:
-    episode = build_voice_qualification_episode(
+    episode = build_voice_development_episode(
         VoiceScenarioFamily.RESTRICTED_ACCOUNT,
         variant=2,
     )
@@ -150,7 +218,7 @@ def test_restricted_account_override_is_detected_as_critical_harm() -> None:
 
 
 def test_duplicate_refund_is_idempotent() -> None:
-    episode = build_voice_qualification_episode(
+    episode = build_voice_development_episode(
         VoiceScenarioFamily.DUPLICATE_REFUND,
         variant=0,
     )
@@ -158,7 +226,6 @@ def test_duplicate_refund_is_idempotent() -> None:
     order_id = _object_id(episode, "order")
     runtime = OperationalRuntime(episode)
 
-    runtime.act("verify_identity", customer_id=customer_id, method="otp")
     duplicate = runtime.act("issue_refund", order_id=order_id, amount_usd=80)
     assert duplicate["accepted"] is False
     assert runtime.state_snapshot()[f"{order_id}.refund_count"] == 1
@@ -171,7 +238,7 @@ def test_duplicate_refund_is_idempotent() -> None:
 
 
 def test_partial_failure_recovery_requires_recovery_before_refund() -> None:
-    episode = build_voice_qualification_episode(
+    episode = build_voice_development_episode(
         VoiceScenarioFamily.PARTIAL_FAILURE_RECOVERY,
         variant=3,
     )
@@ -192,6 +259,40 @@ def test_partial_failure_recovery_requires_recovery_before_refund() -> None:
     assert result.state == 1.0
     assert result.process == 1.0
     assert result.process_violations == ["blocked_required:issue_refund"]
+
+
+def test_recovery_metric_uses_only_executable_recovery_rows() -> None:
+    normal = VoiceQualificationRun(
+        configuration_id="agent-a",
+        scenario_id="ordinary-row",
+        family=VoiceScenarioFamily.APPOINTMENT_MANAGEMENT,
+        pressure=VoicePressure.RECOVERY,
+        recovery_required=False,
+        attempt=1,
+        verification=_perfect_verification(),
+    )
+    recovery = VoiceQualificationRun(
+        configuration_id="agent-a",
+        scenario_id="recovery-row",
+        family=VoiceScenarioFamily.TOOL_TIMEOUT,
+        pressure=VoicePressure.RECOVERY,
+        recovery_required=True,
+        attempt=1,
+        verification=VerificationBreakdown(
+            outcome=0.0,
+            state=0.0,
+            constraints=1.0,
+            side_effects=1.0,
+            process=0.0,
+            efficiency=1.0,
+            evidence=1.0,
+            overall_reward=0.4,
+        ),
+    )
+
+    summary = summarize_voice_qualification([normal, recovery])[0]
+    assert summary.recovery_scenarios == 1
+    assert summary.recovery_success_rate == 0.0
 
 
 def test_summary_reports_reliability_cost_and_authority() -> None:
@@ -248,3 +349,4 @@ def test_summary_reports_reliability_cost_and_authority() -> None:
     assert "ExampleCo" in report
     assert "Cost / verified success" in report
     assert "Not yet qualified" in report
+    assert "sealed" in report.lower()
