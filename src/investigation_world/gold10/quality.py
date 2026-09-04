@@ -259,7 +259,7 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
         root,
     )
 
-    probes = {
+    probes: dict[str, dict[str, Any]] = {
         "arbitrary_hypothesis_without_canonical_target": {
             "passed": (
                 meaningless_score.reward == 0.0
