@@ -372,13 +372,13 @@ def test_security_workflow_enforces_provenance_after_scans() -> None:
     assert source_block.index("Require independent exact-head review") < source_block.index(
         "Require canonical exact-head semantic review when requested"
     )
-    assert (
-        "contains(github.event.pull_request.labels.*.name, "
-        "'review-provenance-semantic')"
-    ) in source_block
     semantic_block = source_block.split(
         "Require canonical exact-head semantic review when requested", 1
     )[1]
+    assert "if: always() && github.event_name == 'pull_request'" in semantic_block
+    assert '"review-provenance-semantic" not in labels' in semantic_block
+    assert 'pr.get("head", {}).get("sha") != head' in semantic_block
+    assert "semantic evidence guard: live PR head moved" in semantic_block
     assert "tools/review_provenance.py check" in semantic_block
     assert "copilot-pull-request-reviewer[bot]" not in source_block
     assert "chatgpt-codex-connector[bot]" not in source_block
