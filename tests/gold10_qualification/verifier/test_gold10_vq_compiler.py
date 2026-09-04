@@ -3,18 +3,20 @@ from investigation_world.gold10_qualification.verifier.compiler import (
     compile_gold10_verifier_qualification,
     compile_task_qualification,
 )
+from investigation_world.gold10_qualification.verifier.models import (
+    Gold10TaskVerifierQualification,
+)
 from investigation_world.qualification.maturity import GateOutcome
 
 
-def _failure_summary(record: object) -> str:
-    task_record = record
-    report = task_record.report
+def _failure_summary(record: Gold10TaskVerifierQualification) -> str:
+    report = record.report
     failures = [
         (gate.name, gate.outcome.value, gate.observed, gate.required)
         for gate in report.gates
         if gate.outcome != GateOutcome.PASS
     ]
-    return f"case={task_record.binding.case_id} report={report.status.value} gates={failures!r}"
+    return f"case={record.binding.case_id} report={report.status.value} gates={failures!r}"
 
 
 def test_each_gold10_task_compiles_fail_closed_verifier_evidence() -> None:
