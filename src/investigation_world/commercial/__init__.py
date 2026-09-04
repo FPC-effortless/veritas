@@ -1,5 +1,8 @@
 from investigation_world.commercial.manifest import EvaluationManifest
-from investigation_world.commercial.report import build_customer_report, normalize_capability_score
+from investigation_world.commercial.report import (
+    build_customer_report,
+    normalize_capability_score,
+)
 from investigation_world.commercial.sre_evaluation import (
     build_sre_prompt,
     evaluate_sre_generator,
@@ -7,6 +10,7 @@ from investigation_world.commercial.sre_evaluation import (
     sanitize_sre_evaluation,
 )
 from investigation_world.commercial.voice_qualification import (
+    VoiceFailureClass,
     VoicePressure,
     VoiceQualificationRun,
     VoiceQualificationSummary,
@@ -18,6 +22,7 @@ from investigation_world.commercial.voice_qualification import (
     build_voice_qualification_episode,
     build_voice_qualification_report,
     build_voice_qualification_suite,
+    classify_voice_failure,
     load_voice_qualification_suite,
     qualification_submission,
     summarize_voice_qualification,
@@ -35,6 +40,7 @@ __all__ = [
     "EvaluationManifest",
     "VoiceAgentResult",
     "VoiceAgentSession",
+    "VoiceFailureClass",
     "VoicePressure",
     "VoiceQualificationRun",
     "VoiceQualificationSummary",
@@ -48,6 +54,7 @@ __all__ = [
     "build_voice_qualification_episode",
     "build_voice_qualification_report",
     "build_voice_qualification_suite",
+    "classify_voice_failure",
     "compare_voice_configurations",
     "evaluate_sre_generator",
     "evaluate_voice_configuration",
