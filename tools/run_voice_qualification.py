@@ -4,10 +4,10 @@ import argparse
 import json
 import os
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 from urllib.parse import urlparse
 
 from investigation_world.commercial.voice_qualification import (
@@ -70,7 +70,7 @@ class EndpointClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        request = urllib.request.Request(
+        request = urllib_request.Request(
             self.endpoint,
             data=json.dumps(payload).encode("utf-8"),
             headers=headers,
@@ -78,12 +78,12 @@ class EndpointClient:
         )
         started = time.time()
         try:
-            with urllib.request.urlopen(
+            with urllib_request.urlopen(
                 request,
                 timeout=self.timeout,
             ) as response:
                 body = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
+        except urllib_error.HTTPError as exc:
             detail = exc.read().decode(
                 "utf-8",
                 errors="replace",
