@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from enum import StrEnum
 from statistics import median
 from typing import Any
