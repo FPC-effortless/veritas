@@ -1,4 +1,4 @@
-from investigation_world.gold10_qualification.verifier import (
+from investigation_world.gold10_qualification.verifier.models import (
     Applicability,
     Gold10ApplicabilityRecord,
     Gold10TaskBinding,
