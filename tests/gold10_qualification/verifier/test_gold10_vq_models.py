@@ -1,6 +1,5 @@
 from investigation_world.gold10_qualification.verifier import models as vq_models
-from investigation_world.qualification import maturity
-from investigation_world.qualification import verifier_suite
+from investigation_world.qualification import maturity, verifier_suite
 
 
 SHA_A = "a" * 64
