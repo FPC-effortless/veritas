@@ -13,6 +13,7 @@ from .models import EpistemicClaim, EpistemicClaimKind, Gold10Submission
 from .registry import PILOTS_REL, ROOT, _read_object, build_taskset, load_pilot_contract
 from .replay import reference_submission
 from .verifier import score_submission
+from .vq import build_canonical_vq_scorecard
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
@@ -321,70 +322,6 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
     }
 
 
-def _vq_scorecard(
-    *,
-    contract: Any,
-    coverage: dict[str, Any],
-    exploit: dict[str, Any],
-    reference: dict[str, Any],
-) -> dict[str, Any]:
-    case_integrity = 1.0 if coverage["case_count"] == 10 else 0.0
-    modality = min(1.0, coverage["modality_diversity_count"] / 2)
-    capability = min(1.0, coverage["capability_target_diversity_count"] / 3)
-    source = min(1.0, coverage["source_diversity_count"] / 2)
-    coverage_diversity = round(
-        (case_integrity + modality + capability + source) / 4,
-        6,
-    )
-    exploit_ratio = (
-        sum(
-            1
-            for item in exploit["probes"].values()
-            if item["passed"]
-        )
-        / len(exploit["probes"])
-    )
-    dimensions = {
-        "task_integrity": case_integrity,
-        "provenance_rights_integrity": 1.0,
-        "temporal_integrity": 1.0,
-        "replay_scripted_solvability": (
-            1.0 if reference["status"] == "pass" else 0.0
-        ),
-        "coverage_diversity": coverage_diversity,
-        "verifier_robustness": round(
-            exploit_ratio * contract.unqualified_reward_ceiling,
-            6,
-        ),
-        "contamination_resilience": 0.5,
-    }
-    return {
-        "dimensions": dimensions,
-        "overall_mean": round(
-            sum(dimensions.values()) / len(dimensions),
-            6,
-        ),
-        "status": "pilot_candidate_only",
-        "qualification_authority": {
-            "scientific": False,
-            "frontier": False,
-            "training_value": False,
-            "commercial": False,
-        },
-        "notes": {
-            "verifier_robustness": (
-                "Capped because the deterministic verifier is not semantically qualified."
-            ),
-            "contamination_resilience": (
-                "Explicitly discounted because the corpus is public historical material."
-            ),
-            "coverage_diversity": (
-                "Single-source USCSB coverage is visible in the score rather than hidden."
-            ),
-        },
-    }
-
-
 def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
     repo_root = (root or ROOT).resolve()
     tasks = build_taskset(repo_root)
@@ -411,13 +348,15 @@ def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
             for task in tasks
         ],
     }
+    taskset_rebuild_sha256 = canonical_hash(rebuild_payload)
     duplicate = _duplicate_analysis(tasks, contract.near_duplicate_threshold)
     contamination = _contamination_assessment(repo_root)
     coverage = _coverage_report(repo_root, tasks)
     reference = _reference_solvability(repo_root, tasks)
     exploit = _exploit_shortcut_report(repo_root)
-    vq = _vq_scorecard(
+    vq = build_canonical_vq_scorecard(
         contract=contract,
+        taskset_rebuild_sha256=taskset_rebuild_sha256,
         coverage=coverage,
         exploit=exploit,
         reference=reference,
@@ -426,7 +365,7 @@ def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "schema_version": "1.0",
         "pilot_id": contract.pilot_id,
-        "taskset_rebuild_sha256": canonical_hash(rebuild_payload),
+        "taskset_rebuild_sha256": taskset_rebuild_sha256,
         "duplicate_near_duplicate_analysis": duplicate,
         "contamination_assessment": contamination,
         "coverage_report": coverage,
