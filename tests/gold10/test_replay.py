@@ -19,6 +19,9 @@ def test_reference_experiences_are_native_traceable_machine_experience() -> None
         assert all(event.private_payload == {} for event in experience.trajectory.events)
         assert experience.readiness.reverification_ready.status is ReadinessStatus.UNKNOWN
         assert experience.public_metadata["evidence_boundary"] == "pilot_candidate_only"
+        assert experience.public_metadata["verifier_qualification"] == "unqualified"
+        assert experience.trajectory.original_evaluation.reward == 0.75
+        assert experience.trajectory.public_metadata["reward_ceiling"] == 0.75
 
 
 def test_traceable_experience_identity_is_deterministic() -> None:

@@ -10,13 +10,14 @@ from .models import (
     InstitutionalFinding,
     PilotContract,
 )
+from .quality import build_pilot_gate_report
 from .registry import Gold10PilotError, build_task, build_taskset, load_pilot_contract
 from .replay import (
     build_reference_experiences,
     reference_submission,
     traceable_experience,
 )
-from .verifier import score_submission, score_submission_json
+from .verifier import evidence_target_statement, score_submission, score_submission_json
 
 __all__ = [
     "EpistemicClaim",
@@ -28,9 +29,11 @@ __all__ = [
     "Gold10Task",
     "InstitutionalFinding",
     "PilotContract",
+    "build_pilot_gate_report",
     "build_reference_experiences",
     "build_task",
     "build_taskset",
+    "evidence_target_statement",
     "load_pilot_contract",
     "reference_submission",
     "score_submission",

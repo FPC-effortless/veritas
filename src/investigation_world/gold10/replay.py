@@ -31,46 +31,88 @@ from .models import (
     Gold10Submission,
 )
 from .registry import ROOT, build_task, build_taskset, load_pilot_contract
-from .verifier import score_submission
+from .verifier import evidence_target_statement, score_submission
 
 
 def reference_submission(case_id: str, root: Path | None = None) -> Gold10Submission:
     repo_root = (root or ROOT).resolve()
     task = build_task(case_id, repo_root)
     contract = load_pilot_contract(repo_root)
-    cited = task.available_evidence[: contract.evidence_coverage_target]
-    first = cited[0]
-    claim_kind = (
-        EpistemicClaimKind.INSTITUTIONAL_FINDING
-        if first.epistemic_role == "official_finding"
-        else EpistemicClaimKind.FACT
+
+    primary_hypothesis = (
+        "The evidence available at the frozen cut supports a provisional causal account "
+        "that should remain explicitly evidence-bounded."
     )
+    alternative_hypothesis = (
+        "A materially different causal account remains plausible because the frozen "
+        "record is incomplete and institutional findings are not private truth."
+    )
+    unresolved_question = (
+        "What material evidence remains unavailable at the frozen temporal cut?"
+    )
+
+    selected_ids: list[str] = []
+    canonical_claim: EpistemicClaim
+    if task.available_findings:
+        finding = task.available_findings[0]
+        selected_ids.extend(finding.source_evidence_ids)
+        canonical_claim = EpistemicClaim(
+            claim_id=f"{case_id}-canonical-finding",
+            statement=finding.statement,
+            kind=EpistemicClaimKind.INSTITUTIONAL_FINDING,
+            evidence_ids=finding.source_evidence_ids,
+            canonical_target_id=f"finding:{finding.finding_id}",
+        )
+    else:
+        evidence = task.available_evidence[0]
+        selected_ids.append(evidence.evidence_id)
+        canonical_claim = EpistemicClaim(
+            claim_id=f"{case_id}-canonical-evidence",
+            statement=evidence_target_statement(evidence),
+            kind=EpistemicClaimKind.FACT,
+            evidence_ids=(evidence.evidence_id,),
+            canonical_target_id=f"evidence:{evidence.evidence_id}",
+        )
+
+    for evidence in task.available_evidence:
+        if len(selected_ids) >= contract.evidence_coverage_target:
+            break
+        if evidence.evidence_id not in selected_ids:
+            selected_ids.append(evidence.evidence_id)
+    cited_ids = tuple(selected_ids)
+    claims: list[EpistemicClaim] = [
+        canonical_claim,
+        EpistemicClaim(
+            claim_id=f"{case_id}-primary-hypothesis",
+            statement=primary_hypothesis,
+            kind=EpistemicClaimKind.HYPOTHESIS,
+            evidence_ids=cited_ids,
+        ),
+        EpistemicClaim(
+            claim_id=f"{case_id}-alternative-hypothesis",
+            statement=alternative_hypothesis,
+            kind=EpistemicClaimKind.HYPOTHESIS,
+            evidence_ids=cited_ids,
+        ),
+    ]
+    if task.calibration_required:
+        claims.append(
+            EpistemicClaim(
+                claim_id=f"{case_id}-uncertainty",
+                statement=unresolved_question,
+                kind=EpistemicClaimKind.UNCERTAINTY,
+                evidence_ids=cited_ids,
+            )
+        )
+
     return Gold10Submission(
-        primary_hypothesis=(
-            "The evidence available at the frozen cut supports a provisional causal account "
-            "that should remain explicitly evidence-bounded."
-        ),
-        alternative_hypothesis=(
-            "A materially different causal account remains plausible because the frozen "
-            "record is incomplete and institutional findings are not private truth."
-        ),
+        primary_hypothesis=primary_hypothesis,
+        alternative_hypothesis=alternative_hypothesis,
         primary_confidence=0.55,
         alternative_confidence=0.25,
-        evidence_ids=tuple(item.evidence_id for item in cited),
-        claims=(
-            EpistemicClaim(
-                claim_id=f"{case_id}-reference-claim",
-                statement=(
-                    f"Evidence record {first.evidence_id} is available within the frozen "
-                    "public temporal cut."
-                ),
-                kind=claim_kind,
-                evidence_ids=(first.evidence_id,),
-            ),
-        ),
-        unresolved_questions=(
-            "What material evidence remains unavailable at the frozen temporal cut?",
-        ),
+        evidence_ids=cited_ids,
+        claims=tuple(claims),
+        unresolved_questions=(unresolved_question,),
     )
 
 
@@ -174,6 +216,8 @@ def traceable_experience(
             "case_id": case_id,
             "split": task.split,
             "calibration_required": task.calibration_required,
+            "reward_ceiling": contract.unqualified_reward_ceiling,
+            "verifier_qualification": "unqualified_pilot_candidate",
         },
     )
     return MachineExperience(
@@ -232,6 +276,7 @@ def traceable_experience(
             "case_id": case_id,
             "split": task.split,
             "evidence_boundary": "pilot_candidate_only",
+            "verifier_qualification": "unqualified",
         },
     )
 

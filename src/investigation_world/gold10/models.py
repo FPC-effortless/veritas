@@ -49,6 +49,8 @@ class PilotContract(CanonicalModel):
     verifier_version: str
     evidence_coverage_target: int = Field(ge=1)
     calibration_min_uncertainty_mass: float = Field(ge=0.0, le=1.0)
+    unqualified_reward_ceiling: float = Field(gt=0.0, lt=1.0)
+    near_duplicate_threshold: float = Field(gt=0.0, lt=1.0)
 
 
 class Gold10Task(CanonicalModel):
@@ -83,6 +85,7 @@ class EpistemicClaim(CanonicalModel):
     statement: str
     kind: EpistemicClaimKind
     evidence_ids: tuple[str, ...]
+    canonical_target_id: str | None = None
 
     @model_validator(mode="after")
     def require_evidence(self) -> "EpistemicClaim":
@@ -90,6 +93,8 @@ class EpistemicClaim(CanonicalModel):
             raise ValueError("epistemic claims require at least one evidence reference")
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
             raise ValueError("epistemic claim evidence ids must be unique")
+        if self.canonical_target_id is not None and not self.canonical_target_id.strip():
+            raise ValueError("canonical_target_id must be non-empty when supplied")
         return self
 
 

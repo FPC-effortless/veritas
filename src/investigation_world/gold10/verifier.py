@@ -6,7 +6,14 @@ from typing import Any
 
 from investigation_world.investigation_data.gold10_manifest import build_gold10_manifest
 
-from .models import EpistemicClaimKind, Gold10Score, Gold10Submission
+from .models import (
+    EpistemicClaim,
+    EpistemicClaimKind,
+    EvidenceRecord,
+    Gold10Score,
+    Gold10Submission,
+    Gold10Task,
+)
 from .registry import (
     PILOTS_REL,
     ROOT,
@@ -16,6 +23,13 @@ from .registry import (
     build_task,
     load_pilot_contract,
 )
+
+
+def evidence_target_statement(evidence: EvidenceRecord) -> str:
+    return (
+        f"Evidence record {evidence.evidence_id} is available from {evidence.source_id} "
+        "at the frozen public temporal cut."
+    )
 
 
 def _case_row(case_id: str, root: Path) -> dict[str, Any]:
@@ -44,6 +58,102 @@ def _all_fragment_ids(case_id: str, root: Path) -> set[str]:
     return output
 
 
+def _canonical_target_failure(
+    task: Gold10Task,
+    claim: EpistemicClaim,
+) -> str | None:
+    target_id = claim.canonical_target_id
+    if target_id is None:
+        if claim.kind in {
+            EpistemicClaimKind.FACT,
+            EpistemicClaimKind.INSTITUTIONAL_FINDING,
+        }:
+            return f"canonical_target_required:{claim.claim_id}"
+        return None
+
+    if target_id.startswith("evidence:"):
+        evidence_id = target_id.removeprefix("evidence:")
+        evidence = next(
+            (item for item in task.available_evidence if item.evidence_id == evidence_id),
+            None,
+        )
+        if evidence is None:
+            return f"canonical_target_unknown:{claim.claim_id}"
+        if claim.kind is not EpistemicClaimKind.FACT:
+            return f"canonical_target_kind_mismatch:{claim.claim_id}"
+        if claim.statement.strip() != evidence_target_statement(evidence):
+            return f"canonical_target_statement_mismatch:{claim.claim_id}"
+        if set(claim.evidence_ids) != {evidence_id}:
+            return f"canonical_target_evidence_mismatch:{claim.claim_id}"
+        return None
+
+    if target_id.startswith("finding:"):
+        finding_id = target_id.removeprefix("finding:")
+        finding = next(
+            (item for item in task.available_findings if item.finding_id == finding_id),
+            None,
+        )
+        if finding is None:
+            return f"canonical_target_unknown:{claim.claim_id}"
+        if claim.kind is not EpistemicClaimKind.INSTITUTIONAL_FINDING:
+            return f"canonical_target_kind_mismatch:{claim.claim_id}"
+        if claim.statement.strip() != finding.statement.strip():
+            return f"canonical_target_statement_mismatch:{claim.claim_id}"
+        if set(claim.evidence_ids) != set(finding.source_evidence_ids):
+            return f"canonical_target_evidence_mismatch:{claim.claim_id}"
+        return None
+
+    return f"canonical_target_unknown:{claim.claim_id}"
+
+
+def _hypothesis_support_score(
+    submission: Gold10Submission,
+    *,
+    available_ids: set[str],
+) -> tuple[float, list[str]]:
+    failures: list[str] = []
+
+    def matching(statement: str) -> list[EpistemicClaim]:
+        return [
+            claim
+            for claim in submission.claims
+            if claim.kind is EpistemicClaimKind.HYPOTHESIS
+            and claim.statement.strip() == statement.strip()
+            and set(claim.evidence_ids).issubset(available_ids)
+        ]
+
+    primary = matching(submission.primary_hypothesis)
+    alternative = matching(submission.alternative_hypothesis)
+    if not primary:
+        failures.append("primary_hypothesis_unbound")
+    if not alternative:
+        failures.append("alternative_hypothesis_unbound")
+    return (1.0 if primary and alternative else 0.0), failures
+
+
+def _calibration_score(
+    task: Gold10Task,
+    submission: Gold10Submission,
+    *,
+    available_ids: set[str],
+    minimum_uncertainty_mass: float,
+) -> float:
+    if not task.calibration_required:
+        return 1.0
+    if submission.uncertainty_mass < minimum_uncertainty_mass:
+        return 0.0
+    unresolved = {item.strip() for item in submission.unresolved_questions if item.strip()}
+    if not unresolved:
+        return 0.0
+    bound_uncertainty = any(
+        claim.kind is EpistemicClaimKind.UNCERTAINTY
+        and claim.statement.strip() in unresolved
+        and set(claim.evidence_ids).issubset(available_ids)
+        for claim in submission.claims
+    )
+    return 1.0 if bound_uncertainty else 0.0
+
+
 def score_submission(
     case_id: str,
     submission: Gold10Submission,
@@ -54,6 +164,7 @@ def score_submission(
     contract = load_pilot_contract(repo_root)
 
     available = {item.evidence_id: item for item in task.available_evidence}
+    available_ids = set(available)
     all_fragments = _all_fragment_ids(case_id, repo_root)
     submitted_ids = set(submission.evidence_ids)
 
@@ -73,51 +184,61 @@ def score_submission(
     if len(claim_ids) != len(set(claim_ids)):
         hard_failures.append("duplicate_claim_id")
 
+    canonical_target_matches = 0
     for claim in submission.claims:
         claim_evidence = set(claim.evidence_ids)
         if not claim_evidence.issubset(submitted_ids):
             hard_failures.append(f"claim_evidence_not_cited:{claim.claim_id}")
             continue
-        if not claim_evidence.issubset(available):
+        if not claim_evidence.issubset(available_ids):
             continue
-        if claim.kind is EpistemicClaimKind.INSTITUTIONAL_FINDING:
-            roles = {available[evidence_id].epistemic_role for evidence_id in claim_evidence}
-            if "official_finding" not in roles:
-                hard_failures.append(
-                    f"institutional_finding_without_official_evidence:{claim.claim_id}"
-                )
+        target_failure = _canonical_target_failure(task, claim)
+        if target_failure is not None:
+            hard_failures.append(target_failure)
+        elif claim.canonical_target_id is not None:
+            canonical_target_matches += 1
+
+    hypothesis_structure, hypothesis_failures = _hypothesis_support_score(
+        submission,
+        available_ids=available_ids,
+    )
+    hard_failures.extend(hypothesis_failures)
+    if canonical_target_matches == 0:
+        hard_failures.append("no_canonical_verifier_target")
 
     coverage_target = min(contract.evidence_coverage_target, len(available))
-    coverage = min(1.0, len(submitted_ids & set(available)) / coverage_target)
-    hypothesis_structure = 1.0
-    epistemic_integrity = 1.0 if submission.claims else 0.5
+    coverage = min(1.0, len(submitted_ids & available_ids) / coverage_target)
+    canonical_target_fidelity = 1.0 if canonical_target_matches else 0.0
+    calibration = _calibration_score(
+        task,
+        submission,
+        available_ids=available_ids,
+        minimum_uncertainty_mass=contract.calibration_min_uncertainty_mass,
+    )
+    rights_temporal_integrity = 1.0 if not any(
+        item.startswith(("hindsight_evidence:", "unknown_evidence:"))
+        for item in hard_failures
+    ) else 0.0
 
-    calibration = 1.0
-    if task.calibration_required:
-        if (
-            submission.uncertainty_mass < contract.calibration_min_uncertainty_mass
-            or not submission.unresolved_questions
-        ):
-            calibration = 0.0
-
-    rights_temporal_integrity = 1.0 if not hard_failures else 0.0
     components = {
         "evidence_coverage": coverage,
         "hypothesis_structure": hypothesis_structure,
-        "epistemic_integrity": epistemic_integrity,
+        "canonical_target_fidelity": canonical_target_fidelity,
         "calibration_integrity": calibration,
         "rights_temporal_integrity": rights_temporal_integrity,
     }
     if hard_failures:
         reward = 0.0
     else:
-        reward = (
-            0.25 * coverage
+        raw_reward = (
+            0.20 * coverage
             + 0.20 * hypothesis_structure
-            + 0.25 * epistemic_integrity
+            + 0.30 * canonical_target_fidelity
             + 0.15 * calibration
             + 0.15 * rights_temporal_integrity
         )
+        reward = raw_reward * contract.unqualified_reward_ceiling
+
     return Gold10Score(
         reward=round(reward, 6),
         component_scores={key: round(value, 6) for key, value in components.items()},
