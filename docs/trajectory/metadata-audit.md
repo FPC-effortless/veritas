@@ -46,7 +46,7 @@ Reward components are optional in this audit; the remaining listed dimensions ar
 | time usage | CONDITIONAL | UNSUPPORTED | UNSUPPORTED |
 | termination/truncation | CONDITIONAL | PRESENT | PRESENT |
 | failure origin/classification | CONDITIONAL | CONDITIONAL | CONDITIONAL |
-| public/private visibility | PRESENT | UNSUPPORTED | CONDITIONAL |
+| public/private visibility | ABSENT | UNSUPPORTED | CONDITIONAL |
 | provenance/source references | PRESENT | ABSENT | CONDITIONAL |
 
 None of the three audited paths is unconditionally complete across the required metadata dimensions.
@@ -71,7 +71,7 @@ One schema-level gap is proven: `HarnessIdentity` contains `harness_id` and `ver
 
 ## 2. Legacy Foundry RolloutTrace adapter
 
-`trajectory_v2_from_rollout_trace()` is a real deterministic `TrajectoryV2` producer. It correctly refuses to invent legacy facts.
+`trajectory_v2_from_rollout_trace()` is a real deterministic `TrajectoryV2` producer, but not every value it emits is evidence supplied by the legacy producer. In particular, visibility currently receives adapter defaults.
 
 Native/derived coverage includes:
 
@@ -94,7 +94,10 @@ Important fail-closed behavior already present:
 - partial provider cost accounting does not become a fabricated total;
 - private legacy metadata is retained as private provenance metadata.
 
-Remaining producer gap: legacy `TraceEvent` conversion does not populate `TrajectoryEvent.duration_s`, so event-level timing is unavailable even when overall elapsed time is supplied.
+Remaining producer gaps:
+
+- `TraceEvent` has an arbitrary `payload` but no sensitivity or visibility metadata. Conversion copies that payload and assigns `TrajectoryEvent.visibility = PUBLIC` unconditionally; `RolloutTraceAdapterContext` also defaults overall trajectory visibility to `PUBLIC`. Those values are adapter defaults, not producer facts or deterministic sensitivity classifications. Legacy public/private visibility is therefore **ABSENT** from producer evidence and must not be treated as proof that an unclassified payload is public-safe.
+- legacy `TraceEvent` conversion does not populate `TrajectoryEvent.duration_s`, so event-level timing is unavailable even when overall elapsed time is supplied.
 
 ## 3. Portable operational runtime
 
@@ -132,6 +135,12 @@ However, HUD metering is intentionally an out-of-band observer, not a `Trajector
 Public-only metering must not be generalized into a claim that all associated metadata is safe for public trajectory serialization. `TrajectoryV2` visibility must still be assigned at the canonical trajectory boundary.
 
 ## Interface-gap requests
+
+### TRACE-GAP-LEGACY-VISIBILITY — Foundry/trajectory adapter authority
+
+**Request:** add explicit sensitivity metadata to legacy trace events and preserve it during `TrajectoryV2` conversion. Until that contract exists, unclassified legacy payloads must not acquire evidence authority merely because the adapter writes the default `PUBLIC` enum value.
+
+**Why:** `TraceEvent.payload` accepts arbitrary content without a visibility field, `_event()` copies the payload and assigns `PUBLIC` unconditionally, and the adapter context defaults whole-trajectory visibility to `PUBLIC`. The current serialization value therefore cannot establish that the producer classified the content as public-safe.
 
 ### TRACE-GAP-HARNESS-CONFIG — trajectory schema authority
 

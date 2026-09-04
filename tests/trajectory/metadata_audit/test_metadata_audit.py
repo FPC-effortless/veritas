@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from investigation_world.foundry.models import DistributionSplit, RolloutTrace, TraceEvent
+from investigation_world.trajectory.adapter import trajectory_v2_from_rollout_trace
 from investigation_world.trajectory.audit import (
     AuditStatus,
     InterfaceGapRequest,
@@ -16,10 +18,11 @@ from investigation_world.trajectory.audit import (
     TrajectoryMetadataField,
     serialize_metadata_audit,
 )
-from investigation_world.trajectory.models import HarnessIdentity
+from investigation_world.trajectory.models import HarnessIdentity, VisibilityClass
 
 BASE_COMMIT = "fbdb74db7080a078c945506a6c759305f4cd1f78"
 TRAJECTORY_MODEL = "src/investigation_world/trajectory/models.py"
+FOUNDRY_MODELS = "src/investigation_world/foundry/models.py"
 ROLLOUT_ADAPTER = "src/investigation_world/trajectory/adapter.py"
 PORTABLE_MODELS = "src/investigation_world/portable_runtime/models.py"
 HUD_ADAPTER = "src/investigation_world/exporters/hud/adapter.py"
@@ -78,7 +81,6 @@ def _legacy_rollout() -> ProducerMetadataCoverage:
         TrajectoryMetadataField.ACTION_TOOL_RESOURCE_CALLS,
         TrajectoryMetadataField.STATE_DIGESTS_TRANSITIONS,
         TrajectoryMetadataField.REWARD_COMPONENTS,
-        TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY,
         TrajectoryMetadataField.PROVENANCE_SOURCE_REFERENCES,
     }
     conditional = {
@@ -109,7 +111,7 @@ def _legacy_rollout() -> ProducerMetadataCoverage:
             conditional=conditional,
         ),
         notes=(
-            "unknown legacy facts are not fabricated",
+            "legacy visibility values are adapter defaults, not producer evidence",
             "resource calls and source provenance are derived",
         ),
     )
@@ -197,6 +199,20 @@ def _audit() -> TrajectoryMetadataAudit:
         producers=(_hud_adapter(), _portable_runtime(), _legacy_rollout()),
         interface_gaps=(
             InterfaceGapRequest(
+                gap_id="TRACE-GAP-LEGACY-VISIBILITY",
+                field=TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY,
+                owner="Foundry/trajectory adapter authority",
+                requested_change=(
+                    "add explicit sensitivity metadata to legacy trace events and "
+                    "preserve it during TrajectoryV2 conversion"
+                ),
+                evidence_paths=(FOUNDRY_MODELS, ROLLOUT_ADAPTER),
+                rationale=(
+                    "TraceEvent carries an arbitrary payload without visibility "
+                    "metadata, while the adapter assigns PUBLIC unconditionally"
+                ),
+            ),
+            InterfaceGapRequest(
                 gap_id="TRACE-GAP-HARNESS-CONFIG",
                 field=TrajectoryMetadataField.HARNESS_CONFIG_IDENTITY,
                 owner="trajectory schema authority",
@@ -271,6 +287,43 @@ def test_schema_presence_is_not_legacy_producer_completeness() -> None:
     assert model.coverage == MetadataCoverage.CONDITIONAL
     assert config.coverage == MetadataCoverage.ABSENT
     assert provenance.coverage == MetadataCoverage.PRESENT
+
+
+def test_legacy_adapter_public_default_is_not_visibility_evidence() -> None:
+    trace = RolloutTrace(
+        trace_id="trace-unclassified",
+        environment_version="1",
+        task_id="task-unclassified",
+        task_seed=7,
+        split=DistributionSplit.IID_TEST,
+        taskset_version="1",
+        harness_version="1",
+        runtime_version="1",
+        initial_state_hash="state-before",
+        events=[
+            TraceEvent(
+                step=0,
+                event_type="unclassified",
+                payload={"content": "no visibility metadata"},
+            )
+        ],
+    )
+
+    trajectory = trajectory_v2_from_rollout_trace(trace)
+    visibility = _legacy_rollout().coverage_for(
+        TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY
+    )
+    gap = next(
+        item
+        for item in _audit().interface_gaps
+        if item.gap_id == "TRACE-GAP-LEGACY-VISIBILITY"
+    )
+
+    assert trajectory.events[0].visibility == VisibilityClass.PUBLIC
+    assert trajectory.visibility == VisibilityClass.PUBLIC
+    assert visibility.coverage == MetadataCoverage.ABSENT
+    assert gap.field == TrajectoryMetadataField.PUBLIC_PRIVATE_VISIBILITY
+    assert gap.owner == "Foundry/trajectory adapter authority"
 
 
 def test_portable_semantics_do_not_imply_trajectory_metadata() -> None:
