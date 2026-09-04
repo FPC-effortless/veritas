@@ -112,6 +112,68 @@ def test_source_policy_true_boundaries_fail_closed_on_false(
         build_gold10_manifest()
 
 
+def test_authority_policy_must_match_current_canonical_source_policy(monkeypatch) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        value = deepcopy(value)
+        if path.name == "source_catalog.json":
+            source = next(
+                item for item in value["sources"] if item["source_id"] == "uscsb"
+            )
+            source["rights"]["ai_use"] = "blocked"
+        elif path.name == "report_acquisition.json":
+            value["policy"]["ai_use"] = "blocked"
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError, match="current canonical source policy"):
+        build_gold10_manifest()
+
+
+def test_task_use_authority_cannot_rebind_to_another_source(monkeypatch) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        value = deepcopy(value)
+        if path.name in {
+            "case_selection_v1.json",
+            "index.json",
+            "report_acquisition.json",
+            "task_use_authority_v1.json",
+        }:
+            value["source_id"] = "other-source"
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError, match="source_id uscsb"):
+        build_gold10_manifest()
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["report_acquisition.json", "task_use_authority_v1.json"],
+)
+def test_report_and_authority_artifact_ids_must_be_globally_unique(
+    monkeypatch,
+    filename: str,
+) -> None:
+    original_read_json = gold10_manifest._read_json
+
+    def corrupted_read_json(path):
+        value, digest = original_read_json(path)
+        if path.name == filename:
+            value = deepcopy(value)
+            value["artifacts"][1]["artifact_id"] = value["artifacts"][0]["artifact_id"]
+        return value, digest
+
+    monkeypatch.setattr(gold10_manifest, "_read_json", corrupted_read_json)
+    with pytest.raises(Gold10ManifestError, match="duplicate .* artifact_id"):
+        build_gold10_manifest()
+
+
 def test_report_review_status_is_never_an_authority_token() -> None:
     assert _report_task_eligible("pending_artifact_level_review") is False
     assert _report_task_eligible("approved_for_task_use") is False
