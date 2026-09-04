@@ -1,0 +1,166 @@
+name: CSB Gold-10 Report Acquisition
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/csb-gold10-report-acquisition.yml"
+      - "docs/investigation_data/corpora/csb_gold_10/report_acquisition.json"
+      - "src/investigation_world/investigation_data/acquisition.py"
+      - "src/investigation_world/investigation_data/queued_acquisition.py"
+      - "src/investigation_world/investigation_data/source_catalog.json"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/csb-gold10-report-acquisition.yml"
+      - "docs/investigation_data/corpora/csb_gold_10/report_acquisition.json"
+      - "src/investigation_world/investigation_data/acquisition.py"
+      - "src/investigation_world/investigation_data/queued_acquisition.py"
+      - "src/investigation_world/investigation_data/source_catalog.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: csb-gold10-report-acquisition-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acquire-receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Veritas
+        run: python -m pip install -e .
+
+      - name: Acquire reports and retain receipts only
+        run: |
+          python -m investigation_world.investigation_data.queued_acquisition \
+            docs/investigation_data/corpora/csb_gold_10/report_acquisition.json \
+            --output .veritas-data \
+            --receipts-out artifacts/csb-gold10-report-receipts.json \
+            --effective-catalog-out artifacts/csb-gold10-effective-catalog.json \
+            --max-bytes 268435456 \
+            --timeout 120 \
+            --delay-seconds 1
+
+      - name: Verify receipt count, dual URL provenance, authority, sidecars, and raw cleanup
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          bundle_path = Path("artifacts/csb-gold10-report-receipts.json")
+          catalog_path = Path("artifacts/csb-gold10-effective-catalog.json")
+          queue_path = Path("docs/investigation_data/corpora/csb_gold_10/report_acquisition.json")
+          bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+          catalog_bytes = catalog_path.read_bytes()
+          catalog_sha256 = hashlib.sha256(catalog_bytes).hexdigest()
+          catalog = json.loads(catalog_bytes)
+          queue_bytes = queue_path.read_bytes()
+          queue_sha256 = hashlib.sha256(queue_bytes).hexdigest()
+          queue = json.loads(queue_bytes)
+          queue_by_id = {item["artifact_id"]: item for item in queue["artifacts"]}
+
+          assert len(bundle["artifacts"]) == 10
+          assert bundle["bundle_version"] == "1.2"
+          assert bundle["raw_payloads_retained"] is False
+          assert bundle["queue_sha256"] == queue_sha256
+          assert bundle["catalog_sha256"] == catalog_sha256
+          assert bundle["effective_catalog_sha256"] == catalog_sha256
+          assert {item["catalog_sha256"] for item in bundle["artifacts"]} == {catalog_sha256}
+          assert {item["queue_sha256"] for item in bundle["artifacts"]} == {queue_sha256}
+
+          source = next(item for item in catalog["sources"] if item["source_id"] == "uscsb")
+          effective_ids = {item["artifact_id"] for item in source["artifacts"]}
+          receipt_ids = {item["artifact_id"] for item in bundle["artifacts"]}
+          assert receipt_ids <= effective_ids
+          assert receipt_ids == set(queue_by_id)
+
+          distinct_source_transport = 0
+          sidecar_paths = []
+          for item in bundle["artifacts"]:
+              queue_item = queue_by_id[item["artifact_id"]]
+              canonical_source_url = queue_item["source_url"]
+              acquisition_url = queue_item.get("acquisition_url", canonical_source_url)
+              authority = {
+                  "source_id": "uscsb",
+                  "case_id": queue_item["case_id"],
+                  "artifact_id": queue_item["artifact_id"],
+                  "canonical_source_url": canonical_source_url,
+                  "acquisition_url": acquisition_url,
+                  "expected_sha256": queue_item["sha256"],
+              }
+              authority_sha256 = hashlib.sha256(
+                  json.dumps(
+                      authority,
+                      sort_keys=True,
+                      separators=(",", ":"),
+                      ensure_ascii=False,
+                  ).encode("utf-8")
+              ).hexdigest()
+
+              assert item["source_url"] == acquisition_url
+              assert item["canonical_source_url"] == canonical_source_url
+              assert item["acquisition_url"] == acquisition_url
+              assert item["expected_sha256"] == queue_item["sha256"]
+              assert item["acquisition_spec_sha256"] == authority_sha256
+              if canonical_source_url != acquisition_url:
+                  distinct_source_transport += 1
+
+              sidecar_path = Path(".veritas-data") / f'{item["local_path"]}.provenance.json'
+              assert sidecar_path.is_file(), f"missing retained sidecar: {sidecar_path}"
+              assert not sidecar_path.is_symlink(), f"unsafe retained sidecar: {sidecar_path}"
+              sidecar_bytes = sidecar_path.read_bytes()
+              assert hashlib.sha256(sidecar_bytes).hexdigest() == item["receipt_sha256"]
+              sidecar = json.loads(sidecar_bytes)
+              for key in (
+                  "source_id",
+                  "artifact_id",
+                  "source_url",
+                  "canonical_source_url",
+                  "acquisition_url",
+                  "expected_sha256",
+                  "queue_sha256",
+                  "acquisition_spec_sha256",
+                  "case_id",
+                  "sha256",
+                  "catalog_sha256",
+              ):
+                  assert sidecar[key] == item[key]
+              sidecar_paths.append(sidecar_path)
+
+          assert distinct_source_transport > 0
+          assert len(sidecar_paths) == 10
+          assert len(set(sidecar_paths)) == 10
+          assert len(list(Path(".veritas-data").rglob("*.provenance.json"))) == 10
+
+          unexpected = [
+              path
+              for path in Path(".veritas-data").rglob("*")
+              if path.is_file() and not path.name.endswith(".provenance.json")
+          ]
+          assert not unexpected, f"raw source payloads remain: {unexpected}"
+          PY
+
+      - name: Upload provenance receipts and effective acquisition authority only
+        uses: actions/upload-artifact@v4
+        with:
+          name: csb-gold10-report-receipts-${{ github.sha }}
+          path: |
+            artifacts/csb-gold10-report-receipts.json
+            artifacts/csb-gold10-effective-catalog.json
+            .veritas-data/**/*.provenance.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

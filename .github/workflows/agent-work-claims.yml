@@ -3,19 +3,37 @@ name: Agent Work Claims
 on:
   issue_comment:
     types: [created]
+  issues:
+    types: [opened, reopened]
 
 permissions:
   contents: read
   issues: write
   pull-requests: read
 
-concurrency:
-  group: agent-work-coordination
-  cancel-in-progress: false
-
 jobs:
+  enroll:
+    if: >-
+      github.event_name == 'issues' &&
+      github.event.issue.pull_request == null &&
+      contains(github.event.issue.body, '<!-- veritas-agent-work -->') &&
+      (github.event.issue.author_association == 'OWNER' ||
+       github.event.issue.author_association == 'MEMBER' ||
+       github.event.issue.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enroll agent work issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const enroll = require('./.github/scripts/agent-work-enroll.js');
+            await enroll({ github, context, core });
+
   coordinate:
     if: >-
+      github.event_name == 'issue_comment' &&
       github.event.issue.pull_request == null &&
       (startsWith(github.event.comment.body, '/claim ') ||
        startsWith(github.event.comment.body, '/heartbeat ') ||
@@ -23,8 +41,14 @@ jobs:
        startsWith(github.event.comment.body, '/blocked ') ||
        startsWith(github.event.comment.body, '/handoff ') ||
        startsWith(github.event.comment.body, '/done ') ||
+       startsWith(github.event.comment.body, '/recover-completed ') ||
        startsWith(github.event.comment.body, '/recover ') ||
+       startsWith(github.event.comment.body, '/recover-linked ') ||
+       startsWith(github.event.comment.body, '/recover-metadata ') ||
        github.event.comment.body == '/roadmap-bootstrap')
+    concurrency:
+      group: agent-work-coordination
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -35,3 +59,465 @@ jobs:
           script: |
             const coordinate = require('./.github/scripts/agent-work-claims.js');
             await coordinate({ github, context, core });
+
+  recover-merged:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request == null &&
+      startsWith(github.event.comment.body, '/recover-merged ')
+    concurrency:
+      group: agent-work-coordination
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Recover merged exact-head completion
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const STATUS_MARKER = '<!-- veritas-agent-work-status:v1 -->';
+            const REGISTRY_MARKER = '<!-- veritas-agent-work-reservations:v1 -->';
+            const STATE_LABELS = [
+              'work:ready',
+              'work:claimed',
+              'work:blocked',
+              'work:review',
+              'work:done',
+              'work:superseded',
+            ];
+            const SHA_RE = /^[0-9a-f]{40}$/;
+            const RECOGNIZED_REVIEW_STATES = new Set([
+              'APPROVED',
+              'CHANGES_REQUESTED',
+              'COMMENTED',
+              'DISMISSED',
+              'PENDING',
+            ]);
+            const DECISIVE_REVIEW_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED']);
+            const REQUIRED_WORKFLOWS = ['Security', 'Python Quality Ratchet', 'CI'];
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = context.issue.number;
+            const actor = context.actor;
+            const association = context.payload.comment?.author_association || '';
+            const commandText = context.payload.comment?.body || '';
+            const commandMatch = commandText.match(
+              /^\/recover-merged ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) ([1-9][0-9]*) (.{1,500})$/
+            );
+
+            function fail(message) {
+              throw new Error(message);
+            }
+
+            function parseMarkedJson(comment, marker, schemaVersion, expectedIssue = null) {
+              if (comment.user?.login !== 'github-actions[bot]' || !comment.body?.includes(marker)) {
+                return null;
+              }
+              const match = comment.body.match(/```json\s*([\s\S]*?)```/);
+              if (!match) return null;
+              let value;
+              try {
+                value = JSON.parse(match[1]);
+              } catch {
+                return null;
+              }
+              if (value.schema_version !== schemaVersion) return null;
+              if (expectedIssue !== null && value.issue_number !== expectedIssue) return null;
+              return { commentId: comment.id, value };
+            }
+
+            function refsIssue(body, number) {
+              const escaped = String(number).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return new RegExp(`(^|[^A-Za-z0-9_])#${escaped}(?=$|[^A-Za-z0-9_])`, 'm').test(
+                String(body || '')
+              );
+            }
+
+            function refsWorkId(body, workId) {
+              const escaped = String(workId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return Boolean(escaped) &&
+                new RegExp(
+                  `(^|[^A-Za-z0-9._-])${escaped}(?=$|[^A-Za-z0-9._-])`,
+                  'm'
+                ).test(String(body || ''));
+            }
+
+            function decisiveReview(review) {
+              const state = review?.state;
+              if (typeof state !== 'string' || !RECOGNIZED_REVIEW_STATES.has(state)) {
+                fail('review has missing, non-string, or unknown state');
+              }
+              if (!DECISIVE_REVIEW_STATES.has(state)) return null;
+              const commitId = review.commit_id;
+              if (typeof commitId !== 'string' || !SHA_RE.test(commitId)) {
+                fail('decisive review has malformed commit identity');
+              }
+              const login = review.user?.login;
+              if (typeof login !== 'string' || !login.trim()) {
+                fail('decisive review has no concrete reviewer login');
+              }
+              const reviewId = review.id;
+              if (!Number.isInteger(reviewId) || reviewId <= 0) {
+                fail('decisive review has no positive integer review id');
+              }
+              const submittedAt = review.submitted_at;
+              if (
+                typeof submittedAt !== 'string' ||
+                !/([zZ]|[+-][0-9]{2}:[0-9]{2})$/.test(submittedAt) ||
+                !Number.isFinite(Date.parse(submittedAt))
+              ) {
+                fail('decisive review timestamp is not timezone-aware ISO-8601');
+              }
+              return {
+                state,
+                commitId,
+                login: login.trim(),
+                reviewId,
+                submittedAt,
+                submittedMs: Date.parse(submittedAt),
+              };
+            }
+
+            function exactHeadApproval(prAuthor, headSha, reviews) {
+              const latest = new Map();
+              for (const review of reviews) {
+                if (!review || typeof review !== 'object' || Array.isArray(review)) {
+                  fail('review payload contains a non-object entry');
+                }
+                const decisive = decisiveReview(review);
+                if (!decisive || decisive.commitId !== headSha) continue;
+                const previous = latest.get(decisive.login);
+                if (
+                  !previous ||
+                  decisive.submittedMs > previous.submittedMs ||
+                  (
+                    decisive.submittedMs === previous.submittedMs &&
+                    decisive.reviewId > previous.reviewId
+                  )
+                ) {
+                  latest.set(decisive.login, decisive);
+                }
+              }
+              const blockers = [...latest.values()]
+                .filter((review) => review.state === 'CHANGES_REQUESTED')
+                .map((review) => review.login)
+                .sort();
+              if (blockers.length) {
+                fail(`exact-head changes requested by ${blockers.join(', ')}`);
+              }
+              const approvals = [...latest.values()]
+                .filter(
+                  (review) =>
+                    review.state === 'APPROVED' &&
+                    review.login !== prAuthor
+                )
+                .sort(
+                  (left, right) =>
+                    right.submittedMs - left.submittedMs ||
+                    right.reviewId - left.reviewId
+                );
+              if (!approvals.length) {
+                fail('no exact-head approval from a GitHub identity distinct from the PR author');
+              }
+              return approvals[0];
+            }
+
+            function latestSuccessfulRequiredRuns(runs, headSha) {
+              const evidence = {};
+              for (const name of REQUIRED_WORKFLOWS) {
+                const matches = runs
+                  .filter(
+                    (run) =>
+                      run.name === name &&
+                      run.head_sha === headSha &&
+                      run.event === 'pull_request'
+                  )
+                  .sort(
+                    (left, right) =>
+                      Number(right.run_number || 0) - Number(left.run_number || 0) ||
+                      Number(right.run_attempt || 0) - Number(left.run_attempt || 0) ||
+                      Number(right.id || 0) - Number(left.id || 0)
+                  );
+                if (!matches.length) fail(`missing exact-head ${name} workflow run`);
+                const run = matches[0];
+                if (run.status !== 'completed' || run.conclusion !== 'success') {
+                  fail(
+                    `exact-head ${name} is ${run.status || 'unknown'}/` +
+                    `${run.conclusion || 'unknown'}`
+                  );
+                }
+                evidence[name] = {
+                  run_id: run.id,
+                  run_number: run.run_number,
+                  run_attempt: run.run_attempt || 1,
+                };
+              }
+              return evidence;
+            }
+
+            try {
+              if (!commandMatch) {
+                fail('malformed recover-merged command; expected one exact single line');
+              }
+              if (association !== 'OWNER') {
+                fail('post-merge recovery requires repository OWNER authority');
+              }
+              const command = {
+                agent: commandMatch[1],
+                pr: Number(commandMatch[2]),
+                reason: commandMatch[3],
+              };
+
+              const issue = (
+                await github.rest.issues.get({ owner, repo, issue_number: issueNumber })
+              ).data;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              let trusted = null;
+              for (const comment of comments.slice().reverse()) {
+                trusted = parseMarkedJson(
+                  comment,
+                  STATUS_MARKER,
+                  'veritas.agent-work-status.v1',
+                  issueNumber
+                );
+                if (trusted) break;
+              }
+              if (!trusted) fail('trusted agent-work status is missing');
+
+              const status = trusted.value;
+              if (status.state !== 'REVIEW') {
+                fail(`post-merge recovery requires REVIEW state; found ${status.state || 'missing'}`);
+              }
+              if (
+                status.github_actor !== actor ||
+                !status.agent_id ||
+                status.agent_id !== command.agent
+              ) {
+                fail('post-merge recovery requires the current authenticated REVIEW holder');
+              }
+              if (!status.linked_pr || status.linked_pr !== command.pr) {
+                fail(`PR mismatch; trusted handoff recorded PR #${status.linked_pr || 'none'}`);
+              }
+              if (
+                typeof status.branch !== 'string' ||
+                !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/.test(status.branch)
+              ) {
+                fail('trusted REVIEW branch is missing or non-concrete');
+              }
+              if (!Array.isArray(status.ownership_paths)) {
+                fail('trusted ownership snapshot is missing');
+              }
+              if (
+                status.ownership_paths.some(
+                  (path) => typeof path !== 'string' || !path
+                )
+              ) {
+                fail('trusted ownership snapshot is malformed');
+              }
+              const previousHead = status.linked_pr_head;
+              if (typeof previousHead !== 'string' || !SHA_RE.test(previousHead)) {
+                fail('trusted handoff head is missing or malformed');
+              }
+
+              const pr = (
+                await github.rest.pulls.get({ owner, repo, pull_number: command.pr })
+              ).data;
+              if (pr.state !== 'closed' || pr.merged !== true || !pr.merged_at) {
+                fail(`PR #${command.pr} is not merged`);
+              }
+              if (pr.head?.ref !== status.branch) {
+                fail(
+                  `PR #${command.pr} head ${pr.head?.ref || 'missing'} does not match ` +
+                  `trusted branch ${status.branch}`
+                );
+              }
+              const finalHead = pr.head?.sha;
+              const mergeCommit = pr.merge_commit_sha;
+              if (
+                typeof finalHead !== 'string' ||
+                !SHA_RE.test(finalHead) ||
+                typeof mergeCommit !== 'string' ||
+                !SHA_RE.test(mergeCommit)
+              ) {
+                fail(`PR #${command.pr} exact merge identity is missing`);
+              }
+              if (previousHead === finalHead) {
+                fail('post-merge recovery requires a moved head; ordinary /done owns exact-head completion');
+              }
+              const prAuthor = pr.user?.login;
+              if (typeof prAuthor !== 'string' || !prAuthor.trim()) {
+                fail('pull request author identity is missing');
+              }
+              if (!refsIssue(pr.body, issueNumber) || !refsWorkId(pr.body, status.work_id)) {
+                fail(`PR #${command.pr} must reference both #${issueNumber} and work ID ${status.work_id}`);
+              }
+
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner,
+                repo,
+                pull_number: command.pr,
+                per_page: 100,
+              });
+              const approval = exactHeadApproval(prAuthor.trim(), finalHead, reviews);
+
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                owner,
+                repo,
+                head_sha: finalHead,
+                event: 'pull_request',
+                per_page: 100,
+              });
+              const gates = latestSuccessfulRequiredRuns(runs, finalHead);
+
+              const repository = (await github.rest.repos.get({ owner, repo })).data;
+              const defaultBranch = repository.default_branch;
+              if (!defaultBranch) fail('repository default branch is missing');
+              const comparison = (
+                await github.rest.repos.compareCommitsWithBasehead({
+                  owner,
+                  repo,
+                  basehead: `${mergeCommit}...${defaultBranch}`,
+                })
+              ).data;
+              if (
+                comparison.behind_by !== 0 ||
+                !['ahead', 'identical'].includes(comparison.status)
+              ) {
+                fail(`PR #${command.pr} merge is not on current ${defaultBranch}`);
+              }
+
+              const timestamp = new Date().toISOString();
+              const transitionSeq = Number(status.transition_seq || 0) + 1;
+              const nextStatus = {
+                ...status,
+                state: 'DONE',
+                linked_pr_head: finalHead,
+                heartbeat_at: timestamp,
+                blocker: null,
+                released_reason: `owner post-merge exact-head recovery: ${command.reason}`,
+                transition_seq: transitionSeq,
+                last_command_comment_id: context.payload.comment.id,
+                updated_at: timestamp,
+                completion_recovery: {
+                  schema_version: 'veritas.owner-post-merge-head-recovery.v1',
+                  pr: command.pr,
+                  previous_handoff_head: previousHead,
+                  pr_head: finalHead,
+                  merge_commit: mergeCommit,
+                  reviewer: approval.login,
+                  review_id: approval.reviewId,
+                  review_submitted_at: approval.submittedAt,
+                  required_workflows: gates,
+                  default_branch: defaultBranch,
+                  transition_seq: transitionSeq,
+                },
+              };
+              const statusBody =
+                `${STATUS_MARKER}\n**Agent work status**\n\n` +
+                `\`\`\`json\n${JSON.stringify(nextStatus, null, 2)}\n\`\`\``;
+
+              // Publish terminal local authority first. If later cleanup fails, a stale
+              // global reservation remains fail-closed rather than making ownership free.
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: trusted.commentId,
+                body: statusBody,
+              });
+              const labelNames = new Set(
+                (issue.labels || []).map((label) =>
+                  typeof label === 'string' ? label : label.name
+                )
+              );
+              for (const label of STATE_LABELS) {
+                if (!labelNames.has(label)) continue;
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: issueNumber,
+                    name: label,
+                  });
+                } catch (error) {
+                  if (error.status !== 404) throw error;
+                }
+              }
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                labels: ['agent-work', 'work:done'],
+              });
+
+              const rootComments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: 150,
+                per_page: 100,
+              });
+              let registry = null;
+              for (const comment of rootComments.slice().reverse()) {
+                registry = parseMarkedJson(
+                  comment,
+                  REGISTRY_MARKER,
+                  'veritas.agent-work-reservations.v1'
+                );
+                if (registry && Array.isArray(registry.value.entries)) break;
+                registry = null;
+              }
+              if (!registry) fail('global reservation registry is missing or malformed');
+              const remainingEntries = registry.value.entries.filter(
+                (entry) => entry.issue !== issueNumber
+              );
+              const registryValue = {
+                ...registry.value,
+                updated_at: timestamp,
+                entries: remainingEntries,
+              };
+              const registryBody =
+                `${REGISTRY_MARKER}\n**Global agent-work reservations**\n\n` +
+                `\`\`\`json\n${JSON.stringify(registryValue, null, 2)}\n\`\`\``;
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: registry.commentId,
+                body: registryBody,
+              });
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body:
+                  `Agent-work post-merge recovery accepted: **${status.work_id}** → **DONE**. ` +
+                  `PR #${command.pr} moved from handed-off head \`${previousHead}\` to independently ` +
+                  `approved exact final head \`${finalHead}\` and merged as \`${mergeCommit}\`. ` +
+                  `Review #${approval.reviewId}; exact-head Security, Python Quality Ratchet, and CI ` +
+                  `are green. Transition #${transitionSeq}. Coordination state only; no release, ` +
+                  `sealed, paid-compute, or qualification authority is granted.`,
+              });
+            } catch (error) {
+              const message = error?.message || String(error);
+              try {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: issueNumber,
+                  body: `Rejected \`recover-merged\` from @${actor}: ${message}`,
+                });
+              } catch {
+                // Preserve the original fail-closed error if audit publication also fails.
+              }
+              throw error;
+            }

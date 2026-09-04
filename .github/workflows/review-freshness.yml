@@ -1,0 +1,39 @@
+name: Review Freshness Queue
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build exact-head freshness report
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python tools/review_freshness.py
+          --repository "$GITHUB_REPOSITORY"
+          --json-out review-freshness.json
+          --markdown-out review-freshness.md
+      - name: Publish queue to job summary
+        run: cat review-freshness.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain machine-readable report
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-freshness
+          path: |
+            review-freshness.json
+            review-freshness.md
+          retention-days: 7
+          if-no-files-found: error
