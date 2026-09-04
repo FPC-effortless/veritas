@@ -1,0 +1,11 @@
+{
+  "calibration_min_uncertainty_mass": 0.15,
+  "evidence_coverage_target": 3,
+  "pilot_id": "gold10-flagship-pilot-v1",
+  "schema_version": "1.0",
+  "taskset_version": "gold10-flagship-pilot-v1",
+  "verifier_id": "veritas.gold10.evidence-discipline",
+  "verifier_version": "0.1.0",
+  "world_id": "veritas.gold10.investigation",
+  "world_version": "0.1.0"
+}
