@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from investigation_world.commercial.voice_qualification import build_voice_qualification_suite
+from investigation_world.commercial.voice_qualification import build_voice_development_suite
 from investigation_world.commercial.voice_runner import (
     VoiceAgentResult,
     VoiceAgentSession,
@@ -21,8 +21,8 @@ def _abstaining_driver(session: VoiceAgentSession) -> VoiceAgentResult:
     )
 
 
-def test_three_configurations_compare_on_same_frozen_suite() -> None:
-    suite = build_voice_qualification_suite(seed=42)
+def test_three_configurations_compare_on_same_development_suite() -> None:
+    suite = build_voice_development_suite(seed=42)
     runs, summaries = compare_voice_configurations(
         suite,
         {
