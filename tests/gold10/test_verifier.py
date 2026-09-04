@@ -11,19 +11,22 @@ from investigation_world.gold10 import (
 )
 
 
+_CASE_IDS = (
+    "2005-04-I-TX",
+    "2008-03-I-FL",
+    "2008-05-I-GA",
+    "2010-08-I-WA",
+    "2012-03-I-CA",
+    "2013-02-I-TX",
+    "2013-03-I-LA",
+    "2017-08-I-TX",
+    "2018-02-I-WI",
+    "2019-04-I-PA",
+)
+
+
 def test_reference_submissions_are_deterministic_and_bounded() -> None:
-    for case_id in (
-        "2005-04-I-TX",
-        "2008-03-I-FL",
-        "2008-05-I-GA",
-        "2010-08-I-WA",
-        "2012-03-I-CA",
-        "2013-02-I-TX",
-        "2013-03-I-LA",
-        "2017-08-I-TX",
-        "2018-02-I-WI",
-        "2019-04-I-PA",
-    ):
+    for case_id in _CASE_IDS:
         submission = reference_submission(case_id)
         first = score_submission(case_id, submission)
         second = score_submission(case_id, submission)
@@ -63,6 +66,41 @@ def test_arbitrary_hypothesis_claims_cannot_receive_positive_reward() -> None:
     score = score_submission(case_id, submission)
     assert score.reward == 0.0
     assert "no_canonical_verifier_target" in score.hard_failures
+    assert any(
+        item.startswith("canonical_target_required:")
+        for item in score.hard_failures
+    )
+
+
+def test_nonsense_hypotheses_plus_valid_factual_target_are_rejected() -> None:
+    case_id = "2005-04-I-TX"
+    reference = reference_submission(case_id)
+    payload = reference.model_dump(mode="python")
+    payload["primary_hypothesis"] = "Nonsense primary hypothesis."
+    payload["alternative_hypothesis"] = "Nonsense alternative hypothesis."
+    claims = list(payload["claims"])
+    for index, claim in enumerate(claims):
+        if claim["kind"] == EpistemicClaimKind.HYPOTHESIS:
+            claims[index] = {
+                **claim,
+                "statement": (
+                    "Nonsense primary hypothesis."
+                    if "primary" in claim["claim_id"]
+                    else "Nonsense alternative hypothesis."
+                ),
+            }
+    payload["claims"] = claims
+
+    score = score_submission(case_id, Gold10Submission.model_validate(payload))
+    assert score.reward == 0.0
+    assert score.component_scores["canonical_target_fidelity"] == 1.0
+    assert score.component_scores["hypothesis_structure"] == 0.0
+    assert "primary_hypothesis_target_mismatch" in score.hard_failures
+    assert "alternative_hypothesis_target_mismatch" in score.hard_failures
+    assert any(
+        item.startswith("canonical_target_statement_mismatch:")
+        for item in score.hard_failures
+    )
 
 
 def test_canonical_target_statement_mismatch_is_a_hard_failure() -> None:
@@ -73,7 +111,7 @@ def test_canonical_target_statement_mismatch_is_a_hard_failure() -> None:
     target_index = next(
         index
         for index, claim in enumerate(claims)
-        if claim.get("canonical_target_id") is not None
+        if str(claim.get("canonical_target_id", "")).startswith(("evidence:", "finding:"))
     )
     claims[target_index] = {
         **claims[target_index],
@@ -126,9 +164,39 @@ def test_calibration_case_penalizes_collapsed_uncertainty() -> None:
     )
     submission = Gold10Submission.model_validate(payload)
     score = score_submission(case_id, submission)
-    assert score.hard_failures == ()
+    assert score.reward == 0.0
     assert score.component_scores["calibration_integrity"] == 0.0
-    assert score.reward < score_submission(case_id, reference).reward
+    assert "calibration_uncertainty_mass_below_minimum" in score.hard_failures
+    assert "calibration_uncertainty_target_missing" in score.hard_failures
+
+
+def test_structured_meaningless_calibration_plus_valid_target_is_rejected() -> None:
+    case_id = "2012-03-I-CA"
+    reference = reference_submission(case_id)
+    payload = reference.model_dump(mode="python")
+    payload["unresolved_questions"] = ("Meaningless unresolved boilerplate.",)
+    claims = list(payload["claims"])
+    uncertainty_index = next(
+        index
+        for index, claim in enumerate(claims)
+        if claim["kind"] == EpistemicClaimKind.UNCERTAINTY
+    )
+    claims[uncertainty_index] = {
+        **claims[uncertainty_index],
+        "statement": "Meaningless unresolved boilerplate.",
+    }
+    payload["claims"] = claims
+
+    score = score_submission(case_id, Gold10Submission.model_validate(payload))
+    assert score.reward == 0.0
+    assert score.component_scores["canonical_target_fidelity"] == 1.0
+    assert score.component_scores["calibration_integrity"] == 0.0
+    assert "calibration_uncertainty_target_missing" in score.hard_failures
+    assert "calibration_uncertainty_claim_unbound" in score.hard_failures
+    assert any(
+        item.startswith("canonical_target_statement_mismatch:")
+        for item in score.hard_failures
+    )
 
 
 def test_submission_schema_has_no_ground_truth_claim_kind() -> None:
