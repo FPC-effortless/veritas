@@ -18,9 +18,17 @@ from investigation_world.commercial.voice_qualification import (
     qualification_submission,
     summarize_voice_qualification,
 )
+from investigation_world.commercial.voice_runner import (
+    VoiceAgentResult,
+    VoiceAgentSession,
+    compare_voice_configurations,
+    evaluate_voice_configuration,
+)
 
 __all__ = [
     "EvaluationManifest",
+    "VoiceAgentResult",
+    "VoiceAgentSession",
     "VoicePressure",
     "VoiceQualificationRun",
     "VoiceQualificationSummary",
@@ -31,7 +39,9 @@ __all__ = [
     "build_voice_qualification_episode",
     "build_voice_qualification_report",
     "build_voice_qualification_suite",
+    "compare_voice_configurations",
     "evaluate_sre_generator",
+    "evaluate_voice_configuration",
     "normalize_capability_score",
     "parse_sre_prediction",
     "qualification_submission",
