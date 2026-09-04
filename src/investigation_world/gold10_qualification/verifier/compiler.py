@@ -88,6 +88,18 @@ def _reordered(submission: Gold10Submission) -> Gold10Submission:
     )
 
 
+def _missing_evidence(reference: Gold10Submission) -> Gold10Submission:
+    if not reference.claims:
+        raise ValueError("missing-evidence falsifier requires at least one retained claim")
+    missing_id = reference.claims[0].evidence_ids[0]
+    if missing_id not in reference.evidence_ids:
+        raise ValueError("reference claim evidence is absent from cited evidence")
+    cited = tuple(evidence_id for evidence_id in reference.evidence_ids if evidence_id != missing_id)
+    if not cited:
+        raise ValueError("missing-evidence falsifier requires another cited evidence item")
+    return reference.model_copy(update={"evidence_ids": cited})
+
+
 def _mutate_submission(
     category: VerifierFixtureCategory,
     reference: Gold10Submission,
@@ -116,8 +128,7 @@ def _mutate_submission(
         )
         return reference.model_copy(update={"claims": (first, *reference.claims[1:])})
     if category == VerifierFixtureCategory.MISSING_EVIDENCE:
-        cited = reference.evidence_ids[1:] or reference.evidence_ids
-        return reference.model_copy(update={"evidence_ids": cited})
+        return _missing_evidence(reference)
     if category == VerifierFixtureCategory.AUTHORITY_PROCESS_VIOLATION:
         return reference.model_copy(
             update={"primary_confidence": 0.25, "alternative_confidence": 0.55}
