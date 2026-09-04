@@ -131,6 +131,7 @@ def traceable_experience(
     repo_root = (root or ROOT).resolve()
     task = build_task(case_id, repo_root)
     contract = load_pilot_contract(repo_root)
+    target_contract_sha256 = contract.verifier_target_contract_sha256
     score = score_submission(case_id, submission, repo_root)
     verifier = VerifierIdentity(
         verifier_id=contract.verifier_id,
@@ -217,6 +218,13 @@ def traceable_experience(
                 source_digest=task.manifest_sha256,
                 visibility=VisibilityClass.PUBLIC,
             ),
+            ProvenanceRecord(
+                source_kind="gold10_verifier_target_contract",
+                source_id=contract.verifier_id,
+                source_version=contract.verifier_version,
+                source_digest=target_contract_sha256,
+                visibility=VisibilityClass.PUBLIC,
+            ),
         ),
         visibility=VisibilityClass.PUBLIC,
         public_metadata={
@@ -224,6 +232,7 @@ def traceable_experience(
             "split": task.split,
             "calibration_required": task.calibration_required,
             "reward_ceiling": contract.unqualified_reward_ceiling,
+            "verifier_target_contract_sha256": target_contract_sha256,
             "verifier_qualification": "unqualified_pilot_candidate",
         },
     )
@@ -276,6 +285,12 @@ def traceable_experience(
                 digest=task.manifest_sha256,
                 visibility=VisibilityClass.PUBLIC,
             ),
+            ExperienceReference(
+                reference_id=f"gold10-verifier-targets:{target_contract_sha256}",
+                reference_type="gold10_verifier_target_contract",
+                digest=target_contract_sha256,
+                visibility=VisibilityClass.PUBLIC,
+            ),
         ),
         visibility=VisibilityClass.PUBLIC,
         public_metadata={
@@ -283,6 +298,7 @@ def traceable_experience(
             "case_id": case_id,
             "split": task.split,
             "evidence_boundary": "pilot_candidate_only",
+            "verifier_target_contract_sha256": target_contract_sha256,
             "verifier_qualification": "unqualified",
         },
     )

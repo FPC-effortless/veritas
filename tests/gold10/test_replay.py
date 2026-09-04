@@ -20,6 +20,22 @@ def test_reference_experiences_are_native_traceable_machine_experience() -> None
         assert experience.readiness.reverification_ready.status is ReadinessStatus.UNKNOWN
         assert experience.public_metadata["evidence_boundary"] == "pilot_candidate_only"
         assert experience.public_metadata["verifier_qualification"] == "unqualified"
+        target_digest = experience.public_metadata["verifier_target_contract_sha256"]
+        assert len(target_digest) == 64
+        assert (
+            experience.trajectory.public_metadata["verifier_target_contract_sha256"]
+            == target_digest
+        )
+        assert any(
+            record.source_kind == "gold10_verifier_target_contract"
+            and record.source_digest == target_digest
+            for record in experience.trajectory.provenance
+        )
+        assert any(
+            reference.reference_type == "gold10_verifier_target_contract"
+            and reference.digest == target_digest
+            for reference in experience.derivation_references
+        )
         assert experience.trajectory.original_evaluation.reward == 0.75
         assert experience.trajectory.public_metadata["reward_ceiling"] == 0.75
 

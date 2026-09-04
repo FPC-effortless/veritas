@@ -460,12 +460,11 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
     }
 
 
-def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
+def build_taskset_rebuild_identity(root: Path | None = None) -> dict[str, str]:
     repo_root = (root or ROOT).resolve()
     tasks = build_taskset(repo_root)
     contract = load_pilot_contract(repo_root)
     manifest = build_gold10_manifest(repo_root)
-
     rebuild_payload = {
         "manifest_sha256": manifest["manifest_sha256"],
         "contract": contract.model_dump(mode="json"),
@@ -486,7 +485,18 @@ def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
             for task in tasks
         ],
     }
-    taskset_rebuild_sha256 = canonical_hash(rebuild_payload)
+    return {
+        "taskset_rebuild_sha256": canonical_hash(rebuild_payload),
+        "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
+    }
+
+
+def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
+    repo_root = (root or ROOT).resolve()
+    tasks = build_taskset(repo_root)
+    contract = load_pilot_contract(repo_root)
+    identity = build_taskset_rebuild_identity(repo_root)
+    taskset_rebuild_sha256 = identity["taskset_rebuild_sha256"]
     duplicate = _duplicate_analysis(tasks, contract.near_duplicate_threshold)
     contamination = _contamination_assessment(repo_root)
     coverage = _coverage_report(repo_root, tasks)
@@ -504,7 +514,9 @@ def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
         "schema_version": "1.0",
         "pilot_id": contract.pilot_id,
         "taskset_rebuild_sha256": taskset_rebuild_sha256,
-        "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
+        "verifier_target_contract_sha256": identity[
+            "verifier_target_contract_sha256"
+        ],
         "duplicate_near_duplicate_analysis": duplicate,
         "contamination_assessment": contamination,
         "coverage_report": coverage,

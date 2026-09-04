@@ -1,7 +1,10 @@
 from dataclasses import replace
 
+import pytest
+
+import investigation_world.gold10.quality as quality_module
 import investigation_world.gold10.targets as targets_module
-from investigation_world.gold10 import build_pilot_gate_report, build_task
+from investigation_world.gold10 import build_pilot_gate_report
 
 
 def test_pilot_gate_report_is_deterministic_and_complete() -> None:
@@ -109,15 +112,10 @@ def test_target_statement_drift_changes_rebuild_and_vq_identity(monkeypatch) -> 
     ]["verifier_subject_sha256"]
 
 
-def test_target_evidence_drift_changes_rebuild_and_vq_identity(monkeypatch) -> None:
+def test_target_evidence_drift_changes_identity_then_fails_closed(monkeypatch) -> None:
     case_id = "2005-04-I-TX"
-    baseline = build_pilot_gate_report()
+    baseline = quality_module.build_taskset_rebuild_identity()
     original = targets_module._TARGETS[case_id]
-    replacement_evidence_id = next(
-        item.evidence_id
-        for item in build_task(case_id).available_evidence
-        if item.evidence_id not in original.primary.evidence_ids
-    )
     monkeypatch.setitem(
         targets_module._TARGETS,
         case_id,
@@ -125,20 +123,18 @@ def test_target_evidence_drift_changes_rebuild_and_vq_identity(monkeypatch) -> N
             original,
             primary=replace(
                 original.primary,
-                evidence_ids=(replacement_evidence_id,),
+                evidence_ids=("csb-final-findings-release-2007-03-20",),
             ),
         ),
     )
 
-    changed = build_pilot_gate_report()
+    changed = quality_module.build_taskset_rebuild_identity()
     assert changed["verifier_target_contract_sha256"] != baseline[
         "verifier_target_contract_sha256"
     ]
     assert changed["taskset_rebuild_sha256"] != baseline["taskset_rebuild_sha256"]
-    assert changed["report_sha256"] != baseline["report_sha256"]
-    assert changed["vq_scorecard"]["verifier_subject_sha256"] != baseline[
-        "vq_scorecard"
-    ]["verifier_subject_sha256"]
+    with pytest.raises(ValueError, match="unavailable evidence"):
+        build_pilot_gate_report()
 
 
 def test_vq_uses_canonical_multidimensional_scorecard_without_scalar_promotion() -> None:

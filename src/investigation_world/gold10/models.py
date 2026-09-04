@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from investigation_world.tasks.spec import TaskSpec
+
+from .targets import verifier_target_contract_sha256 as current_target_contract_sha256
 
 
 class CanonicalModel(BaseModel):
@@ -51,13 +53,17 @@ class PilotContract(CanonicalModel):
     calibration_min_uncertainty_mass: float = Field(ge=0.0, le=1.0)
     unqualified_reward_ceiling: float = Field(gt=0.0, lt=1.0)
     near_duplicate_threshold: float = Field(gt=0.0, lt=1.0)
+    verifier_target_contract_sha256: str = Field(
+        default_factory=current_target_contract_sha256,
+        min_length=64,
+        max_length=64,
+    )
 
-    @computed_field
-    @property
-    def verifier_target_contract_sha256(self) -> str:
-        from .targets import verifier_target_contract_sha256
-
-        return verifier_target_contract_sha256()
+    @model_validator(mode="after")
+    def validate_verifier_target_contract_sha256(self) -> "PilotContract":
+        if self.verifier_target_contract_sha256 != current_target_contract_sha256():
+            raise ValueError("Gold-10 verifier target contract digest is stale or forged")
+        return self
 
 
 class Gold10Task(CanonicalModel):
