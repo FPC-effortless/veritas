@@ -47,11 +47,26 @@ Allowed claim kinds are `fact`, `allegation`, `institutional_finding`,
 `hypothesis`, and `uncertainty`. There is deliberately no `ground_truth` kind.
 
 Primary and alternative hypotheses are not rewarded merely because their strings
-are non-empty. Each must have a matching `hypothesis` claim with public evidence
-available at the temporal cut.
+are non-empty or because they repeat a submitted claim. The verifier owns a
+case-specific target contract in `gold10.targets`. For every case, the primary and
+alternative working hypotheses have distinct target IDs, exact statements, and
+exact support-evidence IDs that must be available at the frozen temporal cut.
 
-Positive reward also requires at least one canonical public verifier target.
-Supported canonical targets are:
+Those targets are evaluation fixtures for the deterministic pilot verifier. They
+are explicitly working hypotheses, not private truth, final causal findings, or
+scientific qualification. Their purpose is to prevent arbitrary prose from
+receiving the maximum available unqualified reward while preserving the pilot's
+non-LLM deterministic boundary.
+
+A valid hypothesis claim therefore must match all of:
+
+- the task-specific hypothesis target ID;
+- the exact target statement for its primary or alternative role; and
+- the exact frozen-cut evidence binding.
+
+Positive reward also requires at least one separate canonical public factual
+verifier target. Hypothesis and uncertainty targets do not count as factual targets.
+Supported factual targets are:
 
 - `evidence:<fragment-id>` for a `fact` claim whose statement and evidence ID
   exactly match the deterministic evidence-availability target; or
@@ -66,24 +81,29 @@ promote it to private or omniscient truth.
 The verifier does not call an LLM. It scores:
 
 - evidence coverage;
-- hypothesis/evidence binding;
-- canonical target fidelity;
+- task-specific hypothesis/evidence binding;
+- canonical factual-target fidelity;
 - calibration integrity;
 - rights and temporal integrity.
 
 Hindsight or invented evidence is a zero-reward hard failure. Missing hypothesis
 bindings, missing canonical targets, unknown canonical targets, target-kind drift,
 target-statement drift, and target-evidence drift are also fail-closed conditions.
+A valid FACT or institutional-finding target cannot authorize unrelated or
+nonsensical hypothesis text.
 
 The verifier does not claim to establish open-ended semantic correctness or
 plausibility of arbitrary free-form hypothesis prose. The pilot contract therefore
-applies a `0.75` multiplicative reward ceiling. A structurally complete scripted
-reference scores `0.75`, not `1.0`. This is a pilot safety boundary, not a
-scientific threshold or a capability score.
+applies a `0.75` multiplicative reward ceiling. A target-bound scripted reference
+scores `0.75`, not `1.0`. This is a pilot safety boundary, not a scientific
+threshold or a capability score.
 
-For the calibration case, residual probability mass alone is insufficient.
-Calibration credit also requires an explicit `uncertainty` claim whose statement
-matches an unresolved question and whose evidence is available at the cut.
+For the Chevron Richmond calibration case, residual probability mass alone is
+insufficient. The verifier has one exact case-specific uncertainty target bound to
+the surveillance evidence available at the frozen cut. Calibration credit requires
+that exact unresolved question and an `uncertainty` claim with the exact target ID,
+statement, and evidence binding. Repeating arbitrary unresolved boilerplate is a
+hard failure even if an unrelated canonical factual target remains valid.
 
 ## Native trajectory and MachineExperience
 
@@ -96,8 +116,8 @@ evaluator reference, private event payload, trajectory private metadata, or
 experience private metadata. The trajectory records the unqualified verifier
 ceiling explicitly in public metadata.
 
-Reference episodes are deterministic protocol-solvability fixtures only. They
-are not expert trajectories and are not model-capability evidence.
+Reference episodes are deterministic target-bound protocol-solvability fixtures
+only. They are not expert trajectories and are not model-capability evidence.
 
 ## Mandatory pilot-level gate report
 
@@ -151,6 +171,7 @@ The executable report records:
 - calibration cases;
 - cases with available institutional findings;
 - explicit causal-edge counts by case;
+- task-specific hypothesis and calibration-target requirements;
 - supported task/claim structure.
 
 Single-source USCSB coverage is visible rather than presented as broad source
@@ -162,14 +183,17 @@ The report executes adversarial probes and fails its exploit gate unless all pas
 
 - arbitrary hypotheses with valid public evidence but no canonical target must
   receive zero reward;
+- nonsense primary/alternative hypotheses must receive zero reward even when an
+  otherwise valid canonical FACT or institutional-finding target is preserved;
 - canonical target statement mismatch must receive zero reward;
 - hindsight evidence must receive zero reward;
-- calibration boilerplate without structured uncertainty must score below the
-  valid calibration reference.
+- collapsed calibration uncertainty must receive zero reward;
+- structured meaningless calibration boilerplate must receive zero reward even
+  when an unrelated valid canonical target remains intact.
 
-Residual risks are retained in the report. Canonical target and provenance binding
-is not open-ended semantic-verifier qualification, and public historical material
-remains contamination-prone.
+Residual risks are retained in the report. The deterministic target contract does
+not establish open-ended semantic-verifier qualification, and public historical
+material remains contamination-prone.
 
 ### Canonical VQ multidimensional scorecard
 
@@ -201,10 +225,13 @@ The owned tests fail if:
 - later Texas City evidence leaks through the frozen cutoff;
 - Chevron Richmond stops being the calibration case;
 - arbitrary hypotheses without a canonical target receive positive reward;
-- canonical target statements/evidence can drift without hard failure;
+- nonsense hypotheses plus a valid factual target can receive positive reward;
+- case-specific hypothesis target statements/evidence can drift without hard failure;
+- canonical factual-target statements/evidence can drift without hard failure;
 - invented or hindsight evidence receives nonzero reward;
-- hypothesis strings are not structurally bound to evidence claims;
-- calibration collapses uncertainty without penalty;
+- primary and alternative hypothesis roles are not bound to their distinct targets;
+- calibration collapses uncertainty without a hard penalty;
+- structured meaningless calibration plus a valid target can receive positive reward;
 - a submission can encode a `ground_truth` claim kind;
 - deterministic task/report identity changes across identical rebuilds;
 - the exploit/shortcut gate does not pass;
