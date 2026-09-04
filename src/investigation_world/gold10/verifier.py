@@ -145,6 +145,17 @@ def _canonical_target_failure(
     return f"canonical_target_unknown:{claim.claim_id}"
 
 
+def _confidence_role_failures(submission: Gold10Submission) -> list[str]:
+    failures: list[str] = []
+    if submission.primary_confidence <= 0.0:
+        failures.append("primary_confidence_nonpositive")
+    if submission.alternative_confidence <= 0.0:
+        failures.append("alternative_confidence_nonpositive")
+    if submission.primary_confidence <= submission.alternative_confidence:
+        failures.append("primary_confidence_not_greater_than_alternative")
+    return failures
+
+
 def _hypothesis_support_score(
     task: Gold10Task,
     submission: Gold10Submission,
@@ -156,7 +167,7 @@ def _hypothesis_support_score(
         available_ids,
         calibration_required=task.calibration_required,
     )
-    failures: list[str] = []
+    failures = _confidence_role_failures(submission)
 
     def bound(target_id: str, statement: str, evidence_ids: tuple[str, ...]) -> bool:
         return any(
@@ -187,7 +198,7 @@ def _hypothesis_support_score(
         failures.append("primary_hypothesis_target_mismatch")
     if not alternative_matches:
         failures.append("alternative_hypothesis_target_mismatch")
-    return (1.0 if primary_matches and alternative_matches else 0.0), failures
+    return (1.0 if primary_matches and alternative_matches and not failures else 0.0), failures
 
 
 def _calibration_score(
@@ -209,7 +220,7 @@ def _calibration_score(
     if uncertainty is None:
         return 0.0, ["calibration_uncertainty_target_missing"]
 
-    failures: list[str] = []
+    failures = _confidence_role_failures(submission)
     if submission.uncertainty_mass < minimum_uncertainty_mass:
         failures.append("calibration_uncertainty_mass_below_minimum")
 

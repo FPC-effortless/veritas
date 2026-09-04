@@ -129,6 +129,7 @@ def _coverage_report(root: Path, tasks: tuple[Any, ...]) -> dict[str, Any]:
             "primary_hypothesis_required": True,
             "alternative_hypothesis_required": True,
             "case_specific_hypothesis_targets_required": True,
+            "primary_confidence_must_exceed_positive_alternative": True,
             "calibration_uncertainty_target_required": True,
             "canonical_factual_target_required_for_positive_reward": True,
             "claim_kinds": [item.value for item in EpistemicClaimKind],
@@ -263,6 +264,23 @@ def _appended_unresolved_text(root: Path) -> Any:
     )
 
 
+def _confidence_role_inversion(
+    root: Path,
+    case_id: str,
+    *,
+    primary_confidence: float,
+    alternative_confidence: float,
+) -> Any:
+    payload = reference_submission(case_id, root).model_dump(mode="python")
+    payload["primary_confidence"] = primary_confidence
+    payload["alternative_confidence"] = alternative_confidence
+    return score_submission(
+        case_id,
+        Gold10Submission.model_validate(payload),
+        root,
+    )
+
+
 def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
     case_id = "2005-04-I-TX"
     reference = reference_submission(case_id, root)
@@ -294,6 +312,12 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
     valid_target_nonsense_score = _nonsense_with_valid_factual_target(root)
     unsupported_allegation_score = _appended_unsupported_allegation(root)
     appended_unresolved_score = _appended_unresolved_text(root)
+    confidence_inversion_score = _confidence_role_inversion(
+        root,
+        case_id,
+        primary_confidence=0.0,
+        alternative_confidence=1.0,
+    )
 
     mismatch_payload = reference.model_dump(mode="python")
     mismatch_claims = list(mismatch_payload["claims"])
@@ -339,6 +363,12 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
         root,
     )
     meaningless_calibration_score = _structured_meaningless_calibration(root)
+    calibration_confidence_inversion_score = _confidence_role_inversion(
+        root,
+        calibration_case,
+        primary_confidence=0.0,
+        alternative_confidence=0.85,
+    )
 
     probes: dict[str, dict[str, Any]] = {
         "arbitrary_hypothesis_without_canonical_target": {
@@ -379,6 +409,21 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
             ),
             "reward": appended_unresolved_score.reward,
             "hard_failures": list(appended_unresolved_score.hard_failures),
+        },
+        "non_calibration_confidence_role_inversion": {
+            "passed": (
+                confidence_inversion_score.reward == 0.0
+                and confidence_inversion_score.component_scores[
+                    "hypothesis_structure"
+                ]
+                == 0.0
+                and "primary_confidence_nonpositive"
+                in confidence_inversion_score.hard_failures
+                and "primary_confidence_not_greater_than_alternative"
+                in confidence_inversion_score.hard_failures
+            ),
+            "reward": confidence_inversion_score.reward,
+            "hard_failures": list(confidence_inversion_score.hard_failures),
         },
         "canonical_target_statement_mismatch": {
             "passed": (
@@ -428,12 +473,32 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
             "reward": meaningless_calibration_score.reward,
             "hard_failures": list(meaningless_calibration_score.hard_failures),
         },
+        "calibration_confidence_role_inversion": {
+            "passed": (
+                calibration_confidence_inversion_score.reward == 0.0
+                and calibration_confidence_inversion_score.component_scores[
+                    "hypothesis_structure"
+                ]
+                == 0.0
+                and calibration_confidence_inversion_score.component_scores[
+                    "calibration_integrity"
+                ]
+                == 0.0
+                and "primary_confidence_nonpositive"
+                in calibration_confidence_inversion_score.hard_failures
+                and "primary_confidence_not_greater_than_alternative"
+                in calibration_confidence_inversion_score.hard_failures
+            ),
+            "reward": calibration_confidence_inversion_score.reward,
+            "hard_failures": list(calibration_confidence_inversion_score.hard_failures),
+        },
     }
     return {
         "policy": {
             "semantic_text_is_not_treated_as_qualified_truth": True,
             "positive_reward_requires_a_canonical_public_factual_target": True,
             "hypotheses_require_exact_case_specific_targets": True,
+            "primary_confidence_must_exceed_positive_alternative": True,
             "calibration_requires_exact_case_specific_uncertainty_target": True,
             "unsupported_extra_claims_fail_closed": True,
             "unexpected_unresolved_text_fails_closed": True,

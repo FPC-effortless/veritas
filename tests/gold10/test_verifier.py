@@ -36,6 +36,58 @@ def test_reference_submissions_are_deterministic_and_bounded() -> None:
         assert first.component_scores["hypothesis_structure"] == 1.0
 
 
+def test_non_calibration_confidence_role_inversion_is_a_hard_failure() -> None:
+    case_id = "2005-04-I-TX"
+    payload = reference_submission(case_id).model_dump(mode="python")
+    payload["primary_confidence"] = 0.0
+    payload["alternative_confidence"] = 1.0
+
+    score = score_submission(case_id, Gold10Submission.model_validate(payload))
+    assert score.reward == 0.0
+    assert score.component_scores["hypothesis_structure"] == 0.0
+    assert "primary_confidence_nonpositive" in score.hard_failures
+    assert "primary_confidence_not_greater_than_alternative" in score.hard_failures
+
+
+def test_calibration_confidence_role_inversion_is_a_hard_failure() -> None:
+    case_id = "2012-03-I-CA"
+    payload = reference_submission(case_id).model_dump(mode="python")
+    payload["primary_confidence"] = 0.0
+    payload["alternative_confidence"] = 0.85
+
+    score = score_submission(case_id, Gold10Submission.model_validate(payload))
+    assert score.reward == 0.0
+    assert score.component_scores["hypothesis_structure"] == 0.0
+    assert score.component_scores["calibration_integrity"] == 0.0
+    assert "primary_confidence_nonpositive" in score.hard_failures
+    assert "primary_confidence_not_greater_than_alternative" in score.hard_failures
+
+
+def test_confidence_roles_reject_ties_and_zero_mass_alternatives() -> None:
+    case_id = "2005-04-I-TX"
+    reference = reference_submission(case_id)
+
+    tied_payload = reference.model_dump(mode="python")
+    tied_payload["primary_confidence"] = 0.5
+    tied_payload["alternative_confidence"] = 0.5
+    tied_score = score_submission(
+        case_id,
+        Gold10Submission.model_validate(tied_payload),
+    )
+    assert tied_score.reward == 0.0
+    assert "primary_confidence_not_greater_than_alternative" in tied_score.hard_failures
+
+    zero_alternative_payload = reference.model_dump(mode="python")
+    zero_alternative_payload["primary_confidence"] = 0.5
+    zero_alternative_payload["alternative_confidence"] = 0.0
+    zero_alternative_score = score_submission(
+        case_id,
+        Gold10Submission.model_validate(zero_alternative_payload),
+    )
+    assert zero_alternative_score.reward == 0.0
+    assert "alternative_confidence_nonpositive" in zero_alternative_score.hard_failures
+
+
 def test_arbitrary_hypothesis_claims_cannot_receive_positive_reward() -> None:
     case_id = "2005-04-I-TX"
     task = build_task(case_id)
