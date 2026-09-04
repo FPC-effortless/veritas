@@ -472,7 +472,7 @@ def _validated_task_use_authority(
     )
     if len(records_by_artifact) != 10 or set(records_by_artifact) != expected_artifact_ids:
         raise Gold10ManifestError(
-            "task-use authority artifact_id set must equal exactly the ten current Gold report artifacts"
+            "task-use authority artifact_id set mismatches canonical Gold reports"
         )
     return records
 
