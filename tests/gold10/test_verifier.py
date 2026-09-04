@@ -1,11 +1,11 @@
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from investigation_world.gold10 import (
-    build_task,
     EpistemicClaim,
     EpistemicClaimKind,
     Gold10Submission,
+    build_task,
     reference_submission,
     score_submission,
 )
