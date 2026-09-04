@@ -16,7 +16,10 @@ def _failure_summary(record: Gold10TaskVerifierQualification) -> str:
         for gate in report.gates
         if gate.outcome != GateOutcome.PASS
     ]
-    return f"case={record.binding.case_id} report={report.status.value} gates={failures!r}"
+    return (
+        f"case={record.binding.case_id} report={report.status.value} "
+        f"gates={failures!r}"
+    )
 
 
 def test_each_gold10_task_compiles_fail_closed_verifier_evidence() -> None:
