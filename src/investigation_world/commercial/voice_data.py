@@ -19,7 +19,6 @@ from investigation_world.operational.models import (
     TaskContract,
 )
 
-
 COMPILER_VERSION = "veritas-voice-data-compiler-v1"
 
 
