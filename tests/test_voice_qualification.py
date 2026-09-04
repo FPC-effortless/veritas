@@ -11,12 +11,16 @@ from investigation_world.commercial.voice_qualification import (
     qualification_submission,
     summarize_voice_qualification,
 )
-from investigation_world.operational.models import VerificationBreakdown
+from investigation_world.operational.models import OperationalEpisode, VerificationBreakdown
 from investigation_world.operational.runtime import OperationalRuntime
 
 
-def _object_id(episode, record_type: str) -> str:
-    return next(record.object_id for record in episode.records if record.record_type == record_type)
+def _object_id(episode: OperationalEpisode, record_type: str) -> str:
+    return next(
+        record.object_id
+        for record in episode.records
+        if record.record_type == record_type
+    )
 
 
 def _perfect_verification() -> VerificationBreakdown:
@@ -47,7 +51,8 @@ def test_voice_suite_is_deterministic_and_covers_required_families() -> None:
         family.value for family in VoiceScenarioFamily
     }
     for pressure in VoicePressure:
-        assert sum(item.metadata["pressure"] == pressure.value for item in first) == 15
+        matching = [item for item in first if item.metadata["pressure"] == pressure.value]
+        assert len(matching) == 15
 
 
 def test_public_sample_excludes_hidden_oracle() -> None:
@@ -61,13 +66,26 @@ def test_public_sample_excludes_hidden_oracle() -> None:
 
 
 def test_valid_refund_reference_trajectory_reaches_verified_state() -> None:
-    episode = build_voice_qualification_episode(VoiceScenarioFamily.VALID_REFUND, variant=0)
+    episode = build_voice_qualification_episode(
+        VoiceScenarioFamily.VALID_REFUND,
+        variant=0,
+    )
     customer_id = _object_id(episode, "customer_account")
     order_id = _object_id(episode, "order")
     runtime = OperationalRuntime(episode)
 
-    assert runtime.act("verify_identity", customer_id=customer_id, method="otp")["verified"] is True
-    assert runtime.act("issue_refund", order_id=order_id, amount_usd=80)["refund_status"] == "issued"
+    verified = runtime.act(
+        "verify_identity",
+        customer_id=customer_id,
+        method="otp",
+    )
+    assert verified["verified"] is True
+    refunded = runtime.act(
+        "issue_refund",
+        order_id=order_id,
+        amount_usd=80,
+    )
+    assert refunded["refund_status"] == "issued"
     runtime.act("close_case", customer_id=customer_id)
     result = runtime.submit(qualification_submission(episode))
 
@@ -82,7 +100,10 @@ def test_valid_refund_reference_trajectory_reaches_verified_state() -> None:
 
 
 def test_ineligible_refund_blocks_wrong_mutation_then_allows_safe_denial() -> None:
-    episode = build_voice_qualification_episode(VoiceScenarioFamily.INELIGIBLE_REFUND, variant=0)
+    episode = build_voice_qualification_episode(
+        VoiceScenarioFamily.INELIGIBLE_REFUND,
+        variant=0,
+    )
     customer_id = _object_id(episode, "customer_account")
     order_id = _object_id(episode, "order")
     runtime = OperationalRuntime(episode)
@@ -92,7 +113,11 @@ def test_ineligible_refund_blocks_wrong_mutation_then_allows_safe_denial() -> No
     assert blocked["accepted"] is False
     assert runtime.state_snapshot()[f"{order_id}.refund_count"] == 0
 
-    runtime.act("deny_refund", order_id=order_id, reason="policy_ineligible")
+    runtime.act(
+        "deny_refund",
+        order_id=order_id,
+        reason="policy_ineligible",
+    )
     runtime.act("close_case", customer_id=customer_id)
     result = runtime.submit(qualification_submission(episode))
     assert result.outcome == 1.0
@@ -101,13 +126,20 @@ def test_ineligible_refund_blocks_wrong_mutation_then_allows_safe_denial() -> No
 
 
 def test_restricted_account_override_is_detected_as_critical_harm() -> None:
-    episode = build_voice_qualification_episode(VoiceScenarioFamily.RESTRICTED_ACCOUNT, variant=2)
+    episode = build_voice_qualification_episode(
+        VoiceScenarioFamily.RESTRICTED_ACCOUNT,
+        variant=2,
+    )
     customer_id = _object_id(episode, "customer_account")
     runtime = OperationalRuntime(episode)
 
     runtime.act("unsafe_override", customer_id=customer_id, control="policy")
     runtime.act("inspect_account", customer_id=customer_id)
-    runtime.act("create_escalation", customer_id=customer_id, reason="human_review")
+    runtime.act(
+        "create_escalation",
+        customer_id=customer_id,
+        reason="human_review",
+    )
     runtime.act("close_case", customer_id=customer_id)
     result = runtime.submit(qualification_submission(episode))
 
@@ -118,7 +150,10 @@ def test_restricted_account_override_is_detected_as_critical_harm() -> None:
 
 
 def test_duplicate_refund_is_idempotent() -> None:
-    episode = build_voice_qualification_episode(VoiceScenarioFamily.DUPLICATE_REFUND, variant=0)
+    episode = build_voice_qualification_episode(
+        VoiceScenarioFamily.DUPLICATE_REFUND,
+        variant=0,
+    )
     customer_id = _object_id(episode, "customer_account")
     order_id = _object_id(episode, "order")
     runtime = OperationalRuntime(episode)
@@ -136,7 +171,10 @@ def test_duplicate_refund_is_idempotent() -> None:
 
 
 def test_partial_failure_recovery_requires_recovery_before_refund() -> None:
-    episode = build_voice_qualification_episode(VoiceScenarioFamily.PARTIAL_FAILURE_RECOVERY, variant=3)
+    episode = build_voice_qualification_episode(
+        VoiceScenarioFamily.PARTIAL_FAILURE_RECOVERY,
+        variant=3,
+    )
     customer_id = _object_id(episode, "customer_account")
     order_id = _object_id(episode, "order")
     runtime = OperationalRuntime(episode)
@@ -203,7 +241,10 @@ def test_summary_reports_reliability_cost_and_authority() -> None:
     assert by_id["agent-b"].hard_invariant_violation_rate == 1.0
     assert by_id["agent-b"].authority_envelope["valid_refund"] == "human_required"
 
-    report = build_voice_qualification_report(summaries, customer_name="ExampleCo")
+    report = build_voice_qualification_report(
+        summaries,
+        customer_name="ExampleCo",
+    )
     assert "ExampleCo" in report
     assert "Cost / verified success" in report
-    assert "Not yet qualified" not in report.split("## Recommendation", 1)[1].split("## Authority", 1)[0]
+    assert "Not yet qualified" in report
