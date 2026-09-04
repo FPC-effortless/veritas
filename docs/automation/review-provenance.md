@@ -79,11 +79,35 @@ A missing or invalid exact-head review therefore makes the required context fail
 it does not skip Bandit, dependency auditing, dependency review, or other
 substantive checks.
 
+When `review-provenance-semantic` is present, Security applies the same canonical
+exact-head review authority. The label does not create a second vendor-specific
+merge gate. Copilot, Codex, or another external reviewer may add stronger identity
+or semantic evidence when available, but no named external provider is required
+for ordinary repository integration.
+
 A submitted or dismissed PR review triggers the default-branch Security workflow.
 That event re-runs the latest completed Security run associated with the exact PR
 head so newly recorded review evidence can refresh the existing required contexts.
 
 Push, schedule, and manual Security runs do not require PR review provenance.
+
+## Engineering acceptance versus external qualification
+
+Repository integration must remain continuously available using GitHub, Veritas's
+own tests and CI, and canonical exact-head review provenance. Third-party accounts,
+credits, hardware, services, or reviewer identities are not universal merge
+authorities.
+
+Provider-specific evidence belongs to the claim it supports. HUD, Prime, NeMo Gym,
+OpenEnv, Harbor, Copilot, Codex, paid compute, or another external system may be a
+required qualification gate only when the work item or release claim specifically
+asserts compatibility, validation, or authority from that system. If such evidence
+is unavailable, the implementation may still be mergeable while the stronger claim
+remains pending or false.
+
+Scientific, Frontier, training-value, release, deployment, and commercial claims
+remain subject to their own stricter evidence boundaries. Removing an unavailable
+provider from ordinary merge authority does not weaken those qualification gates.
 
 ## Agent review procedure
 
