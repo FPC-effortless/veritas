@@ -369,6 +369,20 @@ def test_security_workflow_enforces_provenance_after_scans() -> None:
         "Require independent exact-head review"
     )
     assert "tools/review_provenance.py check" in source_block
+    assert source_block.index("Require independent exact-head review") < source_block.index(
+        "Require canonical exact-head semantic review when requested"
+    )
+    semantic_block = source_block.split(
+        "Require canonical exact-head semantic review when requested", 1
+    )[1]
+    assert "if: always() && github.event_name == 'pull_request'" in semantic_block
+    assert '"review-provenance-semantic" not in labels' in semantic_block
+    assert 'pr.get("head", {}).get("sha") != head' in semantic_block
+    assert "semantic evidence guard: live PR head moved" in semantic_block
+    assert "tools/review_provenance.py check" in semantic_block
+    assert "copilot-pull-request-reviewer[bot]" not in source_block
+    assert "chatgpt-codex-connector[bot]" not in source_block
+    assert "veritas-semantic-codex" not in source_block
 
     node_block = workflow.split("node-dependency-audit:", 1)[1].split(
         "dependency-review:", 1
