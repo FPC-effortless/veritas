@@ -1671,12 +1671,13 @@ def _run_failures(
 def _failure_counts(
     runs: list[VoiceQualificationRun],
 ) -> dict[str, Counter[VoiceFailureClass]]:
-    counts: dict[str, Counter[VoiceFailureClass]] = defaultdict(Counter)
+    counts: dict[str, Counter[VoiceFailureClass]] = {}
     for run in runs:
         if run.attempt != 1:
             continue
         classes, _ = _run_failures(run)
-        counts[run.configuration_id].update(classes)
+        counter = counts.setdefault(run.configuration_id, Counter())
+        counter.update(classes)
     return counts
 
 
@@ -1956,9 +1957,7 @@ def build_voice_qualification_report(
             lines.append(f"- Evidence: {item}")
         lines.extend(_trace_lines(run))
 
-    observed_failures = Counter[
-        VoiceFailureClass
-    ]()
+    observed_failures: Counter[VoiceFailureClass] = Counter()
     for run in first_attempts:
         classes, _ = _run_failures(run)
         observed_failures.update(classes)
