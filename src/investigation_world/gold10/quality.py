@@ -136,7 +136,9 @@ def _coverage_report(root: Path, tasks: tuple[Any, ...]) -> dict[str, Any]:
         "task_structure": {
             "primary_hypothesis_required": True,
             "alternative_hypothesis_required": True,
-            "canonical_target_required_for_positive_reward": True,
+            "case_specific_hypothesis_targets_required": True,
+            "calibration_uncertainty_target_required": True,
+            "canonical_factual_target_required_for_positive_reward": True,
             "claim_kinds": [item.value for item in EpistemicClaimKind],
             "no_llm_judge": True,
         },
@@ -183,10 +185,56 @@ def _reference_solvability(root: Path, tasks: tuple[Any, ...]) -> dict[str, Any]
         "status": "pass" if passed else "fail",
         "reference_scores": scores,
         "interpretation": (
-            "Reference submissions establish scripted protocol solvability only, "
-            "not model capability or semantic-verifier qualification."
+            "Reference submissions establish target-bound scripted protocol solvability "
+            "only, not model capability or open-ended semantic-verifier qualification."
         ),
     }
+
+
+def _nonsense_with_valid_factual_target(root: Path) -> Any:
+    case_id = "2005-04-I-TX"
+    payload = reference_submission(case_id, root).model_dump(mode="python")
+    payload["primary_hypothesis"] = "Nonsense primary hypothesis."
+    payload["alternative_hypothesis"] = "Nonsense alternative hypothesis."
+    claims = list(payload["claims"])
+    for index, claim in enumerate(claims):
+        if claim["kind"] == EpistemicClaimKind.HYPOTHESIS:
+            claims[index] = {
+                **claim,
+                "statement": (
+                    "Nonsense primary hypothesis."
+                    if "primary" in claim["claim_id"]
+                    else "Nonsense alternative hypothesis."
+                ),
+            }
+    payload["claims"] = claims
+    return score_submission(
+        case_id,
+        Gold10Submission.model_validate(payload),
+        root,
+    )
+
+
+def _structured_meaningless_calibration(root: Path) -> Any:
+    case_id = "2012-03-I-CA"
+    payload = reference_submission(case_id, root).model_dump(mode="python")
+    payload["unresolved_questions"] = ("Meaningless unresolved boilerplate.",)
+    claims = list(payload["claims"])
+    uncertainty_index = next(
+        index
+        for index, claim in enumerate(claims)
+        if claim["kind"] == EpistemicClaimKind.UNCERTAINTY
+    )
+    claims[uncertainty_index] = {
+        **claims[uncertainty_index],
+        "statement": "Meaningless unresolved boilerplate.",
+    }
+    payload["claims"] = claims
+    return score_submission(
+        case_id,
+        Gold10Submission.model_validate(payload),
+        root,
+    )
 
 
 def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
@@ -217,13 +265,16 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
         unresolved_questions=("Boilerplate unresolved text.",),
     )
     meaningless_score = score_submission(case_id, meaningless, root)
+    valid_target_nonsense_score = _nonsense_with_valid_factual_target(root)
 
     mismatch_payload = reference.model_dump(mode="python")
     mismatch_claims = list(mismatch_payload["claims"])
     first_target = next(
         index
         for index, claim in enumerate(mismatch_claims)
-        if claim.get("canonical_target_id") is not None
+        if str(claim.get("canonical_target_id", "")).startswith(
+            ("evidence:", "finding:")
+        )
     )
     mismatch_claims[first_target] = {
         **mismatch_claims[first_target],
@@ -253,12 +304,13 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
         }
     )
     calibration = Gold10Submission.model_validate(calibration_payload)
-    calibration_score = score_submission(calibration_case, calibration, root)
+    collapsed_calibration_score = score_submission(calibration_case, calibration, root)
     calibration_reference = score_submission(
         calibration_case,
         reference_submission(calibration_case, root),
         root,
     )
+    meaningless_calibration_score = _structured_meaningless_calibration(root)
 
     probes: dict[str, dict[str, Any]] = {
         "arbitrary_hypothesis_without_canonical_target": {
@@ -268,6 +320,17 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
             ),
             "reward": meaningless_score.reward,
             "hard_failures": list(meaningless_score.hard_failures),
+        },
+        "nonsense_hypotheses_with_valid_factual_target": {
+            "passed": (
+                valid_target_nonsense_score.reward == 0.0
+                and "primary_hypothesis_target_mismatch"
+                in valid_target_nonsense_score.hard_failures
+                and "alternative_hypothesis_target_mismatch"
+                in valid_target_nonsense_score.hard_failures
+            ),
+            "reward": valid_target_nonsense_score.reward,
+            "hard_failures": list(valid_target_nonsense_score.hard_failures),
         },
         "canonical_target_statement_mismatch": {
             "passed": (
@@ -291,19 +354,39 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
             "reward": hindsight_score.reward,
             "hard_failures": list(hindsight_score.hard_failures),
         },
-        "calibration_boilerplate_without_uncertainty": {
+        "collapsed_calibration_uncertainty": {
             "passed": (
-                calibration_score.component_scores["calibration_integrity"] == 0.0
-                and calibration_score.reward < calibration_reference.reward
+                collapsed_calibration_score.reward == 0.0
+                and collapsed_calibration_score.component_scores[
+                    "calibration_integrity"
+                ]
+                == 0.0
+                and calibration_reference.reward > 0.0
             ),
-            "reward": calibration_score.reward,
+            "reward": collapsed_calibration_score.reward,
             "reference_reward": calibration_reference.reward,
+            "hard_failures": list(collapsed_calibration_score.hard_failures),
+        },
+        "structured_meaningless_calibration_with_valid_target": {
+            "passed": (
+                meaningless_calibration_score.reward == 0.0
+                and meaningless_calibration_score.component_scores[
+                    "calibration_integrity"
+                ]
+                == 0.0
+                and "calibration_uncertainty_target_missing"
+                in meaningless_calibration_score.hard_failures
+            ),
+            "reward": meaningless_calibration_score.reward,
+            "hard_failures": list(meaningless_calibration_score.hard_failures),
         },
     }
     return {
         "policy": {
             "semantic_text_is_not_treated_as_qualified_truth": True,
-            "positive_reward_requires_a_canonical_public_target": True,
+            "positive_reward_requires_a_canonical_public_factual_target": True,
+            "hypotheses_require_exact_case_specific_targets": True,
+            "calibration_requires_exact_case_specific_uncertainty_target": True,
             "unqualified_reward_is_capped": True,
             "reference_text_alone_is_not_a_verifier_target": True,
         },
@@ -311,8 +394,13 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
         "all_probes_pass": all(item["passed"] for item in probes.values()),
         "residual_risks": [
             (
-                "The deterministic verifier validates canonical target/provenance binding "
-                "but does not establish open-ended semantic correctness of free-form prose."
+                "The deterministic verifier checks a frozen case-specific hypothesis target "
+                "contract; it does not establish open-ended semantic correctness of arbitrary "
+                "new prose."
+            ),
+            (
+                "The target contract contains working hypotheses and uncertainty fixtures, "
+                "not private ground truth or scientific causal qualification."
             ),
             (
                 "Public historical source material remains contamination-prone; this pilot "
