@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 from investigation_world.commercial.voice_qualification import (
     build_voice_qualification_report,
-    build_voice_qualification_suite,
+    load_voice_qualification_suite,
 )
 from investigation_world.commercial.voice_runner import (
     VoiceAgentResult,
@@ -309,7 +309,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "Run Voice Operations qualification against an "
-            "OpenAI-compatible endpoint."
+            "OpenAI-compatible endpoint using a sealed suite."
         )
     )
     parser.add_argument(
@@ -324,6 +324,17 @@ def main() -> None:
         required=True,
         help="Repeat as NAME=MODEL; at least three are required.",
     )
+    parser.add_argument(
+        "--suite",
+        type=Path,
+        required=True,
+        help="Evaluator-only sealed voice suite JSON artifact.",
+    )
+    parser.add_argument(
+        "--suite-sha256",
+        required=True,
+        help="Out-of-band SHA-256 digest for the exact sealed suite bytes.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument(
@@ -334,7 +345,6 @@ def main() -> None:
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--max-turns", type=int, default=18)
     parser.add_argument("--attempts", type=int, default=1)
-    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--input-cost-per-million", type=float)
     parser.add_argument("--output-cost-per-million", type=float)
     args = parser.parse_args()
@@ -343,6 +353,10 @@ def main() -> None:
     if len(configurations) < 3:
         parser.error("at least three distinct configurations are required")
 
+    suite = load_voice_qualification_suite(
+        args.suite,
+        expected_sha256=args.suite_sha256,
+    )
     client = EndpointClient(
         endpoint=args.endpoint,
         api_key=os.getenv(args.api_key_env),
@@ -361,16 +375,15 @@ def main() -> None:
     }
 
     started = time.time()
-    suite = build_voice_qualification_suite(seed=args.seed)
     runs, summaries = compare_voice_configurations(
         suite,
         drivers,
         attempts=args.attempts,
     )
     output = {
-        "schema_version": "veritas-voice-qualification-run-v1",
+        "schema_version": "veritas-voice-qualification-run-v2",
         "suite": {
-            "seed": args.seed,
+            "sha256": args.suite_sha256.lower(),
             "scenarios": len(suite),
             "attempts": args.attempts,
             "configurations": configurations,
