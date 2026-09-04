@@ -105,13 +105,13 @@ def _fingerprint(tool: str, path: str, code: str, message: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _ruff_diagnostics() -> list[dict[str, str]]:
+def _ruff_diagnostics() -> list[dict[str, Any]]:
     completed = _run(RUFF_COMMAND, "ruff")
     try:
         rows = json.loads(completed.stdout or "[]")
     except json.JSONDecodeError as exc:
         raise QualityBaselineError("ruff returned invalid JSON") from exc
-    diagnostics: list[dict[str, str]] = []
+    diagnostics: list[dict[str, Any]] = []
     for row in rows:
         path = _relative_path(row["filename"])
         diagnostics.append(
@@ -121,14 +121,15 @@ def _ruff_diagnostics() -> list[dict[str, str]]:
                 "lane": _lane(path),
                 "code": str(row["code"]),
                 "message": str(row["message"]),
+                "line": int(row["location"]["row"]),
             }
         )
     return diagnostics
 
 
-def _mypy_diagnostics() -> list[dict[str, str]]:
+def _mypy_diagnostics() -> list[dict[str, Any]]:
     completed = _run(MYPY_COMMAND, "mypy")
-    diagnostics: list[dict[str, str]] = []
+    diagnostics: list[dict[str, Any]] = []
     for line in completed.stdout.splitlines():
         match = MYPY_PATTERN.match(line)
         if match is None:
@@ -143,6 +144,7 @@ def _mypy_diagnostics() -> list[dict[str, str]]:
                 "lane": _lane(path),
                 "code": match.group("code") or "untyped",
                 "message": match.group("message"),
+                "line": int(match.group("line")),
             }
         )
     return diagnostics
@@ -169,6 +171,7 @@ def _snapshot() -> dict[str, Any]:
             "mypy": list(MYPY_COMMAND[2:]),
         },
         "fingerprints": dict(sorted(fingerprints.items())),
+        "diagnostics": diagnostics,
         "summary": {
             "diagnostics_by_tool": dict(sorted(by_tool.items())),
             "files_by_tool": {
@@ -211,8 +214,17 @@ def _check(snapshot: dict[str, Any], baseline: dict[str, Any]) -> None:
     print(f"ratchet_removed={sum(removed.values())}")
     if introduced:
         print(f"ratchet_introduced={sum(introduced.values())}", file=sys.stderr)
-        for fingerprint, count in sorted(introduced.items()):
-            print(f"new {fingerprint} x{count}", file=sys.stderr)
+        for item in snapshot["diagnostics"]:
+            fingerprint = _fingerprint(
+                item["tool"], item["path"], item["code"], item["message"]
+            )
+            if introduced[fingerprint]:
+                print(
+                    "introduced "
+                    f"{item['tool']} {item['path']}:{item['line']} "
+                    f"{item['code']}: {item['message']}",
+                    file=sys.stderr,
+                )
         raise QualityBaselineError("new Ruff/Mypy diagnostics exceed the committed baseline")
     print("ratchet_introduced=0")
 
