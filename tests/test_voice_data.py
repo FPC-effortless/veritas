@@ -32,6 +32,7 @@ def _source(
         license_id="MIT",
         use_policy=use_policy,
         attribution_required=True,
+        notes="private-source-note",
     )
 
 
@@ -46,7 +47,10 @@ def _refund_record() -> dict[str, object]:
             "close_case",
         ],
         "locale": "en-US",
-        "metadata": {"fixture": True},
+        "metadata": {
+            "fixture": True,
+            "private_annotation": "source-only-annotation",
+        },
     }
 
 
@@ -72,11 +76,16 @@ def test_abcd_adapter_and_compiler_are_deterministic() -> None:
     assert first.model_dump(mode="json") == second.model_dump(mode="json")
     assert first.task.domain.value == "enterprise_operations"
     assert first.metadata["source_scenario_id"] == "abcd-refund-001"
-    assert first.metadata["voice_source_provenance"]["license_id"] == "MIT"
-    assert first.metadata["voice_source_provenance"]["use_policy"] == "commercial_ok"
+    provenance = first.oracle.metadata["voice_source_provenance"]
+    assert provenance["license_id"] == "MIT"
+    assert provenance["use_policy"] == "commercial_ok"
+    assert first.oracle.metadata["voice_source_metadata"] == {
+        "fixture": True,
+        "private_annotation": "source-only-annotation",
+    }
 
 
-def test_public_payload_contains_source_context_but_not_oracle() -> None:
+def test_public_payload_contains_context_without_raw_source_provenance() -> None:
     spec = adapt_abcd_record(_refund_record(), source=_source())
     episode = compile_voice_scenario(spec)
     payload = episode.public_payload()
@@ -85,18 +94,35 @@ def test_public_payload_contains_source_context_but_not_oracle() -> None:
     assert "oracle" not in payload
     assert "initial_state" not in serialized
     assert "canonical_action_mapping" not in serialized
+    assert "ABCD-shaped fixture" not in serialized
+    assert "abcd-fixture-001" not in serialized
+    assert "fixture://abcd/001" not in serialized
+    assert "private-source-note" not in serialized
+    assert "source-only-annotation" not in serialized
+    assert '"license_id": "MIT"' not in serialized
+
     source_record = next(
         record
         for record in payload["records"]
         if record["record_type"] == "source_dialogue_context"
     )
-    assert source_record["fields"]["customer_utterance"].startswith("I need a refund")
-    assert source_record["provenance_ids"] == ["abcd-fixture-001"]
+    assert source_record["fields"]["customer_utterance"].startswith(
+        "I need a refund"
+    )
+    assert source_record["provenance_ids"] == [
+        "voice-scenario:abcd-refund-001"
+    ]
+    assert "source_record_id" not in source_record["fields"]
+    assert "source_name" not in payload["task"]["metadata"]
 
 
 def test_abcd_adapter_rejects_unknown_or_mismatched_policy_actions() -> None:
     unknown = _refund_record()
-    unknown["action_sequence"] = ["verify_identity", "wire_money", "close_case"]
+    unknown["action_sequence"] = [
+        "verify_identity",
+        "wire_money",
+        "close_case",
+    ]
     with pytest.raises(ValueError, match="unsupported source action"):
         adapt_abcd_record(unknown, source=_source())
 
@@ -125,7 +151,10 @@ def test_research_only_source_fails_closed_for_commercial_compile() -> None:
         source=_source(VoiceSourceUsePolicy.RESEARCH_ONLY),
     )
 
-    with pytest.raises(ValueError, match="not authorized for commercial compilation"):
+    with pytest.raises(
+        ValueError,
+        match="not authorized for commercial compilation",
+    ):
         compile_voice_scenario(spec)
 
 
@@ -140,25 +169,40 @@ def test_schema_variant_changes_public_action_ontology_not_semantics() -> None:
             "issue_refund": "credit_purchase",
             "close_case": "finish_interaction",
         },
-        objective="Resolve the reimbursement request using the available service APIs.",
+        objective=(
+            "Resolve the reimbursement request using the available service APIs."
+        ),
     )
     shifted = compile_voice_scenario(shifted_spec, seed=81)
 
-    canonical_actions = {action.name for action in canonical.task.available_actions}
-    shifted_actions = {action.name for action in shifted.task.available_actions}
+    canonical_actions = {
+        action.name
+        for action in canonical.task.available_actions
+    }
+    shifted_actions = {
+        action.name
+        for action in shifted.task.available_actions
+    }
     assert "verify_identity" in canonical_actions
     assert "verify_identity" not in shifted_actions
-    assert {"confirm_caller", "credit_purchase", "finish_interaction"} <= shifted_actions
+    assert {
+        "confirm_caller",
+        "credit_purchase",
+        "finish_interaction",
+    } <= shifted_actions
 
     assert canonical.oracle.initial_state == shifted.oracle.initial_state
     assert canonical.oracle.target_state == shifted.oracle.target_state
     assert canonical.oracle.invariants == shifted.oracle.invariants
-    assert [effect.set_state for effect in canonical.oracle.action_effects] == [
-        effect.set_state for effect in shifted.oracle.action_effects
+    assert [
+        effect.set_state
+        for effect in canonical.oracle.action_effects
+    ] == [
+        effect.set_state
+        for effect in shifted.oracle.action_effects
     ]
-    assert shifted.oracle.metadata["canonical_action_mapping"]["confirm_caller"] == (
-        "verify_identity"
-    )
+    mapping = shifted.oracle.metadata["canonical_action_mapping"]
+    assert mapping["confirm_caller"] == "verify_identity"
 
 
 def test_schema_shifted_refund_executes_through_same_verifier() -> None:
@@ -177,9 +221,20 @@ def test_schema_shifted_refund_executes_through_same_verifier() -> None:
     order_id = _record_object_id(episode, "order")
     runtime = OperationalRuntime(episode)
 
-    runtime.act("confirm_caller", customer_id=customer_id, method="otp")
-    runtime.act("credit_purchase", order_id=order_id, amount_usd=80)
-    runtime.act("finish_interaction", customer_id=customer_id)
+    runtime.act(
+        "confirm_caller",
+        customer_id=customer_id,
+        method="otp",
+    )
+    runtime.act(
+        "credit_purchase",
+        order_id=order_id,
+        amount_usd=80,
+    )
+    runtime.act(
+        "finish_interaction",
+        customer_id=customer_id,
+    )
     result = runtime.submit(qualification_submission(episode))
 
     assert result.outcome == 1.0
@@ -209,18 +264,28 @@ def test_schema_aliases_fail_closed_on_unknown_or_colliding_actions() -> None:
         compile_voice_scenario(collision)
 
 
-def test_private_authorized_source_can_compile_without_public_hidden_truth() -> None:
+def test_private_authorized_source_stays_hidden_after_compile() -> None:
     source = VoiceSourceProvenance(
         source_name="Customer private workflow export",
         source_version="2026-09-04",
         record_id="customer-private-001",
+        source_uri="customer-private://workflow/001",
+        license_id="customer-contract-77",
         use_policy=VoiceSourceUsePolicy.AUTHORIZED_PRIVATE,
+        notes="private customer note",
     )
     spec = adapt_abcd_record(_refund_record(), source=source)
     episode = compile_voice_scenario(spec)
 
-    assert episode.metadata["voice_source_provenance"]["use_policy"] == (
-        "authorized_private"
-    )
-    assert "oracle" not in episode.public_payload()
+    hidden = episode.oracle.metadata["voice_source_provenance"]
+    assert hidden["use_policy"] == "authorized_private"
+    assert hidden["record_id"] == "customer-private-001"
+
+    serialized = json.dumps(episode.public_payload(), sort_keys=True)
+    assert "Customer private workflow export" not in serialized
+    assert "customer-private-001" not in serialized
+    assert "customer-private://workflow/001" not in serialized
+    assert "customer-contract-77" not in serialized
+    assert "private customer note" not in serialized
+    assert "source-only-annotation" not in serialized
     assert spec.family == VoiceScenarioFamily.VALID_REFUND
