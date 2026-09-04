@@ -19,6 +19,7 @@ FREEZE_REL = Path("data/gold10/case_selection_v1.json")
 TASK_USE_AUTHORITY_REL = (
     CORPUS_REL / "report_artifact_reviews" / "task_use_authority_v1.json"
 )
+EXPECTED_SOURCE_ID = "uscsb"
 EXPECTED_TASK_OWNER_ROOT = "src/investigation_world/gold10/tasks"
 EXPECTED_VERIFIER_OWNER_ROOT = "src/investigation_world/gold10/verifiers"
 EXPECTED_TRUTH_POLICY = "institutional_findings_are_evidence_not_private_truth"
@@ -395,6 +396,7 @@ def _validated_task_use_authority(
     authority: dict[str, Any],
     *,
     expected_cases: set[str],
+    expected_artifact_ids: set[str],
     source_id: str,
 ) -> dict[str, dict[str, Any]]:
     _require_exact_string(
@@ -402,10 +404,14 @@ def _validated_task_use_authority(
         label="Gold-10 task-use authority_id",
         expected=EXPECTED_TASK_USE_AUTHORITY_ID,
     )
+    if source_id != EXPECTED_SOURCE_ID:
+        raise Gold10ManifestError(
+            "Gold-10 task-use authority must remain bound to source_id uscsb"
+        )
     _require_exact_string(
         authority.get("source_id"),
         label="Gold-10 task-use authority source_id",
-        expected=source_id,
+        expected=EXPECTED_SOURCE_ID,
     )
     _require_exact_string(
         authority.get("review_scope"),
@@ -447,16 +453,47 @@ def _validated_task_use_authority(
         authority.get("staleness_rule"), label="Gold-10 task-use authority staleness_rule"
     )
 
+    authority_artifacts = _require_list(
+        authority.get("artifacts"), label="task-use authority artifacts"
+    )
     records = _unique_by(
-        _require_list(authority.get("artifacts"), label="task-use authority artifacts"),
+        authority_artifacts,
         "case_id",
         label="task-use authority case",
+    )
+    records_by_artifact = _unique_by(
+        authority_artifacts,
+        "artifact_id",
+        label="task-use authority artifact",
     )
     if len(records) != 10 or set(records) != expected_cases:
         raise Gold10ManifestError(
             "task-use authority must cover exactly the canonical ten Gold-10 cases"
         )
+    if len(records_by_artifact) != 10 or set(records_by_artifact) != expected_artifact_ids:
+        raise Gold10ManifestError(
+            "task-use authority must cover exactly the ten current Gold report artifacts"
+        )
     return records
+
+
+def _validate_task_use_source_policy(
+    authority: dict[str, Any],
+    canonical_source_policy: dict[str, Any],
+) -> None:
+    authority_policy = _require_object(
+        authority.get("source_policy"), label="Gold-10 task-use authority source_policy"
+    )
+    canonical_rights = _require_object(
+        canonical_source_policy.get("rights"),
+        label="validated canonical Gold-10 source rights",
+    )
+    for field in ("acquisition", "redistribution", "ai_use", "attribution_required"):
+        if authority_policy.get(field) != canonical_rights.get(field):
+            raise Gold10ManifestError(
+                f"task-use authority source_policy {field!r} disagrees with current "
+                "canonical source policy; task-use re-review is required"
+            )
 
 
 def _validated_task_use_record(
@@ -618,10 +655,16 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         "case_id",
         label="coverage case",
     )
+    report_artifacts = _require_list(reports.get("artifacts"), label="report artifacts")
     report_cases = _unique_by(
-        _require_list(reports.get("artifacts"), label="report artifacts"),
+        report_artifacts,
         "case_id",
         label="report case",
+    )
+    reports_by_artifact = _unique_by(
+        report_artifacts,
+        "artifact_id",
+        label="report artifact",
     )
 
     expected_cases = set(index_cases)
@@ -645,6 +688,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
     authority_cases = _validated_task_use_authority(
         task_use_authority,
         expected_cases=expected_cases,
+        expected_artifact_ids=set(reports_by_artifact),
         source_id=source_id,
     )
 
@@ -694,6 +738,7 @@ def build_gold10_manifest(root: Path | None = None) -> dict[str, Any]:
         report_policy,
         source_id=source_id,
     )
+    _validate_task_use_source_policy(task_use_authority, source_policy)
 
     task_owner_root = _require_owner_root(
         freeze.get("task_owner_root"),
