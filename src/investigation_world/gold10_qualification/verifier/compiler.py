@@ -4,14 +4,22 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
-from typing import Callable
 
 import investigation_world.gold10.targets as gold_targets
 import investigation_world.gold10.verifier as gold_verifier
 from investigation_world.gold10.models import Gold10Submission
-from investigation_world.gold10.registry import ROOT, build_task, build_taskset, load_pilot_contract
+from investigation_world.gold10.registry import (
+    ROOT,
+    build_task,
+    build_taskset,
+    load_pilot_contract,
+)
 from investigation_world.gold10.replay import reference_submission
-from investigation_world.qualification.maturity import EnvironmentIdentity, GateOutcome, VerifierIdentity
+from investigation_world.qualification.maturity import (
+    EnvironmentIdentity,
+    GateOutcome,
+    VerifierIdentity,
+)
 from investigation_world.qualification.verifier_suite import (
     VerifierFixture,
     VerifierFixtureCategory,
