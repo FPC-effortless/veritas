@@ -130,8 +130,6 @@ def _mypy_diagnostics() -> list[dict[str, str]]:
     completed = _run(MYPY_COMMAND, "mypy")
     diagnostics: list[dict[str, str]] = []
     for line in completed.stdout.splitlines():
-        if "src/investigation_world/commercial/" in line:
-            print(f"MYPY_COMMERCIAL_DIAG {line}", file=sys.stderr)
         match = MYPY_PATTERN.match(line)
         if match is None:
             if ": error:" in line:
