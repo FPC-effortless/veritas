@@ -43,10 +43,11 @@ class VoiceSourceProvenance(BaseModel):
 
 
 class VoiceScenarioSpec(BaseModel):
-    """Dataset-neutral, public-side scenario IR.
+    """Compiler-side scenario IR with no target-state or oracle fields.
 
-    The specification deliberately has no target-state, invariant, oracle, or hidden
-    action-effect fields. Those are selected by trusted Veritas compiler logic.
+    Source provenance and source metadata are trusted compiler inputs. They may be
+    retained for audit in the hidden oracle, but are never emitted raw in the
+    agent-facing operational payload.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -103,13 +104,21 @@ _EXPECTED_ABCD_WORKFLOWS: dict[str, tuple[str, ...]] = {
     "refund_ineligible": ("verify_identity", "deny_refund", "close_case"),
     "refund_duplicate": ("inspect_account", "close_case"),
     "authentication_incomplete": ("request_authentication", "close_case"),
-    "account_restricted": ("inspect_account", "create_escalation", "close_case"),
+    "account_restricted": (
+        "inspect_account",
+        "create_escalation",
+        "close_case",
+    ),
     "subscription_change": (
         "verify_identity",
         "change_subscription",
         "close_case",
     ),
-    "escalation_required": ("inspect_account", "create_escalation", "close_case"),
+    "escalation_required": (
+        "inspect_account",
+        "create_escalation",
+        "close_case",
+    ),
 }
 
 
@@ -130,8 +139,12 @@ def adapt_abcd_record(
     variant: int = 0,
     pressure: VoicePressure = VoicePressure.NORMAL,
 ) -> VoiceScenarioSpec:
-    """Map a bounded ABCD-style record to public scenario IR and fail closed."""
-    record = raw if isinstance(raw, ABCDLikeRecord) else ABCDLikeRecord.model_validate(raw)
+    """Map a bounded ABCD-style record to scenario IR and fail closed."""
+    record = (
+        raw
+        if isinstance(raw, ABCDLikeRecord)
+        else ABCDLikeRecord.model_validate(raw)
+    )
     family = _ABCD_FLOW_FAMILY.get(record.flow)
     if family is None:
         raise ValueError(f"unsupported ABCD-style flow: {record.flow}")
@@ -193,9 +206,14 @@ def _validate_aliases(
     canonical_names = {action.name for action in actions}
     unknown = set(aliases) - canonical_names
     if unknown:
-        raise ValueError(f"action aliases reference unknown actions: {sorted(unknown)}")
+        raise ValueError(
+            f"action aliases reference unknown actions: {sorted(unknown)}"
+        )
 
-    resolved = {name: aliases.get(name, name) for name in canonical_names}
+    resolved = {
+        name: aliases.get(name, name)
+        for name in canonical_names
+    }
     public_names = list(resolved.values())
     if any(not name.strip() for name in public_names):
         raise ValueError("public action aliases must be non-empty")
@@ -204,7 +222,10 @@ def _validate_aliases(
     return resolved
 
 
-def _rename_action(action: PublicActionSpec, mapping: dict[str, str]) -> PublicActionSpec:
+def _rename_action(
+    action: PublicActionSpec,
+    mapping: dict[str, str],
+) -> PublicActionSpec:
     payload = action.model_dump(mode="python")
     payload["name"] = mapping[action.name]
     return PublicActionSpec.model_validate(payload)
@@ -223,9 +244,15 @@ def _rename_effect(
     return HiddenActionEffect.model_validate(payload)
 
 
-def _rename_oracle(oracle: HiddenOracle, mapping: dict[str, str]) -> HiddenOracle:
+def _rename_oracle(
+    oracle: HiddenOracle,
+    mapping: dict[str, str],
+) -> HiddenOracle:
     payload = oracle.model_dump(mode="python")
-    payload["required_actions"] = [mapping[name] for name in oracle.required_actions]
+    payload["required_actions"] = [
+        mapping[name]
+        for name in oracle.required_actions
+    ]
     payload["required_action_order"] = [
         mapping[name]
         for name in oracle.required_action_order
@@ -234,7 +261,10 @@ def _rename_oracle(oracle: HiddenOracle, mapping: dict[str, str]) -> HiddenOracl
         mapping[name]: count
         for name, count in oracle.required_action_counts.items()
     }
-    payload["forbidden_actions"] = [mapping[name] for name in oracle.forbidden_actions]
+    payload["forbidden_actions"] = [
+        mapping[name]
+        for name in oracle.forbidden_actions
+    ]
     payload["action_effects"] = [
         _rename_effect(effect, mapping).model_dump(mode="python")
         for effect in oracle.action_effects
@@ -249,7 +279,26 @@ def _rename_oracle(oracle: HiddenOracle, mapping: dict[str, str]) -> HiddenOracl
     return HiddenOracle.model_validate(payload)
 
 
-def _source_record(spec: VoiceScenarioSpec, episode: OperationalEpisode) -> OperationalRecord:
+def _attach_private_source_provenance(
+    oracle: HiddenOracle,
+    spec: VoiceScenarioSpec,
+) -> HiddenOracle:
+    payload = oracle.model_dump(mode="python")
+    metadata = dict(oracle.metadata)
+    metadata.update(
+        {
+            "voice_source_provenance": spec.source.model_dump(mode="json"),
+            "voice_source_metadata": dict(spec.source_metadata),
+        }
+    )
+    payload["metadata"] = metadata
+    return HiddenOracle.model_validate(payload)
+
+
+def _source_record(
+    spec: VoiceScenarioSpec,
+    episode: OperationalEpisode,
+) -> OperationalRecord:
     customer_id = next(
         record.object_id
         for record in episode.records
@@ -264,10 +313,9 @@ def _source_record(spec: VoiceScenarioSpec, episode: OperationalEpisode) -> Oper
             "customer_utterance": spec.customer_utterance,
             "locale": spec.locale,
             "schema_variant": spec.schema_variant,
-            "source_record_id": spec.source.record_id,
         },
         searchable_text=spec.customer_utterance,
-        provenance_ids=[spec.source.record_id],
+        provenance_ids=[f"voice-scenario:{spec.scenario_id}"],
         source_authority="medium",
         freshness="unknown",
     )
@@ -279,8 +327,11 @@ def compile_voice_scenario(
     seed: int = 42,
     allow_restricted_source: bool = False,
 ) -> OperationalEpisode:
-    """Compile public scenario IR into an independently verified operational world."""
-    if not allow_restricted_source and not _allowed_for_commercial_compile(spec.source):
+    """Compile scenario IR into an independently verified operational world."""
+    if (
+        not allow_restricted_source
+        and not _allowed_for_commercial_compile(spec.source)
+    ):
         raise ValueError(
             "source is not authorized for commercial compilation: "
             f"{spec.source.use_policy.value}"
@@ -292,7 +343,10 @@ def compile_voice_scenario(
         variant=spec.variant,
         pressure=spec.pressure,
     )
-    mapping = _validate_aliases(base.task.available_actions, spec.action_aliases)
+    mapping = _validate_aliases(
+        base.task.available_actions,
+        spec.action_aliases,
+    )
 
     task_payload = base.task.model_dump(mode="python")
     task_payload["objective"] = spec.objective
@@ -304,7 +358,6 @@ def compile_voice_scenario(
     task_metadata.update(
         {
             "source_scenario_id": spec.scenario_id,
-            "source_name": spec.source.source_name,
             "schema_variant": spec.schema_variant,
             "locale": spec.locale,
             "voice_data_compiler": COMPILER_VERSION,
@@ -314,20 +367,23 @@ def compile_voice_scenario(
     task = TaskContract.model_validate(task_payload)
 
     oracle = _rename_oracle(base.oracle, mapping)
+    oracle = _attach_private_source_provenance(oracle, spec)
     source_record = _source_record(spec, base)
 
     episode_payload = base.model_dump(mode="python")
     episode_payload["task"] = task.model_dump(mode="python")
     episode_payload["oracle"] = oracle.model_dump(mode="python")
     episode_payload["records"] = [
-        *[record.model_dump(mode="python") for record in base.records],
+        *[
+            record.model_dump(mode="python")
+            for record in base.records
+        ],
         source_record.model_dump(mode="python"),
     ]
     episode_metadata = dict(base.metadata)
     episode_metadata.update(
         {
             "source_scenario_id": spec.scenario_id,
-            "voice_source_provenance": spec.source.model_dump(mode="json"),
             "schema_variant": spec.schema_variant,
             "locale": spec.locale,
             "voice_data_compiler": COMPILER_VERSION,
