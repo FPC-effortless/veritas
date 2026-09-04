@@ -11,6 +11,7 @@ from investigation_world.commercial.voice_qualification import (
     VoiceQualificationSummary,
     VoiceScenarioFamily,
     summarize_voice_qualification,
+    validate_voice_episode,
 )
 from investigation_world.operational.models import EpisodeSubmission, OperationalEpisode
 from investigation_world.operational.runtime import OperationalRuntime
@@ -75,18 +76,21 @@ def evaluate_voice_configuration(
     configuration_id: str,
     attempts: int = 1,
 ) -> list[VoiceQualificationRun]:
-    """Evaluate one agent configuration against a fixed set of private episodes."""
+    """Evaluate one agent configuration against a fixed validated episode set."""
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
 
     suite = list(episodes)
     if not suite:
         raise ValueError("at least one voice qualification episode is required")
+    for episode in suite:
+        validate_voice_episode(episode)
 
     runs: list[VoiceQualificationRun] = []
     for episode in suite:
         family = VoiceScenarioFamily(str(episode.metadata["scenario_family"]))
         pressure = VoicePressure(str(episode.metadata["pressure"]))
+        recovery_required = bool(episode.oracle.metadata.get("recovery_required", False))
         for attempt in range(1, attempts + 1):
             runtime = OperationalRuntime(episode)
             result = driver(VoiceAgentSession(runtime))
@@ -97,6 +101,7 @@ def evaluate_voice_configuration(
                     scenario_id=episode.episode_id,
                     family=family,
                     pressure=pressure,
+                    recovery_required=recovery_required,
                     attempt=attempt,
                     verification=verification,
                     cost_usd=result.cost_usd,
@@ -118,6 +123,8 @@ def compare_voice_configurations(
     suite = list(episodes)
     if not suite:
         raise ValueError("at least one voice qualification episode is required")
+    for episode in suite:
+        validate_voice_episode(episode)
 
     runs: list[VoiceQualificationRun] = []
     for configuration_id, driver in sorted(drivers.items()):
