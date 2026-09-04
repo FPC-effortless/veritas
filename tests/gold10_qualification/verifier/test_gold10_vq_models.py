@@ -1,3 +1,5 @@
+# ruff: noqa: I001
+
 import investigation_world.gold10_qualification.verifier.models as vq_models
 import investigation_world.qualification.maturity as maturity
 import investigation_world.qualification.verifier_suite as verifier_suite
