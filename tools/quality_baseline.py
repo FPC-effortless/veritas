@@ -114,8 +114,6 @@ def _ruff_diagnostics() -> list[dict[str, str]]:
     diagnostics: list[dict[str, str]] = []
     for row in rows:
         path = _relative_path(row["filename"])
-        if path == "tools/run_voice_qualification.py":
-            print(f"RAW_RUFF={json.dumps(row, sort_keys=True)}", file=sys.stderr)
         diagnostics.append(
             {
                 "tool": "ruff",
@@ -171,7 +169,6 @@ def _snapshot() -> dict[str, Any]:
             "mypy": list(MYPY_COMMAND[2:]),
         },
         "fingerprints": dict(sorted(fingerprints.items())),
-        "diagnostics": diagnostics,
         "summary": {
             "diagnostics_by_tool": dict(sorted(by_tool.items())),
             "files_by_tool": {
@@ -216,11 +213,6 @@ def _check(snapshot: dict[str, Any], baseline: dict[str, Any]) -> None:
         print(f"ratchet_introduced={sum(introduced.values())}", file=sys.stderr)
         for fingerprint, count in sorted(introduced.items()):
             print(f"new {fingerprint} x{count}", file=sys.stderr)
-            for item in snapshot["diagnostics"]:
-                if _fingerprint(
-                    item["tool"], item["path"], item["code"], item["message"]
-                ) == fingerprint:
-                    print(json.dumps(item, sort_keys=True), file=sys.stderr)
         raise QualityBaselineError("new Ruff/Mypy diagnostics exceed the committed baseline")
     print("ratchet_introduced=0")
 
