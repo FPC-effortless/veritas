@@ -1953,8 +1953,8 @@ def build_voice_qualification_report(
                 "Failure classes: "
                 + ", ".join(item.value for item in classes)
             )
-        for item in evidence:
-            lines.append(f"- Evidence: {item}")
+        for evidence_item in evidence:
+            lines.append(f"- Evidence: {evidence_item}")
         lines.extend(_trace_lines(run))
 
     observed_failures: Counter[VoiceFailureClass] = Counter()
