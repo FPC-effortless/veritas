@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 from enum import StrEnum
 from statistics import median
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from investigation_world.operational.models import OperationalEpisode
+from investigation_world.operational.models import (
+    EpisodeSubmission,
+    OperationalEpisode,
+    VerificationBreakdown,
+)
 from investigation_world.operational.runtime import OperationalRuntime
 
 VOICE_CHANNEL_VERSION = "veritas-voice-channel-v1"
@@ -49,8 +54,7 @@ class VoiceChannelEvent(BaseModel):
     harness_payload: dict[str, Any] = Field(default_factory=dict)
 
     def public_payload(self) -> dict[str, Any]:
-        payload = self.model_dump(mode="json", exclude={"harness_payload"})
-        return payload
+        return self.model_dump(mode="json", exclude={"harness_payload"})
 
 
 class VoiceHandoffSnapshot(BaseModel):
@@ -75,6 +79,7 @@ class VoiceChannelMetrics(BaseModel):
     asr_induced_action_error_rate: float
     clarification_correctness: float
     premature_action_rate: float
+    duplicate_side_effect_rate: float
     handoff_state_continuity_rate: float
     disconnect_recovery_rate: float
     response_latency_p50_ms: float | None
@@ -82,11 +87,22 @@ class VoiceChannelMetrics(BaseModel):
     time_to_verified_resolution_ms: int | None
 
 
-class VoiceChannelRuntime:
-    """Provider-neutral voice/session layer above `OperationalRuntime`.
+class PendingVoiceToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    Only observable tool results enter the voice event stream. Hidden operational
-    state, action consequences, and verifier truth remain inside the wrapped runtime.
+    call_id: str
+    action_name: str
+    parameters: dict[str, Any]
+    premature: bool = False
+
+
+class VoiceChannelRuntime:
+    """Provider-neutral voice/session layer above ``OperationalRuntime``.
+
+    Tool calls have an explicit asynchronous lifecycle. A call may start while the
+    voice session is connected and reach a completed or unknown terminal outcome
+    after a disconnect. Hidden operational truth and verifier results remain in the
+    harness-only side of the trace.
     """
 
     def __init__(self, episode: OperationalEpisode):
@@ -96,9 +112,11 @@ class VoiceChannelRuntime:
         self.agent_speaking = False
         self.user_speaking = False
         self._last_at_ms = -1
+        self._pending_calls: dict[str, PendingVoiceToolCall] = {}
         self._completed_calls: set[str] = set()
         self._unknown_calls: set[str] = set()
         self._observed_object_ids: set[str] = set()
+        self._seen_side_effects: set[str] = set()
         self._last_user_utterance: str | None = None
         self._last_agent_utterance: str | None = None
 
@@ -127,7 +145,12 @@ class VoiceChannelRuntime:
         self.events.append(event)
         return event
 
-    def speech_started(self, speaker: VoiceSpeaker, *, at_ms: int) -> VoiceChannelEvent:
+    def speech_started(
+        self,
+        speaker: VoiceSpeaker,
+        *,
+        at_ms: int,
+    ) -> VoiceChannelEvent:
         if speaker == VoiceSpeaker.USER:
             self.user_speaking = True
         elif speaker == VoiceSpeaker.AGENT:
@@ -172,7 +195,12 @@ class VoiceChannelRuntime:
             text=text,
         )
 
-    def agent_speech_started(self, text: str, *, at_ms: int) -> VoiceChannelEvent:
+    def agent_speech_started(
+        self,
+        text: str,
+        *,
+        at_ms: int,
+    ) -> VoiceChannelEvent:
         self.agent_speaking = True
         self._last_agent_utterance = text
         return self._emit(
@@ -182,7 +210,11 @@ class VoiceChannelRuntime:
             text=text,
         )
 
-    def user_barge_in(self, *, at_ms: int) -> tuple[VoiceChannelEvent, VoiceChannelEvent]:
+    def user_barge_in(
+        self,
+        *,
+        at_ms: int,
+    ) -> tuple[VoiceChannelEvent, VoiceChannelEvent]:
         if not self.agent_speaking:
             raise ValueError("barge-in requires active agent speech")
         interrupted = self._emit(
@@ -236,6 +268,122 @@ class VoiceChannelRuntime:
             },
         )
 
+    def _call_id_used(self, call_id: str) -> bool:
+        return (
+            call_id in self._pending_calls
+            or call_id in self._completed_calls
+            or call_id in self._unknown_calls
+        )
+
+    def start_tool_call(
+        self,
+        call_id: str,
+        action_name: str,
+        parameters: dict[str, Any],
+        *,
+        at_ms: int,
+        premature: bool = False,
+    ) -> VoiceChannelEvent:
+        if not self.connected:
+            raise ValueError("cannot start a tool call while disconnected")
+        if not call_id.strip():
+            raise ValueError("tool call ID must be non-empty")
+        if self._call_id_used(call_id):
+            raise ValueError(f"tool call ID already used: {call_id}")
+        pending = PendingVoiceToolCall(
+            call_id=call_id,
+            action_name=action_name,
+            parameters=dict(parameters),
+            premature=premature,
+        )
+        self._pending_calls[call_id] = pending
+        self._observe_parameters(parameters)
+        return self._emit(
+            VoiceEventKind.TOOL_CALL_STARTED,
+            at_ms=at_ms,
+            payload={
+                "call_id": call_id,
+                "action_name": action_name,
+                "parameters": parameters,
+            },
+            harness_payload={"premature": premature},
+        )
+
+    def _duplicate_side_effect(self) -> bool:
+        if not self.runtime.events:
+            return False
+        action_event = self.runtime.events[-1]
+        duplicate = any(
+            side_effect in self._seen_side_effects
+            for side_effect in action_event.side_effects
+        )
+        self._seen_side_effects.update(action_event.side_effects)
+        return duplicate
+
+    def complete_tool_call(
+        self,
+        call_id: str,
+        *,
+        at_ms: int,
+    ) -> dict[str, Any]:
+        pending = self._pending_calls.get(call_id)
+        if pending is None:
+            raise ValueError(f"tool call is not pending: {call_id}")
+        result = self.runtime.act(
+            pending.action_name,
+            **pending.parameters,
+        )
+        duplicate_side_effect = self._duplicate_side_effect()
+        del self._pending_calls[call_id]
+        self._completed_calls.add(call_id)
+        self._emit(
+            VoiceEventKind.TOOL_CALL_COMPLETED,
+            at_ms=at_ms,
+            payload={
+                "call_id": call_id,
+                "action_name": pending.action_name,
+                "parameters": pending.parameters,
+                "result": result,
+            },
+            harness_payload={
+                "duplicate_side_effect": duplicate_side_effect,
+            },
+        )
+        return result
+
+    def mark_tool_unknown(
+        self,
+        call_id: str,
+        *,
+        at_ms: int,
+        effect_applied: bool,
+    ) -> VoiceChannelEvent:
+        pending = self._pending_calls.get(call_id)
+        if pending is None:
+            raise ValueError(f"tool call is not pending: {call_id}")
+        duplicate_side_effect = False
+        if effect_applied:
+            self.runtime.act(
+                pending.action_name,
+                **pending.parameters,
+            )
+            duplicate_side_effect = self._duplicate_side_effect()
+        del self._pending_calls[call_id]
+        self._unknown_calls.add(call_id)
+        return self._emit(
+            VoiceEventKind.TOOL_CALL_UNKNOWN_OUTCOME,
+            at_ms=at_ms,
+            payload={
+                "call_id": call_id,
+                "action_name": pending.action_name,
+                "parameters": pending.parameters,
+            },
+            harness_payload={
+                "effect_applied": effect_applied,
+                "duplicate_side_effect": duplicate_side_effect,
+            },
+        )
+
     def tool_call(
         self,
         call_id: str,
@@ -246,34 +394,14 @@ class VoiceChannelRuntime:
         completed_at_ms: int,
         premature: bool = False,
     ) -> dict[str, Any]:
-        if not self.connected:
-            raise ValueError("cannot execute a tool call while disconnected")
-        if call_id in self._completed_calls or call_id in self._unknown_calls:
-            raise ValueError(f"tool call ID already used: {call_id}")
-        self._emit(
-            VoiceEventKind.TOOL_CALL_STARTED,
+        self.start_tool_call(
+            call_id,
+            action_name,
+            parameters,
             at_ms=started_at_ms,
-            payload={
-                "call_id": call_id,
-                "action_name": action_name,
-                "parameters": parameters,
-            },
-            harness_payload={"premature": premature},
+            premature=premature,
         )
-        result = self.runtime.act(action_name, **parameters)
-        self._completed_calls.add(call_id)
-        self._observe_parameters(parameters)
-        self._emit(
-            VoiceEventKind.TOOL_CALL_COMPLETED,
-            at_ms=completed_at_ms,
-            payload={
-                "call_id": call_id,
-                "action_name": action_name,
-                "parameters": parameters,
-                "result": result,
-            },
-        )
-        return result
+        return self.complete_tool_call(call_id, at_ms=completed_at_ms)
 
     def tool_unknown_outcome(
         self,
@@ -283,28 +411,18 @@ class VoiceChannelRuntime:
         *,
         started_at_ms: int,
         unknown_at_ms: int,
+        effect_applied: bool = False,
     ) -> None:
-        if call_id in self._completed_calls or call_id in self._unknown_calls:
-            raise ValueError(f"tool call ID already used: {call_id}")
-        self._emit(
-            VoiceEventKind.TOOL_CALL_STARTED,
+        self.start_tool_call(
+            call_id,
+            action_name,
+            parameters,
             at_ms=started_at_ms,
-            payload={
-                "call_id": call_id,
-                "action_name": action_name,
-                "parameters": parameters,
-            },
         )
-        self._unknown_calls.add(call_id)
-        self._observe_parameters(parameters)
-        self._emit(
-            VoiceEventKind.TOOL_CALL_UNKNOWN_OUTCOME,
+        self.mark_tool_unknown(
+            call_id,
             at_ms=unknown_at_ms,
-            payload={
-                "call_id": call_id,
-                "action_name": action_name,
-                "parameters": parameters,
-            },
+            effect_applied=effect_applied,
         )
 
     def disconnect(self, *, at_ms: int) -> VoiceChannelEvent:
@@ -328,13 +446,14 @@ class VoiceChannelRuntime:
         at_ms: int,
         continuity_ok: bool | None = None,
     ) -> VoiceHandoffSnapshot:
+        unresolved = set(self._unknown_calls) | set(self._pending_calls)
         snapshot = VoiceHandoffSnapshot(
             reason=reason,
             task_id=self.runtime.episode.task.task_id,
             last_user_utterance=self._last_user_utterance,
             last_agent_utterance=self._last_agent_utterance,
             completed_tool_calls=sorted(self._completed_calls),
-            unresolved_tool_calls=sorted(self._unknown_calls),
+            unresolved_tool_calls=sorted(unresolved),
             observed_object_ids=sorted(self._observed_object_ids),
         )
         harness_payload: dict[str, Any] = {}
@@ -348,14 +467,35 @@ class VoiceChannelRuntime:
         )
         return snapshot
 
-    def mark_verified_resolution(self, *, at_ms: int) -> VoiceChannelEvent:
-        return self._emit(
+    def verify_resolution(
+        self,
+        submission: EpisodeSubmission,
+        *,
+        at_ms: int,
+        text: str = "Interaction resolved.",
+    ) -> tuple[VoiceChannelEvent, VerificationBreakdown]:
+        verification = self.runtime.submit(submission)
+        verified = _is_verified_resolution(verification)
+        event = self._emit(
             VoiceEventKind.SPEECH_FINAL,
             at_ms=at_ms,
             speaker=VoiceSpeaker.AGENT,
-            text="Interaction resolved.",
-            harness_payload={"resolution_verified": True},
+            text=text,
+            harness_payload={
+                "resolution_verified": verified,
+                "verification_overall_reward": verification.overall_reward,
+            },
         )
+        return event, verification
+
+    def mark_verified_resolution(
+        self,
+        submission: EpisodeSubmission,
+        *,
+        at_ms: int,
+    ) -> tuple[VoiceChannelEvent, VerificationBreakdown]:
+        """Compatibility name that now requires real verifier evidence."""
+        return self.verify_resolution(submission, at_ms=at_ms)
 
     def public_events(self) -> list[dict[str, Any]]:
         return [event.public_payload() for event in self.events]
@@ -366,15 +506,51 @@ class VoiceChannelRuntime:
                 self._observed_object_ids.add(value)
 
 
+def _is_verified_resolution(verification: VerificationBreakdown) -> bool:
+    return all(
+        score == 1.0
+        for score in (
+            verification.outcome,
+            verification.state,
+            verification.constraints,
+            verification.side_effects,
+            verification.process,
+            verification.evidence,
+        )
+    )
+
+
+def _tool_event_identity(
+    event: VoiceChannelEvent,
+) -> tuple[str, str, dict[str, Any]]:
+    call_id = event.payload.get("call_id")
+    action_name = event.payload.get("action_name")
+    parameters = event.payload.get("parameters")
+    if not isinstance(call_id, str) or not call_id:
+        raise ValueError("voice tool event requires a non-empty call ID")
+    if not isinstance(action_name, str) or not action_name:
+        raise ValueError("voice tool event requires an action name")
+    if not isinstance(parameters, dict):
+        raise ValueError("voice tool event parameters must be an object")
+    return call_id, action_name, parameters
+
+
 def replay_voice_events(
     episode: OperationalEpisode,
     events: list[VoiceChannelEvent],
 ) -> OperationalRuntime:
-    """Replay completed tool effects from a voice trace into a fresh runtime."""
+    """Replay trusted voice events while enforcing tool lifecycle provenance.
+
+    Unknown outcomes are replayed only when the trusted harness event records
+    whether the hidden effect actually happened. Public traces intentionally omit
+    that bit and therefore cannot silently convert uncertainty into success.
+    """
     runtime = OperationalRuntime(episode)
     expected_sequence = 1
     last_at_ms = -1
-    completed_call_ids: set[str] = set()
+    pending: dict[str, tuple[str, dict[str, Any]]] = {}
+    terminal_call_ids: set[str] = set()
+
     for event in events:
         if event.sequence != expected_sequence:
             raise ValueError("voice event sequence is not contiguous")
@@ -382,17 +558,48 @@ def replay_voice_events(
             raise ValueError("voice event timestamps are not monotonic")
         expected_sequence += 1
         last_at_ms = event.at_ms
-        if event.kind != VoiceEventKind.TOOL_CALL_COMPLETED:
+
+        if event.kind == VoiceEventKind.TOOL_CALL_STARTED:
+            call_id, action_name, parameters = _tool_event_identity(event)
+            if call_id in pending or call_id in terminal_call_ids:
+                raise ValueError("voice tool call IDs must be unique")
+            pending[call_id] = (action_name, parameters)
             continue
-        call_id = str(event.payload.get("call_id", ""))
-        if not call_id or call_id in completed_call_ids:
-            raise ValueError("completed voice tool calls require unique call IDs")
-        action_name = str(event.payload.get("action_name", ""))
-        parameters = event.payload.get("parameters")
-        if not isinstance(parameters, dict):
-            raise ValueError("completed voice tool call parameters must be an object")
-        runtime.act(action_name, **parameters)
-        completed_call_ids.add(call_id)
+
+        if event.kind not in {
+            VoiceEventKind.TOOL_CALL_COMPLETED,
+            VoiceEventKind.TOOL_CALL_UNKNOWN_OUTCOME,
+        }:
+            continue
+
+        call_id, action_name, parameters = _tool_event_identity(event)
+        started = pending.get(call_id)
+        if started is None:
+            raise ValueError("terminal voice tool event has no matching start")
+        if started != (action_name, parameters):
+            raise ValueError("terminal voice tool event does not match its start")
+
+        if event.kind == VoiceEventKind.TOOL_CALL_COMPLETED:
+            recorded_result = event.payload.get("result")
+            if not isinstance(recorded_result, dict):
+                raise ValueError("completed voice tool event requires a result object")
+            replayed_result = runtime.act(action_name, **parameters)
+            if replayed_result != recorded_result:
+                raise ValueError("completed voice tool result does not replay exactly")
+        else:
+            if "effect_applied" not in event.harness_payload:
+                raise ValueError(
+                    "unknown outcome replay requires trusted outcome provenance"
+                )
+            effect_applied = event.harness_payload["effect_applied"]
+            if not isinstance(effect_applied, bool):
+                raise ValueError("unknown outcome provenance must be boolean")
+            if effect_applied:
+                runtime.act(action_name, **parameters)
+
+        del pending[call_id]
+        terminal_call_ids.add(call_id)
+
     return runtime
 
 
@@ -405,7 +612,11 @@ def _percentile(values: list[int], percentile: float) -> float | None:
 
 
 def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetrics:
-    interruptions = [event for event in events if event.kind == VoiceEventKind.USER_BARGE_IN]
+    interruptions = [
+        event
+        for event in events
+        if event.kind == VoiceEventKind.USER_BARGE_IN
+    ]
     recovered_interruptions = 0
     for interruption in interruptions:
         if any(
@@ -430,13 +641,34 @@ def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetric
         for event in critical_asr
     )
 
-    tool_starts = [event for event in events if event.kind == VoiceEventKind.TOOL_CALL_STARTED]
+    tool_starts = [
+        event
+        for event in events
+        if event.kind == VoiceEventKind.TOOL_CALL_STARTED
+    ]
     premature_actions = sum(
         bool(event.harness_payload.get("premature"))
         for event in tool_starts
     )
+    tool_terminals = [
+        event
+        for event in events
+        if event.kind
+        in {
+            VoiceEventKind.TOOL_CALL_COMPLETED,
+            VoiceEventKind.TOOL_CALL_UNKNOWN_OUTCOME,
+        }
+    ]
+    duplicate_side_effects = sum(
+        bool(event.harness_payload.get("duplicate_side_effect"))
+        for event in tool_terminals
+    )
 
-    handoffs = [event for event in events if event.kind == VoiceEventKind.HUMAN_HANDOFF]
+    handoffs = [
+        event
+        for event in events
+        if event.kind == VoiceEventKind.HUMAN_HANDOFF
+    ]
     scored_handoffs = [
         event
         for event in handoffs
@@ -447,7 +679,11 @@ def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetric
         for event in scored_handoffs
     )
 
-    disconnects = [event for event in events if event.kind == VoiceEventKind.CALL_DISCONNECTED]
+    disconnects = [
+        event
+        for event in events
+        if event.kind == VoiceEventKind.CALL_DISCONNECTED
+    ]
     recovered_disconnects = 0
     for disconnect in disconnects:
         resumed = any(
@@ -462,7 +698,8 @@ def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetric
     user_final_events = [
         event
         for event in events
-        if event.kind == VoiceEventKind.SPEECH_FINAL and event.speaker == VoiceSpeaker.USER
+        if event.kind == VoiceEventKind.SPEECH_FINAL
+        and event.speaker == VoiceSpeaker.USER
     ]
     for user_event in user_final_events:
         next_agent = next(
@@ -508,6 +745,11 @@ def measure_voice_channel(events: list[VoiceChannelEvent]) -> VoiceChannelMetric
         premature_action_rate=(
             premature_actions / len(tool_starts)
             if tool_starts
+            else 0.0
+        ),
+        duplicate_side_effect_rate=(
+            duplicate_side_effects / len(tool_terminals)
+            if tool_terminals
             else 0.0
         ),
         handoff_state_continuity_rate=(
