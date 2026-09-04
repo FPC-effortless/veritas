@@ -91,7 +91,7 @@ def _reordered(submission: Gold10Submission) -> Gold10Submission:
 def _missing_evidence(
     reference: Gold10Submission,
     available_evidence_ids: tuple[str, ...],
-) -> Gold10Submission:
+) -> Gold10Submission | str:
     if not reference.claims:
         raise ValueError("missing-evidence falsifier requires at least one retained claim")
     missing_id = reference.claims[0].evidence_ids[0]
@@ -102,21 +102,23 @@ def _missing_evidence(
         for evidence_id in reference.evidence_ids
         if evidence_id != missing_id
     )
-    if not cited:
-        replacement = next(
-            (
-                evidence_id
-                for evidence_id in available_evidence_ids
-                if evidence_id != missing_id
-            ),
-            None,
-        )
-        if replacement is None:
-            raise ValueError(
-                "missing-evidence falsifier requires a non-supporting replacement evidence item"
-            )
-        cited = (replacement,)
-    return reference.model_copy(update={"evidence_ids": cited})
+    if cited:
+        return reference.model_copy(update={"evidence_ids": cited})
+
+    replacement = next(
+        (
+            evidence_id
+            for evidence_id in available_evidence_ids
+            if evidence_id != missing_id
+        ),
+        None,
+    )
+    if replacement is not None:
+        return reference.model_copy(update={"evidence_ids": (replacement,)})
+
+    raw = reference.model_dump(mode="json")
+    raw["evidence_ids"] = []
+    return json.dumps(raw, sort_keys=True, separators=(",", ":"))
 
 
 def _mutate_submission(
