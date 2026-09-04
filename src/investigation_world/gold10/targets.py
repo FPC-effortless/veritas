@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
+
+from investigation_world.trajectory import canonical_hash
 
 
 @dataclass(frozen=True)
@@ -240,6 +243,45 @@ _TARGETS: dict[str, CaseVerifierTargets] = {
         ),
     ),
 }
+
+
+def _hypothesis_target_payload(target: HypothesisTarget) -> dict[str, Any]:
+    return {
+        "target_id": target.target_id,
+        "role": target.role,
+        "statement": target.statement,
+        "evidence_ids": list(target.evidence_ids),
+    }
+
+
+def _uncertainty_target_payload(target: UncertaintyTarget) -> dict[str, Any]:
+    return {
+        "target_id": target.target_id,
+        "statement": target.statement,
+        "evidence_ids": list(target.evidence_ids),
+    }
+
+
+def verifier_target_contract_payload() -> dict[str, Any]:
+    cases: dict[str, Any] = {}
+    for case_id, targets in sorted(_TARGETS.items()):
+        cases[case_id] = {
+            "primary": _hypothesis_target_payload(targets.primary),
+            "alternative": _hypothesis_target_payload(targets.alternative),
+            "uncertainty": (
+                None
+                if targets.uncertainty is None
+                else _uncertainty_target_payload(targets.uncertainty)
+            ),
+        }
+    return {
+        "schema_version": "veritas.gold10.verifier-targets.v1",
+        "cases": cases,
+    }
+
+
+def verifier_target_contract_sha256() -> str:
+    return canonical_hash(verifier_target_contract_payload())
 
 
 def get_case_verifier_targets(case_id: str) -> CaseVerifierTargets:

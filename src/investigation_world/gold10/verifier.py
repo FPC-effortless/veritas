@@ -63,6 +63,9 @@ def _canonical_target_failure(
     task: Gold10Task,
     claim: EpistemicClaim,
 ) -> str | None:
+    if claim.kind is EpistemicClaimKind.ALLEGATION:
+        return f"unsupported_claim_kind:{claim.claim_id}"
+
     targets = validate_case_verifier_targets(
         task.case_id,
         {item.evidence_id for item in task.available_evidence},
@@ -77,7 +80,7 @@ def _canonical_target_failure(
             EpistemicClaimKind.UNCERTAINTY,
         }:
             return f"canonical_target_required:{claim.claim_id}"
-        return None
+        return f"unsupported_claim_kind:{claim.claim_id}"
 
     if target_id.startswith("evidence:"):
         evidence_id = target_id.removeprefix("evidence:")
@@ -211,8 +214,11 @@ def _calibration_score(
         failures.append("calibration_uncertainty_mass_below_minimum")
 
     unresolved = {item.strip() for item in submission.unresolved_questions if item.strip()}
+    expected_unresolved = {uncertainty.statement}
     if uncertainty.statement not in unresolved:
         failures.append("calibration_uncertainty_target_missing")
+    if unresolved != expected_unresolved:
+        failures.append("calibration_unresolved_questions_mismatch")
 
     bound_uncertainty = any(
         claim.kind is EpistemicClaimKind.UNCERTAINTY
@@ -256,6 +262,10 @@ def score_submission(
     claim_ids = [claim.claim_id for claim in submission.claims]
     if len(claim_ids) != len(set(claim_ids)):
         hard_failures.append("duplicate_claim_id")
+    if not task.calibration_required and any(
+        item.strip() for item in submission.unresolved_questions
+    ):
+        hard_failures.append("unexpected_unresolved_questions")
 
     factual_target_matches = 0
     for claim in submission.claims:

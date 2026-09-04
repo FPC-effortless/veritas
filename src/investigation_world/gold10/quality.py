@@ -39,11 +39,7 @@ def _duplicate_analysis(tasks: tuple[Any, ...], threshold: float) -> dict[str, A
     exact: dict[str, list[str]] = defaultdict(list)
     for task in tasks:
         exact[_normalized(task.task.objective)].append(task.case_id)
-    exact_groups = [
-        sorted(case_ids)
-        for case_ids in exact.values()
-        if len(case_ids) > 1
-    ]
+    exact_groups = [sorted(case_ids) for case_ids in exact.values() if len(case_ids) > 1]
 
     near_pairs: list[dict[str, Any]] = []
     max_similarity = 0.0
@@ -108,12 +104,8 @@ def _coverage_report(root: Path, tasks: tuple[Any, ...]) -> dict[str, Any]:
         for task in tasks
         for capability in task.capability_targets
     )
-    finding_cases = [
-        task.case_id for task in tasks if task.available_findings
-    ]
-    calibration_cases = [
-        task.case_id for task in tasks if task.calibration_required
-    ]
+    finding_cases = [task.case_id for task in tasks if task.available_findings]
+    calibration_cases = [task.case_id for task in tasks if task.calibration_required]
     return {
         "case_count": len(tasks),
         "case_ids": [task.case_id for task in tasks],
@@ -140,6 +132,8 @@ def _coverage_report(root: Path, tasks: tuple[Any, ...]) -> dict[str, Any]:
             "calibration_uncertainty_target_required": True,
             "canonical_factual_target_required_for_positive_reward": True,
             "claim_kinds": [item.value for item in EpistemicClaimKind],
+            "unsupported_extra_claims_fail_closed": True,
+            "unexpected_unresolved_text_fails_closed": True,
             "no_llm_judge": True,
         },
     }
@@ -237,6 +231,38 @@ def _structured_meaningless_calibration(root: Path) -> Any:
     )
 
 
+def _appended_unsupported_allegation(root: Path) -> Any:
+    case_id = "2005-04-I-TX"
+    payload = reference_submission(case_id, root).model_dump(mode="python")
+    claims = list(payload["claims"])
+    claims.append(
+        {
+            "claim_id": "shortcut-appended-allegation",
+            "statement": "Invisible dragons deliberately sabotaged the refinery.",
+            "kind": EpistemicClaimKind.ALLEGATION,
+            "evidence_ids": (payload["evidence_ids"][0],),
+            "canonical_target_id": None,
+        }
+    )
+    payload["claims"] = claims
+    return score_submission(
+        case_id,
+        Gold10Submission.model_validate(payload),
+        root,
+    )
+
+
+def _appended_unresolved_text(root: Path) -> Any:
+    case_id = "2005-04-I-TX"
+    payload = reference_submission(case_id, root).model_dump(mode="python")
+    payload["unresolved_questions"] = ("Unsupported appended unresolved text.",)
+    return score_submission(
+        case_id,
+        Gold10Submission.model_validate(payload),
+        root,
+    )
+
+
 def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
     case_id = "2005-04-I-TX"
     reference = reference_submission(case_id, root)
@@ -266,6 +292,8 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
     )
     meaningless_score = score_submission(case_id, meaningless, root)
     valid_target_nonsense_score = _nonsense_with_valid_factual_target(root)
+    unsupported_allegation_score = _appended_unsupported_allegation(root)
+    appended_unresolved_score = _appended_unresolved_text(root)
 
     mismatch_payload = reference.model_dump(mode="python")
     mismatch_claims = list(mismatch_payload["claims"])
@@ -332,6 +360,26 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
             "reward": valid_target_nonsense_score.reward,
             "hard_failures": list(valid_target_nonsense_score.hard_failures),
         },
+        "append_only_unsupported_allegation": {
+            "passed": (
+                unsupported_allegation_score.reward == 0.0
+                and any(
+                    item.startswith("unsupported_claim_kind:")
+                    for item in unsupported_allegation_score.hard_failures
+                )
+            ),
+            "reward": unsupported_allegation_score.reward,
+            "hard_failures": list(unsupported_allegation_score.hard_failures),
+        },
+        "append_only_unresolved_text": {
+            "passed": (
+                appended_unresolved_score.reward == 0.0
+                and "unexpected_unresolved_questions"
+                in appended_unresolved_score.hard_failures
+            ),
+            "reward": appended_unresolved_score.reward,
+            "hard_failures": list(appended_unresolved_score.hard_failures),
+        },
         "canonical_target_statement_mismatch": {
             "passed": (
                 mismatch_score.reward == 0.0
@@ -387,6 +435,8 @@ def _exploit_shortcut_report(root: Path) -> dict[str, Any]:
             "positive_reward_requires_a_canonical_public_factual_target": True,
             "hypotheses_require_exact_case_specific_targets": True,
             "calibration_requires_exact_case_specific_uncertainty_target": True,
+            "unsupported_extra_claims_fail_closed": True,
+            "unexpected_unresolved_text_fails_closed": True,
             "unqualified_reward_is_capped": True,
             "reference_text_alone_is_not_a_verifier_target": True,
         },
@@ -454,6 +504,7 @@ def build_pilot_gate_report(root: Path | None = None) -> dict[str, Any]:
         "schema_version": "1.0",
         "pilot_id": contract.pilot_id,
         "taskset_rebuild_sha256": taskset_rebuild_sha256,
+        "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
         "duplicate_near_duplicate_analysis": duplicate,
         "contamination_assessment": contamination,
         "coverage_report": coverage,

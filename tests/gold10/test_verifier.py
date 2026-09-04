@@ -125,6 +125,38 @@ def test_canonical_target_statement_mismatch_is_a_hard_failure() -> None:
     )
 
 
+def test_appended_unsupported_allegation_is_a_hard_failure() -> None:
+    case_id = "2005-04-I-TX"
+    reference = reference_submission(case_id)
+    payload = reference.model_dump(mode="python")
+    claims = list(payload["claims"])
+    claims.append(
+        {
+            "claim_id": "unsupported-allegation",
+            "statement": "Invisible dragons deliberately sabotaged the refinery.",
+            "kind": EpistemicClaimKind.ALLEGATION,
+            "evidence_ids": (reference.evidence_ids[0],),
+            "canonical_target_id": None,
+        }
+    )
+    payload["claims"] = claims
+
+    score = score_submission(case_id, Gold10Submission.model_validate(payload))
+    assert score.reward == 0.0
+    assert "unsupported_claim_kind:unsupported-allegation" in score.hard_failures
+
+
+def test_non_calibration_unresolved_junk_is_a_hard_failure() -> None:
+    case_id = "2005-04-I-TX"
+    reference = reference_submission(case_id)
+    payload = reference.model_dump(mode="python")
+    payload["unresolved_questions"] = ("Unsupported appended unresolved text.",)
+
+    score = score_submission(case_id, Gold10Submission.model_validate(payload))
+    assert score.reward == 0.0
+    assert "unexpected_unresolved_questions" in score.hard_failures
+
+
 def test_hindsight_evidence_is_a_zero_reward_hard_failure() -> None:
     case_id = "2005-04-I-TX"
     reference = reference_submission(case_id)
@@ -192,10 +224,26 @@ def test_structured_meaningless_calibration_plus_valid_target_is_rejected() -> N
     assert score.component_scores["calibration_integrity"] == 0.0
     assert "calibration_uncertainty_target_missing" in score.hard_failures
     assert "calibration_uncertainty_claim_unbound" in score.hard_failures
+    assert "calibration_unresolved_questions_mismatch" in score.hard_failures
     assert any(
         item.startswith("canonical_target_statement_mismatch:")
         for item in score.hard_failures
     )
+
+
+def test_calibration_rejects_extra_unresolved_text() -> None:
+    case_id = "2012-03-I-CA"
+    reference = reference_submission(case_id)
+    payload = reference.model_dump(mode="python")
+    payload["unresolved_questions"] = (
+        *reference.unresolved_questions,
+        "Unsupported appended unresolved text.",
+    )
+
+    score = score_submission(case_id, Gold10Submission.model_validate(payload))
+    assert score.reward == 0.0
+    assert score.component_scores["calibration_integrity"] == 0.0
+    assert "calibration_unresolved_questions_mismatch" in score.hard_failures
 
 
 def test_submission_schema_has_no_ground_truth_claim_kind() -> None:

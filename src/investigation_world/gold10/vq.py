@@ -91,6 +91,7 @@ def build_canonical_vq_scorecard(
     verifier_payload = {
         "verifier_id": contract.verifier_id,
         "verifier_version": contract.verifier_version,
+        "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
         "unqualified_reward_ceiling": contract.unqualified_reward_ceiling,
         "exploit_policy": exploit["policy"],
         "exploit_probe_pass": {
@@ -156,6 +157,9 @@ def build_canonical_vq_scorecard(
             artifact_id="gold10-manifest-binding",
             payload={
                 "taskset_rebuild_sha256": taskset_rebuild_sha256,
+                "verifier_target_contract_sha256": (
+                    contract.verifier_target_contract_sha256
+                ),
                 "pilot_id": contract.pilot_id,
             },
         ),
@@ -166,6 +170,8 @@ def build_canonical_vq_scorecard(
     )
     return {
         "scorecard": scorecard.model_dump(mode="json"),
+        "verifier_subject_sha256": verifier.content_sha256,
+        "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
         "failed_dimensions": [item.value for item in scorecard.failed_dimensions],
         "unknown_dimensions": [item.value for item in scorecard.unknown_dimensions],
         "complete": scorecard.complete,

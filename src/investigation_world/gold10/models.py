@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from investigation_world.tasks.spec import TaskSpec
 
@@ -51,6 +51,13 @@ class PilotContract(CanonicalModel):
     calibration_min_uncertainty_mass: float = Field(ge=0.0, le=1.0)
     unqualified_reward_ceiling: float = Field(gt=0.0, lt=1.0)
     near_duplicate_threshold: float = Field(gt=0.0, lt=1.0)
+
+    @computed_field
+    @property
+    def verifier_target_contract_sha256(self) -> str:
+        from .targets import verifier_target_contract_sha256
+
+        return verifier_target_contract_sha256()
 
 
 class Gold10Task(CanonicalModel):
