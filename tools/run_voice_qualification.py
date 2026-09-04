@@ -381,7 +381,7 @@ def main() -> None:
         attempts=args.attempts,
     )
     output = {
-        "schema_version": "veritas-voice-qualification-run-v2",
+        "schema_version": "veritas-voice-qualification-run-v3",
         "suite": {
             "sha256": args.suite_sha256.lower(),
             "scenarios": len(suite),
@@ -412,7 +412,7 @@ def main() -> None:
     )
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(
-        build_voice_qualification_report(summaries),
+        build_voice_qualification_report(summaries, runs),
         encoding="utf-8",
     )
     print(json.dumps(output["summaries"], indent=2, sort_keys=True))
