@@ -169,6 +169,7 @@ def _snapshot() -> dict[str, Any]:
             "mypy": list(MYPY_COMMAND[2:]),
         },
         "fingerprints": dict(sorted(fingerprints.items())),
+        "diagnostics": diagnostics,
         "summary": {
             "diagnostics_by_tool": dict(sorted(by_tool.items())),
             "files_by_tool": {
@@ -213,6 +214,16 @@ def _check(snapshot: dict[str, Any], baseline: dict[str, Any]) -> None:
         print(f"ratchet_introduced={sum(introduced.values())}", file=sys.stderr)
         for fingerprint, count in sorted(introduced.items()):
             print(f"new {fingerprint} x{count}", file=sys.stderr)
+        for item in snapshot["diagnostics"]:
+            fingerprint = _fingerprint(
+                item["tool"],
+                item["path"],
+                item["code"],
+                item["message"],
+            )
+            if fingerprint in introduced:
+                detail = json.dumps(item, sort_keys=True, ensure_ascii=False)
+                print(f"introduced_detail={detail}", file=sys.stderr)
         raise QualityBaselineError("new Ruff/Mypy diagnostics exceed the committed baseline")
     print("ratchet_introduced=0")
 
