@@ -1,3 +1,5 @@
+import pytest
+
 import investigation_world.gold10_qualification.verifier.compiler as compiler
 from investigation_world.gold10.registry import build_taskset, load_pilot_contract
 from investigation_world.gold10_qualification.verifier.compiler import (
@@ -8,6 +10,7 @@ from investigation_world.gold10_qualification.verifier.models import (
     Gold10TaskVerifierQualification,
 )
 from investigation_world.qualification.maturity import GateOutcome
+from investigation_world.qualification.verifier_suite import qualify_verifier
 
 
 def _failure_summary(record: Gold10TaskVerifierQualification) -> str:
@@ -123,3 +126,60 @@ def test_world_version_drift_changes_bound_environment_identity(monkeypatch) -> 
     assert drifted.environment_id == canonical.world_id
     assert drifted.environment_version == "0.1.1-drift"
     assert drifted.content_sha256 != original.content_sha256
+
+
+def test_replays_bind_full_qualification_identity_and_reject_stale_rows(
+    monkeypatch,
+) -> None:
+    case_id = build_taskset()[0].case_id
+    canonical_contract = load_pilot_contract()
+    captured: list[tuple[object, tuple[object, ...]]] = []
+    canonical_qualify = compiler.qualify_verifier
+
+    def capture(manifest, replays):
+        captured.append((manifest, tuple(replays)))
+        return canonical_qualify(manifest, replays)
+
+    monkeypatch.setattr(compiler, "qualify_verifier", capture)
+    canonical_record = compile_task_qualification(case_id)
+    canonical_manifest, canonical_replays = captured[-1]
+    replay = canonical_replays[0]
+
+    required_provenance = {
+        "case_id",
+        "task_id",
+        "task_manifest_sha256",
+        "taskset_version",
+        "world_id",
+        "world_version",
+        "environment_content_sha256",
+        "verifier_id",
+        "verifier_version",
+        "verifier_content_sha256",
+        "verifier_target_contract_sha256",
+        "qualification_binding_sha256",
+        "repetition",
+    }
+    assert required_provenance <= replay.provenance.keys()
+
+    drifted_contract = canonical_contract.model_copy(
+        update={"verifier_version": "0.3.1-drift"}
+    )
+    monkeypatch.setattr(
+        compiler,
+        "load_pilot_contract",
+        lambda root=None: drifted_contract,
+    )
+    drifted_record = compile_task_qualification(case_id)
+    drifted_manifest, _ = captured[-1]
+
+    canonical_fixture_ids = {item.fixture_id for item in canonical_manifest.fixtures}
+    drifted_fixture_ids = {item.fixture_id for item in drifted_manifest.fixtures}
+    assert canonical_fixture_ids.isdisjoint(drifted_fixture_ids)
+    assert (
+        canonical_record.report.replay_evidence_id
+        != drifted_record.report.replay_evidence_id
+    )
+
+    with pytest.raises(ValueError, match="replay references unknown fixture"):
+        qualify_verifier(drifted_manifest, canonical_replays)
