@@ -40,7 +40,12 @@ _FIXED_TIME = datetime(2026, 9, 4, tzinfo=timezone.utc)
 
 
 def _digest_json(value: object) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode()
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode()
     return sha256(encoded).hexdigest()
 
 
@@ -202,6 +207,36 @@ def _execute(
     return passed, score.reward, score.component_scores, _digest_json(output)
 
 
+def _neutralize_noncalibration_ambiguity(report: object) -> object:
+    metrics = dict(report.metrics)
+    metrics["ambiguity_sensitivity"] = None
+    gates = tuple(
+        gate.model_copy(
+            update={
+                "outcome": GateOutcome.UNKNOWN,
+                "observed": None,
+                "detail": (
+                    "Gold-10 non-calibration adversarial fixtures test verifier "
+                    "robustness, not ambiguity or calibration sensitivity."
+                ),
+            }
+        )
+        if gate.name == "ambiguity_sensitivity"
+        else gate
+        for gate in report.gates
+    )
+    payload = report.model_dump(
+        mode="python",
+        exclude={"report_id", "metrics", "gates", "status"},
+    )
+    return report.__class__(
+        **payload,
+        metrics=metrics,
+        gates=gates,
+        status=GateOutcome.UNKNOWN,
+    )
+
+
 def compile_task_qualification(
     case_id: str,
     root: Path | None = None,
@@ -259,7 +294,9 @@ def compile_task_qualification(
                 "task_manifest_sha256": task.manifest_sha256,
                 "world_id": contract.world_id,
                 "world_version": contract.world_version,
-                "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
+                "verifier_target_contract_sha256": (
+                    contract.verifier_target_contract_sha256
+                ),
             },
         )
         fixtures.append(fixture)
@@ -294,30 +331,36 @@ def compile_task_qualification(
         fixtures=tuple(fixtures),
     )
     report = qualify_verifier(manifest, tuple(replays))
-    applicability = (
+    if not task.calibration_required:
+        report = _neutralize_noncalibration_ambiguity(report)
+
+    applicability_records = [
         Gold10ApplicabilityRecord(
             gate="falsifier_fixture_coverage",
             applicability=Applicability.NOT_APPLICABLE,
             rationale=(
-                "The generic taxonomy contains alternative-strategy, authority/process, and "
-                "forbidden-side-effect categories that are not semantically represented by this "
-                "read-only Gold-10 protocol. Those categories are omitted rather than fabricated."
+                "The generic taxonomy contains alternative-strategy, "
+                "authority/process, and forbidden-side-effect categories that are "
+                "not semantically represented by this read-only Gold-10 protocol. "
+                "Those categories are omitted rather than fabricated."
             ),
         ),
         Gold10ApplicabilityRecord(
             gate="alternative_solution_acceptance",
             applicability=Applicability.NOT_APPLICABLE,
             rationale=(
-                "No independently defensible second semantic solution strategy is established by "
-                "this deterministic pilot; reordered reference content is not an alternative strategy."
+                "No independently defensible second semantic solution strategy is "
+                "established by this deterministic pilot; reordered reference "
+                "content is not an alternative strategy."
             ),
         ),
         Gold10ApplicabilityRecord(
             gate="process_rule_correctness",
             applicability=Applicability.NOT_APPLICABLE,
             rationale=(
-                "Gold-10 exposes no authority/process transition surface. Confidence-role inversion "
-                "is retained as adversarial verifier evidence instead of process-rule evidence."
+                "Gold-10 exposes no authority/process transition surface. "
+                "Confidence-role inversion is retained as adversarial verifier "
+                "evidence instead of process-rule evidence."
             ),
         ),
         Gold10ApplicabilityRecord(
@@ -325,7 +368,20 @@ def compile_task_qualification(
             applicability=Applicability.NOT_APPLICABLE,
             rationale="Gold-10 exposes no mutating action or side-effect semantics.",
         ),
-    )
+    ]
+    if not task.calibration_required:
+        applicability_records.append(
+            Gold10ApplicabilityRecord(
+                gate="ambiguity_sensitivity",
+                applicability=Applicability.NOT_APPLICABLE,
+                rationale=(
+                    "This task has no declared calibration/ambiguity surface. Its "
+                    "adversarial fixtures test duplicate-claim and confidence-role "
+                    "robustness, not ambiguity sensitivity."
+                ),
+            )
+        )
+
     return Gold10TaskVerifierQualification(
         binding=Gold10TaskBinding(
             case_id=case_id,
@@ -335,7 +391,7 @@ def compile_task_qualification(
             verifier_target_contract_sha256=contract.verifier_target_contract_sha256,
         ),
         report=report,
-        applicability=applicability,
+        applicability=tuple(applicability_records),
     )
 
 
