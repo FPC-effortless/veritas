@@ -248,7 +248,23 @@ def compile_task_qualification(
     task = build_task(case_id, repo_root)
     contract = load_pilot_contract(repo_root)
     reference = reference_submission(case_id, repo_root)
+    environment_identity = _environment_identity(case_id, repo_root)
+    verifier_identity = _verifier_identity(repo_root)
     available_evidence_ids = tuple(item.evidence_id for item in task.available_evidence)
+    qualification_binding = {
+        "case_id": case_id,
+        "task_id": task.task.task_id,
+        "task_manifest_sha256": task.manifest_sha256,
+        "taskset_version": contract.taskset_version,
+        "world_id": contract.world_id,
+        "world_version": contract.world_version,
+        "environment_content_sha256": environment_identity.content_sha256,
+        "verifier_id": contract.verifier_id,
+        "verifier_version": contract.verifier_version,
+        "verifier_content_sha256": verifier_identity.content_sha256,
+        "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
+    }
+    qualification_binding_sha256 = _digest_json(qualification_binding)
 
     omitted_categories = {
         VerifierFixtureCategory.ALTERNATIVE_CORRECT_STRATEGY,
@@ -289,17 +305,13 @@ def compile_task_qualification(
             expected_pass=expected_pass,
             minimum_reward=minimum_reward,
             maximum_reward=maximum_reward,
-            strategy_family="gold10-deterministic-v1",
+            strategy_family=(
+                f"gold10-deterministic-v1:{qualification_binding_sha256}"
+            ),
             description=description,
             provenance={
-                "case_id": case_id,
-                "task_id": task.task.task_id,
-                "task_manifest_sha256": task.manifest_sha256,
-                "world_id": contract.world_id,
-                "world_version": contract.world_version,
-                "verifier_target_contract_sha256": (
-                    contract.verifier_target_contract_sha256
-                ),
+                **qualification_binding,
+                "qualification_binding_sha256": qualification_binding_sha256,
             },
         )
         fixtures.append(fixture)
@@ -319,18 +331,19 @@ def compile_task_qualification(
                     output_sha256=output_sha256,
                     observed_at=_FIXED_TIME,
                     provenance={
-                        "case_id": case_id,
+                        **qualification_binding,
+                        "qualification_binding_sha256": (
+                            qualification_binding_sha256
+                        ),
                         "repetition": repetition,
-                        "world_id": contract.world_id,
-                        "world_version": contract.world_version,
                     },
                 )
             )
 
     manifest = VerifierFixtureManifest(
         suite_version="gold10-verifier-qualification-v1",
-        environment_identity=_environment_identity(case_id, repo_root),
-        verifier_identity=_verifier_identity(repo_root),
+        environment_identity=environment_identity,
+        verifier_identity=verifier_identity,
         fixtures=tuple(fixtures),
     )
     report = qualify_verifier(manifest, tuple(replays))
