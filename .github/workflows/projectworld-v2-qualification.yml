@@ -38,20 +38,29 @@ jobs:
             --seeds-per-type 40 \
             --random-seed 7
 
-      - name: Print qualification summary
+      - name: Assert exact 18/18 qualification
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           report = json.loads(Path("results/projectworld-v2/qualification.json").read_text())
           q = report["qualification"]
+          gates = q["gates"]
+          failed = [g["name"] for g in gates if not g["passed"]]
+          if len(gates) != 18:
+              raise SystemExit(f"FAIL: expected exactly 18 gates, got {len(gates)}")
+          if failed:
+              raise SystemExit(f"FAIL: ProjectWorld v2 is not 18/18: {failed}")
+          if report["status"] != "benchmark_candidate" or not q["releaseable"]:
+              raise SystemExit("FAIL: 18 passing gates did not produce a releaseable candidate")
           print(json.dumps({
               "status": report["status"],
               "candidate_id": q["candidate_id"],
               "report_id": q["report_id"],
               "panel_id": q["panel_id"],
+              "gate_count": len(gates),
+              "passed_gates": len(gates) - len(failed),
               "policy_means": q["policy_means"],
-              "failed_gates": [g["name"] for g in q["gates"] if not g["passed"]],
           }, indent=2, sort_keys=True))
           PY
 
