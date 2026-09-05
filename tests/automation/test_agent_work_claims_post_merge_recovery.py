@@ -1,6 +1,9 @@
+from copy import deepcopy
 from json import dumps, loads
 from pathlib import Path
 from subprocess import run
+
+from tools.review_provenance import evaluate_reviews
 
 WORKFLOW = Path(".github/workflows/agent-work-claims.yml")
 COORDINATOR = Path(".github/scripts/agent-work-claims.js")
@@ -18,6 +21,15 @@ const mutations = [];
 const listComments = function listComments() {};
 const listReviews = function listReviews() {};
 const listWorkflowRunsForRepo = function listWorkflowRunsForRepo() {};
+
+for (const [key, value] of Object.entries({
+  CANONICAL_REVIEW_HEAD: fixture.canonical_review.head,
+  CANONICAL_REVIEWER: fixture.canonical_review.reviewer,
+  CANONICAL_REVIEW_ID: String(fixture.canonical_review.review_id),
+  CANONICAL_REVIEW_REASON: fixture.canonical_review.reason,
+})) {
+  process.env[key] = value;
+}
 
 const github = {
   rest: {
@@ -64,7 +76,7 @@ const github = {
 
 const context = {
   repo: { owner: 'FPC-effortless', repo: 'veritas' },
-  issue: { number: 322 },
+  issue: { number: fixture.issue_number },
   actor: fixture.actor,
   payload: {
     comment: {
@@ -129,24 +141,43 @@ def _marked_comment(marker, value, comment_id):
     }
 
 
+def _clean_agent_review(*, head=FINAL_HEAD, review_id=7001):
+    return {
+        "state": "COMMENTED",
+        "commit_id": head,
+        "user": {"login": "FPC-effortless"},
+        "id": review_id,
+        "submitted_at": "2026-09-04T21:16:15Z",
+        "body": (
+            f"<!-- veritas-agent-review:v1 head={head} verdict=clean -->\n\n"
+            "Fresh exact-head review found no merge-precluding defect."
+        ),
+    }
+
+
 def _base_fixture():
     status = {
         "schema_version": "veritas.agent-work-status.v1",
-        "work_id": "ROADMAP-REVIEW-PROVENANCE-002",
-        "issue_number": 322,
+        "work_id": "ROADMAP-001 / GOLD-001-PILOT",
+        "issue_number": 152,
         "state": "REVIEW",
         "github_actor": "FPC-effortless",
-        "agent_id": "review-provenance-a1",
-        "branch": "fix/review-provenance-gate",
-        "linked_pr": 323,
+        "agent_id": "chatgpt-sol-gold10-pilot",
+        "branch": "feat/gold10-pilot",
+        "linked_pr": 354,
         "linked_pr_head": OLD_HEAD,
-        "ownership_paths": ["tools/review_provenance.py"],
-        "transition_seq": 2,
+        "ownership_paths": [
+            "data/gold10/pilot/**",
+            "docs/investigation_data/gold10-pilot/**",
+            "src/investigation_world/gold10/**",
+            "tests/gold10/**",
+        ],
+        "transition_seq": 9,
     }
     registry = {
         "schema_version": "veritas.agent-work-reservations.v1",
-        "updated_at": "2026-08-31T00:00:00Z",
-        "entries": [{"issue": 322, "paths": ["tools/review_provenance.py"]}],
+        "updated_at": "2026-09-04T21:00:00Z",
+        "entries": [{"issue": 152, "paths": status["ownership_paths"]}],
     }
     runs = []
     for index, name in enumerate(
@@ -165,11 +196,13 @@ def _base_fixture():
                 "id": 8000 + index,
             }
         )
+    review = _clean_agent_review()
     return {
+        "issue_number": 152,
         "actor": "FPC-effortless",
         "association": "OWNER",
         "command": (
-            "/recover-merged review-provenance-a1 323 "
+            "/recover-merged chatgpt-sol-gold10-pilot 354 "
             "reconcile-final-head"
         ),
         "issue": {"labels": ["agent-work", "work:review"]},
@@ -190,27 +223,19 @@ def _base_fixture():
         "pr": {
             "state": "closed",
             "merged": True,
-            "merged_at": "2026-08-31T01:00:00Z",
-            "head": {
-                "ref": "fix/review-provenance-gate",
-                "sha": FINAL_HEAD,
-            },
+            "merged_at": "2026-09-04T21:19:25Z",
+            "head": {"ref": "feat/gold10-pilot", "sha": FINAL_HEAD},
             "merge_commit_sha": MERGE_SHA,
             "user": {"login": "FPC-effortless"},
-            "body": (
-                "Fixes #322\n\n"
-                "Work ID: ROADMAP-REVIEW-PROVENANCE-002"
-            ),
+            "body": "Implements ROADMAP-001 / #152 on the claimed lane.",
         },
-        "reviews": [
-            {
-                "state": "APPROVED",
-                "commit_id": FINAL_HEAD,
-                "user": {"login": "independent-reviewer"},
-                "id": 7001,
-                "submitted_at": "2026-08-31T01:01:00Z",
-            }
-        ],
+        "reviews": [review],
+        "canonical_review": {
+            "head": FINAL_HEAD,
+            "reviewer": "FPC-effortless",
+            "review_id": 7001,
+            "reason": "exact-head clean agent-session semantic review",
+        },
         "runs": runs,
         "comparison": {"behind_by": 0, "status": "ahead"},
     }
@@ -219,9 +244,7 @@ def _base_fixture():
 def _run_recovery(fixture):
     completed = run(
         ["node", "-e", NODE_HARNESS],
-        input=dumps(
-            {"script": _recovery_script(), "fixture": fixture}
-        ),
+        input=dumps({"script": _recovery_script(), "fixture": fixture}),
         capture_output=True,
         check=True,
         text=True,
@@ -241,7 +264,7 @@ def _assert_rejected(fixture, expected):
     )
 
 
-def test_recovery_is_separate_and_serialized():
+def test_recovery_is_separate_serialized_and_delegates_review_authority():
     workflow = _workflow()
     coordinate = workflow.split("  coordinate:\n", 1)[1].split(
         "  recover-merged:\n", 1
@@ -255,19 +278,47 @@ def test_recovery_is_separate_and_serialized():
         "contents: read",
         "issues: write",
         "pull-requests: read",
+        "- uses: actions/checkout@v4",
+        "Resolve canonical exact-head review provenance",
+        "tools/review_provenance.py",
+        "REVIEW_PROVENANCE_PASS:",
+        "CANONICAL_REVIEW_HEAD",
+        "CANONICAL_REVIEWER",
+        "CANONICAL_REVIEW_ID",
+        "CANONICAL_REVIEW_REASON",
     )
     for needle in needles:
         assert needle in recovery
     assert "/recover-merged" not in coordinate
+    assert "exactHeadApproval" not in recovery
+    assert "DECISIVE_REVIEW_STATES" not in recovery
 
 
-def test_recovery_accepts_only_fully_verified_case():
+def test_recovery_accepts_production_shape_with_canonical_clean_agent_review():
     result = _run_recovery(_base_fixture())
     assert result["ok"] is True
     operations = [item["op"] for item in result["mutations"]]
     assert operations.index("updateComment") < operations.index("addLabels")
     assert operations.count("updateComment") == 2
     assert any("→ **DONE**" in body for body in result["emitted"])
+    status_update = next(
+        item
+        for item in result["mutations"]
+        if item["op"] == "updateComment" and item["args"]["comment_id"] == 1001
+    )
+    assert FINAL_HEAD in status_update["args"]["body"]
+    assert '"review_id": 7001' in status_update["args"]["body"]
+    assert "veritas.owner-post-merge-head-recovery.v2" in status_update["args"]["body"]
+
+
+def test_recovery_uses_primary_work_id_like_ordinary_handoff():
+    fixture = _base_fixture()
+    fixture["pr"]["body"] = "Implements ROADMAP-001 / #152."
+    assert _run_recovery(fixture)["ok"] is True
+
+    fixture = _base_fixture()
+    fixture["pr"]["body"] = "Implements #152 but omits the work ID."
+    _assert_rejected(fixture, "must reference both #152 and work ID ROADMAP-001")
 
 
 def test_recovery_rejects_wrong_actor_agent_pr_and_branch():
@@ -278,12 +329,12 @@ def test_recovery_rejects_wrong_actor_agent_pr_and_branch():
     cases.append((fixture, "current authenticated REVIEW holder"))
 
     fixture = _base_fixture()
-    fixture["command"] = "/recover-merged other-agent 323 reason"
+    fixture["command"] = "/recover-merged other-agent 354 reason"
     cases.append((fixture, "current authenticated REVIEW holder"))
 
     fixture = _base_fixture()
     fixture["command"] = (
-        "/recover-merged review-provenance-a1 324 reason"
+        "/recover-merged chatgpt-sol-gold10-pilot 355 reason"
     )
     cases.append((fixture, "PR mismatch"))
 
@@ -298,80 +349,107 @@ def test_recovery_rejects_wrong_actor_agent_pr_and_branch():
 def test_recovery_rejects_non_owner_and_unmerged_pr():
     fixture = _base_fixture()
     fixture["association"] = "MEMBER"
-    _assert_rejected(
-        fixture,
-        "requires repository OWNER authority",
-    )
+    _assert_rejected(fixture, "requires repository OWNER authority")
 
     fixture = _base_fixture()
     fixture["pr"]["merged"] = False
-    _assert_rejected(fixture, "PR #323 is not merged")
+    _assert_rejected(fixture, "PR #354 is not merged")
 
 
-def test_recovery_rejects_same_author_or_stale_review():
+def test_recovery_rejects_canonical_output_identity_mismatch():
     fixture = _base_fixture()
-    fixture["reviews"][0]["user"]["login"] = "FPC-effortless"
+    fixture["canonical_review"]["head"] = OLD_HEAD
     _assert_rejected(
         fixture,
-        "no exact-head approval from a GitHub identity distinct",
+        "canonical review provenance head does not match final PR head",
     )
 
     fixture = _base_fixture()
-    fixture["reviews"][0]["commit_id"] = OLD_HEAD
-    _assert_rejected(
-        fixture,
-        "no exact-head approval from a GitHub identity distinct",
-    )
+    fixture["canonical_review"]["review_id"] = 7999
+    _assert_rejected(fixture, "canonical review #7999 is missing")
 
-
-def test_recovery_rejects_changes_requested_on_final_head():
     fixture = _base_fixture()
-    fixture["reviews"].append(
-        {
-            "state": "CHANGES_REQUESTED",
-            "commit_id": FINAL_HEAD,
-            "user": {"login": "blocking-reviewer"},
-            "id": 7002,
-            "submitted_at": "2026-08-31T01:02:00Z",
-        }
+    fixture["canonical_review"]["reviewer"] = "different-reviewer"
+    _assert_rejected(fixture, "reviewer identity changed")
+
+
+def test_canonical_checker_accepts_clean_agent_review_and_rejects_blockers():
+    clean = _clean_agent_review()
+    decision = evaluate_reviews(
+        pr_author="FPC-effortless",
+        head_sha=FINAL_HEAD,
+        reviews=[clean],
     )
-    _assert_rejected(
-        fixture,
-        "exact-head changes requested by blocking-reviewer",
+    assert decision.ok is True
+    assert decision.review_id == 7001
+
+    blocking = deepcopy(clean)
+    blocking["id"] = 7002
+    blocking["body"] = (
+        f"<!-- veritas-agent-review:v1 head={FINAL_HEAD} verdict=blocking -->\n\n"
+        "BLOCKING: deterministic finding"
     )
+    decision = evaluate_reviews(
+        pr_author="FPC-effortless",
+        head_sha=FINAL_HEAD,
+        reviews=[blocking],
+    )
+    assert decision.ok is False
+
+    stale = _clean_agent_review(head=OLD_HEAD)
+    decision = evaluate_reviews(
+        pr_author="FPC-effortless",
+        head_sha=FINAL_HEAD,
+        reviews=[stale],
+    )
+    assert decision.ok is False
+
+    changes_requested = {
+        "state": "CHANGES_REQUESTED",
+        "commit_id": FINAL_HEAD,
+        "user": {"login": "independent-reviewer"},
+        "id": 7003,
+        "submitted_at": "2026-09-04T21:17:00Z",
+        "body": "Request changes",
+    }
+    decision = evaluate_reviews(
+        pr_author="FPC-effortless",
+        head_sha=FINAL_HEAD,
+        reviews=[clean, changes_requested],
+    )
+    assert decision.ok is False
+
+    inline_finding = {
+        "pull_request_review_id": 7001,
+        "commit_id": FINAL_HEAD,
+        "user": {"login": "FPC-effortless"},
+    }
+    decision = evaluate_reviews(
+        pr_author="FPC-effortless",
+        head_sha=FINAL_HEAD,
+        reviews=[clean],
+        review_comments=[inline_finding],
+    )
+    assert decision.ok is False
 
 
 def test_recovery_rejects_missing_or_failed_required_gate():
     fixture = _base_fixture()
     fixture["runs"] = [
-        run for run in fixture["runs"] if run["name"] != "Security"
+        item for item in fixture["runs"] if item["name"] != "Security"
     ]
-    _assert_rejected(
-        fixture,
-        "missing exact-head Security workflow run",
-    )
+    _assert_rejected(fixture, "missing exact-head Security workflow run")
 
     fixture = _base_fixture()
-    ci_run = next(
-        run for run in fixture["runs"] if run["name"] == "CI"
-    )
+    ci_run = next(item for item in fixture["runs"] if item["name"] == "CI")
     ci_run["conclusion"] = "failure"
-    _assert_rejected(
-        fixture,
-        "exact-head CI is completed/failure",
-    )
+    _assert_rejected(fixture, "exact-head CI is completed/failure")
 
 
 def test_recovery_rejects_merge_not_on_current_main():
     fixture = _base_fixture()
-    fixture["comparison"] = {
-        "behind_by": 1,
-        "status": "diverged",
-    }
-    _assert_rejected(
-        fixture,
-        "merge is not on current main",
-    )
+    fixture["comparison"] = {"behind_by": 1, "status": "diverged"}
+    _assert_rejected(fixture, "merge is not on current main")
 
 
 def test_recovery_preserves_done_head_invariant():
@@ -384,10 +462,7 @@ def test_recovery_preserves_done_head_invariant():
 
     fixture = _base_fixture()
     body = fixture["comments"][0]["body"]
-    fixture["comments"][0]["body"] = body.replace(
-        OLD_HEAD,
-        FINAL_HEAD,
-    )
+    fixture["comments"][0]["body"] = body.replace(OLD_HEAD, FINAL_HEAD)
     _assert_rejected(
         fixture,
         "ordinary /done owns exact-head completion",
