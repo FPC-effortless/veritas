@@ -13,23 +13,31 @@ MERGE_SHA = "3" * 40
 
 NODE_HARNESS = r"""
 const fs = require('fs');
+const childProcess = require('node:child_process');
 const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
 const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
 const fixture = payload.fixture;
 const emitted = [];
 const mutations = [];
+const execFileCalls = [];
 const listComments = function listComments() {};
 const listReviews = function listReviews() {};
 const listWorkflowRunsForRepo = function listWorkflowRunsForRepo() {};
 
-for (const [key, value] of Object.entries({
-  CANONICAL_REVIEW_HEAD: fixture.canonical_review.head,
-  CANONICAL_REVIEWER: fixture.canonical_review.reviewer,
-  CANONICAL_REVIEW_ID: String(fixture.canonical_review.review_id),
-  CANONICAL_REVIEW_REASON: fixture.canonical_review.reason,
-})) {
-  process.env[key] = value;
-}
+childProcess.execFileSync = (file, args, options) => {
+  execFileCalls.push({ file, args, options: { ...options, env: undefined } });
+  if (fixture.canonical_review.error) {
+    const error = new Error('canonical checker failed');
+    error.stderr = fixture.canonical_review.error;
+    throw error;
+  }
+  return (
+    `REVIEW_PROVENANCE_PASS: reviewer=${fixture.canonical_review.reviewer} ` +
+    `review_id=${fixture.canonical_review.review_id} ` +
+    `head=${fixture.canonical_review.head} ` +
+    `reason=${fixture.canonical_review.reason}\n`
+  );
+};
 
 const github = {
   rest: {
@@ -91,13 +99,14 @@ const context = {
   try {
     const runner = new AsyncFunction('github', 'context', 'core', payload.script);
     await runner(github, context, {});
-    process.stdout.write(JSON.stringify({ ok: true, emitted, mutations }));
+    process.stdout.write(JSON.stringify({ ok: true, emitted, mutations, execFileCalls }));
   } catch (error) {
     process.stdout.write(JSON.stringify({
       ok: false,
       error: error && error.message ? error.message : String(error),
       emitted,
       mutations,
+      execFileCalls,
     }));
   }
 })();
@@ -235,6 +244,7 @@ def _base_fixture():
             "reviewer": "FPC-effortless",
             "review_id": 7001,
             "reason": "exact-head clean agent-session semantic review",
+            "error": None,
         },
         "runs": runs,
         "comparison": {"behind_by": 0, "status": "ahead"},
@@ -282,16 +292,37 @@ def test_recovery_is_separate_serialized_and_delegates_review_authority():
         "Resolve canonical exact-head review provenance",
         "tools/review_provenance.py",
         "REVIEW_PROVENANCE_PASS:",
-        "CANONICAL_REVIEW_HEAD",
-        "CANONICAL_REVIEWER",
-        "CANONICAL_REVIEW_ID",
-        "CANONICAL_REVIEW_REASON",
+        "node:child_process",
+        "execFileSync",
     )
     for needle in needles:
         assert needle in recovery
     assert "/recover-merged" not in coordinate
     assert "exactHeadApproval" not in recovery
     assert "DECISIVE_REVIEW_STATES" not in recovery
+
+
+def test_recovery_never_routes_untrusted_comment_through_a_shell():
+    workflow = _workflow()
+    assert "uses: actions/github-script@v7" in workflow
+    assert "shell:" not in workflow
+    assert "run:" not in workflow
+
+    result = _run_recovery(_base_fixture())
+    assert len(result["execFileCalls"]) == 1
+    call = result["execFileCalls"][0]
+    assert call["file"] == "python3"
+    assert call["args"] == [
+        "tools/review_provenance.py",
+        "check",
+        "--repository",
+        "FPC-effortless/veritas",
+        "--pr",
+        "354",
+        "--head",
+        FINAL_HEAD,
+    ]
+    assert "shell" not in call["options"]
 
 
 def test_recovery_accepts_production_shape_with_canonical_clean_agent_review():
@@ -359,10 +390,7 @@ def test_recovery_rejects_non_owner_and_unmerged_pr():
 def test_recovery_rejects_canonical_output_identity_mismatch():
     fixture = _base_fixture()
     fixture["canonical_review"]["head"] = OLD_HEAD
-    _assert_rejected(
-        fixture,
-        "canonical review provenance head does not match final PR head",
-    )
+    _assert_rejected(fixture, "canonical review checker returned a stale head")
 
     fixture = _base_fixture()
     fixture["canonical_review"]["review_id"] = 7999
@@ -371,6 +399,10 @@ def test_recovery_rejects_canonical_output_identity_mismatch():
     fixture = _base_fixture()
     fixture["canonical_review"]["reviewer"] = "different-reviewer"
     _assert_rejected(fixture, "reviewer identity changed")
+
+    fixture = _base_fixture()
+    fixture["canonical_review"]["error"] = "REVIEW_PROVENANCE_FAIL: blocking review"
+    _assert_rejected(fixture, "canonical exact-head review provenance failed")
 
 
 def test_canonical_checker_accepts_clean_agent_review_and_rejects_blockers():

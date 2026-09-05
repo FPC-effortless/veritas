@@ -78,106 +78,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve canonical exact-head review provenance
-        id: review_provenance
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          import re
-          import subprocess
-          import sys
-          import urllib.request
-
-          repository = os.environ["REPOSITORY"]
-          token = os.environ["GITHUB_TOKEN"]
-          command = os.environ["COMMENT_BODY"]
-          match = re.fullmatch(
-              r"/recover-merged ([A-Za-z0-9][A-Za-z0-9._-]{0,63}) "
-              r"([1-9][0-9]*) (.{1,500})",
-              command,
-          )
-          if match is None:
-              raise SystemExit(
-                  "malformed recover-merged command; expected one exact single line"
-              )
-          pr_number = int(match.group(2))
-          headers = {
-              "Accept": "application/vnd.github+json",
-              "Authorization": f"Bearer {token}",
-              "User-Agent": "veritas-post-merge-recovery",
-              "X-GitHub-Api-Version": "2022-11-28",
-          }
-          request = urllib.request.Request(
-              f"https://api.github.com/repos/{repository}/pulls/{pr_number}",
-              headers=headers,
-          )
-          with urllib.request.urlopen(request, timeout=30) as response:
-              pr = json.load(response)
-          head = pr.get("head", {}).get("sha")
-          if not isinstance(head, str) or re.fullmatch(r"[0-9a-f]{40}", head) is None:
-              raise SystemExit("pull request exact head is missing or malformed")
-
-          completed = subprocess.run(
-              [
-                  sys.executable,
-                  "tools/review_provenance.py",
-                  "check",
-                  "--repository",
-                  repository,
-                  "--pr",
-                  str(pr_number),
-                  "--head",
-                  head,
-              ],
-              capture_output=True,
-              text=True,
-              env=os.environ.copy(),
-              check=False,
-          )
-          if completed.returncode != 0:
-              if completed.stdout:
-                  sys.stderr.write(completed.stdout)
-              if completed.stderr:
-                  sys.stderr.write(completed.stderr)
-              raise SystemExit("canonical exact-head review provenance failed")
-
-          output = completed.stdout.strip().splitlines()
-          if not output:
-              raise SystemExit("canonical review checker produced no pass evidence")
-          evidence = re.fullmatch(
-              r"REVIEW_PROVENANCE_PASS: reviewer=(\S+) review_id=(\d+) "
-              r"head=([0-9a-f]{40}) reason=(.+)",
-              output[-1],
-          )
-          if evidence is None:
-              raise SystemExit("canonical review checker pass evidence is malformed")
-          reviewer, review_id, review_head, reason = evidence.groups()
-          if review_head != head:
-              raise SystemExit("canonical review checker returned a stale head")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-              handle.write(f"head={head}\n")
-              handle.write(f"reviewer={reviewer}\n")
-              handle.write(f"review_id={review_id}\n")
-              handle.write(f"reason={reason}\n")
-          PY
-
       - name: Recover merged exact-head completion
         uses: actions/github-script@v7
         env:
-          CANONICAL_REVIEW_HEAD: ${{ steps.review_provenance.outputs.head }}
-          CANONICAL_REVIEWER: ${{ steps.review_provenance.outputs.reviewer }}
-          CANONICAL_REVIEW_ID: ${{ steps.review_provenance.outputs.review_id }}
-          CANONICAL_REVIEW_REASON: ${{ steps.review_provenance.outputs.reason }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           script: |
+            const { execFileSync } = require('node:child_process');
             const STATUS_MARKER = '<!-- veritas-agent-work-status:v1 -->';
             const REGISTRY_MARKER = '<!-- veritas-agent-work-reservations:v1 -->';
             const STATE_LABELS = [
@@ -236,6 +143,62 @@ jobs:
                   `(^|[^A-Za-z0-9._-])${escaped}(?=$|[^A-Za-z0-9._-])`,
                   'm'
                 ).test(String(body || ''));
+            }
+
+            function canonicalReviewEvidence(prNumber, finalHead) {
+              let output;
+              try {
+                output = execFileSync(
+                  'python3',
+                  [
+                    'tools/review_provenance.py',
+                    'check',
+                    '--repository',
+                    `${owner}/${repo}`,
+                    '--pr',
+                    String(prNumber),
+                    '--head',
+                    finalHead,
+                  ],
+                  {
+                    encoding: 'utf8',
+                    env: { ...process.env, GITHUB_TOKEN: process.env.GITHUB_TOKEN || '' },
+                    maxBuffer: 1024 * 1024,
+                  }
+                );
+              } catch (error) {
+                const stdout = String(error?.stdout || '').trim();
+                const stderr = String(error?.stderr || '').trim();
+                const detail = stderr || stdout;
+                fail(
+                  `canonical exact-head review provenance failed${detail ? `: ${detail}` : ''}`
+                );
+              }
+              const lines = String(output || '').trim().split(/\r?\n/).filter(Boolean);
+              if (!lines.length) {
+                fail('canonical review checker produced no pass evidence');
+              }
+              const evidence = lines[lines.length - 1].match(
+                /^REVIEW_PROVENANCE_PASS: reviewer=(\S+) review_id=(\d+) head=([0-9a-f]{40}) reason=(.+)$/
+              );
+              if (!evidence) {
+                fail('canonical review checker pass evidence is malformed');
+              }
+              const [, reviewer, reviewIdText, reviewHead, reason] = evidence;
+              const reviewId = Number(reviewIdText);
+              if (reviewHead !== finalHead) {
+                fail('canonical review checker returned a stale head');
+              }
+              if (!reviewer.trim()) {
+                fail('canonical review provenance has no concrete reviewer');
+              }
+              if (!Number.isInteger(reviewId) || reviewId <= 0) {
+                fail('canonical review provenance has no positive review id');
+              }
+              if (!reason.trim()) {
+                fail('canonical review provenance has no decision reason');
+              }
+              return { head: reviewHead, reviewer, reviewId, reason };
             }
 
             function latestSuccessfulRequiredRuns(runs, headSha) {
@@ -370,21 +333,15 @@ jobs:
                 fail(`PR #${command.pr} must reference both #${issueNumber} and work ID ${primaryWorkId}`);
               }
 
-              const canonicalHead = process.env.CANONICAL_REVIEW_HEAD || '';
-              const canonicalReviewer = process.env.CANONICAL_REVIEWER || '';
-              const canonicalReviewId = Number(process.env.CANONICAL_REVIEW_ID || 0);
-              const canonicalReason = process.env.CANONICAL_REVIEW_REASON || '';
+              // Resolve canonical exact-head review provenance through the repository's
+              // existing checker. execFileSync uses structured argv and does not invoke a shell.
+              const canonical = canonicalReviewEvidence(command.pr, finalHead);
+              const canonicalHead = canonical.head;
+              const canonicalReviewer = canonical.reviewer;
+              const canonicalReviewId = canonical.reviewId;
+              const canonicalReason = canonical.reason;
               if (canonicalHead !== finalHead) {
                 fail('canonical review provenance head does not match final PR head');
-              }
-              if (!canonicalReviewer.trim()) {
-                fail('canonical review provenance has no concrete reviewer');
-              }
-              if (!Number.isInteger(canonicalReviewId) || canonicalReviewId <= 0) {
-                fail('canonical review provenance has no positive review id');
-              }
-              if (!canonicalReason.trim()) {
-                fail('canonical review provenance has no decision reason');
               }
 
               const reviews = await github.paginate(github.rest.pulls.listReviews, {
