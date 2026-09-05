@@ -1,0 +1,259 @@
+name: Deploy Veritas SRE to HUD
+
+on:
+  workflow_dispatch:
+    inputs:
+      taskset:
+        description: "HUD taskset to deploy"
+        required: true
+        default: "veritas-sre-v1"
+        type: string
+      run_remote_smoke:
+        description: "Run remote HUD evaluation after deployment"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: veritas-sre-hud-deployment
+  cancel-in-progress: false
+
+env:
+  VERITAS_SRE_PRIVATE_CANDIDATE_ID: SRE-CAND-92A84929AD1E82E24357
+  VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID: EVID-2C69B48DCDD5F2232EABDC9B
+  VERITAS_SRE_PRIVATE_REPORT_ID: QREPORT-C585121E94D91766BB6664E3
+  VERITAS_SRE_PRIVATE_PANEL_ID: QPANEL-AFF065BA4C2FD75BE9BB3EBE
+  VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID: PRIVREL-036192DA63716D331C929C0C
+  VERITAS_SRE_PRIVATE_BUNDLE_SHA256: 531d1358883ec399add640c3519c31a36f6c93981796d7a3e8b37e2a7ace0d2a
+
+jobs:
+  deploy:
+    name: Verify and deploy sealed Veritas SRE
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      VERITAS_SRE_SEAL_PRIVATE_KEY_PEM: ${{ secrets.VERITAS_SRE_SEAL_PRIVATE_KEY_PEM }}
+      HUD_API_KEY: ${{ secrets.HUD_API_KEY }}
+      TASKSET: ${{ inputs.taskset }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Veritas
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Install HUD
+        run: |
+          python -m pip install "hud>=0.6,<0.7"
+
+      - name: Verify deployment credentials exist
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" || {
+            echo "::error::VERITAS_SRE_SEAL_PRIVATE_KEY_PEM is not configured"
+            exit 1
+          }
+
+          test -n "$HUD_API_KEY" || {
+            echo "::error::HUD_API_KEY is not configured"
+            exit 1
+          }
+
+          echo "Required deployment credentials are configured."
+
+      - name: Download retained frozen encrypted SRE v4 seal
+        uses: actions/download-artifact@v4
+        with:
+          name: sre-v4-portability-encrypted-seal-retained
+          path: ${{ runner.temp }}/sre-v4-seal
+          github-token: ${{ github.token }}
+          repository: FPC-effortless/veritas
+          run-id: 33058148037
+
+      - name: Verify ciphertext and decrypt frozen private release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          seal_root="$RUNNER_TEMP/sre-v4-seal"
+          private_root="$RUNNER_TEMP/veritas-sre-portability-private"
+          mkdir -p "$private_root"
+
+          test -f "$seal_root/private-release.zip.enc"
+          test -f "$seal_root/data-key.bin.enc"
+
+          test "$(sha256sum "$seal_root/private-release.zip.enc" | awk '{print $1}')" = \
+            "1a230dec590184f4ce0244965ce8a52727a84884f663ad2aaa90f338e2aeaf1d"
+
+          test "$(sha256sum "$seal_root/data-key.bin.enc" | awk '{print $1}')" = \
+            "836d0a52551b91094420bc6ec0bf58239162e8223acc0c3be15bf7f7c5778790"
+
+          key_file="$private_root/seal-private.pem"
+          data_key="$private_root/data-key.bin"
+          bundle="$private_root/private-release.zip"
+
+          printf '%s\n' "$VERITAS_SRE_SEAL_PRIVATE_KEY_PEM" > "$key_file"
+          chmod 600 "$key_file"
+
+          openssl pkeyutl -decrypt \
+            -inkey "$key_file" \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -in "$seal_root/data-key.bin.enc" \
+            -out "$data_key"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in "$seal_root/private-release.zip.enc" \
+            -out "$bundle" \
+            -pass file:"$data_key"
+
+          test "$(sha256sum "$bundle" | awk '{print $1}')" = \
+            "$VERITAS_SRE_PRIVATE_BUNDLE_SHA256"
+
+          mkdir -p "$private_root/bundle"
+          unzip -q "$bundle" -d "$private_root/bundle"
+
+          qualification="$(
+            find "$private_root/bundle" \
+              -type f \
+              -name qualification.json \
+              -path '*/sre-v4/*' \
+              -print -quit
+          )"
+
+          test -n "$qualification"
+
+          echo "VERITAS_SRE_QUALIFICATION_PATH=$qualification" >> "$GITHUB_ENV"
+
+      - name: Verify exact sealed SRE release
+        run: |
+          python tools/portability_verify_sealed_sre.py \
+            --qualification "$VERITAS_SRE_QUALIFICATION_PATH" \
+            --output "$RUNNER_TEMP/veritas-sre-portability-proof" \
+            --source-bundle-sha256 "$VERITAS_SRE_PRIVATE_BUNDLE_SHA256" \
+            --expected-candidate-id "$VERITAS_SRE_PRIVATE_CANDIDATE_ID" \
+            --expected-evidence-manifest-id "$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID" \
+            --expected-report-id "$VERITAS_SRE_PRIVATE_REPORT_ID" \
+            --expected-panel-id "$VERITAS_SRE_PRIVATE_PANEL_ID" \
+            --expected-private-release-manifest-id "$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID" \
+            --expected-private-count 30
+
+      - name: Confirm buyer-safe proof exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          proof="$RUNNER_TEMP/veritas-sre-portability-proof/buyer_safe_proof.json"
+
+          test -f "$proof"
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          proof = Path(
+              os.environ["RUNNER_TEMP"]
+          ) / "veritas-sre-portability-proof" / "buyer_safe_proof.json"
+
+          data = json.loads(proof.read_text())
+
+          print("Buyer-safe proof loaded.")
+          print("Proof keys:", sorted(data.keys()))
+          PY
+
+      - name: Build sealed HUD package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          hud_root="$RUNNER_TEMP/veritas-sre-portability-proof/first/hud"
+
+          test -d "$hud_root"
+          test -f "$hud_root/env.py"
+          test -f "$hud_root/tasks.py"
+          test -f "$hud_root/pyproject.toml"
+          test -f "$hud_root/Dockerfile.hud"
+
+          echo "HUD package:"
+          find "$hud_root" -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Build HUD Docker image before publication
+        working-directory: ${{ runner.temp }}/veritas-sre-portability-proof/first/hud
+        run: |
+          docker build \
+            -f Dockerfile.hud \
+            -t veritas-sre-v4-portability:deployment .
+
+      - name: Deploy environment to HUD
+        working-directory: ${{ runner.temp }}/veritas-sre-portability-proof/first/hud
+        env:
+          HUD_API_KEY: ${{ secrets.HUD_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          hud deploy .
+
+      - name: Sync sealed taskset to HUD
+        env:
+          HUD_API_KEY: ${{ secrets.HUD_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          hud sync tasks "$TASKSET"
+
+      - name: Optional remote HUD smoke evaluation
+        if: ${{ inputs.run_remote_smoke }}
+        env:
+          HUD_API_KEY: ${{ secrets.HUD_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          hud eval "$TASKSET" claude --remote --full
+
+      - name: Upload buyer-safe deployment proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-sre-hud-deployment-proof
+          path: ${{ runner.temp }}/veritas-sre-portability-proof/buyer_safe_proof.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          {
+            echo "## Veritas SRE HUD Deployment"
+            echo
+            echo "- Taskset: \`$TASKSET\`"
+            echo "- Candidate: \`$VERITAS_SRE_PRIVATE_CANDIDATE_ID\`"
+            echo "- Evidence: \`$VERITAS_SRE_PRIVATE_EVIDENCE_MANIFEST_ID\`"
+            echo "- Qualification report: \`$VERITAS_SRE_PRIVATE_REPORT_ID\`"
+            echo "- Qualification panel: \`$VERITAS_SRE_PRIVATE_PANEL_ID\`"
+            echo "- Private release: \`$VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID\`"
+            echo "- Private task count: \`30\`"
+            echo "- Remote smoke requested: \`${{ inputs.run_remote_smoke }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove decrypted private release
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/veritas-sre-portability-private"
+          rm -rf "$RUNNER_TEMP/sre-v4-seal"
