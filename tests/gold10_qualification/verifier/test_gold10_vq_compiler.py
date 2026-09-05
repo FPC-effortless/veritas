@@ -32,7 +32,10 @@ def test_each_gold10_task_compiles_fail_closed_verifier_evidence() -> None:
         assert record.binding.task_id == task.task.task_id
         assert record.binding.task_manifest_sha256 == task.manifest_sha256
         assert record.report.environment_identity.environment_id == contract.world_id
-        assert record.report.environment_identity.environment_version == contract.world_version
+        assert (
+            record.report.environment_identity.environment_version
+            == contract.world_version
+        )
         assert record.effective_status == GateOutcome.PASS, _failure_summary(record)
         gate_names = {gate.name for gate in record.report.gates}
         assert "reward_hack_resistance" in gate_names
@@ -41,7 +44,10 @@ def test_each_gold10_task_compiles_fail_closed_verifier_evidence() -> None:
         assert record.report.metrics["deterministic_reproduction"] == 1.0
         assert record.report.metrics["alternative_solution_acceptance"] is None
         assert record.report.metrics["process_rule_correctness"] is None
-        assert record.report.metrics["ambiguity_sensitivity"] == 1.0
+        if task.calibration_required:
+            assert record.report.metrics["ambiguity_sensitivity"] == 1.0
+        else:
+            assert record.report.metrics["ambiguity_sensitivity"] is None
 
 
 def test_candidate_qualification_requires_all_ten_task_records() -> None:
@@ -57,8 +63,8 @@ def test_candidate_qualification_requires_all_ten_task_records() -> None:
     assert result.qualification_id.startswith("G10VQ-")
 
 
-def test_nonrepresented_generic_gates_are_explicitly_not_applicable() -> None:
-    task = build_taskset()[0]
+def test_noncalibration_ambiguity_is_not_manufactured() -> None:
+    task = next(item for item in build_taskset() if not item.calibration_required)
     record = compile_task_qualification(task.case_id)
     non_applicable = {
         item.gate
@@ -70,12 +76,33 @@ def test_nonrepresented_generic_gates_are_explicitly_not_applicable() -> None:
         "alternative_solution_acceptance",
         "process_rule_correctness",
         "side_effect_sensitivity",
+        "ambiguity_sensitivity",
     }
     outcomes = {gate.name: gate.outcome for gate in record.report.gates}
     assert outcomes["falsifier_fixture_coverage"] == GateOutcome.UNKNOWN
     assert outcomes["alternative_solution_acceptance"] == GateOutcome.UNKNOWN
     assert outcomes["process_rule_correctness"] == GateOutcome.UNKNOWN
     assert outcomes["side_effect_sensitivity"] == GateOutcome.UNKNOWN
+    assert outcomes["ambiguity_sensitivity"] == GateOutcome.UNKNOWN
+    assert record.report.metrics["ambiguity_sensitivity"] is None
+
+
+def test_calibration_case_retains_real_ambiguity_evidence() -> None:
+    task = next(item for item in build_taskset() if item.calibration_required)
+    record = compile_task_qualification(task.case_id)
+    non_applicable = {
+        item.gate
+        for item in record.applicability
+        if item.applicability.value == "NOT_APPLICABLE"
+    }
+    assert "ambiguity_sensitivity" not in non_applicable
+    outcome = next(
+        gate.outcome
+        for gate in record.report.gates
+        if gate.name == "ambiguity_sensitivity"
+    )
+    assert outcome == GateOutcome.PASS
+    assert record.report.metrics["ambiguity_sensitivity"] == 1.0
 
 
 def test_world_version_drift_changes_bound_environment_identity(monkeypatch) -> None:
@@ -84,7 +111,11 @@ def test_world_version_drift_changes_bound_environment_identity(monkeypatch) -> 
     original = compiler._environment_identity(case_id, compiler.ROOT)
 
     drifted_contract = canonical.model_copy(update={"world_version": "0.1.1-drift"})
-    monkeypatch.setattr(compiler, "load_pilot_contract", lambda root=None: drifted_contract)
+    monkeypatch.setattr(
+        compiler,
+        "load_pilot_contract",
+        lambda root=None: drifted_contract,
+    )
     drifted = compiler._environment_identity(case_id, compiler.ROOT)
 
     assert original.environment_id == canonical.world_id
