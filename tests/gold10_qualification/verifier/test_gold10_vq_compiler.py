@@ -10,7 +10,11 @@ from investigation_world.gold10_qualification.verifier.models import (
     Gold10TaskVerifierQualification,
 )
 from investigation_world.qualification.maturity import GateOutcome
-from investigation_world.qualification.verifier_suite import qualify_verifier
+from investigation_world.qualification.verifier_suite import (
+    VerifierFixtureManifest,
+    VerifierReplay,
+    qualify_verifier,
+)
 
 
 def _failure_summary(record: Gold10TaskVerifierQualification) -> str:
@@ -133,12 +137,16 @@ def test_replays_bind_full_qualification_identity_and_reject_stale_rows(
 ) -> None:
     case_id = build_taskset()[0].case_id
     canonical_contract = load_pilot_contract()
-    captured: list[tuple[object, tuple[object, ...]]] = []
+    captured: list[tuple[VerifierFixtureManifest, tuple[VerifierReplay, ...]]] = []
     canonical_qualify = compiler.qualify_verifier
 
-    def capture(manifest, replays):
-        captured.append((manifest, tuple(replays)))
-        return canonical_qualify(manifest, replays)
+    def capture(
+        manifest: VerifierFixtureManifest,
+        replays: tuple[VerifierReplay, ...] | list[VerifierReplay],
+    ):
+        replay_tuple = tuple(replays)
+        captured.append((manifest, replay_tuple))
+        return canonical_qualify(manifest, replay_tuple)
 
     monkeypatch.setattr(compiler, "qualify_verifier", capture)
     canonical_record = compile_task_qualification(case_id)
