@@ -84,9 +84,18 @@ world-version drift therefore changes both the declared environment version and 
 content-bound identity rather than being aliased to a task-manifest digest.
 
 Verifier identity binds the verifier ID/version, verifier-target contract SHA-256, and
-SHA-256 digests of the exact imported Gold-10 verifier and target source files. Fixture
-payloads, replay outputs, generic reports, per-task records, and the ten-task candidate
-are all content-bound.
+SHA-256 digests of the exact imported Gold-10 verifier and target source files.
+
+Each fixture and replay additionally carries one qualification-binding digest over the
+case/task identity, task manifest, taskset version, world identity, environment content
+identity, verifier ID/version/content identity, and verifier-target-contract SHA-256.
+That digest participates in `fixture_id`, so the canonical replay evidence hash changes
+with any of those frozen identities. Replays from an earlier identity therefore point
+to fixture IDs that do not exist in a revised manifest and are rejected rather than
+silently reused. Replay provenance repeats the full binding fields for auditability.
+
+Fixture payloads, replay outputs, generic reports, per-task records, and the ten-task
+candidate are therefore all content-bound to the same frozen qualification identity.
 
 ## Downstream use
 
