@@ -21,22 +21,23 @@ bound qualification identity and invalidates stale evidence.
 ## Deterministic compiler
 
 `compile_task_qualification(case_id)` constructs canonical verifier fixtures and two
-replays per fixture for one frozen Gold-10 task. `compile_gold10_verifier_qualification()`
-executes the same protocol across exactly ten unique tasks and emits the fail-closed
-candidate aggregate.
+replays per fixture for one frozen Gold-10 task.
+`compile_gold10_verifier_qualification()` executes the same protocol across exactly
+ten unique tasks and emits the fail-closed candidate aggregate.
 
 Every semantically applicable generic falsifier category is exercised. The suite
 includes the scripted reference, partial and plausible-invalid submissions,
 unrelated-target reward laundering, target/state drift, missing cited evidence,
-deterministic perturbation, malformed JSON, and adversarial edge cases. Confidence-role
-inversion is retained explicitly as adversarial verifier evidence. On the calibration
-case, a separate adversarial fixture uses unbound generic uncertainty; on
-non-calibration cases, the semantic adversarial fixture uses a duplicate-claim attack.
+deterministic perturbation, malformed JSON, and adversarial edge cases.
+Confidence-role inversion is retained explicitly as adversarial verifier evidence.
+On the calibration case, a separate adversarial fixture uses unbound generic
+uncertainty; on non-calibration cases, the semantic adversarial fixture uses a
+duplicate-claim attack.
 
 The valid scripted reference is predeclared to score exactly at the frozen pilot reward
-ceiling (`0.75`). Negative fixtures are predeclared to fail at zero reward. The compiler
-does not derive its expected ranges from observed outputs. That makes changed verifier
-behavior a qualification failure rather than an updated expectation.
+ceiling (`0.75`). Negative fixtures are predeclared to fail at zero reward. The
+compiler does not derive its expected ranges from observed outputs. That makes changed
+verifier behavior a qualification failure rather than an updated expectation.
 
 ## Applicability
 
@@ -56,6 +57,23 @@ and are explicitly classified `NOT_APPLICABLE` by the Gold-10 wrapper. The gener
 are deliberately absent and is explicitly marked `NOT_APPLICABLE` with rationale.
 `NOT_APPLICABLE` can never erase an observed FAIL. Any other UNKNOWN remains required
 and keeps the task and candidate UNKNOWN.
+
+### Ambiguity and calibration
+
+The canonical generic suite derives `ambiguity_sensitivity` from adversarial and
+alternative-strategy fixture categories. That aggregate is not automatically valid
+Gold-10 ambiguity evidence.
+
+For non-calibration tasks, duplicate-claim rejection and confidence-role inversion are
+verifier-robustness checks, not ambiguity/calibration tests. The Gold-10 wrapper
+therefore neutralizes the derived generic ambiguity metric to `None`, resets its gate
+to `UNKNOWN`, and marks it `NOT_APPLICABLE` with rationale. This prevents unrelated
+adversarial success from becoming manufactured ambiguity qualification evidence.
+
+For the designated Chevron calibration task, the unbound-structured-uncertainty
+falsifier exercises the declared calibration surface. Its ambiguity/calibration gate
+remains applicable and must satisfy the canonical threshold. Confidence-role inversion
+remains adversarial evidence and is not reclassified as process authority.
 
 ## Evidence identities
 
