@@ -104,7 +104,8 @@ def _require_precondition(effect: HiddenActionEffect, key: str, expected: Any) -
         for assertion in effect.required_state
     ):
         raise ValueError(
-            f"voice family semantics require {effect.action_name} to depend on {key} == {expected!r}"
+            f"voice family semantics require {effect.action_name} "
+            f"to depend on {key} == {expected!r}"
         )
 
 
