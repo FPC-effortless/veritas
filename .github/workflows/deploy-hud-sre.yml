@@ -211,6 +211,7 @@ jobs:
           hud deploy .
 
       - name: Sync sealed taskset to HUD
+        working-directory: ${{ runner.temp }}/veritas-sre-portability-proof/first/hud
         env:
           HUD_API_KEY: ${{ secrets.HUD_API_KEY }}
         run: |
@@ -220,6 +221,7 @@ jobs:
 
       - name: Optional remote HUD smoke evaluation
         if: ${{ inputs.run_remote_smoke }}
+        working-directory: ${{ runner.temp }}/veritas-sre-portability-proof/first/hud
         env:
           HUD_API_KEY: ${{ secrets.HUD_API_KEY }}
         run: |
