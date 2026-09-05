@@ -52,7 +52,11 @@ _base_summarize_voice_qualification = _core.summarize_voice_qualification
 
 
 def _single_effect(episode: OperationalEpisode, action_name: str) -> HiddenActionEffect:
-    matches = [effect for effect in episode.oracle.action_effects if effect.action_name == action_name]
+    matches = [
+        effect
+        for effect in episode.oracle.action_effects
+        if effect.action_name == action_name
+    ]
     if len(matches) != 1:
         raise ValueError(
             f"voice family semantics require exactly one {action_name} transition"
@@ -61,7 +65,11 @@ def _single_effect(episode: OperationalEpisode, action_name: str) -> HiddenActio
 
 
 def _record_object_id(episode: OperationalEpisode, record_type: str) -> str:
-    matches = [record.object_id for record in episode.records if record.record_type == record_type]
+    matches = [
+        record.object_id
+        for record in episode.records
+        if record.record_type == record_type
+    ]
     if len(matches) != 1:
         raise ValueError(
             f"voice family semantics require exactly one {record_type} record"
