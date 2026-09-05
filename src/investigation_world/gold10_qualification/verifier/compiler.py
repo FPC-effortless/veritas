@@ -24,6 +24,7 @@ from investigation_world.qualification.verifier_suite import (
     VerifierFixture,
     VerifierFixtureCategory,
     VerifierFixtureManifest,
+    VerifierQualificationReport,
     VerifierReplay,
     qualify_verifier,
 )
@@ -207,7 +208,9 @@ def _execute(
     return passed, score.reward, score.component_scores, _digest_json(output)
 
 
-def _neutralize_noncalibration_ambiguity(report: object) -> object:
+def _neutralize_noncalibration_ambiguity(
+    report: VerifierQualificationReport,
+) -> VerifierQualificationReport:
     metrics = dict(report.metrics)
     metrics["ambiguity_sensitivity"] = None
     gates = tuple(
@@ -229,7 +232,7 @@ def _neutralize_noncalibration_ambiguity(report: object) -> object:
         mode="python",
         exclude={"report_id", "metrics", "gates", "status"},
     )
-    return report.__class__(
+    return VerifierQualificationReport(
         **payload,
         metrics=metrics,
         gates=gates,
