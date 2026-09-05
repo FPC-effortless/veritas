@@ -52,13 +52,16 @@ def _module_digest(path: str | None) -> str:
 
 def _environment_identity(case_id: str, root: Path) -> EnvironmentIdentity:
     task = build_task(case_id, root)
+    contract = load_pilot_contract(root)
     payload = {
+        "world_id": contract.world_id,
+        "world_version": contract.world_version,
         "task": task.model_dump(mode="json"),
         "manifest_sha256": task.manifest_sha256,
     }
     return EnvironmentIdentity(
-        environment_id="veritas.gold10.investigation",
-        environment_version=task.manifest_sha256,
+        environment_id=contract.world_id,
+        environment_version=contract.world_version,
         content_sha256=_digest_json(payload),
     )
 
@@ -130,10 +133,7 @@ def _mutate_submission(
 ) -> Gold10Submission | str:
     if category == VerifierFixtureCategory.CORRECT_SOLUTION:
         return reference
-    if category in {
-        VerifierFixtureCategory.ALTERNATIVE_CORRECT_STRATEGY,
-        VerifierFixtureCategory.NONDETERMINISTIC_PERTURBATION,
-    }:
+    if category == VerifierFixtureCategory.NONDETERMINISTIC_PERTURBATION:
         return _reordered(reference)
     if category == VerifierFixtureCategory.PARTIALLY_CORRECT:
         return reference.model_copy(update={"claims": reference.claims[:-1]})
@@ -151,10 +151,6 @@ def _mutate_submission(
         return reference.model_copy(update={"claims": (first, *reference.claims[1:])})
     if category == VerifierFixtureCategory.MISSING_EVIDENCE:
         return _missing_evidence(reference, available_evidence_ids)
-    if category == VerifierFixtureCategory.AUTHORITY_PROCESS_VIOLATION:
-        return reference.model_copy(
-            update={"primary_confidence": 0.25, "alternative_confidence": 0.55}
-        )
     if category == VerifierFixtureCategory.MALFORMED_ARTIFACT:
         return "{not-valid-json"
     if category == VerifierFixtureCategory.ADVERSARIAL_EDGE_CASE:
@@ -167,10 +163,15 @@ def _mutate_submission(
     raise ValueError(f"unsupported Gold-10 verifier fixture category: {category.value}")
 
 
+def _confidence_role_inversion(reference: Gold10Submission) -> Gold10Submission:
+    return reference.model_copy(
+        update={"primary_confidence": 0.25, "alternative_confidence": 0.55}
+    )
+
+
 def _expected(category: VerifierFixtureCategory) -> tuple[bool, float, float]:
     if category in {
         VerifierFixtureCategory.CORRECT_SOLUTION,
-        VerifierFixtureCategory.ALTERNATIVE_CORRECT_STRATEGY,
         VerifierFixtureCategory.NONDETERMINISTIC_PERTURBATION,
     }:
         return True, 0.75, 0.75
@@ -211,20 +212,38 @@ def compile_task_qualification(
     reference = reference_submission(case_id, repo_root)
     available_evidence_ids = tuple(item.evidence_id for item in task.available_evidence)
 
-    categories = tuple(
-        category
-        for category in VerifierFixtureCategory
-        if category != VerifierFixtureCategory.FORBIDDEN_SIDE_EFFECT
-    )
-    fixtures: list[VerifierFixture] = []
-    replays: list[VerifierReplay] = []
-    for category in categories:
+    omitted_categories = {
+        VerifierFixtureCategory.ALTERNATIVE_CORRECT_STRATEGY,
+        VerifierFixtureCategory.AUTHORITY_PROCESS_VIOLATION,
+        VerifierFixtureCategory.FORBIDDEN_SIDE_EFFECT,
+    }
+    fixture_payloads: list[
+        tuple[VerifierFixtureCategory, Gold10Submission | str, str]
+    ] = []
+    for category in VerifierFixtureCategory:
+        if category in omitted_categories:
+            continue
         payload = _mutate_submission(
             category,
             reference,
             calibration_required=task.calibration_required,
             available_evidence_ids=available_evidence_ids,
         )
+        fixture_payloads.append(
+            (category, payload, f"Gold-10 {case_id} {category.value} falsifier")
+        )
+
+    fixture_payloads.append(
+        (
+            VerifierFixtureCategory.ADVERSARIAL_EDGE_CASE,
+            _confidence_role_inversion(reference),
+            f"Gold-10 {case_id} confidence-role inversion adversarial falsifier",
+        )
+    )
+
+    fixtures: list[VerifierFixture] = []
+    replays: list[VerifierReplay] = []
+    for category, payload, description in fixture_payloads:
         expected_pass, minimum_reward, maximum_reward = _expected(category)
         fixture = VerifierFixture(
             category=category,
@@ -233,11 +252,13 @@ def compile_task_qualification(
             minimum_reward=minimum_reward,
             maximum_reward=maximum_reward,
             strategy_family="gold10-deterministic-v1",
-            description=f"Gold-10 {case_id} {category.value} falsifier",
+            description=description,
             provenance={
                 "case_id": case_id,
                 "task_id": task.task.task_id,
                 "task_manifest_sha256": task.manifest_sha256,
+                "world_id": contract.world_id,
+                "world_version": contract.world_version,
                 "verifier_target_contract_sha256": contract.verifier_target_contract_sha256,
             },
         )
@@ -257,7 +278,12 @@ def compile_task_qualification(
                     component_scores=component_scores,
                     output_sha256=output_sha256,
                     observed_at=_FIXED_TIME,
-                    provenance={"case_id": case_id, "repetition": repetition},
+                    provenance={
+                        "case_id": case_id,
+                        "repetition": repetition,
+                        "world_id": contract.world_id,
+                        "world_version": contract.world_version,
+                    },
                 )
             )
 
@@ -273,9 +299,25 @@ def compile_task_qualification(
             gate="falsifier_fixture_coverage",
             applicability=Applicability.NOT_APPLICABLE,
             rationale=(
-                "Gold-10 is a read-only investigation submission protocol and has no mutable "
-                "operational side-effect surface; the only omitted generic fixture category is "
-                "forbidden_side_effect. All other canonical falsifier categories are present."
+                "The generic taxonomy contains alternative-strategy, authority/process, and "
+                "forbidden-side-effect categories that are not semantically represented by this "
+                "read-only Gold-10 protocol. Those categories are omitted rather than fabricated."
+            ),
+        ),
+        Gold10ApplicabilityRecord(
+            gate="alternative_solution_acceptance",
+            applicability=Applicability.NOT_APPLICABLE,
+            rationale=(
+                "No independently defensible second semantic solution strategy is established by "
+                "this deterministic pilot; reordered reference content is not an alternative strategy."
+            ),
+        ),
+        Gold10ApplicabilityRecord(
+            gate="process_rule_correctness",
+            applicability=Applicability.NOT_APPLICABLE,
+            rationale=(
+                "Gold-10 exposes no authority/process transition surface. Confidence-role inversion "
+                "is retained as adversarial verifier evidence instead of process-rule evidence."
             ),
         ),
         Gold10ApplicabilityRecord(
