@@ -171,3 +171,8 @@ def test_prime_package_is_deterministic_and_v1_shaped(tmp_path, monkeypatch) -> 
     assert "class SRETaskset" in taskset_source
     assert "def load(self)" in taskset_source
     assert "def load_environment()" in legacy_source
+    assert "compatibility-only" in legacy_source
+    manifest_text = (package_dir / "portable_manifest.json").read_text()
+    assert "private-id" not in manifest_text
+    private_text = (package_dir / "private_tasks.json").read_text()
+    assert '"expected_causal_class": "capacity"' in private_text
