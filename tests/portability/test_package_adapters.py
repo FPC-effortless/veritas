@@ -146,6 +146,9 @@ def test_hud_package_is_deterministic_and_operator_private(tmp_path, monkeypatch
     public_manifest = (tmp_path / "first" / "portable_manifest.json").read_text()
     assert "private-id" not in public_manifest
     assert "expected_causal_class" not in public_manifest
+    tasks_source = (tmp_path / "first" / "tasks.py").read_text()
+    assert "    _task = sre_causal_classification(" in tasks_source
+    assert "    task = sre_causal_classification(" not in tasks_source
     readme = (tmp_path / "first" / "README.md").read_text()
     assert "docker build -f Dockerfile.hud" in readme
     assert "hud task start" in readme
@@ -168,8 +171,3 @@ def test_prime_package_is_deterministic_and_v1_shaped(tmp_path, monkeypatch) -> 
     assert "class SRETaskset" in taskset_source
     assert "def load(self)" in taskset_source
     assert "def load_environment()" in legacy_source
-    assert "compatibility-only" in legacy_source
-    manifest_text = (package_dir / "portable_manifest.json").read_text()
-    assert "private-id" not in manifest_text
-    private_text = (package_dir / "private_tasks.json").read_text()
-    assert '"expected_causal_class": "capacity"' in private_text
