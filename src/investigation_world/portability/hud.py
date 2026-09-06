@@ -127,8 +127,8 @@ Generated for the sealed Veritas SRE evaluation release.
 
 This directory is an **operator-private evaluation package**. `private_tasks.json` contains hidden
 scoring truth and must not be published as a buyer-safe/public artifact. Release-control identifiers,
-qualification reports, signing material, and other private provenance remain outside the HUD runtime
-package in the sealed release workflow.
+qualification reports, signing material, and private provenance remain outside the HUD runtime package
+in the sealed release workflow.
 
 Build the HUD protocol server image:
 
