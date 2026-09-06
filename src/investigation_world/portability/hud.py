@@ -72,16 +72,16 @@ from env import env, sre_causal_classification
 _records = json.loads(Path(__file__).with_name("private_tasks.json").read_text(encoding="utf-8"))
 tasks = []
 for record in _records:
-    task = sre_causal_classification(
+    _task = sre_causal_classification(
         prompt=record["prompt"],
         expected_causal_class=record["expected_causal_class"],
     )
-    task.slug = record["task_id"].lower()
-    task.columns = {
+    _task.slug = record["task_id"].lower()
+    _task.columns = {
         "environment": "veritas-sre-v1",
         "portable_task_id": record["task_id"],
     }
-    tasks.append(task)
+    tasks.append(_task)
 
 __all__ = ["env", "tasks"]
 '''
