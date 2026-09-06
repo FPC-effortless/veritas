@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from hud import Environment
 from investigation_world.portability.evidence import PortableQualificationEvidence
 from investigation_world.portability.models import PortableEnvironmentManifest
 from investigation_world.portability.package import PortablePackageBuildResult, write_portable_package
