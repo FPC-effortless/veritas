@@ -217,7 +217,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          hud sync tasks "$TASKSET"
+          hud sync tasks "$TASKSET" tasks.py --yes
 
       - name: Optional remote HUD smoke evaluation
         if: ${{ inputs.run_remote_smoke }}
