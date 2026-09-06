@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from hud import Environment
 from investigation_world.portability.evidence import PortableQualificationEvidence
 from investigation_world.portability.models import PortableEnvironmentManifest
 from investigation_world.portability.package import PortablePackageBuildResult, write_portable_package
@@ -104,8 +105,6 @@ include = [
   "env.py",
   "tasks.py",
   "private_tasks.json",
-  "portable_manifest.json",
-  "qualification_evidence.json",
 ]
 '''
 
@@ -125,12 +124,12 @@ CMD ["hud", "serve", "env:env", "--host", "0.0.0.0", "--port", "8765"]
 def _render_readme(manifest: PortableEnvironmentManifest) -> str:
     return f'''# {manifest.sku} — HUD export
 
-Generated from portable manifest `{manifest.manifest_id}`.
+Generated for the sealed Veritas SRE evaluation release.
 
 This directory is an **operator-private evaluation package**. `private_tasks.json` contains hidden
-scoring truth and must not be published as a buyer-safe/public artifact. `qualification_evidence.json`
-is buyer-safe and intentionally contains only release identities, aggregate counts, gate outcomes,
-and policy anchors—not scenario IDs or hidden labels.
+scoring truth and must not be published as a buyer-safe/public artifact. Release-control identifiers,
+qualification reports, signing material, and other private provenance remain outside the HUD runtime
+package in the sealed release workflow.
 
 Build the HUD protocol server image:
 
@@ -169,10 +168,6 @@ def build_hud_sre_package(
 
     private_payload = [record.model_dump(mode="json") for record in private_tasks]
     files = {
-        "portable_manifest.json": json.dumps(
-            manifest.model_dump(mode="json"), indent=2, sort_keys=True
-        )
-        + "\n",
         "private_tasks.json": json.dumps(private_payload, indent=2, sort_keys=True) + "\n",
         "env.py": _render_env_module(),
         "tasks.py": _render_tasks_module(),
@@ -180,10 +175,6 @@ def build_hud_sre_package(
         "Dockerfile.hud": _render_dockerfile(),
         "README.md": _render_readme(manifest),
     }
-    if qualification_evidence is not None:
-        files["qualification_evidence.json"] = json.dumps(
-            qualification_evidence.model_dump(mode="json"), indent=2, sort_keys=True
-        ) + "\n"
     return write_portable_package(
         output_dir,
         adapter="hud-v6",
