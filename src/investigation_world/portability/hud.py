@@ -123,12 +123,12 @@ CMD ["hud", "serve", "env:env", "--host", "0.0.0.0", "--port", "8765"]
 def _render_readme(manifest: PortableEnvironmentManifest) -> str:
     return f'''# {manifest.sku} — HUD export
 
-Generated for the sealed Veritas SRE evaluation release.
+Generated from portable manifest `{manifest.manifest_id}`.
 
 This directory is an **operator-private evaluation package**. `private_tasks.json` contains hidden
-scoring truth and must not be published as a buyer-safe/public artifact. Release-control identifiers,
-qualification reports, signing material, and private provenance remain outside the HUD runtime package
-in the sealed release workflow.
+scoring truth and must not be published as a buyer-safe/public artifact. `qualification_evidence.json`
+is buyer-safe and intentionally contains only release identities, aggregate counts, gate outcomes,
+and policy anchors—not scenario IDs or hidden labels.
 
 Build the HUD protocol server image:
 
