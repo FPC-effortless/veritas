@@ -94,7 +94,7 @@ object, not a missing object.
 
 ### 5.1 CapabilityContract
 
-**Artifacts.** `CapabilityContract` in `src/investigation_world/foundry/models.py` (lines 40–51);
+**Artifacts.** `CapabilityContract` in `src/investigation_world/foundry/models.py` (lines 40–50);
 producers in `src/investigation_world/foundry/capability_families.py`
 (`external_investigation_capability_contract()`, `selective_agency_capability_contract()`) and
 `src/investigation_world/foundry/companyworld.py` (`companyworld_capability_contract()`).
@@ -152,7 +152,7 @@ programmatically.
 `capability_contract_id` does not match the External Investigation contract
 (`foundry/cli.py:226-227`). `foundry/companyworld.py:9-32` maps each CompanyWorld task family to
 its capability tag set (`_FAMILY_CAPABILITIES`), propagated into `FoundryTaskMetadata.capability_tags`
-(line 158). This is genuine capability-to-task binding at the *foundry* layer.
+(companyworld.py:158). This is genuine capability-to-task binding at the *foundry* layer.
 
 **Gap — the binding does not reach the operational episode.** Verified by direct search:
 `CapabilityContract`, `capability_contract`, and `CapabilityFamily` are **not imported anywhere**
@@ -181,11 +181,11 @@ execution time; the binding belongs in *identity and provenance*.
 ### 5.3 VeritasWorld / OperationalWorld
 
 **Artifacts.** `CompiledOperationalWorld` and `OperationalWorldSpec` in
-`src/investigation_world/operational_world/models.py` (lines 160, 244); compiler
+`src/investigation_world/operational_world/models.py` (lines 160 and 244); compiler
 `src/investigation_world/operational_world/compiler.py::OperationalWorldCompiler`; production
 wrapper `src/investigation_world/operational_world/pipeline.py::OperationalWorldCompiler`;
 validation `validation.py::validate_operational_world → WorldIntegrityReport`; capability packs
-`capability_pack.py`; calibration `CalibrationProfile` (same module, lines 84–152) plus
+`capability_pack.py`; calibration `CalibrationProfile` (same module, lines 121–158) plus
 `calibration.py`, `fusion.py`, `external_profiles.py`, `production.py`.
 
 **The identity mapping holds.** `VeritasWorld ≈ OperationalWorld` is **sufficient**. The
@@ -218,7 +218,7 @@ contract it calibrates. This is the same binding gap as 5.2, one layer down.
 
 ### 5.4 VeritasEpisode / OperationalEpisode
 
-**Artifacts.** `OperationalEpisode` in `src/investigation_world/operational/models.py:147`, with
+**Artifacts.** `OperationalEpisode` in `src/investigation_world/operational/models.py:182`, with
 `TaskContract`, `PublicActionSpec`, `HiddenOracle`, `HiddenActionEffect`, `ActionEvent`,
 `EpisodeSubmission`, `VerificationBreakdown`, `OperationalInvariant`, `StateAssertion`.
 
@@ -1045,7 +1045,17 @@ Checks actually run, cheapest first.
    unclosed inline code.
 7. **Import/compile smoke.** `python3 -m compileall` over the packages inspected in §5 completed
    without errors, so the symbols cited are from importable modules on this base.
-8. **Targeted test evidence.** Test names cited in §5 were confirmed to exist in the repository's
+8. **Line-citation corrections.** During review, the following line citations in §5 were checked
+   against the source and corrected in this revision: `CapabilityContract` is at
+   `foundry/models.py:40–50` (not 40–51); `OperationalEpisode` is at
+   `operational/models.py:182` (not 147); `CalibrationProfile` is at
+   `operational_world/models.py:121–158` (not 84–152); `OperationalWorldSpec` and
+   `CompiledOperationalWorld` are at lines 160 and 244 respectively (previously transposed);
+   `FoundryTaskMetadata.capability_tags` is at `foundry/models.py:59-72` and is set at
+   `companyworld.py:158` (not `foundry/models.py:158`); and `VerificationDimension` is defined
+   in `operational/models.py:26` rather than in `verifier.py`. The verifier's efficiency weight
+   is 0.05, not 0.10. All other line citations checked in §14 item 2 resolve as written.
+9. **Targeted test evidence.** Test names cited in §5 were confirmed to exist in the repository's
    test tree with the behaviors described (determinism, oracle non-leakage, fail-closed maturity,
    exact verifier-version binding, panel matching, split disjointness, content-derived identities).
    The full pytest suite was not executed: several suites require native/model dependencies that are
@@ -1057,10 +1067,10 @@ Checks actually run, cheapest first.
 The canonical evidence lifecycle is substantially implemented in Veritas. Of thirteen nodes, six are
 `SATISFIED` outright (`OperationalWorld`, `OperationalEpisode`, independent verification,
 `MachineExperience` as a record, environment qualification, and — for its scoped purpose — held-out
-separation), four are `PARTIAL` because a *producer* or a *binding* is missing rather than a
+separation), six are `PARTIAL` because a *producer* or a *binding* is missing rather than a
 substrate (capability binding, runtime→trajectory, failure evidence, `CapabilityGap`, transfer
-assemblage), and the remaining roles are `NOT SEPARATELY REQUIRED` because an existing object already
-plays them.
+assemblage, and — as an environment-scoped record — qualification), and the remaining roles are
+`NOT SEPARATELY REQUIRED` because an existing object already plays them.
 
 Two findings are load-bearing.
 
