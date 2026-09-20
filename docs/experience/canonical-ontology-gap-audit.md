@@ -332,9 +332,10 @@ trajectory/effects abstraction and found none. `TrajectoryV2` is the execution+e
 **Artifacts.**
 
 - Operational worlds: `src/investigation_world/operational/verifier.py::
-  verify_operational_episode` — seven dimensions (`VerificationDimension`: outcome, state,
-  constraints, side_effects, process, efficiency, evidence), weighted
-  0.30/0.20/0.15/0.10/0.10/0.10/0.10 into `overall_reward`.
+  verify_operational_episode` — seven dimensions (`VerificationDimension` in
+  `src/investigation_world/operational/models.py`: outcome, state, constraints, side_effects,
+  process, efficiency, evidence), weighted 0.30/0.20/0.15/0.10/0.10/0.05/0.10 into `overall_reward`
+  (efficiency is 0.05, not 0.10).
 - Legacy investigation worlds: `src/investigation_world/verifier/aggregate.py::verify` —
   identity, relationships, temporal, evidence support, provenance, abstention, calibration,
   efficiency.
