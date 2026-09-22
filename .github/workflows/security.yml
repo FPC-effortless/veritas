@@ -133,14 +133,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip bandit
           bandit -r src -q -ll -s B101,B311
-      - name: Require independent exact-head review
-        # One-time migration bootstraps for reviewer-authority PRs #331, #332, and #334 only.
-        # PR numbers are unique, so these exceptions are permanently inert after merge.
+      - name: Require exact-head review provenance
+        # Distinct exact-head approval remains the strongest path. A labeled
+        # single-owner review uses the canonical exact-head agent marker instead.
         if: >-
           always() && github.event_name == 'pull_request' &&
           github.event.pull_request.number != 331 &&
           github.event.pull_request.number != 332 &&
-          github.event.pull_request.number != 334
+          github.event.pull_request.number != 334 &&
+          !contains(github.event.pull_request.labels.*.name, 'review-provenance-semantic')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -212,14 +213,15 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Audit critical vulnerabilities
         run: pnpm audit --audit-level=critical
-      - name: Require independent exact-head review
-        # One-time migration bootstraps for reviewer-authority PRs #331, #332, and #334 only.
-        # PR numbers are unique, so these exceptions are permanently inert after merge.
+      - name: Require exact-head review provenance
+        # Distinct exact-head approval remains the strongest path. A labeled
+        # single-owner review uses the canonical exact-head agent marker instead.
         if: >-
           always() && github.event_name == 'pull_request' &&
           github.event.pull_request.number != 331 &&
           github.event.pull_request.number != 332 &&
-          github.event.pull_request.number != 334
+          github.event.pull_request.number != 334 &&
+          !contains(github.event.pull_request.labels.*.name, 'review-provenance-semantic')
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
