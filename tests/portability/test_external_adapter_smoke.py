@@ -189,7 +189,8 @@ def test_generated_hud_package_clean_installs_and_loads_with_current_sdk(
         assert env_module.env is not None
         assert len(tasks_module.tasks) == 1
         assert Path(tasks_module.__file__).resolve().is_relative_to(install_root.resolve())
-        assert (install_root / "qualification_evidence.json").is_file()
+        assert not (install_root / "qualification_evidence.json").exists()
+        assert not (install_root / "portable_manifest.json").exists()
         _assert_parser_parity(env_module._parse_prediction)
         _assert_reward_parity(env_module._score_prediction)
     finally:
