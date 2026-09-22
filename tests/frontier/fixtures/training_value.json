@@ -1,0 +1,16 @@
+{
+  "control_benchmark_preservation": "PASS",
+  "cross_family_transfer": "UNKNOWN",
+  "evidence_ids": {
+    "control_benchmark_preservation": [
+      "CTRL-1"
+    ],
+    "within_family_transfer": [
+      "TV-1"
+    ]
+  },
+  "external_benchmark_transfer": "UNKNOWN",
+  "model_identity": "fixture-strong",
+  "model_tier": "strong",
+  "within_family_transfer": "PASS"
+}

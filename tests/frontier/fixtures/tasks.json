@@ -1,0 +1,180 @@
+{
+  "tasks": [
+    {
+      "action_sequence": [
+        "tool-0",
+        "action-0",
+        "end-0"
+      ],
+      "artifact_schema": "schema-0",
+      "components": [
+        "component-0",
+        "component-3"
+      ],
+      "failure_mode": "failure-0",
+      "grammar_family": "grammar-0",
+      "prompt": "Operational fixture 0 family 0 workflow 0",
+      "source_family": "source-0",
+      "split": "train",
+      "task_id": "fixture-0",
+      "verifier_conditions": [
+        "verify-0"
+      ],
+      "workflow_topology": "flow-0>branch-0>end-0"
+    },
+    {
+      "action_sequence": [
+        "tool-1",
+        "action-1",
+        "end-1"
+      ],
+      "artifact_schema": "schema-1",
+      "components": [
+        "component-1",
+        "component-10"
+      ],
+      "failure_mode": "failure-1",
+      "grammar_family": "grammar-1",
+      "prompt": "Operational fixture 1 family 1 workflow 1",
+      "source_family": "source-1",
+      "split": "train",
+      "task_id": "fixture-1",
+      "verifier_conditions": [
+        "verify-1"
+      ],
+      "workflow_topology": "flow-1>branch-1>end-1"
+    },
+    {
+      "action_sequence": [
+        "tool-2",
+        "action-2",
+        "end-2"
+      ],
+      "artifact_schema": "schema-2",
+      "components": [
+        "component-2",
+        "component-0"
+      ],
+      "failure_mode": "failure-2",
+      "grammar_family": "grammar-2",
+      "prompt": "Operational fixture 2 family 2 workflow 2",
+      "source_family": "source-2",
+      "split": "train",
+      "task_id": "fixture-2",
+      "verifier_conditions": [
+        "verify-2"
+      ],
+      "workflow_topology": "flow-2>branch-2>end-2"
+    },
+    {
+      "action_sequence": [
+        "tool-3",
+        "action-3",
+        "end-3"
+      ],
+      "artifact_schema": "schema-3",
+      "components": [
+        "component-3",
+        "component-7"
+      ],
+      "failure_mode": "failure-3",
+      "grammar_family": "grammar-3",
+      "prompt": "Operational fixture 3 family 3 workflow 3",
+      "source_family": "source-3",
+      "split": "train",
+      "task_id": "fixture-3",
+      "verifier_conditions": [
+        "verify-3"
+      ],
+      "workflow_topology": "flow-3>branch-3>end-3"
+    },
+    {
+      "action_sequence": [
+        "tool-4",
+        "action-4",
+        "end-4"
+      ],
+      "artifact_schema": "schema-4",
+      "components": [
+        "component-4",
+        "component-14"
+      ],
+      "failure_mode": "failure-4",
+      "grammar_family": "grammar-4",
+      "prompt": "Operational fixture 4 family 4 workflow 4",
+      "source_family": "source-4",
+      "split": "train",
+      "task_id": "fixture-4",
+      "verifier_conditions": [
+        "verify-4"
+      ],
+      "workflow_topology": "flow-4>branch-0>end-4"
+    },
+    {
+      "action_sequence": [
+        "tool-5",
+        "action-5",
+        "end-0"
+      ],
+      "artifact_schema": "schema-5",
+      "components": [
+        "component-5",
+        "component-4"
+      ],
+      "failure_mode": "failure-0",
+      "grammar_family": "grammar-5",
+      "prompt": "Operational fixture 5 family 5 workflow 5",
+      "source_family": "source-5",
+      "split": "train",
+      "task_id": "fixture-5",
+      "verifier_conditions": [
+        "verify-5"
+      ],
+      "workflow_topology": "flow-5>branch-1>end-0"
+    },
+    {
+      "action_sequence": [
+        "tool-6",
+        "action-6",
+        "end-1"
+      ],
+      "artifact_schema": "schema-0",
+      "components": [
+        "component-6",
+        "component-11"
+      ],
+      "failure_mode": "failure-1",
+      "grammar_family": "grammar-6",
+      "prompt": "Operational fixture 6 family 6 workflow 0",
+      "source_family": "source-6",
+      "split": "train",
+      "task_id": "fixture-6",
+      "verifier_conditions": [
+        "verify-6"
+      ],
+      "workflow_topology": "flow-0>branch-2>end-1"
+    },
+    {
+      "action_sequence": [
+        "tool-7",
+        "action-7",
+        "end-2"
+      ],
+      "artifact_schema": "schema-1",
+      "components": [
+        "component-7",
+        "component-1"
+      ],
+      "failure_mode": "failure-2",
+      "grammar_family": "grammar-7",
+      "prompt": "Operational fixture 7 family 7 workflow 1",
+      "source_family": "source-7",
+      "split": "train",
+      "task_id": "fixture-7",
+      "verifier_conditions": [
+        "verify-0"
+      ],
+      "workflow_topology": "flow-1>branch-3>end-2"
+    }
+  ]
+}
