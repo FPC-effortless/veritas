@@ -447,7 +447,48 @@ The Work Contract's negative ownership protects the specific surfaces named ther
 `annotation/**`, `docs/experience/canonical-ontology-gap-audit.md`,
 `.github/agent-roadmap.yml`, and the rest), and none of those is touched.
 
-## 10. Deferred, explicitly
+## 11. Closure evidence (recorded at completion)
+
+This section replaces the provisional "not cleared locally" statements above with what the
+gates actually returned. It is recorded because §7.2, §8.2, §8.3 and §8.4 each named a check
+as *CI's responsibility*; those checks have now run.
+
+The work shipped as **PR #392**, merged to `main` as `31c295703e4143f5e570426a4d50bb38da7616f0`.
+The reviewed branch head was
+`233b22589fbec87fb544655d795eef2d39d42419` (remote tree sha
+`0fc8b6d0a96be150b249b64798ac5c41694ed630`, byte-identical to the local tree the review was
+performed against, so the review object binds the exact content that shipped).
+
+| Gate | Result |
+|---|---|
+| `Python 3.12` / `Python 3.13` test suites | **1236 passed, 2 skipped** on both interpreters, including `tests/unit/test_foundry_capability_contract_identity.py` |
+| `repository-python-quality` (ruff 0.16.5 + mypy ratchet) | **success**, no diagnostics from any of the four paths in this lane |
+| `Required` aggregate merge gate | **success** — every job it depends on returned `success` |
+| `Python source security`, `Node dependency audit`, `Dependency review` | **success** after the exact-head review provenance gate was satisfied |
+| Exact-head review provenance (`tools/review_provenance.py check`) | **`REVIEW_PROVENANCE_PASS`** — `exact-head clean agent-session semantic review`, review id `5273014259` at head `233b225…` |
+
+This closes every item in §8.2 (pydantic's own serialization and `Field` handling ran under
+real pydantic in CI, as did all three producers), §8.3 (ruff executed with the pinned
+version against the repository's configured rules) and §8.4 (the full `tests/` tree ran,
+which is a superset of the foundry suite named in the Work Contract's ladder step 2 —
+`test_foundry_cli.py` included, so the `export-training-artifacts` behaviour change was
+exercised end to end).
+
+Two limitations survive the merge and are recorded here rather than dropped:
+
+1. The **host environment limitation in §7.2 is unchanged and still real.** CI passing is not
+   evidence that this host can import `investigation_world`; `pydantic_core` remains
+   unloadable under bionic, and the two out-of-repo harnesses described in §7.2 remain the
+   only on-host way to execute the production source. Nothing in the repository was shimmed.
+2. The 80-bit truncation caveat in §5 is **not** closed by any of the above. No collision
+   resistance is claimed, and none was tested.
+
+Work Contract state at closure: `G-01` transitioned
+`READY → CLAIMED → REVIEW → DONE` (transitions #1–#3, all recorded by the coordination
+bot on issue #391), with `linked_pr: 392` and `linked_pr_head` equal to the merged head. The
+issue is `closed` and labelled `work:done`.
+
+## 12. Deferred, explicitly
 
 Per ONTO-002 §9 and the Work Contract's authority boundaries: causal `CapabilityGap`
 semantics, adaptive world mutation, `DistributionProfile`, and `DifficultyVector` semantics
