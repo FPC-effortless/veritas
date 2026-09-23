@@ -242,7 +242,7 @@ Additive only. No existing field, function, name, or default was changed.
 
 | File | Change |
 |---|---|
-| `src/investigation_world/trajectory/adapter.py` | `OPERATIONAL_RUNTIME_ADAPTER_ID`, `OPERATIONAL_RUNTIME_ADAPTER_VERSION`, `_REWARD_COMPONENTS`, `OperationalRuntimeAdapterContext`, `_operational_state_digest`, `_operational_event`, `_submit_event`, `_breakdown`, `trajectory_v2_from_operational_runtime`. Three private helpers, one public class, one public function, two constants. |
+| `src/investigation_world/trajectory/adapter.py` | `OPERATIONAL_RUNTIME_ADAPTER_ID`, `OPERATIONAL_RUNTIME_ADAPTER_VERSION`, `_REWARD_COMPONENTS`, `OperationalRuntimeAdapterContext`, `_operational_state_digest`, `_operational_event`, `_submit_event`, `_breakdown`, `trajectory_v2_from_operational_runtime`. Three private helpers, one private `Protocol` (`_ResourceCallEvent`), one public class, one public function, two constants. |
 | `src/investigation_world/trajectory/__init__.py` | Four new names added to the import block and `__all__`. Alphabetical/positional placement preserved for the pre-existing names; the new names are appended so no existing line moves. |
 | `tests/trajectory/test_operational_runtime_adapter.py` | New. |
 | `docs/experience/operational-trajectory-adapter.md` | This document. |
@@ -447,9 +447,12 @@ all three were eliminated structurally, and the lane now introduces **zero**:
   did not fix it, because the annotation itself — not the wrapper — was the error.)
 - `ruff:F821` — `Undefined name \`breakdown\`` in the test module, surfaced by the
   `required_action_order` correction recorded in §7.
-- `ruff:I001` — the `typing` import line became `from typing import TYPE_CHECKING, Any`, which
-  ruff's isort sorts as a combined form. It is now one import per line, which is stable under
-  both forms.
+- `ruff:I001` — in the test module, not the implementation. `from investigation_world.trajectory
+  .reverify import ...` preceded `from investigation_world.trajectory.models import ...`;
+  ruff's isort orders `models` before `reverify`. (A first attempt misread this as the
+  implementation module's `typing` line and split `from typing import TYPE_CHECKING, Any` into
+  one import per line. That was harmless but fixed nothing — the fingerprint is recomputed from
+  the file that actually carries it.)
 
 The Protocol is the one place this lane changed an existing annotation, and it is additive in
 behaviour: `_resource_call` accepted `TraceEvent` before and still does, because `TraceEvent`

@@ -54,6 +54,7 @@ from investigation_world.trajectory import (
     VerifierIdentity,
     trajectory_v2_from_operational_runtime,
 )
+from investigation_world.trajectory.models import canonical_hash
 from investigation_world.trajectory.reverify import (
     AuthorizedVerifierRegistry,
     OperationalReplayEvidence,
@@ -63,7 +64,6 @@ from investigation_world.trajectory.reverify import (
     reverify_trajectory,
 )
 from investigation_world.trajectory.reverify import engine as reverification_engine
-from investigation_world.trajectory.models import canonical_hash
 
 _PRIVATE_MARKERS = ("segregation_of_duties_violation", "PRIVATE-ORACLE-SECRET")
 
@@ -285,10 +285,21 @@ def _attach_evidence(
     The reference is appended after adaptation and after evidence construction, so the trajectory
     identity it pins is already final; ``attach_operational_replay_evidence`` then asserts that
     attaching private evidence does not change it.
+
+    ``model_copy`` is deliberately *not* used to add the reference. ``TrajectoryV2`` is frozen and
+    its ``model_validator`` sets ``trajectory_id`` from the semantic payload, which includes
+    ``evidence_references``; ``model_copy`` bypasses validation and would carry the pre-reference
+    id onto a trajectory whose contents had changed, which ``TrajectoryV2.model_validate`` then
+    rejects as "trajectory_id does not match immutable semantic contents". Rebuilding through
+    ``model_validate`` recomputes the id, so the reference is part of identity from the start —
+    the same construction path ``test_reverification.py`` uses.
     """
     evidence = _replay_evidence(runtime, submission, trajectory)
-    referenced = trajectory.model_copy(
-        update={"evidence_references": (evidence.reference(),)}
+    referenced = TrajectoryV2.model_validate(
+        {
+            **trajectory.model_dump(mode="json"),
+            "evidence_references": (evidence.reference(),),
+        }
     )
     return attach_operational_replay_evidence(referenced, evidence.for_trajectory(referenced))
 
