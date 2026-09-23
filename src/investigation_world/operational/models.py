@@ -1,9 +1,27 @@
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from investigation_world.foundry.models import (
+    CAPABILITY_CONTRACT_DIGEST_LENGTH,
+    CAPABILITY_CONTRACT_DIGEST_PREFIX,
+)
+
+_CAPABILITY_CONTRACT_DIGEST_PATTERN = re.compile(
+    r"^"
+    + re.escape(CAPABILITY_CONTRACT_DIGEST_PREFIX)
+    + r"-[0-9A-F]{" + str(CAPABILITY_CONTRACT_DIGEST_LENGTH) + r"}$"
+)
+"""Exact format of the G-01 digest a binding may carry.
+
+`CapabilityContract.content_digest` is `CCONTRACT-` plus 20 uppercase hex characters
+(80 bits of sha256). A binding's digest must be one of those, produced by
+`capability_contract_digest`, never hand-written.
+"""
 
 
 class WorldDomain(StrEnum):
@@ -112,6 +130,125 @@ class OperationalInvariant(BaseModel):
     scope: Literal["final", "always"] = "final"
 
 
+def episode_contract_terms(episode: OperationalEpisode | HiddenOracle) -> tuple[str, ...]:
+    """Reference keys on an episode that a contract coverage check can name.
+
+    Coverage, not equivalence. `CapabilityContract.success_conditions`/`hard_invariants` are
+    free-form prose `list[str]`; `HiddenOracle.target_state` is `list[StateAssertion]` and
+    `invariants` is `list[OperationalInvariant]`. The two sides are not mechanically equatable,
+    and a plausible-looking string match between prose and structured assertions would be a
+    check that passes vacuously and fails silently. So the only decidable coverage question is
+    an existence check: is each episode-side reference key named by the contract's prose?
+
+    These keys are identifiers (`invariant_id`, `object_id.field_name`), not oracle values, so
+    enumerating them leaks no private state. Value-level comparison between a success condition
+    and a `StateAssertion` is never performed or implied, and no contract or oracle content is
+    altered.
+    """
+    oracle = episode.oracle if isinstance(episode, OperationalEpisode) else episode
+    terms: list[str] = [invariant.invariant_id for invariant in oracle.invariants]
+    terms.extend(assertion.key() for assertion in oracle.target_state)
+    return tuple(dict.fromkeys(terms))
+
+
+def capability_binding_from_contract(
+    contract: Any,
+    episode: OperationalEpisode | HiddenOracle | None = None,
+    *,
+    coverage_terms: tuple[str, ...] | None = None,
+) -> CapabilityBinding:
+    """Build a binding from a `CapabilityContract`, failing closed on identity mismatch.
+
+    The digest is always recomputed from the contract's own content and compared to the
+    contract's declared digest: a mismatch raises `ValueError` and is never silently accepted,
+    mirroring `CapabilityContract.validate_content_digest`. This is the explicit constructor
+    path required by the Work Contract.
+
+    When an `episode` is supplied, the advisory coverage findings are recorded on the returned
+    binding as `binding_gaps` (see `episode_contract_terms`). `episode` accepts the
+    `OperationalEpisode` being constructed, or its `HiddenOracle` directly, so a catalog can run
+    the real check without needing a fully constructed episode first. Gaps are a deliverable
+    finding for a downstream lane (G-07/G-09/G-12), never a failure and never a reason to weaken
+    an oracle or a catalog. `coverage_terms` overrides the term universe used by that check; by
+    default it is the contract's own `success_conditions` plus `hard_invariants`.
+
+    The contract argument is typed loosely on purpose: `operational/**` does not import
+    `foundry/**` types, so the caller supplies any object exposing the eight content-bearing
+    contract fields plus `content_digest`.
+    """
+    from investigation_world.foundry.models import (
+        CapabilityContract,
+        capability_contract_digest,
+    )
+
+    if not isinstance(contract, CapabilityContract):
+        raise ValueError("capability binding requires a real CapabilityContract object")
+    derived = capability_contract_digest(contract)
+    if contract.content_digest != derived:
+        raise ValueError(
+            "capability binding content_digest does not match capability contract contents"
+        )
+
+    gaps: list[str] = []
+    if episode is not None:
+        oracle = episode.oracle if isinstance(episode, OperationalEpisode) else episode
+        terms = set(
+            coverage_terms
+            if coverage_terms is not None
+            else [*contract.success_conditions, *contract.hard_invariants]
+        )
+        for reference in episode_contract_terms(oracle):
+            if reference not in terms:
+                gaps.append(
+                    f"{reference} is not named by the {contract.capability_id} contract"
+                )
+    return CapabilityBinding(
+        capability_id=contract.capability_id,
+        content_digest=derived,
+        binding_gaps=tuple(gaps),
+    )
+
+
+class CapabilityBinding(BaseModel):
+    """Reference from an episode or world to the `CapabilityContract` it was built to exercise.
+
+    Declaration metadata only: the binding carries the G-01 capability identity
+    (`capability_id` + `content_digest`) and never participates in execution, verification,
+    scoring, qualification, or release decisions. It references an identity computed by
+    `investigation_world.foundry.models.capability_contract_digest`; it mints no identity of
+    its own, so there is exactly one capability identity scheme in the repository.
+
+    The payload is public declaration content, mirroring `CapabilityContract`: it holds no
+    private scenario identifier, hidden label, oracle row, or decrypted bundle, and it must
+    never be populated from `HiddenOracle` state.
+
+    `binding_gaps` records contract↔oracle coverage findings. It is advisory, not a failure:
+    the coverage check is an existence check only (see `OperationalEpisode.validate_episode`)
+    and a recorded gap is a deliverable finding for a downstream lane (G-07/G-09/G-12), never a
+    reason to weaken an oracle or a catalog. Adding a gap never changes any digest: the field is
+    excluded from the binding's own identity payload, which covers exactly the two identity
+    fields, so findings can accumulate without churning episode identity.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    capability_id: str
+    content_digest: str
+    binding_gaps: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_capability_binding(self) -> "CapabilityBinding":
+        if not self.capability_id.strip():
+            raise ValueError("capability binding requires a non-empty capability_id")
+        if not _CAPABILITY_CONTRACT_DIGEST_PATTERN.match(self.content_digest):
+            raise ValueError(
+                "capability binding content_digest must be a well-formed "
+                f"{CAPABILITY_CONTRACT_DIGEST_PREFIX}-<hex> value computed by "
+                "capability_contract_digest, not a hand-written string"
+            )
+        return self
+
+
 class PublicActionSpec(BaseModel):
     """Agent-visible action contract. Hidden effects live in the oracle."""
 
@@ -187,6 +324,7 @@ class OperationalEpisode(BaseModel):
     records: list[OperationalRecord]
     oracle: HiddenOracle
     metadata: dict[str, Any] = Field(default_factory=dict)
+    capability: CapabilityBinding | None = None
 
     @model_validator(mode="after")
     def validate_episode(self) -> "OperationalEpisode":
@@ -263,6 +401,13 @@ class OperationalEpisode(BaseModel):
         invariant_ids = [invariant.invariant_id for invariant in self.oracle.invariants]
         if len(invariant_ids) != len(set(invariant_ids)):
             raise ValueError("invariant IDs must be unique within an episode")
+        # `capability` needs no extra check here. It is declaration metadata, and
+        # `CapabilityBinding.validate_capability_binding` already fails closed on both identity
+        # conditions: a non-empty `capability_id` and a well-formed G-01 `content_digest`. The
+        # advisory contract↔oracle coverage check is recorded as `binding_gaps` at the explicit
+        # construction site (`capability_binding_from_contract`), not re-run here: re-running it
+        # could only either raise on a gap this lane is required to record, or duplicate a
+        # result already carried on the binding. See `docs/experience/operational-capability-binding.md`.
         return self
 
     def public_payload(self) -> dict[str, Any]:
@@ -272,6 +417,9 @@ class OperationalEpisode(BaseModel):
             "task": self.task.model_dump(mode="json"),
             "records": [record.model_dump(mode="json") for record in self.records],
             "metadata": self.metadata,
+            "capability": (
+                self.capability.model_dump(mode="json") if self.capability is not None else None
+            ),
         }
 
 
