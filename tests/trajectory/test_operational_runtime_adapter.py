@@ -287,20 +287,25 @@ def _attach_evidence(
     attaching private evidence does not change it.
 
     ``model_copy`` is deliberately *not* used to add the reference. ``TrajectoryV2`` is frozen and
-    its ``model_validator`` sets ``trajectory_id`` from the semantic payload, which includes
-    ``evidence_references``; ``model_copy`` bypasses validation and would carry the pre-reference
-    id onto a trajectory whose contents had changed, which ``TrajectoryV2.model_validate`` then
-    rejects as "trajectory_id does not match immutable semantic contents". Rebuilding through
-    ``model_validate`` recomputes the id, so the reference is part of identity from the start —
-    the same construction path ``test_reverification.py`` uses.
+    its ``model_validator`` derives ``trajectory_id`` from the semantic payload, which includes
+    ``evidence_references``; ``model_copy`` bypasses validation and would carry the
+    pre-reference id onto a trajectory whose contents had changed, which later validation
+    rejects as "trajectory_id does not match immutable semantic contents".
+
+    Rebuilding through ``model_validate`` recomputes the id — but only if the carried one is
+    dropped first. ``model_dump`` returns the *already-computed* id, and adding a reference
+    *changes* it (``evidence_references`` is in ``identity_payload``), so the payload carries a
+    value the validator can never accept. Blank it, and the validator derives the new id with the
+    reference in place. This differs from ``TrajectoryV2.with_reverification`` and
+    ``attach_operational_replay_evidence``, both of which re-validate after touching only
+    identity-free fields (``reverifications``, ``private_metadata``), so a carried id still
+    matches; the reference is the one caller-side field that is identity-bearing.
     """
     evidence = _replay_evidence(runtime, submission, trajectory)
-    referenced = TrajectoryV2.model_validate(
-        {
-            **trajectory.model_dump(mode="json"),
-            "evidence_references": (evidence.reference(),),
-        }
-    )
+    payload = trajectory.model_dump(mode="python")
+    payload["trajectory_id"] = ""
+    payload["evidence_references"] = (evidence.reference(),)
+    referenced = TrajectoryV2.model_validate(payload)
     return attach_operational_replay_evidence(referenced, evidence.for_trajectory(referenced))
 
 

@@ -310,6 +310,16 @@ reference → attach the private payload. Both engine assertions that protect id
 the trajectory id, and its `for_trajectory` bind sets only `input_trajectory_id`, which the
 evidence digest deliberately excludes.
 
+One consequence for a caller that adds the reference itself: because `evidence_references` is
+identity-bearing, the id the adapter produced is now stale, and it is *not* merely a field to
+overwrite. `model_dump` returns the already-computed id, so re-validating a payload that both
+carries it and changes the reference can never validate — `TrajectoryV2` raises
+`trajectory_id does not match immutable semantic contents`. The caller must blank it and let the
+validator derive the new one, or construct the trajectory with the reference in place from the
+start (as `tests/trajectory/reverify/test_reverification.py` does). This differs from
+`with_reverification` and `attach_operational_replay_evidence`, which re-validate after touching
+only identity-free fields (`reverifications`, `private_metadata`), so a carried id still matches.
+
 ## 5. Import direction
 
 `investigation_world.trajectory` must be importable without importing
