@@ -335,7 +335,9 @@ def test_emitted_events_decode_and_reverify_on_a_real_catalog_episode() -> None:
     assert [event.event_type for event in trajectory.events] == ["act"] * len(runtime.events) + [
         "submit"
     ]
-    for emitted, expected in zip(trajectory.events, _act_events_only(runtime), strict=True):
+    for emitted, expected in zip(
+        trajectory.events[: len(runtime.events)], _act_events_only(runtime), strict=True
+    ):
         assert reverification_engine._decode_operational_act(emitted) == (
             reverification_engine._decode_operational_act(expected)
         )
