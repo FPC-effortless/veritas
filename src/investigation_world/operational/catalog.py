@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from investigation_world.foundry.capability_families import (
+    external_investigation_capability_contract,
+)
 from investigation_world.operational.models import (
     ActionKind,
+    CapabilityBinding,
     HiddenActionEffect,
     HiddenOracle,
     OperationalEpisode,
@@ -14,6 +18,7 @@ from investigation_world.operational.models import (
     StateAssertion,
     TaskContract,
     WorldDomain,
+    capability_binding_from_contract,
 )
 
 
@@ -215,7 +220,21 @@ def build_investigation_osint_world(seed: int = 42) -> OperationalEpisode:
         max_cost=22, max_tool_calls=18,
         metadata={"legacy_capability_family": "external_investigation"},
     )
-    return OperationalEpisode(episode_id=f"ep-{task_id}", world_id=world_id, task=TaskContract(task_id=task_id, world_id=world_id, domain=WorldDomain.INVESTIGATION_OSINT, objective="Resolve which person the abbreviated director name refers to using public evidence while avoiding a false identity merge.", role="investigative_analyst", permitted_systems=["REGISTRY", "ARCHIVE", "DIRECTORY", "CASEFILE"], available_actions=actions, constraints=["Evidence-backed identity resolution", "Preserve ambiguity until resolved", "Maintain provenance"], success_description="The identity is resolved to the supported person with a complete evidence chain and no false merge."), records=records, oracle=oracle, metadata={"family": "investigation_osint", "bridge": "existing_investigation_world"})
+    return OperationalEpisode(
+        episode_id=f"ep-{task_id}", world_id=world_id,
+        task=TaskContract(task_id=task_id, world_id=world_id, domain=WorldDomain.INVESTIGATION_OSINT, objective="Resolve which person the abbreviated director name refers to using public evidence while avoiding a false identity merge.", role="investigative_analyst", permitted_systems=["REGISTRY", "ARCHIVE", "DIRECTORY", "CASEFILE"], available_actions=actions, constraints=["Evidence-backed identity resolution", "Preserve ambiguity until resolved", "Maintain provenance"], success_description="The identity is resolved to the supported person with a complete evidence chain and no false merge."),
+        records=records, oracle=oracle,
+        metadata={"family": "investigation_osint", "bridge": "existing_investigation_world"},
+        # The only catalog episode with an investigation-shaped objective. Binding it to the
+        # real external-investigation contract links the operational episode to the G-01
+        # content identity it was built to exercise; the digest is recomputed from the contract
+        # at construction, never hand-written, and the advisory coverage findings are recorded
+        # on the binding rather than raised. See `capability_binding_from_contract` and
+        # `docs/experience/operational-capability-binding.md`.
+        capability=capability_binding_from_contract(
+            external_investigation_capability_contract(), episode=oracle
+        ),
+    )
 
 
 def build_gis_operations_world(seed: int = 42) -> OperationalEpisode:
