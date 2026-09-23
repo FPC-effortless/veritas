@@ -123,16 +123,18 @@ The `submit` event is emitted once, after every act event, at step `len(acted)`:
 ```python
 {
     "method": "submit",
-    "args": [copy.deepcopy(ctx.submission)],
+    "args": [serialized_submission],
     "kwargs": {},
     "success": True,
 }
 ```
 
-`_decode_submission` accepts `args == [<submission dict>]` and validates it back into an
-`EpisodeSubmission`; `_validate_submission` then requires that the decoded submission equals the
-evidence's submission. The payload *is* the submission the caller passed to `submit()`. The
-adapter never synthesizes one, because a synthesized submission would fail that equality check
+`_decode_submission` accepts `args == [<submission dict>]` — a **mapping**, not the model object,
+because it re-validates that mapping through `EpisodeSubmission.model_validate` — and
+`_validate_submission` then requires the decoded submission to *equal* the evidence's submission.
+The adapter therefore serializes the caller's submission with `model_dump(mode="json")` rather
+than embedding the object itself. The payload *is* the submission the caller passed to `submit()`;
+the adapter never synthesizes one, because a synthesized submission would fail that equality check
 by construction, and a submission that passed it would be a forgery of what the agent claimed.
 
 ### 2.4 Where verifier-only truth goes
@@ -249,6 +251,13 @@ Additive only. No existing field, function, name, or default was changed.
 `_resource_id` / `_resource_call` pair resolves on the payload shape this adapter emits, so it is
 called directly with the emitted `TrajectoryEvent` list. There is one resource-call convention,
 not two — and one `_resource_call` definition, not two.
+
+The one signature `_resource_call` needed was its parameter type. It was annotated
+`event: TraceEvent` (foundry) and is now annotated with a small private `Protocol`,
+`_ResourceCallEvent`, naming the four members the helper reads — `payload`, `step`, `event_type`,
+`cost`. `TraceEvent` and `TrajectoryEvent` both structurally satisfy it, so the legacy call site
+is unaffected and the operational call site type-checks. That is the only change to a
+pre-existing annotation in this file, and it removes no caller.
 
 No file outside the Work Contract's positive ownership is modified. In particular
 `operational/**` is untouched — the adapter depends on it read-only, through
@@ -424,18 +433,27 @@ the `public_payload()` / `buyer_safe_payload()` projections under real pydantic,
 additive: a change may *remove* diagnostics but must not *introduce* any beyond the baseline.
 The `trajectory` lane currently accounts for 2 ruff and 10 mypy fingerprints.
 
-This lane's code was written to that constraint, and the first CI run was used to verify it
-against the real gate rather than against a guess. That run introduced exactly two fingerprints;
-both were eliminated structurally, and the lane now introduces **zero**:
+This lane's code was written to that constraint, and CI was used to verify it against the real
+gate rather than against a guess. Across the run history this lane surfaced three fingerprints;
+all three were eliminated structurally, and the lane now introduces **zero**:
 
 - `mypy:arg-type` — `Argument 2 to "_resource_call" has incompatible type "TrajectoryEvent";
-  expected "TraceEvent"`. A first revision had wrapped the existing `_resource_call` in a
-  private `_operational_resource_call` so the operational path could pass the narrower event
-  type. The wrapper is gone (§3): `TraceEvent` and `TrajectoryEvent` both expose `payload`,
-  `step`, `event_type`, and `cost`, so the emitted `TrajectoryEvent` list is passed to the one
-  existing `_resource_call` directly. No cast, no `# type: ignore`, no baseline edit.
+  expected "TraceEvent"`. `_resource_call` was annotated `event: TraceEvent` (foundry) and is
+  called with `TrajectoryEvent` (trajectory); both types expose the four members the helper
+  reads. The parameter is now typed as a small private `Protocol` (`_ResourceCallEvent`) naming
+  exactly those members, so mypy has no incompatible pair to compare and the error cannot fire.
+  The legacy call site is unchanged and still type-checks against the Protocol. No cast, no
+  `# type: ignore`, no baseline edit. (An earlier revision tried removing a wrapper helper; that
+  did not fix it, because the annotation itself — not the wrapper — was the error.)
 - `ruff:F821` — `Undefined name \`breakdown\`` in the test module, surfaced by the
   `required_action_order` correction recorded in §7.
+- `ruff:I001` — the `typing` import line became `from typing import TYPE_CHECKING, Any`, which
+  ruff's isort sorts as a combined form. It is now one import per line, which is stable under
+  both forms.
+
+The Protocol is the one place this lane changed an existing annotation, and it is additive in
+behaviour: `_resource_call` accepted `TraceEvent` before and still does, because `TraceEvent`
+structurally satisfies the Protocol.
 
 Neither fix touched the baseline file, which is outside this lane's positive ownership. One
 fingerprint was *removed* as a side effect (`mypy:assignment`, 22 → 21 in the summary); removals

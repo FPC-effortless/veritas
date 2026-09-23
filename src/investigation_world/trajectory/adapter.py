@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Any
+from typing import Protocol
+from typing import TYPE_CHECKING
+from typing import Any
 
 from pydantic import Field
 
@@ -117,7 +119,31 @@ def _resource_id(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _resource_call(index: int, event: TraceEvent) -> ResourceCallSummary:
+class _ResourceCallEvent(Protocol):
+    """The event shape ``_resource_call`` reads.
+
+    ``TraceEvent`` (foundry) and ``TrajectoryEvent`` (trajectory) both carry the four members this
+    helper reads, so one definition serves both adapters instead of a second typed helper.
+    """
+
+    @property
+    def payload(self) -> dict[str, Any]:
+        ...
+
+    @property
+    def step(self) -> int:
+        ...
+
+    @property
+    def event_type(self) -> str:
+        ...
+
+    @property
+    def cost(self) -> float | None:
+        ...
+
+
+def _resource_call(index: int, event: _ResourceCallEvent) -> ResourceCallSummary:
     method = event.payload.get("method")
     operation = method if isinstance(method, str) and method else event.event_type
     success = event.payload.get("success")
@@ -382,8 +408,10 @@ def _operational_event(event: ActionEvent) -> TrajectoryEvent:
 def _submit_event(submission: Any, step: int, cost: float | None) -> TrajectoryEvent:
     """Emit the single ``submit`` event the reverification engine requires.
 
-    ``_decode_submission`` accepts ``args = [<submission dict>]``. The payload *is* the
-    ``EpisodeSubmission`` the caller passed to ``submit(...)``; the adapter never synthesizes one.
+    ``_decode_submission`` accepts ``args = [<submission dict>]`` — a *mapping*, not the model
+    object, because it re-validates through ``EpisodeSubmission.model_validate``. The payload is
+    therefore the caller's submission serialized with ``model_dump(mode="json")``; the adapter
+    never synthesizes one.
     """
 
     return TrajectoryEvent(
@@ -391,7 +419,13 @@ def _submit_event(submission: Any, step: int, cost: float | None) -> TrajectoryE
         event_type="submit",
         payload={
             "method": "submit",
-            "args": [copy.deepcopy(submission)],
+            "args": [
+                copy.deepcopy(
+                    submission.model_dump(mode="json")
+                    if hasattr(submission, "model_dump")
+                    else submission
+                )
+            ],
             "kwargs": {},
             "success": True,
         },
