@@ -209,7 +209,6 @@ def _context(
         "breakdown": breakdown,
         "submission": submission,
         "portable_operational_contract": _portable_contract_identity(runtime.episode),
-        "world_id": runtime.episode.world_id,
         "world_version": "1",
         "initial_state_digest": stable_hash(initial_state),
         "final_state_digest": stable_hash(final_state),
@@ -441,6 +440,55 @@ def test_missing_breakdown_is_rejected_without_re_scoring() -> None:
             runtime,
             context=OperationalRuntimeAdapterContext(submission=submission),
         )
+
+
+def test_missing_submission_is_rejected_rather_than_emitting_an_unsubmittable_trajectory() -> None:
+    """Regression: a closed runtime must not adapt without the submit event it cannot invent.
+
+    ``OperationalRuntime.submit()`` records no ``ActionEvent``, so the reverification engine's
+    ``EXACT_SUBMISSION_EVENT_REQUIRED`` rule can only be satisfied by the submission the caller
+    passed to ``submit()``. Adapting without it used to emit the act events alone and construct
+    a trajectory that could never reverify. It must fail closed instead, before constructing
+    anything, and it must not call ``submit()`` on the caller's runtime to recover one.
+    """
+    runtime, submission, breakdown = _closed_runtime()
+
+    with pytest.raises(ValueError, match="OperationalRuntimeAdapterContext.submission"):
+        trajectory_v2_from_operational_runtime(
+            runtime,
+            context=OperationalRuntimeAdapterContext(breakdown=breakdown),
+        )
+    # The adapter never re-executes; it must not have submitted again either.
+    assert runtime.closed is True
+    assert [event.event_type for event in runtime.events] != []
+    assert all(event.event_type == "act" for event in runtime.events)
+
+
+def test_world_id_is_derived_from_the_runtime_and_cannot_be_overridden_by_context() -> None:
+    """Regression: world identity comes from the executed runtime, not caller enrichment.
+
+    The runtime already names the world it executed (``episode.world_id``), so a context-supplied
+    value is not an enrichment fact but a potential contradiction of the recorded execution —
+    and a disagreeing value also breaks the engine's ``WORLD_IDENTITY_MISMATCH`` check against
+    the portable contract. The context no longer carries the field at all; this test proves a
+    caller cannot route around that by passing the field.
+    """
+    runtime, submission, breakdown = _closed_runtime()
+
+    # The field is gone from the context, so a caller attempting to override it is rejected by
+    # the model's extra="forbid" configuration rather than silently ignored.
+    with pytest.raises(ValueError, match="world_id"):
+        OperationalRuntimeAdapterContext(
+            breakdown=breakdown,
+            submission=submission,
+            world_id="world-that-was-never-executed",
+        )
+
+    trajectory = trajectory_v2_from_operational_runtime(
+        runtime,
+        context=_context(runtime, submission, breakdown=breakdown),
+    )
+    assert trajectory.world.world_id == runtime.episode.world_id
 
 
 # ---------------------------------------------------------------------------

@@ -203,9 +203,17 @@ unknown. `None` means *unknown*, not *default*:
 | `failure` | not in the runtime | `FailureCategory.UNKNOWN` with no confidence |
 
 `world_id` and `task_id` are *derived*, not unknown: `episode.world_id` and
-`episode.task.task_id` are the episode's own identity and are always present. `world_id` is
-overridable through the context because a caller may know the bundle version the episode was
-compiled from, and the episode does not.
+`episode.task.task_id` are the episode's own identity and are always present.
+
+`world_id` is **not** overridable through the context, unlike in the legacy adapter. The
+runtime already names the world it executed, so a caller-supplied value is not enrichment — it
+is a potential contradiction of the recorded execution, and a disagreeing value would also
+break the reverification engine's `WORLD_IDENTITY_MISMATCH` check against the portable
+contract, which derives its own `world_id` from the same episode. The field is therefore absent
+from `OperationalRuntimeAdapterContext` (the model is `extra="forbid"`, so an attempt to pass
+it is rejected rather than ignored), and the adapter reads `episode.world_id` unconditionally.
+A caller who knows the *version* of the world bundle an episode was compiled from supplies
+`world_version`, which the runtime genuinely does not carry.
 
 ### 2.7 State digests
 
@@ -370,7 +378,7 @@ required:
 | 1 | Round trip: events decode through the engine's decoders and reverify on a real catalog episode | `test_emitted_events_decode_and_reverify_on_a_real_catalog_episode` |
 | 2 | Determinism of `trajectory_id` | `test_trajectory_id_is_deterministic_across_adaptations` |
 | 3 | Identity sensitivity | `test_model_and_contract_identity_changes_change_trajectory_identity`, `test_a_partial_action_trace_changes_trajectory_identity` |
-| 4 | Un-submitted runtime raises; adapter never calls `submit()` | `test_unsubmitted_runtime_is_rejected_without_calling_submit`, `test_missing_breakdown_is_rejected_without_re_scoring` |
+| 4 | Un-submitted runtime raises; adapter never calls `submit()` | `test_unsubmitted_runtime_is_rejected_without_calling_submit`, `test_missing_breakdown_is_rejected_without_re_scoring`, `test_missing_submission_is_rejected_rather_than_emitting_an_unsubmittable_trajectory` |
 | 5 | Verifier identity: `VERIFIER_ENTRYPOINT` / `VERIFIER_SEMANTICS_ID`, supplied context honored, `original_evaluation.verifier == trajectory.verifier` | `test_default_verifier_is_the_authorized_operational_binding`, `test_supplied_verifier_identity_is_honored_and_affects_identity`, `test_current_binding_pins_the_committed_verifier_source` |
 | 6 | `machine_experience_from_trajectory(traj)` succeeds with defaults | `test_machine_experience_succeeds_with_defaults` |
 | 7 | No private leakage in `public_payload()` / `buyer_safe_payload()` | `test_public_and_buyer_safe_payloads_carry_no_verifier_only_truth`, `test_private_payload_keeps_verifier_only_truth_out_of_the_public_event` |
@@ -385,6 +393,7 @@ Beyond the required ten, the module also asserts:
 | Provenance records the adapter id, version, source kind, episode id, and a digest | `test_provenance_records_the_adapter_and_the_source_runtime` |
 | Supplied state digests win over computed ones | `test_supplied_state_digests_win_over_computed_ones` |
 | All five catalog domains adapt through the same path, with unknown facts staying unknown | `test_every_catalog_domain_adapts_without_inventing_facts` |
+| `world_id` is runtime-derived and cannot be overridden by the context | `test_world_id_is_derived_from_the_runtime_and_cannot_be_overridden_by_context` |
 
 One correction made after the first CI run is recorded here rather than buried in history. The
 first revision of `test_every_catalog_domain_adapts_without_inventing_facts` iterated

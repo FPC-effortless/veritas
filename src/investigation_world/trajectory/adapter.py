@@ -286,7 +286,9 @@ class OperationalRuntimeAdapterContext(CanonicalModel):
     - ``submission`` — the ``EpisodeSubmission`` the caller passed to ``submit(...)``. The
       reverification engine requires exactly one ``submit`` event whose payload *is* this
       submission, so the adapter emits it from this context rather than inventing one; the
-      runtime's own ``submit()`` does not record an ``ActionEvent``.
+      runtime's own ``submit()`` does not record an ``ActionEvent``. This is enforced, not
+      assumed: a missing submission is rejected rather than producing a trajectory that could
+      never satisfy that requirement.
 
     ``verifier`` is the one mandatory *identity* case. ``TrajectoryV2.validate_trajectory``
     requires ``original_evaluation.verifier == trajectory.verifier``; when the caller does not
@@ -298,10 +300,14 @@ class OperationalRuntimeAdapterContext(CanonicalModel):
     which is private-by-construction. ``initial_state_digest``/``final_state_digest`` override
     the computed digest outright and win over ``scope``, so a caller that already holds the
     exact digest the reverification engine requires can pass it through verbatim.
+
+    ``world_id`` is deliberately *absent* here, unlike :class:`RolloutTraceAdapterContext`. The
+    operational runtime already names the world it executed (``runtime.episode.world_id``), so a
+    caller-supplied value is not enrichment but a potential contradiction of the recorded
+    execution. The adapter therefore derives it and cannot be overridden.
     """
 
     environment_id: str | None = None
-    world_id: str | None = None
     world_version: str | None = None
     world_bundle: ArtifactIdentity | None = None
     portable_operational_contract: ArtifactIdentity | None = None
@@ -460,13 +466,17 @@ def trajectory_v2_from_operational_runtime(
     if not runtime.closed:
         raise ValueError("operational runtime must be submitted before trajectory adaptation")
     ctx = context or OperationalRuntimeAdapterContext()
+    if ctx.submission is None:
+        # Fail closed before constructing anything: a trajectory without the submit event can
+        # never satisfy the reverification engine's EXACT_SUBMISSION_EVENT_REQUIRED rule, and
+        # the adapter must not synthesize one. See the note on ``submission`` above.
+        raise ValueError(
+            "operational trajectory adaptation requires the EpisodeSubmission passed to "
+            "runtime.submit() in OperationalRuntimeAdapterContext.submission"
+        )
     episode = runtime.episode
     acted = tuple(_operational_event(event) for event in runtime.events)
-    events = (
-        (*acted, _submit_event(ctx.submission, len(acted), 0.0))
-        if ctx.submission is not None
-        else acted
-    )
+    events = (*acted, _submit_event(ctx.submission, len(acted), 0.0))
     resource_calls = (
         ctx.resource_calls
         if ctx.resource_calls is not None
@@ -493,7 +503,10 @@ def trajectory_v2_from_operational_runtime(
         world=WorldIdentity(
             environment_id=ctx.environment_id,
             environment_version=ctx.world_version,
-            world_id=ctx.world_id if ctx.world_id is not None else episode.world_id,
+            # Runtime-derived, never caller-overridable: the recorded execution *is* this world,
+            # so a context value that disagrees would contradict the runtime being recorded and
+            # can also break the contract's WORLD_IDENTITY_MISMATCH reverification check.
+            world_id=episode.world_id,
             world_version=ctx.world_version,
             world_bundle=ctx.world_bundle,
             portable_operational_contract=ctx.portable_operational_contract,
