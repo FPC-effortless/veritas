@@ -1,9 +1,13 @@
 """Canonical, versioned trajectory records for Veritas evaluation and replay."""
 
 from investigation_world.trajectory.adapter import (
+    OPERATIONAL_RUNTIME_ADAPTER_ID,
+    OPERATIONAL_RUNTIME_ADAPTER_VERSION,
     ROLLOUT_TRACE_ADAPTER_ID,
     ROLLOUT_TRACE_ADAPTER_VERSION,
+    OperationalRuntimeAdapterContext,
     RolloutTraceAdapterContext,
+    trajectory_v2_from_operational_runtime,
     trajectory_v2_from_rollout_trace,
 )
 from investigation_world.trajectory.models import (
@@ -38,6 +42,8 @@ from investigation_world.trajectory.models import (
 )
 
 __all__ = [
+    "OPERATIONAL_RUNTIME_ADAPTER_ID",
+    "OPERATIONAL_RUNTIME_ADAPTER_VERSION",
     "REVERIFICATION_SCHEMA",
     "ROLLOUT_TRACE_ADAPTER_ID",
     "ROLLOUT_TRACE_ADAPTER_VERSION",
@@ -49,6 +55,7 @@ __all__ = [
     "FailureClassification",
     "HarnessIdentity",
     "ModelIdentity",
+    "OperationalRuntimeAdapterContext",
     "ProviderCallSummary",
     "ProvenanceRecord",
     "ResetIdentity",
@@ -69,5 +76,6 @@ __all__ = [
     "WorldIdentity",
     "canonical_hash",
     "canonical_json",
+    "trajectory_v2_from_operational_runtime",
     "trajectory_v2_from_rollout_trace",
 ]
