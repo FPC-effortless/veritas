@@ -458,10 +458,13 @@ def test_missing_submission_is_rejected_rather_than_emitting_an_unsubmittable_tr
             runtime,
             context=OperationalRuntimeAdapterContext(breakdown=breakdown),
         )
-    # The adapter never re-executes; it must not have submitted again either.
+    # The adapter never re-executes: it must not have called act() or submit() on the caller's
+    # runtime to recover what it refused to adapt without. The recorded events are unchanged.
     assert runtime.closed is True
-    assert [event.event_type for event in runtime.events] != []
-    assert all(event.event_type == "act" for event in runtime.events)
+    assert all(event.blocked is False for event in runtime.events)
+    assert [event.sequence for event in runtime.events] == list(
+        range(1, len(runtime.events) + 1)
+    )
 
 
 def test_world_id_is_derived_from_the_runtime_and_cannot_be_overridden_by_context() -> None:
