@@ -272,8 +272,8 @@ def test_schema_1_1_missing_binding_defaults_to_explicit_null() -> None:
 def test_source_provenance_matches_accepted_g02_candidate() -> None:
     provenance = compile_operational_episode(_episode()).public.provenance
 
-    assert provenance.source_commit == "4984253f5d31ab76190cb2cfff9873b5001ede23"
-    assert provenance.source_model_git_blob_sha1 == "536f6b7981a8d3883182580be34f1bba1f22e398"
+    assert provenance.source_commit == "e722c04846d01c1f6df62fdbfbf1731ecc78630d"
+    assert provenance.source_model_git_blob_sha1 == "a93c95be4104089954366bc091056ad831543198"
 
 
 def test_private_semantic_changes_change_full_identity_not_public_identity() -> None:
