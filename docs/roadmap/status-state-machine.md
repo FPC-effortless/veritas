@@ -4,11 +4,9 @@ Status: coordination policy only. This document governs repository work ownershi
 
 ## Authority and canonical state
 
-For an enrolled `<!-- veritas-agent-work -->` issue, the preferred canonical coordination authority is the latest trusted `<!-- veritas-agent-work-status:v1 -->` record authored by `github-actions[bot]` when such a record exists, with the `work:*` label maintained to match it by `.github/workflows/agent-work-claims.yml`.
+For an enrolled `<!-- veritas-agent-work -->` issue, execution authority is the latest trusted `<!-- veritas-agent-work-status:v1 -->` record authored by `github-actions[bot]`. The `work:*` label is discovery metadata and must match the trusted status; it is not a fallback authority.
 
-When no trusted status record exists, current automation has a weaker fallback. `canonicalStatus()` first accepts exactly one present `work:*` state label as canonical state and only falls back to the issue body's Work Contract `State` if there is not exactly one such label. Bootstrap creates trusted status comments only for reconstructed CLAIMED/REVIEW lanes, so READY, BLOCKED, DONE, and SUPERSEDED work can remain on this label-based authority path. Policy forbids arbitrary/manual state-label edits, but current automation cannot distinguish such an edit from a workflow-maintained label before a trusted status record exists; an externally relabeled no-status issue can therefore affect the next command's canonical state.
-
-The issue body's `Claim holder` and `Linked PR` fields are bootstrap metadata rather than mutable execution authority after a trusted status record exists. The issue body's `State` field is **not fully bootstrap-only in the current workflow**: every command reparses the current issue body, and `/release` uses the freshly parsed `contract.initialState` value to choose whether the released issue becomes READY or BLOCKED. Editing the Work Contract `State` after trusted status exists can therefore alter a later release target. This is a current automation limitation, not intended policy.
+If trusted status is absent, ordinary commands are rejected. An authorized repository OWNER must run `/roadmap-bootstrap` on #150 to materialize or reconcile trusted status for enrolled issues. Bootstrap uses the Work Contract as initial metadata, but after that the trusted record carries live state, authenticated holder, branch, frozen `ownership_paths`, linked PR/head, and `return_state`. Later edits to the Work Contract state or labels cannot change those recorded values. The contract still supplies descriptive/validation inputs where documented below, such as the declared branch for a new `/claim` and the Work ID required in a PR body.
 
 A chat transcript, branch name, open PR, green CI run, or untrusted ordinary issue comment cannot independently change coordination state.
 
@@ -34,25 +32,25 @@ Work cannot be claimed through the normal `/claim` path. BLOCKED may mean either
 
 A blocker reason is required for an owner-held transition from CLAIMED or REVIEW. BLOCKED is coordination state only; it must not be interpreted as failure of a scientific or product qualification gate unless that separate system says so.
 
-The policy model requires an explicit audited way to move an unowned dependency-blocked item to READY when its prerequisites are resolved. The current `agent-work-claims.yml` does **not** implement that unowned `BLOCKED -> READY` transition. `/claim` requires READY, and `/release` requires an active holder. When the issue body's currently parsed Work Contract `State` is BLOCKED, holder release returns the item to unowned BLOCKED rather than READY. Until an administrative/prerequisite-resolution mechanism is implemented, the workflow has no ordinary command that makes such an unowned initially-BLOCKED item READY.
+The current workflow has no ordinary command that resolves an unowned dependency-blocked item to READY. `/claim` requires READY, and `/release` requires an active holder. The OWNER-only `/roadmap-bootstrap` reconciliation has one narrow exception: a pristine bootstrap BLOCKED record can become READY when the Work Contract's declared initial state is READY. It does not resolve a Work Contract initially declared BLOCKED; that still needs an audited prerequisite/admin path.
 
 ### READY
 
 The work contract is available for a permitted agent claim. READY carries no owner and no implementation authority beyond eligibility to claim.
 
-Before a trusted bot status record exists, READY may be obtained by the current single-`work:*`-label fallback. Policy requires that state label to be maintained only by authorized coordination automation, but current enforcement does not cryptographically or structurally prove that provenance before using the label.
+READY is claimable only when present in trusted bot status. A `work:ready` label without trusted status is not sufficient; ordinary commands fail closed until bootstrap creates or reconciles the trusted record.
 
 ### CLAIMED
 
 For an ordinary `/claim`, one agent ID under one authenticated GitHub actor owns the issue's coordination lane. The trusted status records the agent ID, branch, claim time, heartbeat, and authenticated actor. A claim grants work ownership only; it does not grant merge, release, payment, external-account, sealed-data, or qualification authority.
 
-There is a bootstrap exception. When `canonicalStatus()` reconstructs a pre-existing declared holder before a trusted status record exists, it records `github_actor: "bootstrap"` rather than the actor that originally created the historical lane. The current `isHolder()` accepts that sentinel for any otherwise-authorized GitHub actor presenting the matching agent ID. Therefore bootstrap preserves a reservation, but it is not equivalent to the stronger actor binding established by an ordinary `/claim`. Consumers must not describe every bootstrapped CLAIMED/REVIEW holder as authenticated to one specific GitHub actor.
+Bootstrap can preserve a pre-existing declared holder with `github_actor: "bootstrap"`; this does not prove which actor originally created the historical lane. Ordinary holder commands require an actor match, so an OWNER must use the audited `/recover` path to bind a bootstrap-derived or sufficiently stale holder to the recovering actor before ordinary holder transitions can proceed. Do not describe a bootstrap sentinel as an authenticated actor binding.
 
 ### REVIEW
 
 On the ordinary command path, the current holder has handed off an open PR whose head branch matches the recorded claim branch and whose body references the issue and Work ID. REVIEW reserves the work lane while implementation is independently reviewed, corrected, merged, or otherwise dispositioned according to the work contract.
 
-Bootstrap can also reconstruct a pre-existing REVIEW lane directly from issue metadata. Such a bootstrapped REVIEW status may have a declared holder and may have `linked_pr: null`; it therefore does not universally prove that the ordinary `/handoff` validations already ran.
+Bootstrap can also reconstruct a pre-existing REVIEW lane directly from issue metadata. Such a bootstrapped REVIEW status may have a declared holder and may have `linked_pr: null`; it therefore does not prove that ordinary `/handoff` validations ran. Current `/done` rejects a missing linked PR, and a recorded linked PR must match the supplied PR.
 
 REVIEW is not DONE and does not imply that required CI, security, exact-head review, merge authority, scientific evidence, or external/manual conditions have passed.
 
@@ -60,7 +58,7 @@ REVIEW is not DONE and does not imply that required CI, security, exact-head rev
 
 DONE means the coordination workflow accepted completion for the work item. Policy requires that the work-class-specific completion condition also be satisfied before DONE is legitimate.
 
-The current `agent-work-claims.yml` implementation is narrower than that policy. `/done` currently requires REVIEW state, the current holder relation, and a supplied PR that is merged. If `status.linked_pr` is already non-null, the supplied PR must match it. However, `/done` does **not** require `linked_pr` to be non-null and does not repeat the `/handoff` branch/issue/Work-ID checks. A bootstrapped REVIEW record with `linked_pr: null` can therefore reach DONE using a merged PR without proving that the earlier ordinary handoff validation occurred.
+The current `/done` requires REVIEW, the authenticated current holder, a non-null matching linked PR, and a merged PR. When the status records a handoff head, the current PR head must match it. A bootstrap-derived record with missing linkage must first go through the applicable OWNER recovery path and cannot reach DONE by supplying an unrelated merged PR.
 
 The current workflow also does **not** evaluate the richer work-class completion policy defined in [`docs/roadmap/completion-rules.md`](completion-rules.md), merged by PR #282; ROADMAP-DONE-001 (#233) tracks the corresponding automation. Until those owner-scoped extensions exist, a merged implementation PR can satisfy the current coordination command while still lacking scientific, Frontier, training, commercial, release, external/manual, or other class-specific evidence. Consumers must not infer those states from `work:done`.
 
@@ -72,24 +70,21 @@ The current claim workflow has no ordinary agent command that creates or reopens
 
 ## Transition graph: policy target and current enforcement
 
-The policy target includes an audited prerequisite/administrative resolution edge for unowned BLOCKED work, but that edge is not implemented by the current command workflow:
+There is no ordinary prerequisite-resolution command for unowned BLOCKED work. Bootstrap's narrowly-scoped reconciliation is separate from the ordinary transition graph:
 
 ```text
-UNOWNED BLOCKED --policy prerequisite/admin resolution--> READY
-                 [NOT IMPLEMENTED by agent-work-claims.yml]
+UNOWNED BLOCKED --OWNER /roadmap-bootstrap reconciliation--> READY
+                 [only when pristine bootstrap state + declared initial State is READY]
 
 READY   --/claim-->                            CLAIMED
 CLAIMED --/handoff-->                          REVIEW
-REVIEW  --/done with supplied merged PR-->     DONE
+REVIEW  --/done with matching merged PR/head--> DONE
 
-CLAIMED --/release-->                          READY, or BLOCKED according to the
-                                                Work Contract State parsed at release time
-REVIEW  --/release-->                          READY, or BLOCKED according to the
-                                                Work Contract State parsed at release time
+CLAIMED --/release-->                          READY or BLOCKED according to trusted return_state
+REVIEW  --/release-->                          READY or BLOCKED according to trusted return_state
 CLAIMED --/blocked <reason>-->                 BLOCKED (owner-held)
 REVIEW  --/blocked <reason>-->                 BLOCKED (owner-held)
-BLOCKED (owner-held) --/release-->              READY if the currently parsed Work Contract
-                                                State is not BLOCKED; unowned BLOCKED if it is
+BLOCKED (owner-held) --/release-->              READY or BLOCKED according to trusted return_state
 
 CLAIMED --authorized supersession-->           SUPERSEDED [policy only today]
 REVIEW  --authorized supersession-->           SUPERSEDED [policy only today]
@@ -97,9 +92,7 @@ READY   --authorized supersession-->           SUPERSEDED [policy only today]
 BLOCKED --authorized supersession-->           SUPERSEDED [policy only today]
 ```
 
-This distinction is material: an unowned initially-BLOCKED item cannot use `/release`, and `/claim` cannot make it READY. The desired prerequisite-resolution edge must therefore remain labelled as policy until a separately authorized workflow implements it.
-
-The phrase "Work Contract State parsed at release time" is deliberate. Although the implementation property is named `initialState`, `parseContract()` is called against the issue's current mutable body for every command. The trusted status record does not freeze this release-target input.
+This distinction is material: an unowned initially-BLOCKED item cannot use `/release`, and `/claim` cannot make it READY. The owner-only bootstrap reconciliation can only restore READY when the immutable bootstrap snapshot conditions and declared READY initial state match; other prerequisite changes need a separately authorized mechanism.
 
 ## Command preconditions enforced by the current workflow
 
@@ -108,17 +101,17 @@ The repository workflow parses only exact single-line commands and checks the au
 | Command | Required current state | Required holder relation | Result |
 | --- | --- | --- | --- |
 | `/claim <agent> <branch>` | READY | none | CLAIMED with `github_actor` bound to the command actor |
-| `/heartbeat <agent> [branch]` | CLAIMED, BLOCKED, or REVIEW | current holder; bootstrap sentinel also satisfies `isHolder()` for an authorized actor with matching agent ID | state unchanged |
-| `/release <agent> [reason]` | CLAIMED, BLOCKED, or REVIEW | current holder; same bootstrap caveat | READY or BLOCKED according to the Work Contract `State` reparsed from the issue body for this command |
-| `/blocked <agent> <reason>` | CLAIMED or REVIEW | current holder; same bootstrap caveat | BLOCKED |
-| `/handoff <agent> <pr>` | CLAIMED | current holder; same bootstrap caveat | REVIEW only after open-PR, branch, issue, and Work-ID validation |
-| `/done <agent> <pr>` | REVIEW | current holder; same bootstrap caveat | DONE when the supplied PR is merged; an existing non-null `linked_pr` must match, but null `linked_pr` is not rejected |
+| `/heartbeat <agent> [branch]` | CLAIMED, BLOCKED, or REVIEW | authenticated current holder | state unchanged |
+| `/release <agent> [reason]` | CLAIMED, BLOCKED, or REVIEW | authenticated current holder | READY or BLOCKED according to trusted `return_state` |
+| `/blocked <agent> <reason>` | CLAIMED or REVIEW | authenticated current holder | BLOCKED |
+| `/handoff <agent> <pr>` | CLAIMED, or REVIEW for re-handoff of same PR | authenticated current holder | REVIEW only after open-PR, branch, issue, and Work-ID validation; exact head is recorded |
+| `/done <agent> <pr>` | REVIEW | authenticated current holder | DONE only when the linked PR matches and is merged; if a handoff head is recorded, current PR head must match |
 
 Commands outside their permitted source states are rejected rather than silently relabeling the issue. A malformed, multiline, unauthorized, non-holder, mismatched-branch, unresolved-PR, unmerged-PR, or otherwise invalid command must leave the canonical state unchanged.
 
-The table describes **current automation**, not the full completion policy. In particular, `/done` itself does not universally prove that ordinary `/handoff` validation occurred, and the merged policy in [`docs/roadmap/completion-rules.md`](completion-rules.md) requires work-class-specific completion. ROADMAP-DONE-001 (#233) tracks implementation of that policy in automation.
+The table describes **current automation**, not the full completion policy. Ordinary `/handoff` validates the open PR, branch, issue, and Work ID and records the exact head. Bootstrap may reconstruct a legacy linked PR without that head evidence; OWNER recovery paths have separate validation rules. `/done` requires a linked PR and checks the recorded head when present, but it does not itself rerun every ordinary handoff check. The merged policy in [`docs/roadmap/completion-rules.md`](completion-rules.md) requires work-class-specific completion; ROADMAP-DONE-001 (#233) tracks that automation.
 
-Current canonical-state resolution also has an explicit pre-status limitation: if there is no trusted bot status record, exactly one present `work:*` label is consumed as canonical state before the Work Contract state fallback. Thus ordinary command state checks are fail-closed relative to the state they resolve, but the provenance of that no-status label is not itself validated.
+If trusted bot status is absent, ordinary commands are rejected and the audit comment directs an OWNER to run `/roadmap-bootstrap` on #150. Labels and mutable Work Contract state are not execution authority in that case.
 
 ## Illegal transitions
 
@@ -133,9 +126,9 @@ The following are illegal for ordinary agents unless a separate explicit adminis
 - changing holder identity by heartbeat, handoff, blocked, release, or done commands;
 - treating an arbitrary label edit or ordinary comment as an authorized transition.
 
-The last rule is a **policy prohibition**, not a statement that the current workflow fully rejects externally mutated labels. Before a trusted status record exists, `canonicalStatus()` can consume one externally changed `work:*` label as current state. For example, manually changing a no-status BLOCKED issue to a single `work:ready` label can make the next `/claim` evaluate the issue as READY. That is an automation integrity gap and must not be interpreted as an authorized transition merely because a later command succeeds.
+The workflow treats `work:*` labels as discovery metadata and requires trusted status before ordinary commands. If a trusted status is absent, a manually changed label cannot make `/claim` succeed; the workflow rejects the command and requires OWNER bootstrap.
 
-An owner-held BLOCKED lane may transition through `/release` according to the Work Contract `State` parsed at release time. That current behavior is distinct from the currently unimplemented prerequisite-resolution transition for an **unowned** initially-BLOCKED item, and it is weaker than the intended policy because that issue-body field remains mutable after trusted status exists.
+An owner-held BLOCKED lane transitions through `/release` according to its trusted `return_state`. This is distinct from the prerequisite-resolution transition for an **unowned** initially-BLOCKED item, which has no ordinary command path.
 
 If DONE or SUPERSEDED must be reopened, the action must be explicit, authorized, and audited with the prior terminal state, acting GitHub actor, reason, replacement/reopened Work ID when applicable, and timestamp. Reopening must never occur merely because a new comment, branch, PR, or stale timer appears.
 
@@ -151,7 +144,7 @@ A missed heartbeat may mark a claim as stale for human/admin attention, but it d
 - close or supersede the issue;
 - grant force-release authority.
 
-Recovery from a stale holder requires the existing holder's valid `/release` or a separately authorized and audited administrative recovery path.
+The OWNER-only `/recover` command can rebind a bootstrap-derived holder or a holder stale for at least two hours, preserving the recorded branch and frozen ownership. Otherwise recovery requires the existing holder's valid `/release` or another explicitly authorized administrative path.
 
 ## Transition audit contract
 
@@ -170,7 +163,7 @@ Every accepted transition must preserve enough information to reconstruct owners
 - triggering command comment ID;
 - update timestamp.
 
-The trusted status record is the durable ownership history, but current `/release` still depends on one live issue-body input that is not captured as immutable transition authority: the reparsed Work Contract `State`. Reviewers should therefore treat a release target as reflecting both the trusted prior status and the issue-body State present when the release command executed.
+The trusted status comment is the mutable current snapshot, not an immutable transition history. Accepted and rejected commands receive separate audit comments; use those comments to reconstruct prior transitions. The snapshot's `return_state` governs release targets and remains frozen across later Work Contract edits.
 
 For transitions that cannot be represented by the current ordinary command workflow, the administrative record must additionally identify the transition authority and why the exceptional edge was allowed.
 
@@ -204,21 +197,19 @@ The coordination contract is violated if any of the following is possible or doc
 9. coordination state is cited as scientific, Frontier, training, commercial, release, sealed, paid-compute, or external-account PASS;
 10. current `/done` merge-only enforcement is misrepresented as already implementing ROADMAP-DONE-001 work-class completion rules;
 11. unowned initially-BLOCKED work is documented as having a current `BLOCKED -> READY` command when no such command exists;
-12. `/done` is documented as universally proving prior handoff/linked-PR binding even though null `linked_pr` bootstrap REVIEW is accepted;
-13. a bootstrapped holder is described as strongly bound to one authenticated GitHub actor despite the current `github_actor: "bootstrap"` sentinel behavior;
-14. issue-body Work Contract `State` is documented as frozen/bootstrap-only after trusted status even though `/release` reparses and consumes it;
-15. arbitrary `work:*` label mutation is documented as impossible to influence execution even though a no-trusted-status issue can use a single state label as canonical state.
+12. `/done` is documented as accepting a missing linked PR or as revalidating all ordinary handoff checks itself;
+13. a bootstrap sentinel is treated as an authenticated holder without OWNER recovery binding it to the current actor;
+14. `/release` is documented as reparsing the Work Contract state rather than using trusted `return_state`;
+15. labels or mutable Work Contract state are documented as execution authority when trusted status is absent, rather than fail-closed bootstrap being required.
 
 ## Implementation boundary
 
 This specification is grounded in the current `agent-work-claims.yml` behavior but does not modify that workflow. Current automation gaps are explicit rather than hidden:
 
-1. unowned initially-BLOCKED work has no implemented prerequisite/admin transition to READY;
-2. bootstrap reconstructs historical holders with `github_actor: "bootstrap"`, which is weaker than ordinary `/claim` actor binding;
-3. bootstrap can persist REVIEW with `linked_pr: null`, and `/done` does not require a prior non-null linked PR or rerun `/handoff` binding validation;
-4. SUPERSEDED/reopen transitions require a future authorized administrative path;
-5. `/done` currently proves only REVIEW-holder plus supplied-merged-PR completion, while ROADMAP-DONE-001 (#233) owns work-class-specific completion enforcement;
-6. `/release` reparses the mutable issue-body Work Contract `State` even after trusted status exists, so that field can still change the release target; and
-7. when no trusted status record exists, exactly one `work:*` label is accepted as canonical state before the Work Contract fallback, so external/manual label mutation can influence the next command on those lanes.
+1. unowned initially-BLOCKED work has no ordinary prerequisite-resolution command to READY;
+2. bootstrap reconstructs historical holders with `github_actor: "bootstrap"`; an OWNER must recover them to establish current actor binding;
+3. bootstrap can persist REVIEW with a linked PR but no exact head; OWNER recovery is required before normal actor-bound handoff/completion, and `/done` rejects a missing link;
+4. SUPERSEDED/reopen transitions require a future authorized administrative path; and
+5. `/done` does not enforce work-class completion evidence, which ROADMAP-DONE-001 (#233) owns.
 
 Future owner-scoped coordination changes should implement those policies explicitly rather than pretending the existing command workflow already provides them.
