@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "gold10-case-selection-v1",
+  "corpus_id": "csb-gold-10",
+  "source_id": "uscsb",
+  "report_usage_policy": "require_exact_content_bound_task_use_authority",
+  "truth_policy": "institutional_findings_are_evidence_not_private_truth",
+  "contamination_policy": "public_historical_nonsealed",
+  "task_owner_root": "src/investigation_world/gold10/tasks",
+  "verifier_owner_root": "src/investigation_world/gold10/verifiers",
+  "cases": [
+    {"case_id": "2005-04-I-TX", "split": "train", "calibration_required": false},
+    {"case_id": "2008-03-I-FL", "split": "train", "calibration_required": false},
+    {"case_id": "2008-05-I-GA", "split": "train", "calibration_required": false},
+    {"case_id": "2010-08-I-WA", "split": "train", "calibration_required": false},
+    {"case_id": "2013-03-I-LA", "split": "train", "calibration_required": false},
+    {"case_id": "2017-08-I-TX", "split": "train", "calibration_required": false},
+    {"case_id": "2012-03-I-CA", "split": "dev", "calibration_required": true},
+    {"case_id": "2013-02-I-TX", "split": "dev", "calibration_required": false},
+    {"case_id": "2018-02-I-WI", "split": "eval", "calibration_required": false},
+    {"case_id": "2019-04-I-PA", "split": "eval", "calibration_required": false}
+  ]
+}
