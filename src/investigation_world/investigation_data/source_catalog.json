@@ -516,6 +516,146 @@
       "requires_redaction_review": true
     },
     {
+      "source_id": "cdc-nors-public",
+      "name": "CDC National Outbreak Reporting System public dataset",
+      "publisher": "Centers for Disease Control and Prevention",
+      "domains": [
+        "public_health_investigation",
+        "outbreak_investigation"
+      ],
+      "homepage": "https://www.cdc.gov/nors/data/index.html",
+      "allowed_hosts": [
+        "cdc.gov",
+        "data.cdc.gov"
+      ],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "review_required",
+        "ai_use": "allowed_with_conditions",
+        "license_expression": "Public Domain U.S. Government for the public NORS dataset; artifact-scoped CDC attribution and non-endorsement conditions apply",
+        "terms_url": "https://www.cdc.gov/other/agencymaterials.html",
+        "attribution_required": true,
+        "review_notes": "Approval is limited to the public NORS dataset identified as data.cdc.gov asset 5xkq-dg7x. Redistribution requires review because CDC conditions exceed attribution alone: preserve CDC attribution, include a prominent non-endorsement disclaimer, do not substantively alter the material, and state that the material is available from CDC at no charge. Do not extend this policy to additional NORS requests, third-party media, or underlying state/local records without separate review."
+      },
+      "truth": {
+        "strength": "moderate",
+        "basis": "CDC-published outbreak surveillance records reported by state, local and territorial health departments and subjected to CDC data-quality close-out before public release.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "context_only",
+        "limitations": [
+          "Reporting is voluntary and incomplete.",
+          "NORS is dynamic and historical reports can be revised after close-out.",
+          "The public dataset is not a substitute for case-level investigative records."
+        ]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "nors-5xkq-dg7x",
+          "label": "NORS public-use dataset 5xkq-dg7x",
+          "method": "manual",
+          "url": "https://data.cdc.gov/Foodborne-Waterborne-and-Related-Diseases/NORS/5xkq-dg7x",
+          "artifact_class": "data",
+          "filename": null,
+          "expected_sha256": null,
+          "notes": "Use the official Data.CDC.gov API/export surface. Pin the dataset asset ID, export timestamp, row/column metadata and acquired content hash; do not treat later revisions as contemporaneous evidence."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "nors-public-outbreak-context",
+          "label": "Public outbreak surveillance context",
+          "target_episodes": 10,
+          "selection_method": "Select closed-out public rows with sufficient temporal and etiologic fields, stratify by transmission mode and setting, and pair with independently rights-reviewed case evidence before constructing an investigation episode.",
+          "selectors": [
+            "public dataset 5xkq-dg7x",
+            "closed-out public records",
+            "year/month/state/mode/etiology present"
+          ],
+          "strata": [
+            "foodborne",
+            "waterborne",
+            "person-to-person",
+            "animal contact",
+            "environmental/unknown"
+          ],
+          "notes": "Use NORS as context and case-selection evidence only; never infer hidden facility/person identity or causal ground truth from the public aggregate record."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": false,
+      "requires_redaction_review": false
+    },
+    {
+      "source_id": "uscg-cgmix-iir",
+      "name": "USCG CGMIX Incident Investigation Reports",
+      "publisher": "United States Coast Guard",
+      "domains": [
+        "maritime_investigation",
+        "accident_investigation"
+      ],
+      "homepage": "https://cgmix.uscg.mil/iir/Default.aspx",
+      "allowed_hosts": [
+        "uscg.mil",
+        "cgmix.uscg.mil"
+      ],
+      "rights": {
+        "acquisition": "approved",
+        "redistribution": "review_required",
+        "ai_use": "review_required",
+        "license_expression": "Public Coast Guard information with explicit non-commercial/non-endorsement constraints; AI/training and commercial redistribution not expressly authorized",
+        "terms_url": "https://www.uscg.mil/Community/faq/",
+        "attribution_required": true,
+        "review_notes": "CGMIX explicitly provides public bulk IIR export, so acquisition of that public export is approved. Coast Guard web policy restricts commercial use and does not establish AI/training permission; redistribution and AI use therefore remain review-required. Do not extend this approval to FOIA-only complete reports or linked third-party material."
+      },
+      "truth": {
+        "strength": "strong",
+        "basis": "Closed reportable marine-casualty investigations published by the Coast Guard with incident, timeline and detail data.",
+        "official_findings_are_ground_truth": false,
+        "verifier_use": "evidence_reference",
+        "limitations": [
+          "The Coast Guard disclaims guarantees of accuracy, completeness and timeliness.",
+          "Published IIR data are disclosure-filtered and are not necessarily the complete investigative file.",
+          "Cases closed after October 2002 can have incident start dates years earlier."
+        ]
+      },
+      "artifacts": [
+        {
+          "artifact_id": "iir-xlsx-export",
+          "label": "CGMIX closed-investigation XLSX export",
+          "method": "form",
+          "url": "https://cgmix.uscg.mil/XML/IIRExportSearch.aspx",
+          "artifact_class": "data",
+          "filename": null,
+          "expected_sha256": null,
+          "notes": "Record the exact export query, activity IDs, export date, CGMIX last-update date and acquired content hash. The policy lane performs no export or download."
+        }
+      ],
+      "seed_selections": [
+        {
+          "selection_id": "uscg-closed-iir-context",
+          "label": "Closed reportable marine-casualty investigations",
+          "target_episodes": 10,
+          "selection_method": "Select closed IIR records with sufficient incident/timeline/detail evidence, stratify by casualty mechanism, and preserve Activity ID plus export snapshot provenance for every selected record.",
+          "selectors": [
+            "closed after October 2002",
+            "reportable marine casualty",
+            "timeline/detail data available"
+          ],
+          "strata": [
+            "collision/allision",
+            "grounding",
+            "fire/explosion",
+            "injury/death",
+            "pollution/material damage"
+          ],
+          "notes": "Rights approval covers acquisition of the public CGMIX export only. Any derived training or redistributable package remains blocked pending a separate rights review."
+        }
+      ],
+      "requires_identified_user_agent": false,
+      "contains_personal_data": true,
+      "requires_redaction_review": true
+    },
+    {
       "source_id": "acled",
       "name": "Armed Conflict Location & Event Data (ACLED)",
       "publisher": "ACLED Analysis, Inc.",

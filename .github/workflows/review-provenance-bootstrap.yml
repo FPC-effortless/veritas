@@ -1,0 +1,256 @@
+name: Trusted Exact-Head Reviewer
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-candidate:
+    name: Verify trusted review candidate
+    if: github.event.label.name == 'review-provenance-bootstrap'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      eligible: ${{ steps.candidate.outputs.eligible }}
+      head: ${{ steps.candidate.outputs.head }}
+      pull_number: ${{ steps.candidate.outputs.pull_number }}
+    steps:
+      - name: Resolve exact candidate from event
+        id: candidate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const eventPr = context.payload.pull_request;
+            if (!eventPr) {
+              core.setFailed('pull_request_target event is missing pull_request payload');
+              return;
+            }
+            const pull_number = eventPr.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+            });
+            if (pr.state !== 'open' || pr.merged) {
+              core.setFailed('review target is not an open pull request');
+              return;
+            }
+            if (pr.draft) {
+              core.setFailed('draft pull requests are not review-authoritative');
+              return;
+            }
+            if (pr.head.sha !== eventPr.head.sha) {
+              core.setFailed(`event/live head mismatch: ${eventPr.head.sha} != ${pr.head.sha}`);
+              return;
+            }
+            if (pr.user.login === 'github-actions[bot]') {
+              core.setFailed('trusted reviewer cannot review its own pull request');
+              return;
+            }
+            core.setOutput('pull_number', String(pull_number));
+            core.setOutput('head', pr.head.sha);
+            core.setOutput('eligible', 'true');
+
+      - name: Apply trusted non-executable review policy
+        if: steps.candidate.outputs.eligible == 'true'
+        uses: actions/github-script@v7
+        env:
+          TARGET_PR: ${{ steps.candidate.outputs.pull_number }}
+          TARGET_HEAD: ${{ steps.candidate.outputs.head }}
+        with:
+          script: |
+            const pull_number = Number(process.env.TARGET_PR);
+            const head = process.env.TARGET_HEAD;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              per_page: 100,
+            });
+            if (files.length === 0) {
+              core.setFailed('empty pull request cannot receive trusted machine approval');
+              return;
+            }
+            if (files.length > 25) {
+              core.setFailed(`review scope too large: ${files.length} changed files`);
+              return;
+            }
+            const changedLines = files.reduce(
+              (total, file) => total + Number(file.additions || 0) + Number(file.deletions || 0),
+              0,
+            );
+            if (changedLines > 3000) {
+              core.setFailed(`review scope too large: ${changedLines} changed lines`);
+              return;
+            }
+
+            const allowedRootDocs = new Set([
+              'README.md',
+              'CONTRIBUTING.md',
+              'SECURITY.md',
+            ]);
+            const allowedPath = (path) => path.startsWith('docs/') || allowedRootDocs.has(path);
+            const authorityDocs = (path) =>
+              path.startsWith('docs/automation/') ||
+              path.startsWith('docs/agents/');
+            for (const file of files) {
+              if (!allowedPath(file.filename)) {
+                core.setFailed(`executable or authority-bearing path requires a human/agent semantic review: ${file.filename}`);
+                return;
+              }
+              if (authorityDocs(file.filename)) {
+                core.setFailed(`review-authority documentation cannot be machine-approved: ${file.filename}`);
+                return;
+              }
+              if (file.status !== 'removed' && typeof file.patch !== 'string') {
+                core.setFailed(`missing inspectable patch for ${file.filename}`);
+                return;
+              }
+              const patch = file.patch || '';
+              const added = patch
+                .split('\n')
+                .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+                .join('\n');
+              const secretPatterns = [
+                /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+                /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
+                /\bAKIA[0-9A-Z]{16}\b/,
+                /Authorization:\s*Bearer\s+[A-Za-z0-9._~+/=-]{16,}/i,
+              ];
+              if (secretPatterns.some((pattern) => pattern.test(added))) {
+                core.setFailed(`credential-like material detected in ${file.filename}`);
+                return;
+              }
+            }
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              per_page: 100,
+            });
+            const decisive = reviews
+              .filter((review) =>
+                review.commit_id === head &&
+                ['APPROVED', 'CHANGES_REQUESTED'].includes(review.state) &&
+                review.user?.login
+              )
+              .sort((a, b) => {
+                const at = Date.parse(a.submitted_at || '') || 0;
+                const bt = Date.parse(b.submitted_at || '') || 0;
+                return at - bt || Number(a.id || 0) - Number(b.id || 0);
+              });
+            const latestByReviewer = new Map();
+            for (const review of decisive) {
+              latestByReviewer.set(review.user.login, review);
+            }
+            for (const [login, review] of latestByReviewer) {
+              if (review.state === 'CHANGES_REQUESTED') {
+                core.setFailed(`current exact-head changes requested by ${login}`);
+                return;
+              }
+            }
+
+            core.notice(
+              `trusted review policy accepted PR #${pull_number} at ${head}: ` +
+              `${files.length} documentation-only file(s), ${changedLines} changed lines`,
+            );
+
+  approve-candidate:
+    name: Approve exact trusted candidate
+    needs: verify-candidate
+    if: >-
+      needs.verify-candidate.result == 'success' &&
+      needs.verify-candidate.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      TARGET_PR: ${{ needs.verify-candidate.outputs.pull_number }}
+      TARGET_HEAD: ${{ needs.verify-candidate.outputs.head }}
+    steps:
+      - name: Submit machine-isolated exact-head approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pull_number = Number(process.env.TARGET_PR);
+            const head = process.env.TARGET_HEAD;
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+            });
+            if (pr.state !== 'open' || pr.merged || pr.draft) {
+              core.setFailed('review target is no longer an open, ready pull request');
+              return;
+            }
+            if (pr.head.sha !== head) {
+              core.setFailed(`head moved: ${pr.head.sha}`);
+              return;
+            }
+            if (pr.user.login === 'github-actions[bot]') {
+              core.setFailed('trusted reviewer cannot review its own pull request');
+              return;
+            }
+            const labels = new Set((pr.labels || []).map((label) => label.name));
+            if (!labels.has('review-provenance-bootstrap')) {
+              core.setFailed('trusted-review trigger label was removed before approval');
+              return;
+            }
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              per_page: 100,
+            });
+            const decisive = reviews
+              .filter((review) =>
+                review.commit_id === head &&
+                ['APPROVED', 'CHANGES_REQUESTED'].includes(review.state) &&
+                review.user?.login
+              )
+              .sort((a, b) => {
+                const at = Date.parse(a.submitted_at || '') || 0;
+                const bt = Date.parse(b.submitted_at || '') || 0;
+                return at - bt || Number(a.id || 0) - Number(b.id || 0);
+              });
+            const latestByReviewer = new Map();
+            for (const review of decisive) {
+              latestByReviewer.set(review.user.login, review);
+            }
+            for (const [login, review] of latestByReviewer) {
+              if (review.state === 'CHANGES_REQUESTED') {
+                core.setFailed(`current exact-head changes requested by ${login}`);
+                return;
+              }
+            }
+            const existing = decisive.some((review) =>
+              review.state === 'APPROVED' &&
+              review.user?.login === 'github-actions[bot]'
+            );
+            if (existing) {
+              core.notice('exact-head trusted machine approval already exists');
+              return;
+            }
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number,
+              commit_id: head,
+              event: 'APPROVE',
+              body: [
+                'Machine-isolated exact-head approval from the trusted default-branch reviewer.',
+                'The workflow inspected GitHub-reported diff metadata without executing candidate code',
+                'and accepted this head under the permanent non-executable documentation policy.',
+                'This approval does not independently certify factual, scientific, release, or qualification claims.',
+                `Exact head: ${head}`,
+              ].join(' '),
+            });

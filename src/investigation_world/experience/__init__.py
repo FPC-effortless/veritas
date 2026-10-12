@@ -1,0 +1,47 @@
+"""Learning-grade experience contracts over canonical Veritas trajectories."""
+
+from .adapter import machine_experience_from_trajectory
+from .models import (
+    EXPERIENCE_SEQUENCE_SCHEMA,
+    MACHINE_EXPERIENCE_SCHEMA,
+    BeliefRevision,
+    CapabilityGap,
+    EpistemicSnapshot,
+    ExperienceDiagnostics,
+    ExperienceInitialConditions,
+    ExperienceMaturity,
+    ExperienceReadiness,
+    ExperienceReference,
+    ExperienceSequence,
+    ExperienceSpan,
+    FailureFamily,
+    FailureMechanism,
+    HypothesisState,
+    MachineExperience,
+    ReadinessAssessment,
+    ReadinessStatus,
+    StructuralRecord,
+)
+
+__all__ = [
+    "EXPERIENCE_SEQUENCE_SCHEMA",
+    "MACHINE_EXPERIENCE_SCHEMA",
+    "BeliefRevision",
+    "CapabilityGap",
+    "EpistemicSnapshot",
+    "ExperienceDiagnostics",
+    "ExperienceInitialConditions",
+    "ExperienceMaturity",
+    "ExperienceReadiness",
+    "ExperienceReference",
+    "ExperienceSequence",
+    "ExperienceSpan",
+    "FailureFamily",
+    "FailureMechanism",
+    "HypothesisState",
+    "MachineExperience",
+    "ReadinessAssessment",
+    "ReadinessStatus",
+    "StructuralRecord",
+    "machine_experience_from_trajectory",
+]
