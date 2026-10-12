@@ -307,6 +307,32 @@ def test_sync_resolves_dependency_alias_from_live_contract(
     assert by_id["B"]["dependencies"] == ["A"]
 
 
+def test_sync_does_not_derive_self_dependency_from_dependency_rationale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("G-01", 1))
+    issue_a = issue(1, "G-01", "READY", "G-01 is the first capability identity lane")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+
+    assert synced["work"][0]["dependencies"] == []
+    assert roadmap.validate(synced) == []
+
+
+def test_sync_keeps_explicit_self_issue_dependency_as_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("G-01", 1))
+    issue_a = issue(1, "G-01", "READY", "#1")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
+
+    with pytest.raises(roadmap.RoadmapError, match="dependency cycle: G-01 -> G-01"):
+        roadmap.sync(current, "FPC-effortless/veritas", None)
+
+
 def test_sync_rejects_active_issue_without_trusted_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -347,6 +373,46 @@ def test_trusted_review_status_supplies_linkage_when_contract_omits_it(
 
     assert synced["work"][0]["state"] == "REVIEW"
     assert synced["work"][0]["linked_pr"] == 42
+
+
+def test_sync_accepts_trusted_status_identity_as_declared_composite_work_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1, aliases=["OLD-A"]))
+    issue_a = issue(1, "A / OLD-A", "READY", "none")
+    trusted = status(
+        1,
+        "A / OLD-A",
+        "REVIEW",
+        agent="agent-a",
+        branch="feat/a",
+        linked_pr=42,
+    )
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: trusted)
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+
+    assert synced["work"][0]["work_id"] == "A"
+    assert synced["work"][0]["aliases"] == ["OLD-A"]
+    assert synced["work"][0]["state"] == "REVIEW"
+    assert synced["work"][0]["linked_pr"] == 42
+
+
+def test_sync_rejects_undeclared_trusted_status_work_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1, aliases=["OLD-A"]))
+    issue_a = issue(1, "A / OLD-A", "READY", "none")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(
+        roadmap,
+        "status_record",
+        lambda *_: status(1, "A / UNDECLARED", "BLOCKED"),
+    )
+
+    with pytest.raises(roadmap.RoadmapError, match="trusted status identity mismatch"):
+        roadmap.sync(current, "FPC-effortless/veritas", None)
 
 
 def test_ready_contract_without_body_pr_link_uses_no_fallback(

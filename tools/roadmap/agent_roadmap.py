@@ -349,6 +349,13 @@ def dependency_name_map(
     return names
 
 
+def contract_status_identities(contract: dict[str, Any]) -> list[str]:
+    """Return the trusted-status spellings explicitly declared by a contract."""
+    identifiers = [contract["work_id"], *contract["aliases"]]
+    composite = " / ".join(identifiers)
+    return [*identifiers, composite]
+
+
 def derive_dependencies(
     contract: dict[str, Any],
     issue_to_id: dict[int, str],
@@ -358,15 +365,19 @@ def derive_dependencies(
     dependencies = {issue_to_id[ref] for ref in contract["refs"] if ref in issue_to_id}
     summary = contract["dependency_summary"]
     for name, primary in name_to_id.items():
+        if primary == contract["work_id"]:
+            continue
         pattern = rf"(?<![A-Za-z0-9_-]){re.escape(name)}(?![A-Za-z0-9_-])"
         if re.search(pattern, summary):
             dependencies.add(primary)
     return sorted(dependencies)
 
 
-def status_state(status: dict[str, Any], *, issue_number: int, work_id: str) -> str:
+def status_state(
+    status: dict[str, Any], *, issue_number: int, work_ids: list[str]
+) -> str:
     """Resolve execution state from a trusted status record."""
-    if status.get("issue_number") != issue_number or status.get("work_id") != work_id:
+    if status.get("issue_number") != issue_number or status.get("work_id") not in work_ids:
         raise RoadmapError(f"issue #{issue_number}: trusted status identity mismatch")
     state = status.get("state")
     if state not in STATES:
@@ -378,13 +389,13 @@ def validate_live_status(
     status: dict[str, Any],
     *,
     issue_number: int,
-    work_id: str,
+    work_ids: list[str],
     state: str,
 ) -> tuple[str | None, str | None, int | None]:
     """Validate status fields that are authoritative for the live coordination state."""
     if (
         status.get("issue_number") != issue_number
-        or status.get("work_id") != work_id
+        or status.get("work_id") not in work_ids
         or status.get("state") != state
     ):
         raise RoadmapError(f"issue #{issue_number}: trusted status disagrees with live issue")
@@ -460,7 +471,8 @@ def sync(
 
         trusted = status_record(repo, number, token)
         if trusted is not None:
-            state = status_state(trusted, issue_number=number, work_id=contract["work_id"])
+            work_ids = contract_status_identities(contract)
+            state = status_state(trusted, issue_number=number, work_ids=work_ids)
             trusted_by_issue[number] = trusted
         else:
             state = state_from_labels(issue, number)
@@ -490,7 +502,7 @@ def sync(
             claimant, status_branch, status_linked_pr = validate_live_status(
                 trusted,
                 issue_number=number,
-                work_id=contract["work_id"],
+                work_ids=contract_status_identities(contract),
                 state=state,
             )
             linked_pr = status_linked_pr
