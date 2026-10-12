@@ -1,8 +1,9 @@
 # Competitive overlap regression review — 2026-08-28
 
 **Work ID:** COMP-001 / issue #182  
-**Review date:** 2026-08-28  
-**Repository baseline:** `fbdb74db7080a078c945506a6c759305f4cd1f78`  
+**Original review date:** 2026-08-28
+**Current Veritas baseline:** `349af80fd4d0cb657fb3c32e080f88e3644c0907`
+**Last updated:** 2026-10-12 (Veritas roadmap and MachineExperience refresh; Prime v1 source recheck)
 **Scope:** NeMo Gym, Prime Intellect Verifiers, OpenEnv, Harbor, HUD, and directly overlapping public benchmark/evaluation surfaces.
 
 ## Evidence policy
@@ -109,7 +110,7 @@ Current v1 documentation also makes the environment responsible for multi-agent 
 
 Veritas should make required harness capabilities machine-readable and reject unsupported task/harness combinations before execution. HARNESS-001 (#176) owns behavioral declarations and HARNESS-002 (#177) owns adapters; extend that contract to capability negotiation rather than creating a parallel harness registry. ACTOR-001 (#269) already requires multi-actor capability negotiation, so this fits an existing semantic owner.
 
-**FOLLOW UP — environment-owned simulated actors and multi-agent control flow.**
+**ADOPT — environment-owned simulated actors and multi-agent control flow.**
 
 Prime's user simulation is an environment actor with observable, trace-bound interaction, not just a harness feature. ACTOR-001 (#269) is the existing owner: it places actor semantics in the executable world, covers communication/control-flow identity, trace capture, and task/harness capability negotiation. Keep the Veritas implementation scoped to that contract and its acceptance criteria; this is a semantic capability, not a parity target.
 
@@ -127,7 +128,7 @@ Prime is a distribution and training consumer, not a reason for Veritas to own `
 
 **INTEGRATE — harnesses through conformance, not copied implementations.**
 
-HARNESS-001 (#176, active PR #259) should define the behavioral declaration. HARNESS-002 (#177) should then support a small buyer-relevant set deeply. Raw harness count is not a meaningful target.
+HARNESS-001 (#176; PR #259 merged 2026-08-29) defines the behavioral declaration. HARNESS-002 (#177) should support a small buyer-relevant set deeply. Raw harness count is not a meaningful target.
 
 **IGNORE — trainer parity.**
 
@@ -245,7 +246,7 @@ Native XLSX, SQLite, declarative infrastructure, rendered evidence corpora, GIS 
 
 ### Trajectories/reverification — **strong and strategically important**
 
-NeMo's reverify feature validates the category. Veritas should retain stronger append-only identity/history, version comparison, not-reverifiable states, and buyer-safe privacy behavior.
+NeMo's reverify feature validates the category. Since this report's original review, the Machine Experience foundation merged: `MachineExperience` wraps `TrajectoryV2` with learning-readiness, structured diagnostics, and visibility boundaries. It provides a canonical experience record for downstream learning and held-out transfer while preserving the trajectory as the execution/replay authority. It does not itself qualify training value or learning efficiency. Veritas should retain append-only identity/history, version comparison, not-reverifiable states, and buyer-safe privacy behavior.
 
 ### Diagnostics — **semantic foundation good; productization behind leaders**
 
@@ -253,11 +254,11 @@ NeMo BLADE and HUD's advertised failure analysis show the expected UX. DIAG-002 
 
 ### Developer experience — **improving, still a competitive execution gap**
 
-NeMo, Prime, OpenEnv, Harbor, and HUD all offer short scaffold/run loops. DX-003 (#172 / PR #261) materially narrows this gap with installable executable examples, but it is still under independent review as of this report. Do not report it as merged capability until it lands.
+NeMo, Prime, OpenEnv, Harbor, and HUD all offer short scaffold/run loops. DX-003 (#172 / PR #261, merged 2026-08-29) materially narrows this gap with installable executable examples. Keep building on those examples; do not describe the lane as awaiting review.
 
 ### Sandbox/harness breadth — **intentionally narrower; INTEGRATE**
 
-This is not a strategic defect if adapters are good. HARNESS-001/#176 and SANDBOX-001/#174 establish conformance/deep local implementations; HARNESS-002/#177 and SANDBOX-002/#175 should add small, demand-driven external coverage.
+This is not a strategic defect if adapters are good. HARNESS-001/#176 (PR #259, merged 2026-08-29) establishes the behavioral conformance contract. SANDBOX-001/#174 remains active in PR #263 for deep local implementations. HARNESS-002/#177 and SANDBOX-002/#175 should add small, demand-driven external coverage.
 
 ### Portability/conformance — **leading differentiation; EXCEED**
 
@@ -285,8 +286,8 @@ Strategic rank is not execution permission. The highest-value work is the assura
 
 ### Execution sequence from current roadmap state
 
-1. Complete independent review/merge of active additive lanes rather than starting duplicates: HARNESS-001 PR #259, SANDBOX-001 PR #263, DX-003 PR #261, plus any active trace audit lane.
-2. After HARNESS-001 merges, select 2–4 buyer-relevant harness families under HARNESS-002 (#177), based on actual demand rather than popularity.
+1. Complete independent review/merge of active additive lanes rather than starting duplicates: SANDBOX-001 PR #263 and any active trace audit lane.
+2. With HARNESS-001 merged, select 2–4 buyer-relevant harness families under HARNESS-002 (#177), based on actual demand rather than popularity.
 3. After SANDBOX-001 merges and an account/provider is available, prove exactly one remote backend under SANDBOX-002 (#175).
 4. Run Gold task/verifier QA and GOLD-002 (#178) before Gold scale-up; incorporate repeated oracle/reference checks, exploit regression, and independent audit.
 5. Advance DIAG-002 (#193) only when its semantic/harness dependencies are merged.
@@ -298,7 +299,8 @@ Strategic rank is not execution permission. The highest-value work is the assura
 No new roadmap ticket is justified by this review. The main externally visible competitor improvements already map to existing Veritas lanes:
 
 - verifier/reward-hack QA -> VQ-007 (merged PR #247) + GOLD-002 #178;
-- authoring ergonomics -> DX-003 #172 / PR #261;
+- authoring ergonomics -> merged DX-003 #172 / PR #261;
+- environment actors and task/harness capability negotiation -> ACTOR-001 #269;
 - harness breadth -> HARNESS-001 #176 -> HARNESS-002 #177;
 - sandbox breadth -> SANDBOX-001 #174 -> SANDBOX-002 #175;
 - diagnostic productization -> DIAG-002 #193;
@@ -349,7 +351,7 @@ No scoped open ticket was found that should be marked superseded solely because 
 
 ## Sources reviewed
 
-The original comparison was reviewed on **2026-08-28**. The Prime v1 follow-up below was rechecked on **2026-10-12**.
+The original competitor comparison was reviewed on **2026-08-28**. Veritas roadmap status and MachineExperience were refreshed on **2026-10-12**; the Prime v1 additions were rechecked on that date.
 
 ### NeMo Gym / NVIDIA
 
