@@ -387,8 +387,7 @@ jobs:
                   throw new Error('canonical agent review contains a blocking finding');
                 }
                 const findings = comments.filter((comment) =>
-                  Number(comment.pull_request_review_id) === Number(review.id) &&
-                  (!comment.commit_id || comment.commit_id === head)
+                  Number(comment.pull_request_review_id) === Number(review.id)
                 );
                 if (findings.length > 0) {
                   throw new Error(`canonical agent review ${review.id} has inline findings`);
@@ -402,8 +401,7 @@ jobs:
                 }
                 const findings = comments.filter((comment) =>
                   Number(comment.pull_request_review_id) === Number(review.id) &&
-                  comment.user?.login === login &&
-                  (!comment.commit_id || comment.commit_id === head)
+                  comment.user?.login === login
                 );
                 if (findings.length > 0) {
                   throw new Error(
@@ -662,8 +660,7 @@ jobs:
                 return;
               }
               const findings = reviewComments.filter((comment) =>
-                Number(comment.pull_request_review_id) === Number(review.id) &&
-                (!comment.commit_id || comment.commit_id === head)
+                Number(comment.pull_request_review_id) === Number(review.id)
               );
               if (findings.length > 0) {
                 core.setFailed(`canonical agent review ${review.id} has inline findings`);
@@ -679,8 +676,7 @@ jobs:
               }
               const findings = reviewComments.filter((comment) =>
                 Number(comment.pull_request_review_id) === Number(review.id) &&
-                comment.user?.login === login &&
-                (!comment.commit_id || comment.commit_id === head)
+                comment.user?.login === login
               );
               if (findings.length > 0) {
                 core.setFailed(`${login} semantic findings appeared before approval`);
