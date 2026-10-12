@@ -62,7 +62,7 @@ DONE means the coordination workflow accepted completion for the work item. Poli
 
 The current `agent-work-claims.yml` implementation is narrower than that policy. `/done` currently requires REVIEW state, the current holder relation, and a supplied PR that is merged. If `status.linked_pr` is already non-null, the supplied PR must match it. However, `/done` does **not** require `linked_pr` to be non-null and does not repeat the `/handoff` branch/issue/Work-ID checks. A bootstrapped REVIEW record with `linked_pr: null` can therefore reach DONE using a merged PR without proving that the earlier ordinary handoff validation occurred.
 
-The current workflow also does **not** evaluate the richer work-class completion rules tracked by ROADMAP-DONE-001 (#233). Until those owner-scoped extensions exist, a merged implementation PR can satisfy the current coordination command while still lacking scientific, Frontier, training, commercial, release, external/manual, or other class-specific evidence. Consumers must not infer those states from `work:done`.
+The current workflow also does **not** evaluate the richer work-class completion policy defined in [`docs/roadmap/completion-rules.md`](completion-rules.md), merged by PR #282; ROADMAP-DONE-001 (#233) tracks the corresponding automation. Until those owner-scoped extensions exist, a merged implementation PR can satisfy the current coordination command while still lacking scientific, Frontier, training, commercial, release, external/manual, or other class-specific evidence. Consumers must not infer those states from `work:done`.
 
 ### SUPERSEDED
 
@@ -116,7 +116,7 @@ The repository workflow parses only exact single-line commands and checks the au
 
 Commands outside their permitted source states are rejected rather than silently relabeling the issue. A malformed, multiline, unauthorized, non-holder, mismatched-branch, unresolved-PR, unmerged-PR, or otherwise invalid command must leave the canonical state unchanged.
 
-The table describes **current automation**, not the full completion policy. In particular, `/done` itself does not universally prove that ordinary `/handoff` validation occurred, and ROADMAP-DONE-001 (#233) owns the extension that makes completion depend on work class rather than treating a merged PR as sufficient for every class.
+The table describes **current automation**, not the full completion policy. In particular, `/done` itself does not universally prove that ordinary `/handoff` validation occurred, and the merged policy in [`docs/roadmap/completion-rules.md`](completion-rules.md) requires work-class-specific completion. ROADMAP-DONE-001 (#233) tracks implementation of that policy in automation.
 
 Current canonical-state resolution also has an explicit pre-status limitation: if there is no trusted bot status record, exactly one present `work:*` label is consumed as canonical state before the Work Contract state fallback. Thus ordinary command state checks are fail-closed relative to the state they resolve, but the provenance of that no-status label is not itself validated.
 
