@@ -406,8 +406,6 @@ class PortablePublicContract(FrozenContractModel):
             if "capability" in self.model_fields_set:
                 raise ValueError("portable schema 1.0.0 cannot contain capability metadata")
             payload.pop("capability", None)
-        elif "capability" not in self.model_fields_set:
-            raise ValueError("portable schema 1.1.0 requires capability metadata or null")
         return payload
 
 

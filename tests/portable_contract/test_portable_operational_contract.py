@@ -257,6 +257,18 @@ def test_schema_1_0_contract_bytes_and_identity_remain_loadable() -> None:
     assert "capability" not in restored.public.state.observation_schema["properties"]
 
 
+def test_schema_1_1_missing_binding_defaults_to_explicit_null() -> None:
+    current = compile_operational_episode(_episode())
+    public_payload = current.public.model_dump(mode="python")
+    public_payload.pop("capability")
+    public_payload["public_id"] = ""
+
+    restored = type(current.public).model_validate(public_payload)
+
+    assert restored.capability is None
+    assert json.loads(restored.canonical_bytes())["capability"] is None
+
+
 def test_source_provenance_matches_accepted_g02_candidate() -> None:
     provenance = compile_operational_episode(_episode()).public.provenance
 
