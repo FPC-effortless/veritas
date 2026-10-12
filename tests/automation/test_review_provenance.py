@@ -179,13 +179,20 @@ def test_canonical_same_account_agent_review_passes() -> None:
     assert "agent-session" in decision.reason
 
 
-def test_stale_head_reviews_do_not_carry_forward() -> None:
+def test_stale_head_reviews_do_not_carry_forward_even_with_inline_comment() -> None:
     decision = evaluate_reviews(
         pr_author="implementer",
         head_sha=HEAD,
         reviews=[
             _review(review_id=1, login="reviewer", commit_id=OLD_HEAD),
             _agent_review(review_id=2, commit_id=OLD_HEAD),
+        ],
+        review_comments=[
+            {
+                "pull_request_review_id": 2,
+                "commit_id": OLD_HEAD,
+                "body": "Finding on the stale review head.",
+            }
         ],
     )
     assert decision.ok is False
@@ -257,12 +264,13 @@ def test_blocking_agent_review_vetoes_clean_review() -> None:
     assert "blocking" in decision.reason
 
 
-def test_clean_agent_review_with_inline_finding_is_blocked() -> None:
+@pytest.mark.parametrize("comment_commit", [HEAD, OLD_HEAD, None])
+def test_clean_agent_review_with_inline_finding_is_blocked(comment_commit: str | None) -> None:
     review = _agent_review(review_id=7)
     comments = [
         {
             "pull_request_review_id": 7,
-            "commit_id": HEAD,
+            "commit_id": comment_commit,
             "body": "This invariant is not enforced.",
         }
     ]
@@ -271,6 +279,22 @@ def test_clean_agent_review_with_inline_finding_is_blocked() -> None:
         head_sha=HEAD,
         reviews=[review],
         review_comments=comments,
+    )
+    assert decision.ok is False
+    assert "inline finding" in decision.reason
+
+
+def test_clean_agent_review_with_inline_finding_without_commit_id_is_blocked() -> None:
+    decision = evaluate_reviews(
+        pr_author="implementer",
+        head_sha=HEAD,
+        reviews=[_agent_review(review_id=7)],
+        review_comments=[
+            {
+                "pull_request_review_id": 7,
+                "body": "This invariant is not enforced.",
+            }
+        ],
     )
     assert decision.ok is False
     assert "inline finding" in decision.reason
