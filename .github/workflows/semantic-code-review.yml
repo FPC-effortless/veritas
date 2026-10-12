@@ -320,6 +320,37 @@ jobs:
                 pull_number,
                 per_page: 100,
               });
+              const markerPrefix = '<!-- veritas-agent-review:';
+              const markerPattern = /^<!-- veritas-agent-review:v1 head=([0-9a-f]{40}) verdict=(clean|blocking) -->$/;
+              const markerLines = (body) => {
+                const candidates = [];
+                let fenceChar = null;
+                let fenceLength = 0;
+                for (const rawLine of body.split(/\r?\n/)) {
+                  if (fenceChar) {
+                    const close = rawLine.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
+                    if (close && close[1][0] === fenceChar && close[1].length >= fenceLength) {
+                      fenceChar = null;
+                      fenceLength = 0;
+                    }
+                    continue;
+                  }
+                  const open = rawLine.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+                  if (open) {
+                    fenceChar = open[1][0];
+                    fenceLength = open[1].length;
+                    continue;
+                  }
+                  if (rawLine.startsWith('\t') || /^ {4}/.test(rawLine)) continue;
+                  const stripped = rawLine.replace(/^ +/, '');
+                  if (stripped.startsWith('>')) continue;
+                  if (stripped.startsWith(markerPrefix)) candidates.push(stripped.trimEnd());
+                }
+                return candidates;
+              };
+              const canonicalReviews = reviews.filter((review) =>
+                typeof review.body === 'string' && markerLines(review.body).length > 0
+              );
               const semanticReviews = reviews.filter((review) =>
                 review.commit_id === head &&
                 review.state === 'COMMENTED' &&
@@ -332,6 +363,38 @@ jobs:
                 per_page: 100,
               });
               const clean = [];
+              for (const review of canonicalReviews) {
+                const markers = markerLines(review.body);
+                if (markers.length !== 1) {
+                  throw new Error('canonical agent review must contain exactly one standalone marker');
+                }
+                const match = markers[0].match(markerPattern);
+                if (!match || review.state !== 'COMMENTED') {
+                  throw new Error('canonical agent review marker is malformed or not COMMENTED');
+                }
+                const [, markerHead, verdict] = match;
+                if (!/^[0-9a-f]{40}$/.test(review.commit_id || '') || markerHead !== review.commit_id) {
+                  throw new Error('canonical agent review marker does not match its review commit');
+                }
+                if (review.commit_id !== head) continue;
+                if (!Number.isInteger(review.id) || review.id <= 0 ||
+                    typeof review.user?.login !== 'string' || !review.user.login.trim() ||
+                    !/^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/.test(review.submitted_at || '') ||
+                    Number.isNaN(Date.parse(review.submitted_at))) {
+                  throw new Error('canonical agent review metadata is incomplete or malformed');
+                }
+                if (verdict === 'blocking' || /\bBLOCKING\s*:/i.test(review.body)) {
+                  throw new Error('canonical agent review contains a blocking finding');
+                }
+                const findings = comments.filter((comment) =>
+                  Number(comment.pull_request_review_id) === Number(review.id) &&
+                  (!comment.commit_id || comment.commit_id === head)
+                );
+                if (findings.length > 0) {
+                  throw new Error(`canonical agent review ${review.id} has inline findings`);
+                }
+                clean.push(`${review.user.login}:canonical-review:${review.id}`);
+              }
               for (const review of semanticReviews) {
                 const login = review.user.login;
                 if (/\bBLOCKING\s*:/i.test(review.body || '')) {
@@ -391,7 +454,7 @@ jobs:
             }
             if (semanticEvidence.length === 0) {
               core.setFailed(
-                'no clean exact-head semantic evidence arrived from GitHub Copilot or OpenAI Codex',
+                'no clean exact-head semantic evidence arrived from a supported provider or canonical agent review',
               );
               return;
             }
@@ -540,6 +603,74 @@ jobs:
               per_page: 100,
             });
             const evidence = [];
+            const markerPrefix = '<!-- veritas-agent-review:';
+            const markerPattern = /^<!-- veritas-agent-review:v1 head=([0-9a-f]{40}) verdict=(clean|blocking) -->$/;
+            const markerLines = (body) => {
+              const candidates = [];
+              let fenceChar = null;
+              let fenceLength = 0;
+              for (const rawLine of body.split(/\r?\n/)) {
+                if (fenceChar) {
+                  const close = rawLine.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
+                  if (close && close[1][0] === fenceChar && close[1].length >= fenceLength) {
+                    fenceChar = null;
+                    fenceLength = 0;
+                  }
+                  continue;
+                }
+                const open = rawLine.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+                if (open) {
+                  fenceChar = open[1][0];
+                  fenceLength = open[1].length;
+                  continue;
+                }
+                if (rawLine.startsWith('\t') || /^ {4}/.test(rawLine)) continue;
+                const stripped = rawLine.replace(/^ +/, '');
+                if (stripped.startsWith('>')) continue;
+                if (stripped.startsWith(markerPrefix)) candidates.push(stripped.trimEnd());
+              }
+              return candidates;
+            };
+            for (const review of reviews) {
+              if (typeof review.body !== 'string') continue;
+              const markers = markerLines(review.body);
+              if (markers.length === 0) continue;
+              if (markers.length !== 1) {
+                core.setFailed('canonical agent review must contain exactly one standalone marker');
+                return;
+              }
+              const match = markers[0].match(markerPattern);
+              if (!match || review.state !== 'COMMENTED') {
+                core.setFailed('canonical agent review marker is malformed or not COMMENTED');
+                return;
+              }
+              const [, markerHead, verdict] = match;
+              if (!/^[0-9a-f]{40}$/.test(review.commit_id || '') || markerHead !== review.commit_id) {
+                core.setFailed('canonical agent review marker does not match its review commit');
+                return;
+              }
+              if (review.commit_id !== head) continue;
+              if (!Number.isInteger(review.id) || review.id <= 0 ||
+                  typeof review.user?.login !== 'string' || !review.user.login.trim() ||
+                  !/^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/.test(review.submitted_at || '') ||
+                  Number.isNaN(Date.parse(review.submitted_at))) {
+                core.setFailed('canonical agent review metadata is incomplete or malformed');
+                return;
+              }
+              if (verdict === 'blocking' || /\bBLOCKING\s*:/i.test(review.body)) {
+                core.setFailed('canonical agent review contains a blocking finding');
+                return;
+              }
+              const findings = reviewComments.filter((comment) =>
+                Number(comment.pull_request_review_id) === Number(review.id) &&
+                (!comment.commit_id || comment.commit_id === head)
+              );
+              if (findings.length > 0) {
+                core.setFailed(`canonical agent review ${review.id} has inline findings`);
+                return;
+              }
+              evidence.push(`${review.user.login}:canonical-review:${review.id}`);
+            }
             for (const review of semanticReviews) {
               const login = review.user.login;
               if (/\bBLOCKING\s*:/i.test(review.body || '')) {
