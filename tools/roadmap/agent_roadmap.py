@@ -251,7 +251,6 @@ def parse_contract(body: str, issue: int) -> dict[str, Any]:
         "branch",
         "positive_ownership",
         "negative_ownership",
-        "linked_pr",
     }
     missing = sorted(required - fields.keys())
     if missing:
@@ -261,7 +260,9 @@ def parse_contract(body: str, issue: int) -> dict[str, Any]:
     ids = [part.strip() for part in fields["work_id"].split("/") if part.strip()]
     if not ids:
         raise RoadmapError(f"issue #{issue}: empty Work ID")
-    linked = REF_RE.search(fields["linked_pr"])
+    # The body-level PR is only a fallback. Trusted live status is fetched later
+    # and remains authoritative for CLAIMED/REVIEW linkage.
+    linked = REF_RE.search(fields.get("linked_pr", "none"))
     paths = sorted(
         {
             token.strip()

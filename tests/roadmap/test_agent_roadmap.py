@@ -312,6 +312,7 @@ def test_sync_rejects_active_issue_without_trusted_status(
 ) -> None:
     current = manifest(row("A", 1, state="CLAIMED"))
     issue_a = issue(1, "A", "CLAIMED", "none")
+    issue_a["body"] = issue_a["body"].replace("- **Linked PR:** none\n", "")
     monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
     monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
 
@@ -320,6 +321,47 @@ def test_sync_rejects_active_issue_without_trusted_status(
         match="missing trusted coordination status",
     ):
         roadmap.sync(current, "FPC-effortless/veritas", None)
+
+
+def test_trusted_review_status_supplies_linkage_when_contract_omits_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1))
+    issue_a = issue(1, "A", "READY", "none")
+    issue_a["body"] = issue_a["body"].replace("- **Linked PR:** none\n", "")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(
+        roadmap,
+        "status_record",
+        lambda *_: status(
+            1,
+            "A",
+            "REVIEW",
+            agent="agent-a",
+            branch="feat/a",
+            linked_pr=42,
+        ),
+    )
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+
+    assert synced["work"][0]["state"] == "REVIEW"
+    assert synced["work"][0]["linked_pr"] == 42
+
+
+def test_ready_contract_without_body_pr_link_uses_no_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    current = manifest(row("A", 1))
+    issue_a = issue(1, "A", "READY", "none")
+    issue_a["body"] = issue_a["body"].replace("- **Linked PR:** none\n", "")
+    monkeypatch.setattr(roadmap, "fetch_issues", lambda *_: [issue_a])
+    monkeypatch.setattr(roadmap, "status_record", lambda *_: None)
+
+    synced = roadmap.sync(current, "FPC-effortless/veritas", None)
+
+    assert synced["work"][0]["state"] == "READY"
+    assert synced["work"][0]["linked_pr"] is None
 
 
 def test_sync_rejects_active_status_without_holder(
