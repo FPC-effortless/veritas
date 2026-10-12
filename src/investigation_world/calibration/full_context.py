@@ -3,25 +3,29 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from math import isfinite
 from statistics import mean
 from typing import Any
 
 from investigation_world.benchmark.policies import PublicEvidenceReferencePolicy
-from investigation_world.companyworld.dynamic_reference import run_dynamic_public_reference
-from investigation_world.companyworld.dynamic_runtime import DynamicCompanyWorldRuntime
-from investigation_world.companyworld.interactive_models import OperationalAction, OperationalActionType
-from investigation_world.companyworld.interactive_reference import solve_interactive_public
-from investigation_world.companyworld.interactive_runtime import InteractiveCompanyWorldRuntime
-from investigation_world.companyworld.sequential_reference import solve_sequential_public
-from investigation_world.companyworld.sequential_runtime import SequentialCompanyWorldRuntime
-from investigation_world.companyworld.verifier import verify_companyworld
-from investigation_world.core.models import InvestigationResult
 from investigation_world.calibration.fixtures import (
     diagnostic_fixture,
     dynamic_fixture,
     interactive_fixture,
     sequential_fixture,
 )
+from investigation_world.companyworld.dynamic_reference import run_dynamic_public_reference
+from investigation_world.companyworld.dynamic_runtime import DynamicCompanyWorldRuntime
+from investigation_world.companyworld.interactive_models import (
+    OperationalAction,
+    OperationalActionType,
+)
+from investigation_world.companyworld.interactive_reference import solve_interactive_public
+from investigation_world.companyworld.interactive_runtime import InteractiveCompanyWorldRuntime
+from investigation_world.companyworld.sequential_reference import solve_sequential_public
+from investigation_world.companyworld.sequential_runtime import SequentialCompanyWorldRuntime
+from investigation_world.companyworld.verifier import verify_companyworld
+from investigation_world.core.models import InvestigationResult
 
 GenerateFn = Callable[[str], str]
 
@@ -308,6 +312,98 @@ def empty_anchors() -> dict[str, dict[str, float]]:
     }
 
 
+def render_calibration_anchor_report() -> str:
+    """Render the committed, deterministic CompanyWorld anchor report."""
+    empty = empty_anchors()
+    reference = reference_anchors()
+    rows = [
+        f"| {label} | {empty[level]['mean']:.3f} | "
+        f"{reference[level]['mean']:.3f} | {interpretation} |"
+        for level, label, interpretation in (
+            (
+                "diagnostic",
+                "Diagnostic investigation",
+                "No-work gets no factual or evidence credit.",
+            ),
+            (
+                "interactive",
+                "Interactive action",
+                "0.050 authority compliance + 0.050 budget efficiency are always-on "
+                "with no unauthorized actions and no budget spent.",
+            ),
+            (
+                "sequential",
+                "Sequential control",
+                "0.080 authority + 0.070 sequence efficiency remain with no actions, "
+                "ticks, violations, or unauthorized attempts.",
+            ),
+            (
+                "dynamic",
+                "Dynamic portfolio control",
+                "No-op raw subtotal is 0.400; the zero-success ceiling caps it at 0.250.",
+            ),
+        )
+    ]
+    return "\n".join(
+        [
+            "# CompanyWorld v0.1 calibration anchor report",
+            "",
+            "## Scope",
+            "",
+            "This report resolves the no-work baseline semantics for the deterministic public "
+            "calibration fixtures. It reports calibration anchors only; it contains no model "
+            "evaluation and makes no customer performance claim.",
+            "",
+            "## Calibration anchors",
+            "",
+            "| Capability level | Empty-anchor mean | Public-reference mean | Interpretation |",
+            "| --- | ---: | ---: | --- |",
+            *rows,
+            "",
+            "The higher-level nonzero values are intentional verifier semantics. They reflect "
+            "compliance/efficiency terms which can be satisfied without task progress; they are "
+            "not evidence of capability. The dynamic 0.250 is additionally enforced by the "
+            "no-success reward ceiling. For the seed-7 dynamic fixture, all approval outcomes "
+            "are `APPROVED`, so the no-denial uncertainty-recovery default contributes 0.100. "
+            "No verifier or runtime scoring behavior is changed by this calibration correction.",
+            "",
+            "## Buyer comparison rule",
+            "",
+            "For each level, define:",
+            "",
+            "```text",
+            "net_reward = model_mean - empty_anchor_mean",
+            "normalized_reward = clamp(net_reward / "
+            "(reference_anchor_mean - empty_anchor_mean), 0, 1)",
+            "```",
+            "",
+            "The denominator must be finite and strictly positive. Missing, malformed, non-finite, "
+            "or non-separating anchors fail closed. Reports show raw reward for diagnosis, plus "
+            "the empty/reference means, net reward, and normalized reward. Raw reward is not a "
+            "buyer comparison metric and must not be compared across capability levels. Overall "
+            "capability is the unweighted mean of the four level-specific normalized rewards.",
+            "",
+            "The fixture's public-reference policy yields a mean of 1.000 at each level, so each "
+            "denominator is positive. The fixed empty/reference anchor regression tests lock all "
+            "four level values and the buyer-report tests lock fail-closed handling and "
+            "normalized calculations.",
+            "",
+            "Each `run_full_context_calibration()` result also exposes a `calibration_metrics` "
+            "object keyed by the four levels. Every entry contains `empty_anchor_mean`, "
+            "`reference_anchor_mean`, `net_reward`, and `normalized_reward`; raw model reward "
+            "remains available in `model_scores`. This additive calibration JSON shape is "
+            "versioned as `0.2.0` and uses the same fixture anchors included in that result.",
+            "",
+            "## Limitations",
+            "",
+            "These are small public calibration fixtures, not a private procurement panel. This "
+            "report does not establish benchmark qualification, production-agent performance, "
+            "uncertainty intervals, or commercial readiness. Use a same-build private stratified "
+            "evaluation with repeated attempts for buyer decisions.",
+        ]
+    ) + "\n"
+
+
 def run_full_context_calibration(
     generate: GenerateFn,
     *,
@@ -326,13 +422,37 @@ def run_full_context_calibration(
         model_scores[level] = _stats(scores)
         parse_failures[level] = failures
 
+    empty = empty_anchors()
+    reference = reference_anchors()
+    calibration_metrics: dict[str, dict[str, float]] = {}
+    for level, level_stats in model_scores.items():
+        model_mean = level_stats["mean"]
+        empty_mean = empty[level]["mean"]
+        reference_mean = reference[level]["mean"]
+        if not all(isfinite(value) for value in (model_mean, empty_mean, reference_mean)):
+            raise ValueError(f"{level} calibration metrics must be finite")
+        if not 0.0 <= empty_mean < reference_mean <= 1.0:
+            raise ValueError(f"{level} anchors must satisfy 0 <= empty < reference <= 1")
+        if not 0.0 <= model_mean <= 1.0:
+            raise ValueError(f"{level} model mean must be between 0 and 1")
+        denominator = reference_mean - empty_mean
+        calibration_metrics[level] = {
+            "empty_anchor_mean": empty_mean,
+            "reference_anchor_mean": reference_mean,
+            "net_reward": model_mean - empty_mean,
+            "normalized_reward": max(
+                0.0, min(1.0, (model_mean - empty_mean) / denominator)
+            ),
+        }
+
     return {
-        "schema_version": "0.1.0",
+        "schema_version": "0.2.0",
         "mode": "full_context_plan",
         "model": model_name,
         "episodes": {"diagnostic": 3, "interactive": 3, "sequential": 3, "dynamic": 1},
         "model_scores": model_scores,
-        "reference_anchors": reference_anchors(),
-        "empty_anchors": empty_anchors(),
+        "reference_anchors": reference,
+        "empty_anchors": empty,
+        "calibration_metrics": calibration_metrics,
         "parse_failures": parse_failures,
     }
