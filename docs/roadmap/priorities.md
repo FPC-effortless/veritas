@@ -24,6 +24,19 @@ Each roadmap item should expose the following fields when represented in a gener
 
 `strategic_rank` may be used instead of `strategic_priority` when an existing representation requires a numeric ordering, but it has exactly the same semantics: value ordering only, never readiness.
 
+## Mapping to the active roadmap schema
+
+Where existing roadmap records use `strategic_rank`, `state`, `wave`, and `program`, preserve those names and map their meaning as follows:
+
+| Active field | Meaning in this policy |
+| --- | --- |
+| `strategic_rank` | `strategic_priority`; strategic ordering only |
+| `state` | `execution_state`; live coordination/execution state |
+| `wave` | `parallel_wave`; grouping metadata, not proof of safe concurrency |
+| `program` | Program membership; planning context, not a readiness or authorization signal |
+
+Views may expose friendlier aliases such as `execution_state`, but must retain a traceable mapping to the source field and must not create a second independently editable state value.
+
 ## Strategic priority
 
 Strategic priority expresses expected leverage or importance if the work is successfully completed. It may reflect product value, scientific leverage, buyer value, risk reduction, dependency leverage, or another explicitly documented strategic criterion.
@@ -74,7 +87,7 @@ When choosing among multiple READY items of similar strategic value, critical-pa
 
 `parallel_wave` groups work that belongs to the same execution or program wave. It helps render independent lanes and identify possible concurrency, but it does not prove that two items can run in parallel.
 
-Before concurrent execution, the normal repository checks still apply: no dependency edge between the lanes, disjoint positive ownership, no negative-ownership conflict, no shared/root integration conflict, and provider/schema work preceding dependent consumers where required.
+Before concurrent execution, the normal repository checks still apply: no **unsatisfied claim-blocking dependency edge** between the lanes, disjoint positive ownership, no negative-ownership conflict, no shared/root integration conflict, and provider/schema work preceding dependent consumers where required. A satisfied edge, non-blocking relationship, or dependency explicitly deferred to later convergence does not by itself serialize otherwise-ready work. `parallel_wave` alone cannot establish which kind of edge applies.
 
 ## Effort and risk
 
@@ -99,6 +112,8 @@ candidates = candidates that still pass live dependency + ownership + concurrenc
 order candidates using strategic_priority, critical_path, wave/program context, risk/effort, and task-specific policy
 claim exactly one lane through the coordination protocol before editing
 ```
+
+Live coordination state comes from the latest trusted `github-actions[bot]` status comment and its corresponding `work:*` label, under [`docs/automation/agent-work-claims.md`](../automation/agent-work-claims.md). Record the status source and observation time when producing a roadmap snapshot. If the status is missing, stale for the consumer's declared freshness window, or contradictory with labels/PR/claim evidence, represent the state as `UNKNOWN`/non-claimable until reconciled; do not infer READY from old data. The claim workflow does not currently consume strategic priority, wave/program metadata, or evaluate a dependency DAG. These fields are planning inputs for humans and future conforming selectors; they do not change `/claim` behavior today.
 
 The inverse is forbidden:
 
