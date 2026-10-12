@@ -107,11 +107,11 @@ Current v1 documentation also makes the environment responsible for multi-agent 
 
 **ADOPT — explicit task↔harness capability compatibility.**
 
-Veritas should make required harness capabilities machine-readable and reject unsupported task/harness combinations before execution. HARNESS-001 (#176) owns behavioral declarations and HARNESS-002 (#177) owns adapters; extend that contract to capability negotiation rather than creating a parallel harness registry.
+Veritas should make required harness capabilities machine-readable and reject unsupported task/harness combinations before execution. HARNESS-001 (#176) owns behavioral declarations and HARNESS-002 (#177) owns adapters; extend that contract to capability negotiation rather than creating a parallel harness registry. ACTOR-001 (#269) already requires multi-actor capability negotiation, so this fits an existing semantic owner.
 
 **FOLLOW UP — environment-owned simulated actors and multi-agent control flow.**
 
-Prime's user simulation is an environment actor with observable, trace-bound interaction, not just a harness feature. No current Veritas ticket owns environment-side simulated actor execution and its control-flow/evidence semantics. Record a narrow architecture follow-up to decide whether Veritas needs this contract, bounded to environments that actually require interactive user simulation or coordinated agents. This is a semantic ownership gap, not a parity target.
+Prime's user simulation is an environment actor with observable, trace-bound interaction, not just a harness feature. ACTOR-001 (#269) is the existing owner: it places actor semantics in the executable world, covers communication/control-flow identity, trace capture, and task/harness capability negotiation. Keep the Veritas implementation scoped to that contract and its acceptance criteria; this is a semantic capability, not a parity target.
 
 **ADOPT — trace-first scoring as an interoperability principle.**
 
