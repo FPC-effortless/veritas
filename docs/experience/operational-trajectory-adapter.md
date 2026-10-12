@@ -495,16 +495,27 @@ operates under.
 
 ## 8. Stop conditions
 
-The Work Contract named five potential stop conditions. Four were resolved as design decisions;
-one was resolved by verification. None of them stopped the work.
+The Work Contract named five potential stop conditions. Stop condition 3 is triggered by
+independent review: `NativeOperationalRuntime.submit()` adds native-artifact assertions to the
+scored oracle state without corresponding `ActionEvent.state_changes`. The G-03 contract
+requires stopping and reporting this mismatch rather than treating the native adapter as
+verified. The native-runtime round-trip criterion remains unmet, and this lane must not be
+marked complete until a separately owned change makes the scored state reconstructible from the
+recorded trajectory or the contract is revised by its owner.
 
 | # | Condition | Resolution |
 |---|---|---|
 | 1 | State-digest scope: operational state is seeded from private oracle state | **Resolved by decision.** Default `StateDigestScope.SEMANTIC`, not the legacy `PUBLIC_SEMANTIC`, with caller-supplied digests winning. Follows the reviewer recommendation recorded in the contract's Unresolved §1: do not silently downgrade a private-seeded state to a public-scope digest. |
 | 2 | Verifier identity may not be statically resolvable | **Resolved by verification.** The git blob sha1 of `operational/verifier.py` matches `SOURCE_VERIFIER_BLOB` exactly, so `current_operational_verifier_binding()` constructs and the default identity is the authorized one. No stop. |
-| 3 | `NativeOperationalRuntime` mutates oracle state before scoring | **Resolved by decision, with one scope limit recorded.** No per-runtime branching: the mutation happens before `super().submit()` scores, so the caller's breakdown describes the recorded events and one code path adapts both runtimes. The limit is that the same mutation makes the replay state chain unequal for the native runtime — its `native_artifact.*` keys are not any `ActionEvent`'s `state_changes` — so replay reverification is asserted for `OperationalRuntime` only, and criterion 9 asserts shared adaptation for the native runtime. |
+| 3 | `NativeOperationalRuntime` mutates oracle state before scoring | **Triggered; stop and report.** Submit-time `native_artifact.*` assertions affect the breakdown but are absent from the recorded `ActionEvent.state_changes`. The native replay state therefore cannot be reconstructed from the trajectory. Do not claim native reverification, branch the adapter by runtime, or remove the native checks in this lane. |
 | 4 | Resource-call convention may differ for operational actions | **Resolved by decision.** `_resource_id` / `_resource_call` resolve on the emitted payload shape, so they are reused. No second convention, no new helper. |
 | 5 | The reverify engine may require a payload shape the adapter cannot emit | **Resolved by inspection.** The engine's decoders accept exactly the shape §2.3 emits, confirmed against the decoder source and asserted by round-trip test. |
+
+Independent exact-head review also found that the default `initial_state` digest currently hashes
+`runtime.state_snapshot()` after execution, the same current snapshot used for `final_state`.
+When callers omit `initial_state_digest`, the initial digest therefore does not represent the
+episode's initial state. This defect remains unresolved; it must be corrected and regression-
+tested within the G-03 owned files after the stop-condition dependency is addressed.
 
 ## 9. Deferred, explicitly
 
