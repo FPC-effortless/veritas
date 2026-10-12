@@ -566,5 +566,5 @@ def test_sync_released_blocked_status_clears_stale_holder(
     synced = roadmap.sync(current, "FPC-effortless/veritas", None)
     entry = synced["work"][0]
     assert entry["claimant"] is None
-    assert entry["branch"] == "feat/a"
+    assert entry["branch"] is None
     assert entry["linked_pr"] is None
