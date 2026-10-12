@@ -7,7 +7,6 @@ from investigation_world.foundry.capability_families import (
 )
 from investigation_world.operational.models import (
     ActionKind,
-    CapabilityBinding,
     HiddenActionEffect,
     HiddenOracle,
     OperationalEpisode,
@@ -222,7 +221,27 @@ def build_investigation_osint_world(seed: int = 42) -> OperationalEpisode:
     )
     return OperationalEpisode(
         episode_id=f"ep-{task_id}", world_id=world_id,
-        task=TaskContract(task_id=task_id, world_id=world_id, domain=WorldDomain.INVESTIGATION_OSINT, objective="Resolve which person the abbreviated director name refers to using public evidence while avoiding a false identity merge.", role="investigative_analyst", permitted_systems=["REGISTRY", "ARCHIVE", "DIRECTORY", "CASEFILE"], available_actions=actions, constraints=["Evidence-backed identity resolution", "Preserve ambiguity until resolved", "Maintain provenance"], success_description="The identity is resolved to the supported person with a complete evidence chain and no false merge."),
+        task=TaskContract(
+            task_id=task_id,
+            world_id=world_id,
+            domain=WorldDomain.INVESTIGATION_OSINT,
+            objective=(
+                "Resolve which person the abbreviated director name refers to using "
+                "public evidence while avoiding a false identity merge."
+            ),
+            role="investigative_analyst",
+            permitted_systems=["REGISTRY", "ARCHIVE", "DIRECTORY", "CASEFILE"],
+            available_actions=actions,
+            constraints=[
+                "Evidence-backed identity resolution",
+                "Preserve ambiguity until resolved",
+                "Maintain provenance",
+            ],
+            success_description=(
+                "The identity is resolved to the supported person with a complete "
+                "evidence chain and no false merge."
+            ),
+        ),
         records=records, oracle=oracle,
         metadata={"family": "investigation_osint", "bridge": "existing_investigation_world"},
         # The only catalog episode with an investigation-shaped objective. Binding it to the

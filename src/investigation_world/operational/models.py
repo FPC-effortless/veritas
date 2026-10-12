@@ -407,7 +407,8 @@ class OperationalEpisode(BaseModel):
         # advisory contract↔oracle coverage check is recorded as `binding_gaps` at the explicit
         # construction site (`capability_binding_from_contract`), not re-run here: re-running it
         # could only either raise on a gap this lane is required to record, or duplicate a
-        # result already carried on the binding. See `docs/experience/operational-capability-binding.md`.
+        # result already carried on the binding. See
+        # `docs/experience/operational-capability-binding.md`.
         return self
 
     def public_payload(self) -> dict[str, Any]:
