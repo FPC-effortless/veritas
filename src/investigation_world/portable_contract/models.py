@@ -106,6 +106,18 @@ class PortableTaskIdentity(FrozenContractModel):
     domain: str
 
 
+class PortableCapabilityBinding(FrozenContractModel):
+    capability_id: str = Field(min_length=1)
+    content_digest: str = Field(pattern=r"^CCONTRACT-[0-9A-F]{20}$")
+    binding_gaps: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_capability_id(self) -> "PortableCapabilityBinding":
+        if not self.capability_id.strip():
+            raise ValueError("capability binding requires a non-empty capability_id")
+        return self
+
+
 class PortableStateAssertion(FrozenContractModel):
     object_id: str
     field_name: str
@@ -362,6 +374,7 @@ class PortablePublicContract(FrozenContractModel):
     permitted_systems: tuple[str, ...]
     constraints: tuple[str, ...]
     success_description: str
+    capability: PortableCapabilityBinding | None = None
     task_metadata: dict[str, Any]
     episode_metadata: dict[str, Any]
     state: PortableStateContract

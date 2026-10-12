@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from investigation_world.operational.models import (
     ActionKind,
     AssertionComparison,
+    CapabilityBinding,
     HiddenActionEffect,
     HiddenOracle,
     OperationalEpisode,
@@ -18,6 +19,7 @@ from investigation_world.operational.models import (
 )
 from investigation_world.portable_contract import (
     PortableBudgetContract,
+    PortableCapabilityBinding,
     PortableOperationalContract,
     PortableResourceLimit,
     SemanticRoundTripError,
@@ -186,6 +188,40 @@ def test_contract_identity_and_bytes_are_deterministic() -> None:
     assert serialize_portable_contract(first) == serialize_portable_contract(second)
     assert serialize_public_contract(first) == serialize_public_contract(second)
     assert first.private.reset_identity == second.private.reset_identity
+
+
+def test_capability_binding_is_carried_as_public_content() -> None:
+    episode = _episode()
+    episode.capability = CapabilityBinding(
+        capability_id="external-investigation",
+        content_digest="CCONTRACT-91A20E2ED9D0445EE997",
+        binding_gaps=("osi-no-false-merge",),
+    )
+
+    contract = compile_operational_episode(episode)
+    public_payload = json.loads(serialize_public_contract(contract))
+    restored = PortableOperationalContract.model_validate_json(
+        serialize_portable_contract(contract)
+    )
+
+    assert contract.public.capability == PortableCapabilityBinding(
+        capability_id="external-investigation",
+        content_digest="CCONTRACT-91A20E2ED9D0445EE997",
+        binding_gaps=("osi-no-false-merge",),
+    )
+    assert public_payload["capability"] == {
+        "capability_id": "external-investigation",
+        "content_digest": "CCONTRACT-91A20E2ED9D0445EE997",
+        "binding_gaps": ["osi-no-false-merge"],
+    }
+    assert restored.public.capability == contract.public.capability
+
+
+def test_unbound_episode_has_explicit_absent_public_binding() -> None:
+    contract = compile_operational_episode(_episode())
+
+    assert contract.public.capability is None
+    assert json.loads(serialize_public_contract(contract))["capability"] is None
 
 
 def test_private_semantic_changes_change_full_identity_not_public_identity() -> None:
