@@ -101,7 +101,17 @@ Prime Verifiers has moved new environment work to v1, organized around `Taskset`
 
 The v1 runtime surface explicitly separates where a harness runs from the task definition, and Prime's broader stack connects the same environment layer to evaluation, prime-rl, the Environments Hub, and hosted training.
 
+Current v1 documentation also makes the environment responsible for multi-agent behavior: it owns the agents, their control flow, and cross-agent rewards. Its `user_sim` environment models the user as another agent and records both sides in the trace. Task tool requirements are checked against harness capabilities (for example, MCP support), and harnesses declare capabilities such as system-prompt appending, MCP, and resume support. These are meaningful environment-actor and task↔harness compatibility semantics, beyond the generic Taskset/Harness/Runtime/Trace composition summarized above.
+
 ### Disposition
+
+**ADOPT — explicit task↔harness capability compatibility.**
+
+Veritas should make required harness capabilities machine-readable and reject unsupported task/harness combinations before execution. HARNESS-001 (#176) owns behavioral declarations and HARNESS-002 (#177) owns adapters; extend that contract to capability negotiation rather than creating a parallel harness registry.
+
+**FOLLOW UP — environment-owned simulated actors and multi-agent control flow.**
+
+Prime's user simulation is an environment actor with observable, trace-bound interaction, not just a harness feature. No current Veritas ticket owns environment-side simulated actor execution and its control-flow/evidence semantics. Record a narrow architecture follow-up to decide whether Veritas needs this contract, bounded to environments that actually require interactive user simulation or coordinated agents. This is a semantic ownership gap, not a parity target.
 
 **ADOPT — trace-first scoring as an interoperability principle.**
 
@@ -339,7 +349,7 @@ No scoped open ticket was found that should be marked superseded solely because 
 
 ## Sources reviewed
 
-All sources below were reviewed on **2026-08-28**.
+The original comparison was reviewed on **2026-08-28**. The Prime v1 follow-up below was rechecked on **2026-10-12**.
 
 ### NeMo Gym / NVIDIA
 
@@ -355,6 +365,8 @@ All sources below were reviewed on **2026-08-28**.
 - Verifiers v1 overview: https://github.com/PrimeIntellect-ai/verifiers/blob/main/docs/overview.md
 - Verifiers v1 tasksets: https://github.com/PrimeIntellect-ai/verifiers/blob/main/docs/v1/tasksets.md
 - Verifiers evaluation reference: https://github.com/PrimeIntellect-ai/verifiers/blob/main/skills/evaluate-environments/references/REFERENCE.md
+- Verifiers v1 user-sim environment: https://github.com/PrimeIntellect-ai/verifiers/blob/main/verifiers/v1/envs/user_sim/env.py
+- Verifiers v1 harness capabilities: https://github.com/PrimeIntellect-ai/verifiers/blob/main/docs/v1/harnesses.md
 
 ### OpenEnv
 
