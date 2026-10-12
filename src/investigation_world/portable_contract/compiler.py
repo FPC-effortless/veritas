@@ -22,6 +22,7 @@ from investigation_world.operational.models import (
 from investigation_world.portable_contract.errors import UnsupportedOperationalSemanticError
 from investigation_world.portable_contract.identity import content_id, normalize_json_value
 from investigation_world.portable_contract.models import (
+    PORTABLE_CONTRACT_SCHEMA_VERSION,
     InteractionMode,
     PortableActionDefinition,
     PortableBudgetContract,
@@ -53,10 +54,10 @@ from investigation_world.portable_contract.validation import (
     assert_operational_semantic_equivalence,
 )
 
-CONTRACT_SCHEMA_VERSION = "1.0.0"
+CONTRACT_SCHEMA_VERSION = PORTABLE_CONTRACT_SCHEMA_VERSION
 COMPILER_ID = "investigation_world.portable_contract.compile_operational_episode"
 COMPILER_VERSION = "1"
-SOURCE_COMMIT = "98500d7e081e48f8e291be51ba360ff851aa88fe"
+SOURCE_COMMIT = "4984253f5d31ab76190cb2cfff9873b5001ede23"
 SOURCE_MODEL_BLOB = "536f6b7981a8d3883182580be34f1bba1f22e398"
 SOURCE_RUNTIME_BLOB = "c82dfd6845a6f33f9bc636874d5cc23b59c37d3f"
 SOURCE_VERIFIER_BLOB = "37c344287cb19b8e22bd705235bcfab67989065e"
