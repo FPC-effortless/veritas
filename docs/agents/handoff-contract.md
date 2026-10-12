@@ -2,7 +2,9 @@
 
 This document defines the repository-native handoff record for roadmap work. Its purpose is to make a work item reconstructible from GitHub without relying on a chat transcript, local shell history, or another agent's memory.
 
-The issue Work Contract remains the authority for work ID, dependency state, branch, and path ownership. A handoff records evidence about one implementation head; it does not change the Work Contract or grant integration authority.
+The issue Work Contract declares the lane's intent and acceptance criteria. Once coordination starts, the latest trusted `github-actions[bot]` work-status record is execution authority for the active holder, branch, linked PR/head, `ownership_paths`, dependency/coordination state, and `return_state`. Treat prose comments and mutable Work Contract fields as declarations, not live execution state. A handoff records evidence about one implementation head; it does not change the Work Contract or grant integration authority.
+
+Completion criteria are governed by the merged canonical policy in [`docs/roadmap/completion-rules.md`](../roadmap/completion-rules.md). This document explains how to record and review evidence; it does not redefine work-class completion requirements.
 
 ## Branch and worktree discipline
 
@@ -23,6 +25,8 @@ If live GitHub state no longer matches the assignment, stop, release/reroute the
 
 A handoff comment or PR description must contain all of the following fields. Use `UNKNOWN`, `NOT RUN`, or `N/A` rather than omitting evidence.
 
+The record is a snapshot for one exact head, not a live status source. Keep the latest trusted bot status link and its timestamp alongside the snapshot; preserve prior records as history rather than editing them to look current.
+
 | Field | Required content |
 | --- | --- |
 | Work ID / issue | Canonical Work ID and linked roadmap issue |
@@ -31,16 +35,16 @@ A handoff comment or PR description must contain all of the following fields. Us
 | Claim holder | Agent ID recorded by the issue coordination state |
 | Positive ownership | Paths the work item is allowed to modify |
 | Negative ownership | Paths explicitly outside the lane |
-| Dependency state | Dependencies and their live READY/BLOCKED/etc. state |
+| Dependency state | Dependencies and their latest trusted status; include the status source and timestamp |
 | Files changed | Complete list of files changed by this implementation head |
 | Unowned files changed | Must be `none` or include explicit authorization and rationale |
 | Targeted tests | Commands/checks and results tied to the changed surface |
-| Broader checks | Exact-head CI, Security, quality, build/package status as applicable |
-| Semantic/privacy/qualification falsifiers | Relevant negative tests and whether each passed, failed, or was not run |
-| Unresolved interface requests | Cross-lane changes needed but not owned here |
+| Broader checks | Exact-head CI, Security, quality, build/package status as applicable; name each check and result |
+| Semantic/privacy/qualification falsifiers | Relevant negative tests and whether each passed, failed, or was not run; include qualification gates explicitly as NOT RUN when out of scope |
+| Unresolved interface requests | Cross-lane changes needed but not owned here, or `none` |
 | Linked PR / head SHA | PR number and full exact head SHA |
 | Evidence boundary | What the evidence establishes and what it explicitly does not establish |
-| Next authority action | Review, convergence, merge, release, sealed/manual gate, or other required next step |
+| Next authority action | Review, convergence, merge, release, sealed/manual gate, or other required next step; state whether authorization is pending |
 
 A green aggregate badge is not enough when an exact-head job result is required. Report the exact reviewed head and the relevant jobs/checks.
 
@@ -87,13 +91,13 @@ The `/done <agent-id> <pr-number>` coordination transition may be used only when
 
 A new agent should be able to recover the lane using GitHub alone:
 
-1. open the roadmap issue and read the Work Contract plus latest trusted coordination status;
+1. open the roadmap issue and read the Work Contract plus the latest trusted bot status; use the bot record for current holder, branch, `ownership_paths`, linked PR/head, and `return_state`;
 2. verify the branch and linked PR;
 3. resolve the exact PR head SHA;
 4. inspect changed files and compare them with ownership;
 5. read review findings and unresolved interface requests;
 6. inspect exact-head CI/Security/quality evidence;
-7. determine the next authority action before making a mutation.
+7. determine the next authority action before making a mutation, including whether the required authority has actually been granted.
 
 If any required fact is absent or contradictory, treat it as unresolved rather than inferring it from an old chat transcript.
 

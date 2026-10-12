@@ -1,9 +1,3 @@
----
-name: Agent roadmap work
-description: Pull request completion contract for agent-owned roadmap work
-title: "[WORK-ID] "
----
-
 ## Work contract
 
 - **Work ID / issue:** <!-- e.g. ROADMAP-003 / #197 -->
@@ -12,7 +6,7 @@ title: "[WORK-ID] "
 - **Branch / worktree:** <!-- branch and isolated worktree/clone identifier -->
 - **Positive ownership:** <!-- allowed paths -->
 - **Negative ownership:** <!-- explicitly forbidden paths -->
-- **Dependency state:** <!-- dependency issues and live state -->
+- **Dependency state:** <!-- dependency issues, latest trusted status source, and timestamp -->
 
 ## Change inventory
 
@@ -27,6 +21,7 @@ title: "[WORK-ID] "
 - **Head SHA:** <!-- full SHA -->
 - **Targeted tests / falsifiers:** <!-- command/check + result; use NOT RUN when absent -->
 - **Broader CI:** <!-- exact-head status -->
+- **Exact-head Security / Dependency Review:** <!-- status for each required check -->
 - **Security/privacy checks:** <!-- exact-head status or N/A -->
 - **Quality/static checks:** <!-- exact-head status or N/A -->
 - **Build/package/container checks:** <!-- exact-head status or N/A -->
@@ -39,6 +34,12 @@ title: "[WORK-ID] "
 ## Next authority action
 
 <!-- Usually: independent exact-head review. Do not claim merge/release authority unless separately granted. -->
+
+## Latest trusted coordination status
+
+- **Issue status comment:** <!-- link and timestamp -->
+- **Current holder / branch / ownership_paths:** <!-- from github-actions[bot] status -->
+- **Linked PR / exact head / return_state:** <!-- from github-actions[bot] status -->
 
 ## Handoff
 
