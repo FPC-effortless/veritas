@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from investigation_world.operational.models import (
     ActionKind,
     AssertionComparison,
+    CapabilityBinding,
     HiddenActionEffect,
     HiddenOracle,
     OperationalEpisode,
@@ -17,7 +18,9 @@ from investigation_world.operational.models import (
     WorldDomain,
 )
 from investigation_world.portable_contract import (
+    CONTRACT_SCHEMA_VERSION,
     PortableBudgetContract,
+    PortableCapabilityBinding,
     PortableOperationalContract,
     PortableResourceLimit,
     SemanticRoundTripError,
@@ -28,6 +31,7 @@ from investigation_world.portable_contract import (
     serialize_portable_contract,
     serialize_public_contract,
 )
+from investigation_world.portable_contract.identity import content_id
 
 
 def _episode() -> OperationalEpisode:
@@ -186,6 +190,90 @@ def test_contract_identity_and_bytes_are_deterministic() -> None:
     assert serialize_portable_contract(first) == serialize_portable_contract(second)
     assert serialize_public_contract(first) == serialize_public_contract(second)
     assert first.private.reset_identity == second.private.reset_identity
+
+
+def test_capability_binding_is_carried_as_public_content() -> None:
+    episode = _episode()
+    episode.capability = CapabilityBinding(
+        capability_id="external-investigation",
+        content_digest="CCONTRACT-91A20E2ED9D0445EE997",
+        binding_gaps=("osi-no-false-merge",),
+    )
+
+    contract = compile_operational_episode(episode)
+    public_payload = json.loads(serialize_public_contract(contract))
+    restored = PortableOperationalContract.model_validate_json(
+        serialize_portable_contract(contract)
+    )
+
+    assert contract.public.capability == PortableCapabilityBinding(
+        capability_id="external-investigation",
+        content_digest="CCONTRACT-91A20E2ED9D0445EE997",
+        binding_gaps=("osi-no-false-merge",),
+    )
+    assert public_payload["capability"] == {
+        "capability_id": "external-investigation",
+        "content_digest": "CCONTRACT-91A20E2ED9D0445EE997",
+        "binding_gaps": ["osi-no-false-merge"],
+    }
+    assert restored.public.capability == contract.public.capability
+
+
+def test_unbound_episode_has_explicit_absent_public_binding() -> None:
+    contract = compile_operational_episode(_episode())
+
+    assert contract.public.capability is None
+    assert json.loads(serialize_public_contract(contract))["capability"] is None
+
+
+def test_schema_1_0_contract_bytes_and_identity_remain_loadable() -> None:
+    current = compile_operational_episode(_episode())
+    old_public = current.public.model_dump(
+        mode="python",
+        exclude={"public_id", "capability"},
+    )
+    old_public["schema_version"] = "1.0.0"
+    observation_schema = old_public["state"]["observation_schema"]
+    observation_schema["required"].remove("capability")
+    observation_schema["properties"].pop("capability")
+    old_public["public_id"] = content_id("poc-public-v1", old_public)
+
+    old_full = current.model_dump(mode="python", exclude={"contract_id"})
+    old_full["schema_version"] = "1.0.0"
+    old_full["public"] = old_public
+    old_full["contract_id"] = content_id("poc-v1", old_full)
+
+    restored = PortableOperationalContract.model_validate_json(
+        json.dumps(old_full)
+    )
+    serialized = json.loads(serialize_portable_contract(restored))
+    serialized_public = json.loads(serialize_public_contract(restored))
+
+    assert CONTRACT_SCHEMA_VERSION == "1.1.0"
+    assert restored.public.public_id == old_public["public_id"]
+    assert restored.contract_id == old_full["contract_id"]
+    assert "capability" not in serialized["public"]
+    assert "capability" not in serialized_public
+    assert "capability" not in restored.public.state.observation_schema["properties"]
+
+
+def test_schema_1_1_missing_binding_defaults_to_explicit_null() -> None:
+    current = compile_operational_episode(_episode())
+    public_payload = current.public.model_dump(mode="python")
+    public_payload.pop("capability")
+    public_payload["public_id"] = ""
+
+    restored = type(current.public).model_validate(public_payload)
+
+    assert restored.capability is None
+    assert json.loads(restored.canonical_bytes())["capability"] is None
+
+
+def test_source_provenance_matches_accepted_g02_candidate() -> None:
+    provenance = compile_operational_episode(_episode()).public.provenance
+
+    assert provenance.source_commit == "e722c04846d01c1f6df62fdbfbf1731ecc78630d"
+    assert provenance.source_model_git_blob_sha1 == "a93c95be4104089954366bc091056ad831543198"
 
 
 def test_private_semantic_changes_change_full_identity_not_public_identity() -> None:
