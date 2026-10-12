@@ -174,8 +174,8 @@ def test_handoff_and_done_bind_exact_final_pr_head_and_allow_same_pr_rehandoff()
     assert "['CLAIMED', 'REVIEW'].includes(status.state)" in handoff_block
     assert "status.state === 'REVIEW' && status.linked_pr !== command.pr" in handoff_block
     assert "pr.head.ref !== status.branch" in handoff_block
-    assert "prBody.includes(`#${issueNumber}`)" in handoff_block
-    assert "prBody.includes(primaryWorkId)" in handoff_block
+    assert "prBodyReferencesIssue(prBody, issueNumber)" in handoff_block
+    assert "prBodyReferencesWorkId(prBody, primaryWorkId)" in handoff_block
     assert "status.linked_pr_head = pr.head.sha" in handoff_block
     assert "!status.linked_pr || status.linked_pr !== command.pr" in script
     assert "status.linked_pr_head !== pr.head.sha" in script
@@ -219,6 +219,342 @@ def test_bootstrap_holder_and_stale_recovery_require_owner_audit() -> None:
     assert "status.github_actor !== 'bootstrap' && !stale" in script
     assert "frozenOwnershipPaths(status)" in script
     assert "STALE_MS = 2 * 60 * 60 * 1000" in script
+
+
+def test_closed_legacy_completion_recovery_is_narrow_and_exact_merge_bound() -> None:
+    workflow = _workflow()
+    script = _script()
+    assert "startsWith(github.event.comment.body, '/recover-completed ')" in workflow
+    assert "command.kind === 'recover-completed'" in script
+    block = script.split("} else if (command.kind === 'recover-completed') {", 1)[1].split(
+        "} else if (command.kind === 'recover-metadata') {", 1
+    )[0]
+    assert "association !== 'OWNER'" in block
+    assert "issue.state !== 'closed'" in block
+    assert "status.github_actor !== 'bootstrap'" in block
+    assert "status.agent_id !== command.agent" in block
+    assert "pr.head?.ref !== status.branch" in block
+    assert "prBodyReferencesIssue(prBody, issueNumber)" in block
+    assert "prBodyReferencesWorkId(prBody, primaryWorkId)" in block
+    assert "compareCommitsWithBasehead" in block
+    assert "comparison.behind_by !== 0" in block
+    assert "status.linked_pr_head = pr.head.sha" in block
+    assert "status.ownership_paths = contract.paths.slice()" in block
+    assert "veritas.owner-exact-merge-recovery.v1" in block
+
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(__SCRIPT__, 'utf8') +
+  '\nmodule.exports.__completedRecoveryParser = { parseCommand };';
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const command = moduleObject.exports.__completedRecoveryParser.parseCommand(
+  '/recover-completed coordination-bootstrap 246 bind historical merge'
+);
+if (!command || command.kind !== 'recover-completed') throw new Error('command not parsed');
+if (command.agent !== 'coordination-bootstrap') throw new Error('agent not parsed');
+if (command.pr !== 246) throw new Error('PR not parsed');
+if (command.reason !== 'bind historical merge') throw new Error('reason not parsed');
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
+def test_closed_legacy_completion_recovery_bypasses_missing_ownership_preflight() -> None:
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const coordinate = require(__SCRIPT__);
+const ENROLL = '<!-- veritas-agent-work -->';
+const STATUS = '<!-- veritas-agent-work-status:v1 -->';
+const REGISTRY = '<!-- veritas-agent-work-reservations:v1 -->';
+const PR_HEAD = '1111111111111111111111111111111111111111';
+const MERGE = '2222222222222222222222222222222222222222';
+const ownership = [
+  '`' + '.github/workflows/agent-work-claims.yml' + '`',
+  '`' + 'docs/automation/agent-work-claims.md' + '`',
+  '`' + 'tests/automation/test_agent_work_claims_workflow.py' + '`',
+].join(', ');
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+const issue = {
+  number: 151,
+  state: 'closed',
+  labels: [{ name: 'agent-work' }, { name: 'work:done' }],
+  body: `${ENROLL}
+## Work Contract
+- **Work ID:** COORD-001
+- **State:** DONE
+- **Branch:** \`feat/agent-work-claim-automation\`
+- **Positive ownership:** ${ownership}
+- **Claim holder:** none
+- **Linked PR:** #246`,
+};
+const legacyStatus = {
+  schema_version: 'veritas.agent-work-status.v1',
+  work_id: 'COORD-001',
+  issue_number: 151,
+  state: 'CLAIMED',
+  github_actor: 'bootstrap',
+  agent_id: 'coordination-bootstrap',
+  branch: 'feat/agent-work-claim-automation',
+  claimed_at: '2026-08-28T09:30:24.125Z',
+  heartbeat_at: '2026-08-28T09:30:24.125Z',
+  linked_pr: null,
+  linked_pr_head: null,
+  blocker: null,
+  released_reason: null,
+  transition_seq: 0,
+  last_command_comment_id: null,
+  updated_at: '2026-08-28T09:30:24.125Z',
+};
+let statusComment = {
+  id: 1001,
+  user: { login: 'github-actions[bot]' },
+  body:
+    `${STATUS}\n**Agent work status**\n\n` +
+    `\`\`\`json\n${JSON.stringify(legacyStatus, null, 2)}\n\`\`\``,
+};
+const command = {
+  id: 2001,
+  user: { login: 'FPC-effortless' },
+  author_association: 'OWNER',
+  body: '/recover-completed coordination-bootstrap 246 bind historical merge',
+};
+let registryComment = {
+  id: 900,
+  user: { login: 'github-actions[bot]' },
+  body: `${REGISTRY}\n**Global agent-work reservations**\n\n\`\`\`json\n${JSON.stringify({
+    schema_version: 'veritas.agent-work-reservations.v1',
+    updated_at: '2026-08-31T00:00:00Z',
+    entries: [],
+  }, null, 2)}\n\`\`\``,
+};
+const audits = [];
+let pullGets = 0;
+const labels = [
+  'agent-work', 'work:ready', 'work:claimed', 'work:blocked',
+  'work:review', 'work:done', 'work:superseded',
+].map((name) => ({ name }));
+const issues = {
+  listLabelsForRepo: async () => labels,
+  createLabel: async () => ({ data: {} }),
+  get: async ({ issue_number }) => ({
+    data: issue_number === 151 ? issue : { number: 150, labels: [] },
+  }),
+  listComments: async ({ issue_number }) => (
+    issue_number === 151 ? [statusComment, command] : [registryComment]
+  ),
+  updateComment: async ({ comment_id, body }) => {
+    if (comment_id === statusComment.id) {
+      statusComment = { ...statusComment, body };
+      return { data: statusComment };
+    }
+    if (comment_id === registryComment.id) {
+      registryComment = { ...registryComment, body };
+      return { data: registryComment };
+    }
+    throw new Error(`unexpected comment ${comment_id}`);
+  },
+  createComment: async ({ issue_number, body }) => {
+    const created = { id: 5000 + audits.length, body, user: { login: 'github-actions[bot]' } };
+    audits.push({ issue_number, body });
+    return { data: created };
+  },
+  removeLabel: async () => ({ data: {} }),
+  addLabels: async () => ({ data: {} }),
+};
+const pulls = {
+  get: async ({ pull_number }) => {
+    pullGets += 1;
+    assert(pull_number === 246, 'wrong historical PR requested');
+    return { data: {
+      number: 246,
+      state: 'closed',
+      merged: true,
+      merged_at: '2026-08-28T09:25:49Z',
+      head: { ref: 'feat/agent-work-claim-automation', sha: PR_HEAD },
+      merge_commit_sha: MERGE,
+      body: 'Implements COORD-001 (#151).\n\nWork ID: COORD-001\n',
+    } };
+  },
+  list: async () => [],
+  listFiles: async () => [],
+};
+const repos = {
+  get: async () => ({ data: { default_branch: 'main' } }),
+  compareCommitsWithBasehead: async ({ basehead }) => {
+    assert(basehead === `${MERGE}...main`, 'wrong merge ancestry comparison');
+    return { data: { behind_by: 0, status: 'ahead' } };
+  },
+};
+const github = {
+  rest: { issues, pulls, repos },
+  paginate: async (fn, args) => fn(args),
+};
+const context = {
+  repo: { owner: 'FPC-effortless', repo: 'veritas' },
+  issue: { number: 151 },
+  actor: 'FPC-effortless',
+  payload: { comment: { body: command.body, author_association: 'OWNER' } },
+};
+(async () => {
+  await coordinate({ github, context });
+  assert(pullGets === 1, 'legacy preflight rejected recovery before PR proof');
+  const match = statusComment.body.match(/```json\s*([\s\S]*?)```/);
+  const finalStatus = JSON.parse(match[1]);
+  assert(finalStatus.state === 'DONE', 'completed recovery did not publish DONE');
+  assert(finalStatus.linked_pr === 246, 'completed recovery did not bind PR');
+  assert(
+    finalStatus.linked_pr_head === PR_HEAD,
+    'completed recovery did not bind exact PR head'
+  );
+  assert(Array.isArray(finalStatus.ownership_paths), 'ownership snapshot was not frozen');
+  assert(
+    finalStatus.ownership_paths.includes('.github/workflows/agent-work-claims.yml'),
+    'contract ownership was not frozen'
+  );
+  assert(
+    finalStatus.completion_recovery?.schema_version ===
+      'veritas.owner-exact-merge-recovery.v1',
+    'recovery evidence missing'
+  );
+  assert(
+    !audits.some(({ body }) => body.includes('predates frozen ownership snapshots')),
+    'legacy preflight still rejected recovery'
+  );
+  process.stdout.write('ok\n');
+})().catch((error) => {
+  console.error(error.stack || String(error));
+  process.exit(1);
+});
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
+def test_pr_body_identity_references_are_exact_tokens() -> None:
+    script_path = json.dumps(str(SCRIPT.resolve()))
+    source = r"""
+const fs = require('fs');
+const vm = require('vm');
+const source = fs.readFileSync(__SCRIPT__, 'utf8') +
+  '\nmodule.exports.__identityReferences = { prBodyReferencesIssue, prBodyReferencesWorkId };';
+const moduleObject = { exports: {} };
+vm.runInNewContext(source, {
+  module: moduleObject,
+  exports: moduleObject.exports,
+  require,
+  console,
+  Set,
+  Date,
+  JSON,
+  String,
+  Number,
+  Boolean,
+  RegExp,
+  Error,
+});
+const { prBodyReferencesIssue, prBodyReferencesWorkId } =
+  moduleObject.exports.__identityReferences;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+assert(prBodyReferencesIssue('Closes #151.', 151), 'exact issue reference rejected');
+assert(!prBodyReferencesIssue('Closes #1510.', 151), 'longer issue number accepted');
+assert(!prBodyReferencesIssue('Closes #151suffix.', 151), 'issue token suffix accepted');
+assert(prBodyReferencesWorkId('Work ID: COORD-001', 'COORD-001'), 'exact work ID rejected');
+assert(!prBodyReferencesWorkId('Work ID: COORD-001-EXTRA', 'COORD-001'), 'longer work ID accepted');
+assert(!prBodyReferencesWorkId('Work ID: XCOORD-001', 'COORD-001'), 'work ID prefix accepted');
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
+
+
+def test_owner_evidence_dependency_proof_is_exact_and_fail_closed() -> None:
+    dependency_script = Path(".github/scripts/roadmap-dependency-notifications.js")
+    script_path = json.dumps(str(dependency_script.resolve()))
+    source = r"""
+const helpers = require(__SCRIPT__).__test;
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+const status = {
+  state: 'DONE',
+  transition_seq: 1,
+  completion_evidence: {
+    schema_version: 'veritas.owner-evidence-completion.v1',
+    rule: 'OWNER_EVIDENCE',
+    completion_class: 'COORDINATION_OPERATION',
+    evidence_comment_id: 99,
+    evidence_actor: 'repo-owner',
+    evidence_created_at: '2026-08-30T00:00:00Z',
+    transition_seq: 1,
+  },
+};
+const contract = {
+  completionRule: 'OWNER_EVIDENCE',
+  completionClass: 'COORDINATION_OPERATION',
+  evidenceCommentId: 99,
+  terminalState: 'DONE',
+};
+const issue = { state: 'closed' };
+const evidence = {
+  id: 99,
+  author_association: 'OWNER',
+  user: { login: 'repo-owner' },
+  created_at: '2026-08-30T00:00:00Z',
+  body: 'Completion evidence: bootstrap completed.',
+};
+assert(
+  helpers.validOwnerEvidenceDependency(status, contract, issue, evidence),
+  'valid owner evidence was rejected'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(
+    status,
+    { ...contract, completionClass: 'SCIENTIFIC_QUALIFICATION' },
+    issue,
+    evidence
+  ),
+  'wrong completion class was accepted'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(
+    status,
+    contract,
+    issue,
+    { ...evidence, author_association: 'MEMBER' }
+  ),
+  'non-owner evidence was accepted'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(
+    { ...status, transition_seq: 2 },
+    contract,
+    issue,
+    evidence
+  ),
+  'stale transition evidence was accepted'
+);
+assert(
+  !helpers.validOwnerEvidenceDependency(status, contract, { state: 'open' }, evidence),
+  'open provider issue was accepted'
+);
+""".replace("__SCRIPT__", script_path)
+    _run_node(source)
 
 
 def test_failure_injection_preserves_global_exclusion_and_root_file_locks() -> None:
