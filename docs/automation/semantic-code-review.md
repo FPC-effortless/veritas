@@ -4,19 +4,19 @@ Status: merge-authoritative implementation-review infrastructure. This policy do
 
 ## Purpose
 
-The `review-provenance-semantic` label requests a trusted exact-head semantic implementation review for ordinary code and test pull requests. The reviewer combines independent semantic analysis from an enabled external review provider with an exact-head isolated execution gate, then uses the trusted default-branch `github-actions[bot]` identity as the exact-head approval bridge consumed by `tools/review_provenance.py` and Security.
+The `review-provenance-semantic` label requests a trusted exact-head semantic implementation review for ordinary code and test pull requests. Semantic evidence may come from a clean exact-head GitHub Copilot or OpenAI Codex review, or from Veritas's canonical exact-head agent-review marker. The workflow combines that evidence with exact-head isolated execution, then uses the trusted default-branch `github-actions[bot]` identity as the approval bridge consumed by `tools/review_provenance.py` and Security.
 
-Two semantic providers are supported: GitHub Copilot code review and OpenAI Codex code review. The trusted workflow requests Copilot on a best-effort basis and emits an exact-head `@codex review` trigger. At least one provider must return machine-verifiable clean evidence; provider unavailability never degrades into automatic approval. If more than one provider reports evidence, a blocking finding from any observed provider vetoes approval.
+GitHub Copilot and OpenAI Codex remain supported semantic reviewers. The trusted workflow requests Copilot on a best-effort basis and emits an exact-head `@codex review` trigger. Provider availability is optional when a valid canonical agent review already exists; CI alone never satisfies semantic review. Any blocking finding or inline comment in evidence observed before approval vetoes it, whether that evidence comes from a provider or a canonical agent review.
 
-Provider semantic evidence alone is not merge authority. The bridge approves only after the exact head has clean provider evidence and the aggregate `Required` CI check is green. `Required` includes the isolated candidate-execution job. The required Security context independently rechecks the semantic evidence so a provider finding cannot be hidden by an approval-bridge defect.
+Semantic evidence alone is not merge authority. The bridge approves only after the exact head has clean provider or canonical agent-review evidence and the aggregate `Required` CI check is green. `Required` includes the isolated candidate-execution job. Security independently checks the repository's canonical exact-head review provenance; provider findings are checked by the semantic workflow before it submits the bridge approval.
 
 ## Trust split
 
 1. **Ordinary candidate CI** runs in the `pull_request` workflow with read-only repository permissions. Candidate code never receives the semantic reviewer's write token.
 2. **Isolated candidate execution** is an additional required CI job. It separately checks out the trusted base and the exact candidate with `persist-credentials: false`, builds the dependency/test image only from trusted base code, mounts the candidate checkout read-only, and executes a copied candidate workspace inside an ephemeral container. The execution container has no network, no token or repository secrets, a read-only root filesystem, dropped Linux capabilities, `no-new-privileges`, PID/memory/CPU ceilings, and only tmpfs writable state. Candidate Python sources are compiled and the test suite is executed against the candidate `src/` tree. Failure prevents the aggregate `Required` check from passing.
-3. **Semantic inspection** is performed by GitHub Copilot code review and/or OpenAI Codex code review on the exact candidate. Candidate content is untrusted review input. Any inline finding from an observed provider fails closed. A provider review summary containing `BLOCKING:` also fails closed. For Codex, a `+1` reaction from `chatgpt-codex-connector[bot]` on the immutable trusted exact-head trigger comment is accepted as Codex's clean-review signal when no review findings are emitted.
+3. **Semantic inspection** is evidenced by an exact-head GitHub Copilot or OpenAI Codex review, or a canonical Veritas agent review. Candidate content is untrusted review input. Any inline finding from an observed provider or canonical review fails closed. A review summary containing `BLOCKING:` and a canonical `verdict=blocking` marker also fail closed. For Codex, a `+1` reaction from `chatgpt-codex-connector[bot]` on the immutable trusted exact-head trigger comment is accepted as Codex's clean-review signal when no review findings are emitted. The canonical marker's single-owner identity limitation is operational, as described in [review provenance](./review-provenance.md).
 4. **Approval authority** runs from `.github/workflows/semantic-code-review.yml` on `pull_request_target`, therefore from the trusted default branch. It never checks out or executes candidate code and is the only semantic-review component with pull-request approval authority.
-5. **Final Security** is explicitly rerun after approval so the existing exact-head provenance checks validate the resulting APPROVED review and the independent semantic-evidence guard validates provider evidence again.
+5. **Final Security** is explicitly rerun after approval so the existing exact-head provenance checks validate the resulting APPROVED review and the requested semantic provenance gate. Security verifies canonical review provenance; it does not independently query Copilot or Codex evidence.
 
 ## Fail-closed conditions
 
@@ -27,7 +27,8 @@ Semantic integration is refused when any of the following is true:
 - a patch cannot be inspected or credential-like additions are detected;
 - exact-head `Required` CI is absent or not successful, including isolated candidate execution;
 - a Python-sensitive change lacks a successful exact-head `repository-python-quality` check;
-- no enabled semantic provider produces machine-verifiable clean evidence;
+- neither a supported provider nor a valid canonical agent review produces clean exact-head semantic evidence;
+- a canonical marker attempt is malformed; for a current-head marker, a blocking verdict or inline finding fails closed. Stale evidence never satisfies the gate;
 - an observed provider review has any inline finding;
 - an observed provider review contains `BLOCKING:` in its summary;
 - any current exact-head reviewer has `CHANGES_REQUESTED`;
@@ -49,11 +50,15 @@ A clean exact-head Copilot `COMMENTED` review with no inline findings and no `BL
 
 The trusted workflow creates a bot-owned comment containing an immutable exact-head marker and `@codex review` with review guidance. A Codex `COMMENTED` review must be bound by GitHub to the exact candidate head and contain no inline or `BLOCKING:` findings. Codex may instead report a clean review by reacting `+1` to the trigger comment; that signal is accepted only when the trigger comment is owned by `github-actions[bot]`, contains the exact full head marker, and the PR head has not moved.
 
-Codex and Copilot availability is external to repository code. The relevant account/repository review feature must be enabled. If neither provider is available, the semantic lane remains red rather than substituting CI for semantic review.
+Codex and Copilot availability is external to repository code. The relevant account/repository review feature must be enabled to use either provider. If neither provider is available, a valid canonical agent review can still satisfy semantic evidence; CI by itself cannot.
+
+### Canonical Veritas agent review
+
+A canonical exact-head `COMMENTED` review may satisfy semantic evidence when it contains exactly one standalone marker of the form `<!-- veritas-agent-review:v1 head=<40-char-sha> verdict=clean -->`. The marker must bind to the review commit and current PR head, the GitHub review must have valid identity and submission metadata, and the review must contain no `BLOCKING:` summary or inline finding. Quoted, indented, and fenced marker examples are not evidence. A `verdict=blocking` marker fails closed. See [review provenance](./review-provenance.md) for the complete canonical rule and the operational limits of single-owner review identity.
 
 ## Exact-head lifecycle
 
-Head movement invalidates the semantic evidence. Re-handoff the roadmap work when applicable, remove and re-add `review-provenance-semantic`, and obtain new exact-head semantic evidence. Resolving an old finding on the same head is not treated as a clean review; the implementation must move to a new candidate head.
+Head movement invalidates all semantic evidence. Re-handoff the roadmap work when applicable, remove and re-add `review-provenance-semantic`, and obtain new exact-head semantic evidence. Resolving an old finding on the same head is not treated as a clean review; the implementation must move to a new candidate head.
 
 ## Authority boundary
 
