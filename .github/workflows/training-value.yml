@@ -61,7 +61,7 @@ jobs:
             --max-new-tokens 192
 
       - name: Upload training-value report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: training-value-diagnostic-sft
           path: training-value-results/diagnostic-sft.json

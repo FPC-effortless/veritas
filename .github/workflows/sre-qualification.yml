@@ -73,7 +73,7 @@ jobs:
           print(json.dumps(release, indent=2, sort_keys=True))
           PY
       - name: Upload frozen buyer-safe release record only
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sre-v4-public-qualification
           path: results/sre-v4/RELEASE.json
