@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from investigation_world.operational.models import CapabilityBinding
 from investigation_world.operational_world.models import (
     CalibrationProfile,
     CompanySizeBand,
@@ -58,6 +59,7 @@ class InvestigationPackSpec(BaseModel):
         }
     )
     tool_budget: float = Field(default=80.0, gt=0)
+    capability: CapabilityBinding | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -113,12 +115,11 @@ class InvestigationCapabilityPack(BaseModel):
 
     def public_manifest(self) -> dict:
         split_counts = {split: len(items) for split, items in self.public_episodes.items()}
-        return {
+        manifest: dict[str, object] = {
             "format": "veritas-investigation-capability-pack-public-v1",
             "pack_id": self.spec.pack_id,
             "world_count": sum(split_counts.values()),
             "splits": split_counts,
-            "capability": "operational_procurement_investigation",
             "region": self.spec.region,
             "industry": self.spec.industry,
             "size_band": self.spec.size_band,
@@ -127,6 +128,10 @@ class InvestigationCapabilityPack(BaseModel):
             "ood_definition": "held-out scenario families with disjoint world seeds",
             "metadata": self.spec.metadata,
         }
+        if self.spec.capability is not None:
+            manifest["capability_id"] = self.spec.capability.capability_id
+            manifest["content_digest"] = self.spec.capability.content_digest
+        return manifest
 
     def private_manifest(self) -> dict:
         return {
@@ -261,6 +266,7 @@ class InvestigationCapabilityPackBuilder:
                     size_band=spec.size_band,
                     simulation_days=spec.simulation_days,
                     scenario_types=[scenario],
+                    capability=spec.capability,
                     metadata={"capability_pack_id": spec.pack_id},
                 )
                 _, episode = compiler.compile_investigation_episode(
