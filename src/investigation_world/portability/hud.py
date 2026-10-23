@@ -104,8 +104,6 @@ include = [
   "env.py",
   "tasks.py",
   "private_tasks.json",
-  "portable_manifest.json",
-  "qualification_evidence.json",
 ]
 '''
 
@@ -169,10 +167,6 @@ def build_hud_sre_package(
 
     private_payload = [record.model_dump(mode="json") for record in private_tasks]
     files = {
-        "portable_manifest.json": json.dumps(
-            manifest.model_dump(mode="json"), indent=2, sort_keys=True
-        )
-        + "\n",
         "private_tasks.json": json.dumps(private_payload, indent=2, sort_keys=True) + "\n",
         "env.py": _render_env_module(),
         "tasks.py": _render_tasks_module(),
@@ -180,10 +174,6 @@ def build_hud_sre_package(
         "Dockerfile.hud": _render_dockerfile(),
         "README.md": _render_readme(manifest),
     }
-    if qualification_evidence is not None:
-        files["qualification_evidence.json"] = json.dumps(
-            qualification_evidence.model_dump(mode="json"), indent=2, sort_keys=True
-        ) + "\n"
     return write_portable_package(
         output_dir,
         adapter="hud-v6",
