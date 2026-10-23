@@ -1,0 +1,53 @@
+{
+  "observations": [
+    {
+      "failure_mode_counts": {
+        "parser": 5,
+        "reasoning": 20,
+        "tool_selection": 10
+      },
+      "harness_identity": "harness-a",
+      "model_identity": "fixture-weak",
+      "model_snapshot": "w1",
+      "sample_size": 100,
+      "score": 0.2,
+      "seed": 7,
+      "successes": 20,
+      "tier": "weak"
+    },
+    {
+      "comparison_group_id": "strong-pair",
+      "failure_mode_counts": {
+        "parser": 3,
+        "planning": 8,
+        "reasoning": 12,
+        "tool_selection": 9
+      },
+      "harness_identity": "harness-a",
+      "model_identity": "fixture-strong",
+      "model_snapshot": "s1",
+      "sample_size": 100,
+      "score": 0.62,
+      "seed": 7,
+      "successes": 62,
+      "tier": "strong"
+    },
+    {
+      "comparison_group_id": "strong-pair",
+      "failure_mode_counts": {
+        "parser": 2,
+        "planning": 6,
+        "reasoning": 8,
+        "tool_selection": 7
+      },
+      "harness_identity": "harness-b",
+      "model_identity": "fixture-strong",
+      "model_snapshot": "s1",
+      "sample_size": 100,
+      "score": 0.74,
+      "seed": 7,
+      "successes": 74,
+      "tier": "strong"
+    }
+  ]
+}

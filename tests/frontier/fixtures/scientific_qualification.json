@@ -1,0 +1,10 @@
+{
+  "benchmark_name": "SyntheticFrontierFixture",
+  "candidate_id": "FIXTURE-CAND-1",
+  "evidence_manifest_id": "FIXTURE-EVID-1",
+  "panel_id": "FIXTURE-PANEL-1",
+  "private_release_manifest_id": "FIXTURE-REL-1",
+  "releaseable": true,
+  "report_id": "FIXTURE-QREPORT-1",
+  "version": "fixture-v1"
+}
