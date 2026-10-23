@@ -21,8 +21,9 @@ ProjectWorld v2 remains a qualified second environment family and is the next ca
 ## Buyer-facing material
 
 - [Marketplace release packet](marketplace-release.md) — canonical 0.11 release, public/private boundary, offer structure, and external-distribution status.
-- [HUD / DataVendor submission](hud-submission.md) — HUD-safe asset description, intake answers, and seller-account acceptance run.
-- [Prime Intellect submission](prime-submission.md) — sanitized Hub publication strategy and Hosted Evaluation acceptance criteria.
+- [HUD / DataVendor submission](hud-submission.md) — HUD-safe asset description, current Tier 1 listing/Tier 2 briefs path, and seller-account acceptance run.
+- [Copy-ready DataVendor listing](datavendor-listing.md) — title, executive summary, managed-environment asset choice, initial pricing anchor, evidence, rights and preview/private boundaries.
+- [Prime Intellect submission](prime-submission.md) — private proof, sanitized Hub publication strategy and Hosted Evaluation acceptance criteria.
 - [SRE Evaluation Pack v1](sre-evaluation-pack-v1.md) — primary SKU and execution contract.
 - [Benchmark card](benchmark-card.md) — broader Veritas measurement substrate, validity boundaries, and caveats.
 - [Paid design-partner pilot](pilot.md) — standard pilot scope, deliverables, and success criteria.
