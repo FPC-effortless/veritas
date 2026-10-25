@@ -43,13 +43,13 @@ Illustrative `source.json` (a claim from an operator, **not independent permissi
 Example `operations-jsonl` input (illustrative non-source test fixture):
 
 ```json
-{"episode_id":"job-1","subject_id":"machine-1","record_id":"record-1","observed_at":"2026-01-01T12:00:00Z","available_at":"2026-01-01T12:00:02Z","observation":{"temperature_c":50.2},"action":{"performed_at":"2026-01-01T12:01:00Z","payload":{"type":"inspect"}},"outcome":{"status":"unknown","verified":false}}
+{"episode_id":"job-1","subject_id":"machine-1","record_id":"record-1","observed_at":"2026-01-01T12:00:00Z","available_at":"2026-01-01T12:00:02Z","observation":{"temperature_c":50.2},"action":{"performed_at":"2026-01-01T12:01:00Z","available_at":"2026-01-01T12:01:02Z","payload":{"type":"inspect"}},"outcome":{"status":"unknown","verified":false}}
 ```
 
 Example `robot-jsonl` input (illustrative non-source test fixture):
 
 ```json
-{"episode_id":"ep-001","subject_id":"robot-01","record_id":"ep-001/0","frame_index":0,"time_seconds":0.0,"available_seconds":0.0,"observation":{"state":[0.1,0.2]},"action":{"time_seconds":0.0,"payload":{"joint_velocity":[0.1,-0.1]}},"outcome":null}
+{"episode_id":"ep-001","subject_id":"robot-01","record_id":"ep-001/0","frame_index":0,"time_seconds":0.0,"available_seconds":0.0,"observation":{"state":[0.1,0.2]},"action":{"time_seconds":0.0,"available_seconds":0.0,"payload":{"joint_velocity":[0.1,-0.1]}},"outcome":null}
 ```
 
 Without a real persistent robot/entity ID, subject-level holdout is unavailable until the adapter supplies defensible mappings. The robot converter explicitly requires availability time; it will not assume every sensor frame was immediately available. v0.1 does not directly parse LeRobot v3 Parquet/videos, DROID native files, ALOHA HDF5, arbitrary Woyengi envelopes or industrial CSV. Source-specific importers require separately reviewed timestamp and authority semantics.
