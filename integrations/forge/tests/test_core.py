@@ -21,6 +21,7 @@ def operations(subject, step=0, episode=None):
             "available_at": "2026-01-01T10:00:01Z",
             "observation": {"temperature": 32},
             "action": {"performed_at": "2026-01-01T10:02:00Z",
+                       "available_at": "2026-01-01T10:02:30Z",
                        "payload": {"type": "inspect"}},
             "outcome": {"status": "completed", "verified": False,
                         "available_at": "2026-01-01T10:04:00Z"}}
@@ -65,6 +66,16 @@ class ForgeTests(unittest.TestCase):
         self.assertIsNotNone(middle["action"])
         self.assertIsNone(middle["outcome"])
         self.assertEqual(point_in_time(row, "2026-01-01T10:05:00Z")["outcome"]["status"], "completed")
+
+    def test_fractional_timestamp_order_and_delayed_action_visibility(self):
+        row = operations("machine-1")
+        row["observed_at"] = "2026-01-01T10:00:00.500Z"
+        row["available_at"] = "2026-01-01T10:00:00.750Z"
+        row["action"]["available_at"] = "2026-01-01T10:03:30.001Z"
+        normalized = normalize(row, adapter="operations-jsonl", source_id="fixture/ops")
+        self.assertIsNone(point_in_time(normalized, "2026-01-01T10:00:00.500Z"))
+        self.assertIsNone(point_in_time(normalized, "2026-01-01T10:03:30.000Z")["action"])
+        self.assertIsNotNone(point_in_time(normalized, "2026-01-01T10:03:30.001Z")["action"])
 
     def test_robot_adapter_preserves_missing_outcome_and_duplicate_sensor_values(self):
         def frame(idx):
