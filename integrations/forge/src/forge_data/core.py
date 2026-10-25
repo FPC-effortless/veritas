@@ -46,7 +46,8 @@ def _timestamp(value: object, name: str) -> str:
         raise ForgeError(f"{name} is not a valid timestamp") from exc
     if moment.utcoffset() is None:
         raise ForgeError(f"{name} must carry an explicit UTC offset")
-    return moment.astimezone(dt.timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    normalized = moment.astimezone(dt.timezone.utc).isoformat(timespec="microseconds")
+    return normalized.replace("+00:00", "Z")
 
 
 def _seconds(value: object, name: str) -> float:
@@ -105,8 +106,12 @@ def normalize(row: dict, *, adapter: str, source_id: str) -> dict:
         available_at = _timestamp(row.get("available_at"), "available_at")
         if available_at < observed_at:
             raise ForgeError("available_at cannot precede observed_at")
-        action_at = _timestamp(action.get("performed_at"), "action.performed_at") if action else None
-        action_available = _timestamp(action.get("available_at"), "action.available_at") if action else None
+        action_at = (
+            _timestamp(action.get("performed_at"), "action.performed_at") if action else None
+        )
+        action_available = (
+            _timestamp(action.get("available_at"), "action.available_at") if action else None
+        )
         if action and action_available < action_at:
             raise ForgeError("action availability cannot precede performed action")
         if action and action_at < observed_at:
@@ -117,8 +122,13 @@ def normalize(row: dict, *, adapter: str, source_id: str) -> dict:
         available_at = _seconds(row.get("available_seconds"), "available_seconds")
         if available_at < observed_at:
             raise ForgeError("available_seconds cannot precede time_seconds")
-        action_at = _seconds(action.get("time_seconds"), "action.time_seconds") if action else None
-        action_available = _seconds(action.get("available_seconds"), "action.available_seconds") if action else None
+        action_at = (
+            _seconds(action.get("time_seconds"), "action.time_seconds") if action else None
+        )
+        action_available = (
+            _seconds(action.get("available_seconds"), "action.available_seconds")
+            if action else None
+        )
         if action and action_available < action_at:
             raise ForgeError("action availability cannot precede performed action")
         if action and action_at < observed_at:
@@ -131,7 +141,11 @@ def normalize(row: dict, *, adapter: str, source_id: str) -> dict:
     outcome = _outcome(row, temporal)
     if outcome["available_at"] is not None and outcome["available_at"] < observed_at:
         raise ForgeError("outcome availability cannot precede observation")
-    if action_at is not None and outcome["available_at"] is not None and outcome["available_at"] < action_at:
+    if (
+        action_at is not None
+        and outcome["available_at"] is not None
+        and outcome["available_at"] < action_at
+    ):
         raise ForgeError("outcome availability cannot precede recorded action")
     return {
         "schema": SCHEMA, "adapter": adapter, "source_id": source_id,
@@ -185,7 +199,11 @@ def _assign(groups: set[str], salt: str) -> dict[str, str]:
 
 def point_in_time(record: dict, cutoff: str | float) -> dict | None:
     """Give a temporal observation view without future action or outcome leakage."""
-    t = _timestamp(cutoff, "cutoff") if record["temporal_basis"] == "absolute" else _seconds(cutoff, "cutoff")
+    t = (
+        _timestamp(cutoff, "cutoff")
+        if record["temporal_basis"] == "absolute"
+        else _seconds(cutoff, "cutoff")
+    )
     if record["available_at"] > t:
         return None
     view = {k: record[k] for k in ("schema", "episode_id", "subject_id", "source_id",
@@ -193,7 +211,9 @@ def point_in_time(record: dict, cutoff: str | float) -> dict | None:
     action = record["action"]
     view["action"] = action if action and action["available_at"] <= t else None
     outcome = record["outcome"]
-    view["outcome"] = outcome if outcome["available_at"] is not None and outcome["available_at"] <= t else None
+    view["outcome"] = (
+        outcome if outcome["available_at"] is not None and outcome["available_at"] <= t else None
+    )
     return view
 
 
@@ -262,7 +282,10 @@ def release(input_path: Path, spec_path: Path, output_dir: Path) -> dict:
             "records": {k: len(by_split[k]) for k in SPLITS},
             "groups": {k: len({r["subject_id"] for r in by_split[k]}) for k in SPLITS},
             "file_sha256": hashes,
-            "qualification": "schema-and-split-integrity-only; not source authenticity or real-world skill",
+            "qualification": (
+                "schema-and-split-integrity-only; "
+                "not source authenticity or real-world skill"
+            ),
         }
         (stage / "manifest.json").write_bytes(canonical(manifest))
         os.replace(stage, output_dir)
