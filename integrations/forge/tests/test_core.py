@@ -57,7 +57,9 @@ class ForgeTests(unittest.TestCase):
             release(self.data, self.spec, self.root / "first")
 
     def test_point_in_time_masks_future_observation_action_outcome(self):
-        row = normalize(operations("machine-1"), adapter="operations-jsonl", source_id="fixture/ops")
+        row = normalize(
+            operations("machine-1"), adapter="operations-jsonl", source_id="fixture/ops"
+        )
         self.assertIsNone(point_in_time(row, "2026-01-01T10:00:00Z"))
         early = point_in_time(row, "2026-01-01T10:00:01Z")
         self.assertIsNone(early["action"])
@@ -65,7 +67,9 @@ class ForgeTests(unittest.TestCase):
         middle = point_in_time(row, "2026-01-01T10:03:00Z")
         self.assertIsNotNone(middle["action"])
         self.assertIsNone(middle["outcome"])
-        self.assertEqual(point_in_time(row, "2026-01-01T10:05:00Z")["outcome"]["status"], "completed")
+        self.assertEqual(
+            point_in_time(row, "2026-01-01T10:05:00Z")["outcome"]["status"], "completed"
+        )
 
     def test_fractional_timestamp_order_and_delayed_action_visibility(self):
         row = operations("machine-1")
