@@ -9,7 +9,9 @@ from .core import ForgeError, release, verify_release
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Forge: provenance-preserving temporal dataset releases")
+    parser = argparse.ArgumentParser(
+        description="Forge: provenance-preserving temporal dataset releases"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     build = commands.add_parser("release", help="Validate and freeze a JSONL source")
     build.add_argument("--input", required=True, type=Path)
