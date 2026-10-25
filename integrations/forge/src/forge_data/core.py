@@ -46,7 +46,7 @@ def _timestamp(value: object, name: str) -> str:
         raise ForgeError(f"{name} is not a valid timestamp") from exc
     if moment.utcoffset() is None:
         raise ForgeError(f"{name} must carry an explicit UTC offset")
-    return moment.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    return moment.astimezone(dt.timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def _seconds(value: object, name: str) -> float:
@@ -106,6 +106,9 @@ def normalize(row: dict, *, adapter: str, source_id: str) -> dict:
         if available_at < observed_at:
             raise ForgeError("available_at cannot precede observed_at")
         action_at = _timestamp(action.get("performed_at"), "action.performed_at") if action else None
+        action_available = _timestamp(action.get("available_at"), "action.available_at") if action else None
+        if action and action_available < action_at:
+            raise ForgeError("action availability cannot precede performed action")
         if action and action_at < observed_at:
             raise ForgeError("action cannot precede observation")
     elif adapter == "robot-jsonl":
@@ -115,6 +118,9 @@ def normalize(row: dict, *, adapter: str, source_id: str) -> dict:
         if available_at < observed_at:
             raise ForgeError("available_seconds cannot precede time_seconds")
         action_at = _seconds(action.get("time_seconds"), "action.time_seconds") if action else None
+        action_available = _seconds(action.get("available_seconds"), "action.available_seconds") if action else None
+        if action and action_available < action_at:
+            raise ForgeError("action availability cannot precede performed action")
         if action and action_at < observed_at:
             raise ForgeError("action cannot precede observation")
         frame = row.get("frame_index")
@@ -132,7 +138,8 @@ def normalize(row: dict, *, adapter: str, source_id: str) -> dict:
         "episode_id": episode_id, "subject_id": subject_id, "record_id": record_id,
         "temporal_basis": temporal, "observed_at": observed_at,
         "available_at": available_at, "observation": observation,
-        "action": ({"performed_at": action_at, "payload": _payload(action.get("payload"), "action.payload")}
+        "action": ({"performed_at": action_at, "available_at": action_available,
+                    "payload": _payload(action.get("payload"), "action.payload")}
                    if action is not None else None), "outcome": outcome,
         "frame_index": row["frame_index"] if adapter == "robot-jsonl" else None,
     }
@@ -184,7 +191,7 @@ def point_in_time(record: dict, cutoff: str | float) -> dict | None:
     view = {k: record[k] for k in ("schema", "episode_id", "subject_id", "source_id",
                                     "record_id", "observed_at", "available_at", "observation")}
     action = record["action"]
-    view["action"] = action if action and action["performed_at"] <= t else None
+    view["action"] = action if action and action["available_at"] <= t else None
     outcome = record["outcome"]
     view["outcome"] = outcome if outcome["available_at"] is not None and outcome["available_at"] <= t else None
     return view
