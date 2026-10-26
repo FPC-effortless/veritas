@@ -46,5 +46,5 @@ jobs:
         with:
           name: public-nyc311-source-candidate-${{ github.run_id }}
           path: ${{ runner.temp }}/public-nyc311-source-candidate
-          retention-days: 14
+          retention-days: 90
           if-no-files-found: error
