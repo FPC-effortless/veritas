@@ -141,7 +141,7 @@ def _json(data: dict) -> bytes:
 def enroll_candidate(output_dir: Path, *, limit=MAX_CANDIDATES, fetcher=None, clock=None) -> dict:
     """Freeze an acquisition-time cohort candidate; never authorize model fit."""
     if output_dir.exists():
-        raise SnapshotError("existing candidate enrollment cannot be overwritten")
+        raise SnapshotError("existing candidate enrollment cannot be overwritten/overwrite attempted")
     url = _request_url("enroll", limit=limit)
     raw, capture = _capture(url, fetcher=fetcher or _fetch_public, clock=clock or _utc_now)
     rows = _raw_rows(raw, mode="enroll", limit=limit)
