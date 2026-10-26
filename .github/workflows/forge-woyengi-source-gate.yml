@@ -1,0 +1,63 @@
+name: Forge and Woyengi bitemporal source handoff (constructed only)
+on:
+  push:
+    branches:
+      - feature/forge-woyengi-asof-handoff-2026-10-26
+  pull_request:
+    paths:
+      - "integrations/forge/src/forge_data/woyengi.py"
+      - "integrations/forge/tests/test_woyengi.py"
+      - ".github/workflows/forge-woyengi-source-gate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  forge-woyengi-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Forge
+        uses: actions/checkout@v4
+      - name: Checkout pinned Woyengi source
+        uses: actions/checkout@v4
+        with:
+          repository: FPC-effortless/Woyengi
+          ref: c2a93c5534878cab616ac298d37e63343c345c46
+          path: woyengi-source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.12.0"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Forge temporal and Woyengi conversion tests (constructed)
+        env:
+          PYTHONPATH: integrations/forge/src
+        run: python -m unittest discover -s integrations/forge/tests -p "test_*.py" -v
+      - name: Execute Woyengi real library against constructed source
+        run: node woyengi-source/packages/predictive-export/interop/generate-fixture.ts /tmp/woyengi-constructed.json
+      - name: Consume actual Woyengi output through standalone Forge as-of logic
+        env:
+          PYTHONPATH: integrations/forge/src
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from forge_data.woyengi import convert_export_candidate
+          from forge_data.core import point_in_time
+          data = json.loads(Path("/tmp/woyengi-constructed.json").read_text())
+          result = convert_export_candidate(data, source_id="woyengi-fixture-not-publisher-verified")
+          assert result["conversion"] == "STRUCTURAL_ONLY"
+          assert not result["source_legal_permission_verified"]
+          assert not result["woyengi_host_authenticated"]
+          assert len(result["rows"]) == 2
+          for row in result["rows"]:
+              assert point_in_time(row, "2026-02-14T23:59:59Z") is None
+              view = point_in_time(row, "2026-02-15T00:00:00Z")
+              assert view is not None and view["outcome"] is None and view["action"] is None
+              assert row["outcome"]["status"] == "unknown"
+          print("PASS: Woyengi source-code emitter -> Forge point-in-time; constructed only")
+          PY
+      - name: Python syntax preflight
+        run: python -m py_compile integrations/forge/src/forge_data/woyengi.py integrations/forge/tests/test_woyengi.py
