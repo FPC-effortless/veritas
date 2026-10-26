@@ -142,6 +142,23 @@ class ProspectiveCohortTests(unittest.TestCase):
         self.enroll(rows=rows)
         self.assertEqual(inspect_candidate(self.root)["capture"]["acquisition_end_utc"], DAY0_END)
 
+    def test_followup_response_is_received_before_acquisition_end_clock(self):
+        self.enroll()
+        events = []
+        ticks = iter([DAY7, DAY7_END])
+        def clock():
+            events.append("clock")
+            return next(ticks)
+        def fetcher(request, byte_limit):
+            events.append("fetch")
+            return (200, "application/json", "untrusted", b"[]")
+        result = followup_fixed_ids(
+            self.root, self.base / "followup", fetcher=fetcher, clock=clock)
+        self.assertEqual(events, ["clock", "fetch", "clock"])
+        self.assertEqual(result["capture"]["acquisition_end_utc"], DAY7_END)
+        self.assertEqual(inspect_followup(self.root, self.base / "followup")["report_scoring"],
+                         "PROHIBITED")
+
     def test_seven_day_followup_bounded_before_fetch(self):
         self.enroll()
         called = []
