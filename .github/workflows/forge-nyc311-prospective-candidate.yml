@@ -31,9 +31,10 @@ jobs:
       - name: Compile source-only tools
         run: python -m py_compile integrations/forge/src/forge_data/nyc311_prospective.py integrations/forge/tests/test_nyc311_prospective.py
   bounded-open-case-snapshot:
-    # Only the branch push: PR validation must NOT reread cases, spend API quota,
-    # or fetch any outcomes. This is one immediate candidate capture; no schedule.
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Public-case capture only by explicit manual dispatch after the initial
+    # verified 2026-10-26 run. Do not silently enroll new cohorts on code pushes,
+    # PR checks, or a scheduler; followup is NEVER automated here.
+    if: github.event_name == 'workflow_dispatch'
     needs: constructed-source-integrity
     runs-on: ubuntu-latest
     timeout-minutes: 7
