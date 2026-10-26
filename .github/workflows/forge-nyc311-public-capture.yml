@@ -1,0 +1,50 @@
+name: NYC311 original public snapshot acquisition (unqualified)
+on:
+  push:
+    branches:
+      - feature/forge-woyengi-asof-handoff-2026-10-26
+    paths:
+      - "integrations/forge/src/forge_data/nyc311_snapshot.py"
+      - "integrations/forge/tests/test_nyc311_snapshot.py"
+      - ".github/workflows/forge-nyc311-public-capture.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  safe-public-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Constructed no-network source/audit boundary tests
+        env:
+          PYTHONPATH: integrations/forge/src
+        run: python -m unittest discover -s integrations/forge/tests -p "test_nyc311_snapshot.py" -v
+      - name: Acquire minimally selected real publisher bytes and local source receipt
+        env:
+          PYTHONPATH: integrations/forge/src
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from forge_data.nyc311_snapshot import make_snapshot, inspect_capture
+          destination=Path(os.environ["RUNNER_TEMP"])/"public-nyc311-source-candidate"
+          receipt=make_snapshot(destination,limit=25)
+          check=inspect_capture(destination)
+          assert check["fit_or_scoring"]=="PROHIBITED"
+          assert check["historical_asof"]=="NOT_QUALIFIED"
+          print("NYC311 public source captured at:",receipt["acquisition_end_utc"])
+          print("Publisher source bytes SHA256:",receipt["source_bytes_sha256"])
+          print("Publisher case count:",receipt["records_observed"])
+          print("Qualification: NOT QUALIFIED / NO MODEL FIT / NO HISTORICAL AS-OF PROOF")
+          PY
+      - name: Archive original public response and source acquisition receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-nyc311-source-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/public-nyc311-source-candidate
+          retention-days: 14
+          if-no-files-found: error
