@@ -61,3 +61,15 @@ The declared `privacy_reviewed` and rights fields are **not independently verifi
 **Next gate:** ingest a pinned source-authorized authentic dataset; independently verify source timestamp/identity alignment and rights; hold out unseen subjects/sites/scenes; reproduce original releases; then run TAC versus properly matched GRU/Transformer baselines under equal data/parameter/training-compute budgets. Do not promote DEV outcomes into untouched TEST evidence. No trained model or commercial deployment is claimed.
 
 Forge's `manifest.json` is a dataset release receipt, **not** a Veritas verifier oracle or Woyengi authorization receipt. Downstream evaluation and governed action retain independent authority boundaries. This package never writes to either system.
+
+## Woyengi predictive-state export handoff (stacked integration candidate)
+
+A separate, versioned Woyengi read-only export converter is implemented in `forge_data.woyengi.convert_export_candidate` in [draft PR #422](https://github.com/FPC-effortless/veritas/pull/422). This is a **constructed-data interop and point-in-time compatibility gate**, not a legal or operational dataset release and not independently authenticated source permission.
+
+The only accepted input is Woyengi's `PREDICTIVE_READ_EXPORT` v1 contract produced by its [draft PR #56](https://github.com/FPC-effortless/Woyengi/pull/56) source-side module. A trusted, externally reviewed Woyengi host must establish real authorization, current-time access, source-specific AI-use rights and privacy/locality policy before real records reach Forge. JSON or SHA256 values alone cannot prove these properties.
+
+The converter keeps `claim.validFrom` as **fact-validity time**, NOT an observed sensor event; it makes each derived projection record available to Forge **only at the complete snapshot prediction cutoff**, preventing historical `selected`/`conflicted` labels from being visible before they became known. No actions, outcomes, rewards or future truth are fabricated; each row explicitly carries unknown/unverified outcome semantics. `point_in_time` therefore returns `None` before the snapshot cutoff. Independently verify rights and fit/validation/test subject groups before any real `forge-temporal release` is authorized.
+
+A real-code interop CI workflow, `.github/workflows/forge-woyengi-source-gate.yml`, executes Woyengi's pinned source exporter against constructed ClaimLedger + CapabilityEngine records, then executes the standalone Forge conversion, normalizer, and point-in-time checks. The workflow produces *software contract* evidence only, not a licensed dataset, scientific experiment, Veritas independent scorer or deployed product. One fixture subject is insufficient for a meaningful independent subject-held-out scientific comparison.
+
+**Next gates:** external source consent/license audit, authenticated Woyengi host receipt, original publisher source and outcome evidence, multiple independent subjects and a frozen temporal split, a protected reference training runner, and an independent Veritas evaluation. The Forge security and reviewer prerequisites of PR #420 remain binding.
