@@ -14,7 +14,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qsl, urlsplit
 from urllib.request import Request, urlopen
 
 SOURCE_BASE = "https://data.cityofnewyork.us/resource/erm2-nwe9.json"
@@ -171,9 +171,13 @@ def inspect_capture(directory: Path) -> dict:
         raise SnapshotError("unsupported source capture schema")
     if receipt.get("publisher_page") != PUBLISHER_PAGE or receipt.get("dataset_id") != "NYC311/erm2-nwe9":
         raise SnapshotError("unexpected publisher reference")
-    limit = int(dict(__import__("urllib.parse").parse_qsl(
-        __import__("urllib.parse").urlsplit(receipt.get("request_url", "")).query
-    )).get("$limit", "0"))
+    url = receipt.get("request_url")
+    if not isinstance(url, str):
+        raise SnapshotError("missing acquisition request URL")
+    try:
+        limit = int(dict(parse_qsl(urlsplit(url).query)).get("$limit", "0"))
+    except (ValueError, TypeError) as exc:
+        raise SnapshotError("source capture invalid limit") from exc
     if receipt.get("request_url") != _source_url(limit):
         raise SnapshotError("source query not the approved public minimal-field query")
     if receipt.get("source_bytes_sha256") != hashlib.sha256(raw).hexdigest():
