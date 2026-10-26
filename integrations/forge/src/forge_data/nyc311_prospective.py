@@ -94,8 +94,8 @@ def _raw_rows(raw: bytes, *, mode: str, ids: tuple[str, ...] = (), limit=100) ->
     return rows
 
 
-def _capture(url: str, *, fetcher, clock):
-    start = clock()
+def _capture(url: str, *, fetcher, clock, captured_start=None):
+    start = captured_start if captured_start is not None else clock()
     _parse_utc(start, "acquisition_start_utc")
     status, content_type, http_date, raw = fetcher(Request(url, headers={
         "User-Agent": "ForgeProspectiveSourceAudit/0.1 (public snapshot, no fit)"
@@ -237,9 +237,8 @@ def followup_fixed_ids(candidate_dir: Path, output_dir: Path, *,
     enrolled_at = _parse_utc(frozen["capture"]["acquisition_end_utc"], "enrollment end")
     if cutoff < enrolled_at + MIN_FOLLOWUP:
         raise SnapshotError("7-day followup not yet due; do not query future labels")
-    second = iter([start, clock()])
     raw, capture = _capture(_request_url("followup", ids), fetcher=fetcher or _fetch_public,
-                            clock=lambda: next(second))
+                            clock=clock, captured_start=start)
     rows = _raw_rows(raw, mode="followup", ids=ids)
     present = set(row["unique_key"] for row in rows)
     # Missing cases and status corrections are information, not negatives.
