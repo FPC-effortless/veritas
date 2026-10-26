@@ -259,3 +259,98 @@ def followup_fixed_ids(candidate_dir: Path, output_dir: Path, *,
     _atomic_write(output_dir, {"followup-source.json": raw,
                                "followup-receipt.json": _json(receipt)})
     return {k: v for k, v in receipt.items() if k != "missing_case_ids"}
+
+
+
+def inspect_followup(candidate_dir: Path, followup_dir: Path) -> dict:
+    """Recheck saved fixed-ID source bytes and elapsed acquisition receipt.
+
+    An observed publisher status is NEVER auto-promoted into an independent label.
+    This does not validate exact seven-day horizon tolerance or source truth.
+    """
+    enrolled = inspect_candidate(candidate_dir)
+    manifest = json.loads((followup_dir / "followup-receipt.json").read_text(encoding="utf-8"))
+    if manifest.get("schema") != "forge.nyc311-fixed-id-followup.v0.1":
+        raise SnapshotError("unknown followup contract")
+    if manifest.get("cohort_sha256") != enrolled["cohort_sha256"]:
+        raise SnapshotError("followup source membership differs from original cohort")
+    capture = manifest.get("capture")
+    if not isinstance(capture, dict):
+        raise SnapshotError("followup capture receipt missing")
+    if capture.get("request_url") != _request_url("followup", enrolled["case_ids"]):
+        raise SnapshotError("followup did not query exactly the fixed source identities")
+    start = _parse_utc(capture.get("acquisition_start_utc"), "followup start")
+    end = _parse_utc(capture.get("acquisition_end_utc"), "followup end")
+    if start < _parse_utc(enrolled["capture"]["acquisition_end_utc"], "enrollment end") + MIN_FOLLOWUP:
+        raise SnapshotError("premature followup source access")
+    if end < start:
+        raise SnapshotError("followup capture clock reversed")
+    raw = (followup_dir / "followup-source.json").read_bytes()
+    if capture.get("original_response_sha256") != hashlib.sha256(raw).hexdigest():
+        raise SnapshotError("followup original publisher bytes hash mismatch")
+    if capture.get("original_response_bytes") != len(raw) or capture.get("http_status") != 200:
+        raise SnapshotError("followup publisher response integrity mismatch")
+    rows = _raw_rows(raw, mode="followup", ids=enrolled["case_ids"])
+    present = {r["unique_key"] for r in rows}
+    missing = sorted(set(enrolled["case_ids"]) - present)
+    if (manifest.get("present_case_count") != len(present)
+            or manifest.get("missing_case_count") != len(missing)
+            or manifest.get("missing_case_ids") != missing):
+        raise SnapshotError("followup missingness or cohort coverage receipt mismatch")
+    if (manifest.get("actual_status_labels_verified") is not False
+            or manifest.get("historical_asof_qualified") is not False
+            or manifest.get("fit_or_scoring_authorized") is not False
+            or manifest.get("outcome_status") != "PUBLISHER_SNAPSHOT_UNVERIFIED_NO_LABELS"):
+        raise SnapshotError("followup may not promote publisher status to verified outcome")
+    return {
+        "status": "SOURCE_BYTES_MATCH_ONLY_NO_LABELS",
+        "cohort_sha256": enrolled["cohort_sha256"],
+        "present_case_count": len(present),
+        "missing_case_count": len(missing),
+        "original_response_sha256": capture["original_response_sha256"],
+        "report_scoring": "PROHIBITED",
+    }
+
+
+def main(argv=None):
+    """Explicit, operator-initiated CLI. No scheduling, fit or scoring commands."""
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("candidate", help="Bounded, unqualified open-case capture")
+    p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--limit", type=int, default=MAX_CANDIDATES)
+    p = sub.add_parser("inspect-candidate", help="Verify saved bytes and membership")
+    p.add_argument("--candidate", type=Path, required=True)
+    p = sub.add_parser("followup", help="At least seven days later, fixed original IDs ONLY")
+    p.add_argument("--candidate", type=Path, required=True)
+    p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("inspect-followup", help="Verify saved followup without scoring")
+    p.add_argument("--candidate", type=Path, required=True)
+    p.add_argument("--followup", type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "candidate":
+            result = enroll_candidate(args.output, limit=args.limit)
+        elif args.command == "inspect-candidate":
+            observed = inspect_candidate(args.candidate)
+            result = {
+                "status": "SOURCE_COHORT_CANDIDATE_ONLY",
+                "cohort_sha256": observed["cohort_sha256"],
+                "case_count": observed["case_count"],
+                "acquisition_end_utc": observed["capture"]["acquisition_end_utc"],
+                "fit_or_scoring": "PROHIBITED",
+            }
+        elif args.command == "followup":
+            result = followup_fixed_ids(args.candidate, args.output)
+        else:
+            result = inspect_followup(args.candidate, args.followup)
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    except (SnapshotError, OSError, ValueError, TypeError, KeyError) as exc:
+        print(json.dumps({"status": "REJECTED", "reason": str(exc)}, sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
