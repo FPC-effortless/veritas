@@ -1,8 +1,11 @@
 """Constructed no-fit Woyengi->Forge projection tests; NOT real source rights evidence."""
 import copy
 import unittest
+import json
+from pathlib import Path
+import tempfile
 
-from forge_data.core import ForgeError, point_in_time
+from forge_data.core import ForgeError, point_in_time, release
 from forge_data.woyengi import convert_export_candidate
 
 
@@ -39,6 +42,31 @@ class WoyengiForgeContractTest(unittest.TestCase):
     def reject(self):
         with self.assertRaises(ForgeError):
             convert_export_candidate(self.source)
+
+    def test_attested_release_gate_rejects_untrusted_projection_even_with_declared_rights(self):
+        """A human-typed true boolean in the source spec cannot certify Woyengi rights."""
+        result = convert_export_candidate(self.source)
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            source = root / "events.jsonl"
+            spec = root / "spec.json"
+            source.write_text("\n".join(json.dumps(row) for row in result["rows"]) + "\n")
+            spec.write_text(json.dumps({
+                "dataset_id": "CONSTRUCTED_NOT_A_REAL_SOURCE",
+                "source_id": "woyengi-unattested",
+                "source_version": "fixture-v1",
+                "license_id": "claimed-fixture-only",
+                "provenance_uri": "fixture://woyengi",
+                "ai_use_allowed": True,
+                "redistribution_allowed": True,
+                "privacy_reviewed": True,
+                "adapter": "operations-jsonl",
+                "split_salt": "fixture-only",
+            }))
+            output = root / "release"
+            with self.assertRaisesRegex(ForgeError, "UNATTESTED"):
+                release(source, spec, output)
+            self.assertFalse(output.exists())
 
     def test_registered_export_is_candidate_not_training_release(self):
         result = convert_export_candidate(self.source)
