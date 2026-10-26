@@ -19,7 +19,7 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qsl, urlsplit
 from urllib.request import Request
 
 from .nyc311_snapshot import (
@@ -190,9 +190,14 @@ def inspect_candidate(root: Path) -> dict:
     c = manifest.get("capture")
     if not isinstance(c, dict):
         raise SnapshotError("publisher capture metadata missing")
-    url = _request_url("enroll", limit=int(dict(__import__("urllib.parse").parse_qsl(
-        __import__("urllib.parse").urlsplit(c.get("request_url", "")).query
-    )).get("$limit", "0")))
+    captured_url = c.get("request_url")
+    if not isinstance(captured_url, str):
+        raise SnapshotError("capture source URL missing")
+    try:
+        n = int(dict(parse_qsl(urlsplit(captured_url).query)).get("$limit", "0"))
+    except (TypeError, ValueError) as exc:
+        raise SnapshotError("invalid capture limit") from exc
+    url = _request_url("enroll", limit=n)
     if url != c.get("request_url"):
         raise SnapshotError("capture URL is not a strict open-only publisher query")
     data = (root / "enrollment-source.json").read_bytes()
