@@ -3,13 +3,16 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import hashlib
+import subprocess
+import sys
+import os
 import json
 from pathlib import Path
 import tempfile
 import unittest
 
 from forge_data.nyc311_prospective import (
-    _request_url, enroll_candidate, followup_fixed_ids, inspect_candidate,
+    _request_url, enroll_candidate, followup_fixed_ids, inspect_candidate, inspect_followup,
     SnapshotError, SCHEMA
 )
 
@@ -203,6 +206,71 @@ class ProspectiveCohortTests(unittest.TestCase):
         with self.assertRaisesRegex(SnapshotError,"non-allowlisted"):
             followup_fixed_ids(self.root,self.base/"followup",
                 fetcher=fixture(rows=bad),clock=times(DAY7,DAY7_END))
+
+    def test_saved_followup_original_bytes_and_missingness_are_verified(self):
+        self.enroll()
+        response = followup_fixed_ids(
+            self.root, self.base / "followup",
+            fetcher=fixture(rows=[{"unique_key":"101","status":"Closed"}]),
+            clock=times(DAY7, DAY7_END))
+        verified = inspect_followup(self.root, self.base / "followup")
+        self.assertEqual(verified["status"], "SOURCE_BYTES_MATCH_ONLY_NO_LABELS")
+        self.assertEqual(verified["present_case_count"], 1)
+        self.assertEqual(verified["missing_case_count"], 2)
+        self.assertEqual(verified["report_scoring"], "PROHIBITED")
+        self.assertEqual(verified["original_response_sha256"],
+                         response["capture"]["original_response_sha256"])
+
+    def test_followup_original_bytes_tamper_denied(self):
+        self.enroll()
+        folder = self.base / "followup"
+        followup_fixed_ids(self.root, folder, fetcher=fixture(rows=[]),
+                           clock=times(DAY7, DAY7_END))
+        (folder / "followup-source.json").write_bytes(b"[] ")
+        with self.assertRaisesRegex(SnapshotError, "hash"):
+            inspect_followup(self.root, folder)
+
+    def test_followup_cannot_forge_missingness_or_independent_label(self):
+        self.enroll()
+        folder = self.base / "followup"
+        followup_fixed_ids(self.root, folder, fetcher=fixture(rows=[]),
+                           clock=times(DAY7, DAY7_END))
+        receipt_path = folder / "followup-receipt.json"
+        original = json.loads(receipt_path.read_text())
+        altered = dict(original, missing_case_count=0)
+        receipt_path.write_text(json.dumps(altered))
+        with self.assertRaisesRegex(SnapshotError, "missingness"):
+            inspect_followup(self.root, folder)
+        altered = dict(original, actual_status_labels_verified=True)
+        receipt_path.write_text(json.dumps(altered))
+        with self.assertRaisesRegex(SnapshotError, "promote"):
+            inspect_followup(self.root, folder)
+
+    def test_followup_must_query_exact_original_id_list(self):
+        self.enroll()
+        folder = self.base / "followup"
+        followup_fixed_ids(self.root, folder, fetcher=fixture(rows=[]),
+                           clock=times(DAY7, DAY7_END))
+        receipt_path = folder / "followup-receipt.json"
+        altered = json.loads(receipt_path.read_text())
+        altered["capture"]["request_url"] = _request_url("followup", ids=("999",))
+        receipt_path.write_text(json.dumps(altered))
+        with self.assertRaisesRegex(SnapshotError, "exactly the fixed"):
+            inspect_followup(self.root, folder)
+
+    def test_cli_inspection_offline_has_no_labels_or_private_ids(self):
+        self.enroll()
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+        p = subprocess.run([
+            sys.executable, "-m", "forge_data.nyc311_prospective",
+            "inspect-candidate", "--candidate", str(self.root)],
+            env=env, capture_output=True, text=True, check=False, timeout=15)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        result = json.loads(p.stdout)
+        self.assertEqual(result["case_count"], 3)
+        self.assertEqual(result["fit_or_scoring"], "PROHIBITED")
+        self.assertNotIn("case_ids", result)
 
     def test_numeric_fixed_id_sql_safety(self):
         with self.assertRaisesRegex(SnapshotError,"numeric"):
