@@ -236,6 +236,12 @@ def release(input_path: Path, spec_path: Path, output_dir: Path) -> dict:
             try:
                 row = json.loads(line)
                 item = normalize(row, adapter=spec["adapter"], source_id=spec["source_id"])
+                if item["observation"].get("kind") == "woyengi_bitemporal_claim_projection":
+                    raise ForgeError(
+                        "Woyengi candidate projection is UNATTESTED and cannot become a "
+                        "Forge release using operator-declared rights; independent source "
+                        "authentication, AI-use review and outcome provenance are required"
+                    )
             except (ValueError, TypeError, KeyError) as exc:
                 raise ForgeError(f"line {index}: {exc}") from exc
             identity = (item["source_id"], item["record_id"])
