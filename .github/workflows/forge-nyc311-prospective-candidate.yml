@@ -1,0 +1,73 @@
+name: NYC311 fixed-ID prospective source candidate (not a training release)
+on:
+  push:
+    branches:
+      - feature/forge-nyc311-anchored-cohort-2026-10-27
+    paths:
+      - "integrations/forge/src/forge_data/nyc311_prospective.py"
+      - "integrations/forge/tests/test_nyc311_prospective.py"
+      - ".github/workflows/forge-nyc311-prospective-candidate.yml"
+  pull_request:
+    paths:
+      - "integrations/forge/src/forge_data/nyc311_prospective.py"
+      - "integrations/forge/tests/test_nyc311_prospective.py"
+      - ".github/workflows/forge-nyc311-prospective-candidate.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  constructed-source-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test fixed cohort identity, query/clock isolation and no qualification
+        env:
+          PYTHONPATH: integrations/forge/src
+        run: python -m unittest discover -s integrations/forge/tests -p "test_nyc311_prospective.py" -v
+      - name: Compile source-only tools
+        run: python -m py_compile integrations/forge/src/forge_data/nyc311_prospective.py integrations/forge/tests/test_nyc311_prospective.py
+  bounded-open-case-snapshot:
+    # Only the branch push: PR validation must NOT reread cases, spend API quota,
+    # or fetch any outcomes. This is one immediate candidate capture; no schedule.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: constructed-source-integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bounded public open-case candidate capture, no close-date/PII fields
+        env:
+          PYTHONPATH: integrations/forge/src
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from forge_data.nyc311_prospective import enroll_candidate, inspect_candidate
+          root=Path(os.environ["RUNNER_TEMP"])/"nyc311-unqualified-open-case-candidate"
+          receipt=enroll_candidate(root,limit=100)
+          observed=inspect_candidate(root)
+          assert receipt["case_id_list_sha256"]==observed["cohort_sha256"]
+          assert receipt["enrolled_case_count"]==observed["case_count"]
+          assert receipt["fit_or_report_scoring_authorized"] is False
+          assert receipt["source_rights_privacy_approved"] is False
+          assert receipt["historical_asof_qualified"] is False
+          print("Publisher-open candidate count:",observed["case_count"])
+          print("Cohort membership SHA256:",observed["cohort_sha256"])
+          print("Original publisher response SHA256:",receipt["capture"]["original_response_sha256"])
+          print("Original acquisition cutoff UTC:",receipt["capture"]["acquisition_end_utc"])
+          print("No historical FIT, no verified outcome, no protected TEST or report access")
+          PY
+      - name: Preserve original public limited response and cohort ID evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nyc311-unqualified-cohort-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/nyc311-unqualified-open-case-candidate
+          retention-days: 90
+          if-no-files-found: error
