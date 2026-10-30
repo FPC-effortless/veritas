@@ -1,0 +1,41 @@
+name: Forge dataset reader
+
+on:
+  pull_request:
+    paths:
+      - 'integrations/forge/**'
+      - 'integrations/trainlab/**'
+      - '.github/workflows/forge-dataset-reader.yml'
+  push:
+    paths:
+      - 'integrations/forge/**'
+      - 'integrations/trainlab/**'
+      - '.github/workflows/forge-dataset-reader.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dataset-handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install standalone packages
+        run: python -m pip install ./integrations/forge ./integrations/trainlab
+      - name: Verify both package contracts, including the constructed handoff
+        run: |
+          python -m unittest discover -s integrations/forge/tests -v
+          python -m unittest discover -s integrations/trainlab/tests -v
+      - name: Exercise installed CLIs and constructed workflow
+        run: |
+          forge-temporal --help
+          trainlab --help
+          python -m forge_data.dataset --help
+          python integrations/forge/examples/dataset_quickstart.py --output "$RUNNER_TEMP/forge-workbench" --run
