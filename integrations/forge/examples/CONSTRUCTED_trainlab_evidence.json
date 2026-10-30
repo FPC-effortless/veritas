@@ -1,0 +1,52 @@
+{
+  "schema": "trainlab.developer_evidence.v0.1",
+  "experiment_id": "CONSTRUCTED-no-fit",
+  "track": "TAC_100K",
+  "qualification": "NOT_QUALIFIED",
+  "source": {
+    "kind": "CONSTRUCTED_FIXTURE",
+    "dataset_id": "constructed-quickstart-not-real",
+    "publisher_id": null,
+    "original_sha256": null,
+    "release_manifest_sha256": null,
+    "rights_review": "NOT_VERIFIED",
+    "point_in_time_review": "CONSTRUCTED_CHECK",
+    "split_review": "CONSTRUCTED_CHECK"
+  },
+  "training": {
+    "status": "NOT_RUN",
+    "model_commit": null,
+    "learned_parameters": null,
+    "checkpoint_sha256": null,
+    "optimizer_rng_replay_sha256": null,
+    "data_split_identity": null,
+    "train_tokens": null,
+    "train_updates": null,
+    "tuning_budget": null,
+    "baselines": []
+  },
+  "device": {
+    "status": "NOT_RUN",
+    "model": null,
+    "os": null,
+    "export_format": null,
+    "operator_support": null,
+    "numerical_max_abs_error": null,
+    "p50_ms": null,
+    "p95_ms": null,
+    "peak_ram_mb": null,
+    "energy_mj": null,
+    "airplane_mode": null,
+    "network_trace_sha256": null,
+    "state_replay": null,
+    "delivery_sha256": null,
+    "local_stages": null,
+    "remote_fallback": null
+  },
+  "veritas": {
+    "status": "NOT_RUN",
+    "report_sha256": null,
+    "protected_test_authorized": false,
+    "independent_review": false
+  }
+}
