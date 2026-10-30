@@ -9,6 +9,7 @@ import shutil
 import stat
 import tempfile
 import zipfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,6 +27,29 @@ from .runner import (
 
 MAX_BACKUP_BYTES = 2 * 1024 * 1024 * 1024
 MAX_BACKUP_FILES = 8192
+
+
+@contextmanager
+def _pinned_archive(path, expected_sha256, max_bytes):
+    # Keep one inode open across verification and extraction: replacing the
+    # pathname cannot silently substitute a different, unpinned archive.
+    with path.open("rb") as source:
+        metadata = os.fstat(source.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > max_bytes + 16 * 1024 * 1024:
+            raise LabError("backup must be a bounded regular file")
+
+        def check():
+            source.seek(0)
+            hasher = hashlib.sha256()
+            for block in iter(lambda: source.read(65536), b""):
+                hasher.update(block)
+            if hasher.hexdigest() != expected_sha256:
+                raise LabError("backup SHA256 mismatch or archive changed during restore")
+            source.seek(0)
+
+        check()
+        yield source
+        check()
 
 
 def recover_run(directory: Path, *, confirm_no_running_jobs: bool = False) -> dict:
@@ -176,13 +200,14 @@ def restore_runs(
         raise LabError("restore size limit must be positive")
     if destination.exists() or destination.is_symlink():
         raise LabError("restore destination already exists")
-    if digest(archive_path) != expected_sha256:
-        raise LabError("backup SHA256 mismatch")
     with tempfile.TemporaryDirectory(dir=destination.parent, prefix=".restore-") as temporary:
         stage = Path(temporary) / "runs"
         stage.mkdir(mode=0o700)
         try:
-            with zipfile.ZipFile(archive_path) as archive:
+            with (
+                _pinned_archive(archive_path, expected_sha256, max_bytes) as source_archive,
+                zipfile.ZipFile(source_archive) as archive,
+            ):
                 entries = archive.infolist()
                 names = [entry.filename for entry in entries]
                 if (

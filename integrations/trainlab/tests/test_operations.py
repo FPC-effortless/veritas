@@ -7,6 +7,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from trainlab.operations import backup_runs, recover_run, restore_runs, store_health
 from trainlab.runner import LabError, run_experiment, verify_run
@@ -104,4 +105,43 @@ class OperationsTests(unittest.TestCase):
                 expected_sha256=receipt["sha256"],
                 max_bytes=1,
             )
+        self.assertFalse((self.root / "restored").exists())
+
+    def test_replacing_archive_path_cannot_substitute_unpinned_records(self):
+        archive = self.root / "backup.zip"
+        receipt = backup_runs(self.root / "runs", archive)
+        empty = self.root / "empty"
+        empty.mkdir()
+        alternative = self.root / "alternative.zip"
+        backup_runs(empty, alternative)
+        real_zip = zipfile.ZipFile
+
+        def replace_then_open(file, *args, **kwargs):
+            archive.rename(self.root / "original.zip")
+            shutil.copyfile(alternative, archive)
+            return real_zip(file, *args, **kwargs)
+
+        with patch("trainlab.operations.zipfile.ZipFile", side_effect=replace_then_open):
+            result = restore_runs(
+                archive, self.root / "restored", expected_sha256=receipt["sha256"]
+            )
+        self.assertEqual(result["runs"], 1)
+        self.assertTrue(verify_run(self.root / "restored" / self.run["id"])["valid"])
+
+    def test_in_place_archive_change_is_detected_before_publication(self):
+        archive = self.root / "backup.zip"
+        receipt = backup_runs(self.root / "runs", archive)
+        empty = self.root / "empty"
+        empty.mkdir()
+        alternative = self.root / "alternative.zip"
+        backup_runs(empty, alternative)
+        real_zip = zipfile.ZipFile
+
+        def change_then_open(file, *args, **kwargs):
+            archive.write_bytes(alternative.read_bytes())
+            return real_zip(file, *args, **kwargs)
+
+        with patch("trainlab.operations.zipfile.ZipFile", side_effect=change_then_open):
+            with self.assertRaises(LabError):
+                restore_runs(archive, self.root / "restored", expected_sha256=receipt["sha256"])
         self.assertFalse((self.root / "restored").exists())
