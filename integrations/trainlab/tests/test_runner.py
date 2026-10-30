@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from threading import Event
+from unittest.mock import patch
 
 from trainlab.runner import (
     LabError,
     compare_runs,
+    list_runs,
     load_config,
     read_json,
     run_experiment,
@@ -159,6 +164,88 @@ class RunnerTests(unittest.TestCase):
             "(p/'model.json').write_text('{}')"
         )
         self.assertEqual(self.run_one()["status"], "failed")
+
+    def test_noisy_experiment_has_bounded_logs_and_fails(self):
+        self.config["command"] = [
+            sys.executable,
+            "-c",
+            "import os; os.write(1,b'x'*100000); os.write(2,b'y'*100000)",
+        ]
+        self.save()
+        run = run_experiment(self.path, self.root / "runs", log_limit=4096)
+        self.assertEqual(run["status"], "failed")
+        self.assertIn("log limit", run["error"])
+        for name in ("stdout.log", "stderr.log"):
+            self.assertLessEqual((self.root / "runs" / run["id"] / name).stat().st_size, 4096)
+        self.assertTrue(verify_run(self.root / "runs" / run["id"])["valid"])
+
+    def test_operator_cancellation_finalizes_interrupted_record(self):
+        self.config["command"] = [sys.executable, "-c", "import time; time.sleep(20)"]
+        self.save()
+        cancelled = Event()
+        cancelled.set()
+        run = run_experiment(self.path, self.root / "runs", cancel=cancelled)
+        self.assertEqual(run["status"], "interrupted")
+        self.assertIsNotNone(run["finished_at"])
+        self.assertTrue(verify_run(self.root / "runs" / run["id"])["valid"])
+
+    def test_invalid_runtime_limits_rejected_before_launch(self):
+        for value in (0, -1, True, 1.5):
+            with self.subTest(value=value), self.assertRaises(LabError):
+                run_experiment(self.path, self.root / "runs", log_limit=value)
+
+    def test_metadata_is_private_and_fsynced(self):
+        from trainlab.runner import write_json
+
+        with patch("trainlab.runner.os.fsync", wraps=__import__("os").fsync) as sync:
+            write_json(self.root / "private.json", {"value": 1})
+        self.assertTrue(sync.called)
+        if sys.platform != "win32":
+            self.assertEqual((self.root / "private.json").stat().st_mode & 0o777, 0o600)
+
+    def test_active_store_limits_block_admission_and_oversized_state(self):
+        self.run_one()
+        with patch("trainlab.runner.MAX_ACTIVE_RUNS", 1), self.assertRaises(LabError):
+            self.run_one()
+        with patch("trainlab.runner.MAX_ACTIVE_RECORD_BYTES", 1), self.assertRaises(LabError):
+            list_runs(self.root / "runs")
+
+    def test_failed_metadata_write_preserves_previous_record(self):
+        from trainlab.runner import write_json
+
+        path = self.root / "private.json"
+        write_json(path, {"value": "old"})
+        with patch("trainlab.runner.os.fsync", side_effect=OSError("simulated I/O failure")):
+            with self.assertRaises(OSError):
+                write_json(path, {"value": "new"})
+        self.assertEqual(json.loads(path.read_text()), {"value": "old"})
+        self.assertEqual(list(self.root.glob(".metadata-*")), [])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group acceptance")
+    def test_detached_log_writer_cannot_mutate_finalized_logs(self):
+        (self.root / "train.py").write_text(
+            "import os,sys,subprocess,json; from pathlib import Path; "
+            "p=Path(os.environ['TRAINLAB_OUTPUT_DIR']); "
+            "(p/'metrics.json').write_text('{\"loss\":0.25}'); "
+            "(p/'model.json').write_text('{}'); "
+            "child=subprocess.Popen([sys.executable,'-c',"
+            "\"import time; print('detached',flush=True); time.sleep(10)\"],"
+            "start_new_session=True); "
+            "Path('child.pid').write_text(str(child.pid))"
+        )
+        child = None
+        try:
+            run = self.run_one()
+            child = int((self.root / "child.pid").read_text())
+            self.assertEqual(run["status"], "failed")
+            self.assertIn("detached workers", run["error"])
+            self.assertTrue(verify_run(self.root / "runs" / run["id"])["valid"])
+        finally:
+            if child is not None:
+                try:
+                    os.kill(child, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
 
 if __name__ == "__main__":

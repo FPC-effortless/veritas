@@ -1,0 +1,4 @@
+include PRODUCTION.md Dockerfile Dockerfile.dockerignore requirements-server.txt LICENSE
+recursive-include deploy *.yaml Caddyfile
+recursive-include examples *.json *.py
+recursive-include tests *.py
