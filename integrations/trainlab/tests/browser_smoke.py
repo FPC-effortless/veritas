@@ -52,6 +52,10 @@ def main():
                         page.get_by_role('button', name='Export CSV').click()
                     csv = Path(download.value.path()).read_text()
                     assert 'NOT_QUALIFIED' in csv and 'validation_mse' in csv
+                    page.evaluate("state.comparison.runs[0].name = '  =2+2'")
+                    with page.expect_download() as download:
+                        page.get_by_role('button', name='Export CSV').click()
+                    assert '\"\'  =2+2\"' in Path(download.value.path()).read_text(), 'CSV formula escaped after whitespace'
                     page.locator('.compare-table .run-name').first.click()
                     expect(page.locator('#detail-dialog')).to_be_visible()
                     page.get_by_role('button', name='Verify saved files').click()

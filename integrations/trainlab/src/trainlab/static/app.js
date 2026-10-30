@@ -144,7 +144,7 @@ function exportComparison() {
   const runs = state.comparison.runs;
   const names = [...new Set(runs.flatMap(run => Object.keys(run.metric_directions)))];
   // Spreadsheet consumers must not interpret experiment names as formulas.
-  const csv = value => '"' + String(value ?? '').replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"','""') + '"';
+  const csv = value => '"' + String(value ?? '').replace(/^(?:\s*[=+@\-]|[\t\r\n])/, "'$&").replaceAll('"','""') + '"';
   const rows = [['run_id','name','status','seed',...names,'elapsed_seconds','qualification'],...runs.map(run => [run.id,run.name,run.status,run.seed,...names.map(name=>run.metrics[name]),run.elapsed_seconds,'NOT_QUALIFIED'])];
   download('trainlab-comparison.csv',rows.map(row=>row.map(csv).join(',')).join('\r\n'),'text/csv;charset=utf-8');
 }
