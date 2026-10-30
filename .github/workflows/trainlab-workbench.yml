@@ -1,0 +1,48 @@
+name: TrainLab local workbench
+
+on:
+  pull_request:
+    paths:
+      - 'integrations/trainlab/**'
+      - '.github/workflows/trainlab-workbench.yml'
+  push:
+    paths:
+      - 'integrations/trainlab/**'
+      - '.github/workflows/trainlab-workbench.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  local-workbench:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify local runner and HTTP boundaries
+        working-directory: integrations/trainlab
+        run: PYTHONPATH=src python -m unittest discover -s tests -v
+      - name: Check dashboard JavaScript
+        run: node --check integrations/trainlab/src/trainlab/static/app.js
+      - name: Package and exercise the installed CLI
+        working-directory: integrations/trainlab
+        run: |
+          python -m pip install .
+          trainlab run examples/linear.json
+          trainlab run examples/mean.json
+          trainlab list
+      - name: Browser acceptance (constructed data only)
+        if: matrix.python == '3.13'
+        working-directory: integrations/trainlab
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+          python tests/browser_smoke.py

@@ -344,6 +344,12 @@ Private seeds, evaluator oracles, hidden benchmark truth, and unreleased adversa
 
 ## Local development
 
+### TrainLab local experiment workbench (incubation)
+
+[`integrations/trainlab`](integrations/trainlab/README.md) contains a dependency-free local experiment runner and browser dashboard. Record commands, inputs, seeds, budgets, metrics, logs and artifact hashes; launch trusted recipes and compare persistent runs. Constructed demonstrations verify software behavior only. The workbench does not confer scientific, device or commercial qualification and does not replace Forge evidence receipts.
+
+### Veritas development environment
+
 ```bash
 python -m venv .venv
 .venv/bin/pip install -e ".[test]"
