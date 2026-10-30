@@ -243,7 +243,7 @@ class CapabilityBinding(BaseModel):
     def validate_capability_binding(self) -> "CapabilityBinding":
         if not self.capability_id.strip():
             raise ValueError("capability binding requires a non-empty capability_id")
-        if not _CAPABILITY_CONTRACT_DIGEST_PATTERN.match(self.content_digest):
+        if not _CAPABILITY_CONTRACT_DIGEST_PATTERN.fullmatch(self.content_digest):
             raise ValueError(
                 "capability binding content_digest must be a well-formed "
                 f"{CAPABILITY_CONTRACT_DIGEST_PREFIX}-<hex> value computed by "

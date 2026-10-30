@@ -206,6 +206,8 @@ def test_malformed_digest_is_rejected():
         f"{CAPABILITY_CONTRACT_DIGEST_PREFIX}-" + "0" * (CAPABILITY_CONTRACT_DIGEST_LENGTH - 1),
         f"{CAPABILITY_CONTRACT_DIGEST_PREFIX}-" + "g" * CAPABILITY_CONTRACT_DIGEST_LENGTH,
         "CCONTRACT91A20E2ED9D0445EE997",
+        _REAL_DIGEST + "\n",
+        _REAL_DIGEST + "\r\n",
         "",
     ):
         with pytest.raises(ValueError):
