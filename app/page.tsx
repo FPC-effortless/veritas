@@ -14,7 +14,7 @@ const card = {
 export default function Page() {
   const pilotHref =
     process.env.NEXT_PUBLIC_PILOT_CONTACT ||
-    'https://github.com/FPC-effortless/veritas/tree/main/docs/commercial'
+    'https://github.com/FPC-effortless/veritas/issues/new?template=commercial-evaluation.yml'
 
   return (
     <main style={{ minHeight: '100vh', background: '#fafafa', color: '#18181b' }}>
@@ -117,6 +117,10 @@ export default function Page() {
             Inspect the framework
           </a>
         </div>
+        <p style={{ maxWidth: 760, margin: '18px 0 0', color: '#52525b', lineHeight: 1.6, fontSize: 14 }}>
+          The default inquiry opens a public GitHub issue. Do not include credentials, private endpoint
+          details, or customer-confidential information. Agree on a private channel before sharing them.
+        </p>
       </section>
 
       <section style={{ ...shell, paddingBottom: 80 }}>
