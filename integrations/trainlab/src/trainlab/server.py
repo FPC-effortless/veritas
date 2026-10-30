@@ -32,7 +32,17 @@ SECURITY_HEADERS = {
 
 
 class Workspace:
-    def __init__(self, runs: Path, experiments: Path | None, *, log_limit=16 * 1024 * 1024):
+    brand = "TrainLab"
+    body_limit = 4096
+
+    def __init__(
+        self,
+        runs: Path,
+        experiments: Path | None,
+        *,
+        log_limit=16 * 1024 * 1024,
+        forge_workspace: Path | None = None,
+    ):
         self.runs = runs.resolve()
         self.runs.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.experiments = experiments.resolve() if experiments is not None else None
@@ -42,10 +52,21 @@ class Workspace:
         self.lock = threading.Lock()
         self.active = None
         self.cancel = threading.Event()
+        self.forge = None
+        if forge_workspace is not None:
+            try:
+                from forge_data.workbench import ForgeWorkspace
+            except ImportError as error:
+                raise LabError("install the Forge package to enable its workbench") from error
+            self.forge = ForgeWorkspace(forge_workspace, None)
+            self.forge.trainlab_url = "/"
+            self.body_limit = self.forge.body_limit
 
     def close(self):
         self.cancel.set()
         self.pool.shutdown(wait=True, cancel_futures=True)
+        if self.forge is not None:
+            self.forge.close()
 
     def recipes(self):
         result = []
@@ -78,10 +99,19 @@ class Workspace:
         from .operations import store_health
 
         url = urlsplit(path)
+        if self.forge is not None and (
+            url.path in ("/forge", "/forge/") or url.path.startswith(("/forge/", "/api/forge/"))
+        ):
+            return self.forge.dispatch(method, path, headers, body)
         try:
             if method == "GET":
                 if url.path == "/healthz":
                     health = store_health(self.runs)
+                    if self.forge is not None:
+                        forge_status, forge_health, _ = self.forge.dispatch("GET", "/healthz", {})
+                        health["forge"] = forge_health
+                        if forge_status != 200:
+                            health["status"] = "degraded"
                     return (200 if health["status"] == "ok" else 503), health, "application/json"
                 if url.path == "/api/state":
                     job_error = None
@@ -102,6 +132,7 @@ class Workspace:
                             "token": self.token,
                             "job_error": job_error,
                             "busy": self.active is not None and not self.active.done(),
+                            "forge_enabled": self.forge is not None,
                         },
                         "application/json",
                     )
@@ -185,18 +216,42 @@ def local_request(headers, port, public_origin=None):
     )
 
 
-class Dashboard(ThreadingHTTPServer, Workspace):
+class Dashboard(ThreadingHTTPServer):
     """Development/local adapter. Use the optional production WSGI server remotely."""
 
     daemon_threads = True
 
-    def __init__(self, runs: Path, experiments: Path | None, port=8765):
+    def __init__(
+        self,
+        runs: Path,
+        experiments: Path | None,
+        port=8765,
+        *,
+        workspace_factory=Workspace,
+        forge_workspace=None,
+    ):
         ThreadingHTTPServer.__init__(self, ("127.0.0.1", port), Handler)
-        Workspace.__init__(self, runs, experiments)
+        options = {"forge_workspace": forge_workspace} if forge_workspace is not None else {}
+        try:
+            self.workspace = workspace_factory(runs, experiments, **options)
+        except BaseException:
+            ThreadingHTTPServer.server_close(self)
+            raise
+
+    @property
+    def active(self):
+        return self.workspace.active
+
+    @property
+    def token(self):
+        return self.workspace.token
+
+    def dispatch(self, *args):
+        return self.workspace.dispatch(*args)
 
     def server_close(self):
         ThreadingHTTPServer.server_close(self)
-        self.close()
+        self.workspace.close()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -226,7 +281,7 @@ class Handler(BaseHTTPRequestHandler):
             body = b""
             if method == "POST":
                 size = int(self.headers.get("Content-Length", "0"))
-                if not 0 < size <= 4096:
+                if not 0 < size <= self.server.workspace.body_limit:
                     return self._send(400, {"error": "Invalid request size."})
                 body = self.rfile.read(size)
                 if len(body) != size:

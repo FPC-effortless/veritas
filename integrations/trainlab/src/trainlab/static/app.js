@@ -62,6 +62,7 @@ async function refresh() {
   try {
     const response = await api('/api/state');
     state.token = response.token;
+    $('#forge-workbench-link').hidden = !response.forge_enabled;
     if (response.job_error) notice(response.job_error);
     $('#connection-label').textContent = 'Local runtime connected';
     const next = JSON.stringify([response.runs,response.experiments,response.busy]);

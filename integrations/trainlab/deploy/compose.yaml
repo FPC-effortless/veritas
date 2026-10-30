@@ -43,6 +43,8 @@ services:
       - /data/runs
       - --experiments
       - /recipes
+      - --forge-workspace
+      - /data/forge
     logging:
       driver: json-file
       options:
