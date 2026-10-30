@@ -128,6 +128,8 @@ def validate_evidence(receipt: object) -> dict:
             raise ForgeError("exploratory work cannot promote constructed data")
         for key in ("train_tokens", "train_updates", "tuning_budget"):
             _count(train[key], "training." + key, positive=(key != "tuning_budget"))
+        if d["track"] == "TAC_100K" and not train["baselines"]:
+            raise ForgeError("matched TAC_100K research requires baseline controls")
         for arm in train["baselines"]:
             b = _exact(arm, {"name", "learned_parameters", "data_split_identity",
                              "train_tokens", "train_updates", "tuning_budget"}, "baseline")
