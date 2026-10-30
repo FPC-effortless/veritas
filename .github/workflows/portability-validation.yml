@@ -268,7 +268,7 @@ jobs:
           test "$(find "$RUNNER_TEMP/veritas-sre-prime-wheel" -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
 
       - name: Retain ciphertext-only seal for portability validation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sre-v4-portability-encrypted-seal-retained
           path: |
@@ -279,7 +279,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload buyer-safe sealed portability proof only
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sre-v4-portability-proof
           path: ${{ runner.temp }}/veritas-sre-portability-proof/buyer_safe_proof.json
