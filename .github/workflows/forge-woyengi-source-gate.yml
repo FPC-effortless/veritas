@@ -7,6 +7,9 @@ on:
     paths:
       - "integrations/forge/src/forge_data/woyengi.py"
       - "integrations/forge/tests/test_woyengi.py"
+      - "integrations/forge/examples/offline_quickstart.py"
+      - "integrations/forge/tests/test_quickstart.py"
+      - "integrations/forge/README.md"
       - ".github/workflows/forge-woyengi-source-gate.yml"
   workflow_dispatch:
 permissions:
@@ -35,6 +38,10 @@ jobs:
         env:
           PYTHONPATH: integrations/forge/src
         run: python -m unittest discover -s integrations/forge/tests -p "test_*.py" -v
+      - name: Offline developer quickstart (constructed, no model inference)
+        env:
+          PYTHONPATH: integrations/forge/src
+        run: python integrations/forge/examples/offline_quickstart.py
       - name: Execute Woyengi real library against constructed source
         run: node woyengi-source/packages/predictive-export/interop/generate-fixture.ts /tmp/woyengi-constructed.json
       - name: Consume actual Woyengi output through standalone Forge as-of logic
