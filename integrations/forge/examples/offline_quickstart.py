@@ -1,11 +1,13 @@
 """Offline, constructed-only Forge developer quickstart. No model or source qualification."""
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from pathlib import Path
 
 from forge_data.core import normalize, point_in_time, release, verify_release
+from forge_data.evidence_receipt import validate_evidence
 
 
 def run_demo() -> dict:
@@ -50,6 +52,15 @@ def run_demo() -> dict:
         release(input_path, spec_path, output)
         verification = verify_release(output)
         assert verification["valid"] is True and verification["records"] == 12
+        # Link this ephemeral constructed release to a nonqualifying TrainLab
+        # developer receipt; this digest is byte identity, NOT publisher proof.
+        template = Path(__file__).with_name("CONSTRUCTED_trainlab_evidence.json")
+        receipt = json.loads(template.read_text(encoding="utf-8"))
+        receipt["source"]["release_manifest_sha256"] = hashlib.sha256(
+            (output / "manifest.json").read_bytes()
+        ).hexdigest()
+        receipt_result = validate_evidence(receipt)
+        assert receipt_result["scientific_qualification"] == "NOT_QUALIFIED"
 
         seen_subjects: set[str] = set()
         for split in ("train", "validation", "test"):
@@ -79,6 +90,9 @@ def run_demo() -> dict:
         "scientific_qualification": "NOT_PERFORMED",
         "model_training": "NOT_PERFORMED",
         "physical_offline_inference": "NOT_RUN",
+        "trainlab_receipt_structural": receipt_result["structural_validation"],
+        "trainlab_receipt_science": receipt_result["scientific_qualification"],
+        "trainlab_receipt_device": receipt_result["hardware_qualification"],
     }
 
 
