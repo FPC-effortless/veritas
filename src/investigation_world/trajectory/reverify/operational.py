@@ -17,6 +17,7 @@ from investigation_world.operational.models import (
     StateAssertion,
     VerificationBreakdown,
 )
+from investigation_world.operational.native_submission import NativeSubmissionReceipt
 from investigation_world.operational.verifier import verify_operational_episode
 from investigation_world.portable_contract.compiler import (
     CONTRACT_SCHEMA_VERSION,
@@ -30,6 +31,7 @@ from investigation_world.portable_contract.models import (
 )
 from investigation_world.trajectory.models import CanonicalModel, VerifierIdentity
 from investigation_world.trajectory.reverify.models import OperationalReplayEvidence
+from investigation_world.trajectory.reverify.native import verify_retained_artifact
 
 
 class OperationalEvaluatorInput(CanonicalModel):
@@ -39,6 +41,7 @@ class OperationalEvaluatorInput(CanonicalModel):
     submission: EpisodeSubmission
     tool_calls: int
     cost_spent: int
+    native_submission: NativeSubmissionReceipt | None = None
 
 
 def _state_assertion(assertion: PortableStateAssertion) -> StateAssertion:
@@ -122,6 +125,7 @@ def evaluator_input_from_evidence(evidence: OperationalReplayEvidence) -> Operat
         submission=evidence.submission.model_copy(deep=True),
         tool_calls=evidence.tool_calls,
         cost_spent=evidence.cost_spent,
+        native_submission=evidence.native_submission,
     )
 
 
@@ -139,6 +143,7 @@ class OperationalVerifierBinding:
     entrypoint: str
     semantics_id: str
     source_git_blob_sha1: str
+    authorize_native_artifacts: bool = False
 
     def __post_init__(self) -> None:
         if self.entrypoint != VERIFIER_ENTRYPOINT:
@@ -160,14 +165,32 @@ class OperationalVerifierBinding:
             raise RuntimeError("authorized verifier source file is unavailable")
         if _git_blob_sha1(verifier_path) != self.source_git_blob_sha1:
             raise RuntimeError("authorized verifier source identity mismatch")
-        return verify_operational_episode(
-            oracle=evaluator_input.oracle,
+        oracle = evaluator_input.oracle.model_copy(deep=True)
+        native_result = None
+        if evaluator_input.native_submission is not None:
+            if not self.authorize_native_artifacts:
+                raise ValueError("native artifact verifier is not authorized")
+            native_result = verify_retained_artifact(evaluator_input.native_submission)
+            existing = {item.key() for item in oracle.target_state}
+            for check in sorted(native_result.checks):
+                if f"native_artifact.{check}" not in existing:
+                    oracle.target_state.append(StateAssertion(
+                        object_id="native_artifact", field_name=check, expected_value=True,
+                    ))
+        result = verify_operational_episode(
+            oracle=oracle,
             state=copy.deepcopy(evaluator_input.state),
             events=[item.model_copy(deep=True) for item in evaluator_input.events],
             submission=evaluator_input.submission.model_copy(deep=True),
             tool_calls=evaluator_input.tool_calls,
             cost_spent=evaluator_input.cost_spent,
         )
+        if native_result is not None:
+            result.process_violations.extend(
+                f"native_artifact:{check}" for check, passed in sorted(native_result.checks.items())
+                if not passed
+            )
+        return result
 
 
 def current_operational_verifier_binding() -> OperationalVerifierBinding:
@@ -179,6 +202,7 @@ def current_operational_verifier_binding() -> OperationalVerifierBinding:
         entrypoint=VERIFIER_ENTRYPOINT,
         semantics_id=VERIFIER_SEMANTICS_ID,
         source_git_blob_sha1=SOURCE_VERIFIER_BLOB,
+        authorize_native_artifacts=True,
     )
 
 
