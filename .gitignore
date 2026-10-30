@@ -38,6 +38,7 @@ out/
 .veritas-data/
 .veritas-prepared/
 .veritas-fused/
+.trainlab/
 
 # OS/editor
 .DS_Store
