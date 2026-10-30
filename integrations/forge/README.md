@@ -54,6 +54,20 @@ Example `robot-jsonl` input (illustrative non-source test fixture):
 
 Without a real persistent robot/entity ID, subject-level holdout is unavailable until the adapter supplies defensible mappings. The robot converter explicitly requires availability time; it will not assume every sensor frame was immediately available. v0.1 does not directly parse LeRobot v3 Parquet/videos, DROID native files, ALOHA HDF5, arbitrary Woyengi envelopes or industrial CSV. Source-specific importers require separately reviewed timestamp and authority semantics.
 
+## Ten-minute offline developer smoke demo (constructed data only)
+
+From a fresh checkout of this branch, with Python 3.11+ and **no network or package installation required**:
+
+```bash
+cd integrations/forge
+PYTHONPATH=src python examples/offline_quickstart.py
+PYTHONPATH=src python -m unittest discover -s tests -v
+```
+
+The demo uses twelve **constructed** independent machine subjects, writes an ephemeral release, verifies its manifest and disjoint subject splits, and checks that point-in-time reads hide unavailable observations, actions and outcomes. Its JSON result explicitly reports `CONSTRUCTED_ONLY`, `NOT_PERFORMED` scientific qualification, and `NOT_RUN` physical inference. No remote acquisition, training, Woyengi authentication, model export or Veritas certification occurs. A successful demo is **developer contract evidence**, never a real-world capability result or independently verified source-rights claim.
+
+The end-to-end product path remains: authorized real source → Woyengi permission-checked as-of export (where applicable) → independently qualified Forge release → TrainLab source/split/compute receipts → independently verified predictive capability → **fully local** user-device model SDK. The Woyengi candidate export currently needs its offline-only hardening in [draft PR #57](https://github.com/FPC-effortless/Woyengi/pull/57); this demo deliberately does not treat that draft or any operator-declared source rights as a qualified dataset. Customer preprocessing, embeddings, inference, state updates and optional speech must never depend on hosted inference or hidden cloud fallback.
+
 ## Scientific boundaries
 
 The declared `privacy_reviewed` and rights fields are **not independently verified**. This MVP lacks automatic PII scans, rights adjudication, label verification, cross-source identity resolution, robust site/scene leakage grouping, large-data streaming, full model-safe loaders or curation efficacy results. A valid SHA-256 proves byte identity, not source authenticity. The reproducible unit fixtures are synthetic diagnostics: **zero real-world capability evidence**.
