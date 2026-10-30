@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from investigation_world.operational.models import ActionEvent, EpisodeSubmission
+from investigation_world.operational.native_submission import NativeSubmissionReceipt
 from investigation_world.portable_contract.models import PortableOperationalContract
 from investigation_world.trajectory.models import (
     CanonicalModel,
@@ -77,11 +78,13 @@ class OperationalReplayEvidence(CanonicalModel):
     submission: EpisodeSubmission
     tool_calls: int = Field(ge=0)
     cost_spent: int = Field(ge=0)
+    native_submission: NativeSubmissionReceipt | None = None
 
     def digest_payload(self) -> dict[str, Any]:
         return self.model_dump(
             mode="python",
-            exclude={"input_trajectory_id", "evidence_id", "evidence_digest"},
+            exclude={"input_trajectory_id", "evidence_id", "evidence_digest"}
+            | ({"native_submission"} if self.native_submission is None else set()),
         )
 
     @model_validator(mode="after")
