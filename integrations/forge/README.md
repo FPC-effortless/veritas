@@ -89,3 +89,51 @@ The converter keeps `claim.validFrom` as **fact-validity time**, NOT an observed
 A real-code interop CI workflow, `.github/workflows/forge-woyengi-source-gate.yml`, executes Woyengi's pinned source exporter against constructed ClaimLedger + CapabilityEngine records, then executes the standalone Forge conversion, normalizer, and point-in-time checks. The workflow produces *software contract* evidence only, not a licensed dataset, scientific experiment, Veritas independent scorer or deployed product. One fixture subject is insufficient for a meaningful independent subject-held-out scientific comparison.
 
 **Next gates:** external source consent/license audit, authenticated Woyengi host receipt, original publisher source and outcome evidence, multiple independent subjects and a frozen temporal split, a protected reference training runner, and an independent Veritas evaluation. The Forge security and reviewer prerequisites of PR #420 remain binding.
+
+## TrainLab developer evidence receipt v0.1 — validation only
+
+The local `validate-evidence` command checks an **untrusted** versioned receipt.
+It is an engineering *claim checker*, not a Veritas attestor, original-data verifier,
+qualified scientific scoring service, device benchmark or release authority.
+The validator never produces `INDEPENDENTLY_QUALIFIED` or `DEVICE_READY`.
+
+```bash
+cd integrations/forge
+PYTHONPATH=src python -m forge_data validate-evidence \
+  --input examples/CONSTRUCTED_trainlab_evidence.json
+PYTHONPATH=src python -m unittest discover -s tests -p 'test_evidence_receipt.py' -v
+```
+
+The example is **CONSTRUCTED**, has **NO TRAINING**, **NO DEVICE MEASUREMENT**,
+and **NO VERITAS REVIEW**. It produces a redacted structural PASS while
+retaining `scientific_qualification: NOT_QUALIFIED`,
+`hardware_qualification: NOT_QUALIFIED` and `commercial_release: NOT_AUTHORIZED`.
+A clean JSON structure or SHA never constitutes source authenticity or fitness.
+
+Fields are version-locked and checked fail-closed:
+
+- Source identity, publisher/original bytes (or explicit constructed fixture),
+  point-in-time and split-check levels, and unverified rights status.
+- Research track, original checkpoint and optimizer/RNG replay references,
+  train tokens/updates and tuning budget, learned parameters, and matched
+  baselines. For `TAC_100K`, the 95,000–105,000 rule applies, baseline
+  parameter differences may not exceed 1% of TAC, and each baseline must
+  have exactly the same data split, train tokens/updates and tuning budget.
+  Historical `EXPLORATORY_500K` is separate and never promoted to 100K evidence.
+- Named physical device + OS, ONNX/export operator report, numerical error,
+  p50/p95, RAM, energy, artifact and network-trace hashes, airplane-mode and
+  state replay, and local input/preprocessing/embeddings/inference/state/
+  output/speech boundaries with `remote_fallback: false`.
+- Independent review and protected TEST are **never** inferred from JSON fields.
+  Separate Veritas permissions and external evidence remain mandatory.
+
+`INTERNAL_MEASURED` training or `INTERNAL_PHYSICAL_MEASURED` device values are
+accepted only as *self-reported candidates* with required fields; even those
+remain explicitly **NOT QUALIFIED** by this tool. No actual 100K training,
+physical Android test, valid original publisher permission, protected TEST
+or independent Veritas qualification was run by this change.
+
+This incubated module does not claim a separate TrainLab repository, a
+shipping SDK, or commercial adoption. Business model: open models, fully
+offline local SDKs and paid integration, optimization, verification tools and
+support; never hosted per-inference customer model services.
