@@ -31,6 +31,9 @@ class QuickstartTests(unittest.TestCase):
         self.assertEqual(output["scientific_qualification"], "NOT_PERFORMED")
         self.assertEqual(output["model_training"], "NOT_PERFORMED")
         self.assertEqual(output["physical_offline_inference"], "NOT_RUN")
+        self.assertEqual(output["trainlab_receipt_structural"], "PASS")
+        self.assertEqual(output["trainlab_receipt_science"], "NOT_QUALIFIED")
+        self.assertEqual(output["trainlab_receipt_device"], "NOT_QUALIFIED")
 
 
 if __name__ == "__main__":
