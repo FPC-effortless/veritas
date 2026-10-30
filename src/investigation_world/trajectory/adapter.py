@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import copy
-from typing import Any
+import json
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
 
-from investigation_world.foundry.models import RolloutTrace, TraceEvent
+from investigation_world.foundry.models import RolloutTrace, TraceEvent, stable_hash
 from investigation_world.trajectory.models import (
     AgentIdentity,
     ArtifactIdentity,
@@ -14,8 +15,8 @@ from investigation_world.trajectory.models import (
     FailureClassification,
     HarnessIdentity,
     ModelIdentity,
-    ProviderCallSummary,
     ProvenanceRecord,
+    ProviderCallSummary,
     ResetIdentity,
     ResourceCallSummary,
     RuntimeIdentity,
@@ -32,9 +33,18 @@ from investigation_world.trajectory.models import (
     WorldIdentity,
     canonical_hash,
 )
+from investigation_world.trajectory.reverify.operational import (
+    current_operational_verifier_binding,
+)
+
+if TYPE_CHECKING:
+    from investigation_world.operational.models import ActionEvent
+    from investigation_world.operational.runtime import OperationalRuntime
 
 ROLLOUT_TRACE_ADAPTER_ID = "veritas.rollout-trace-to-trajectory-v2"
 ROLLOUT_TRACE_ADAPTER_VERSION = "1"
+OPERATIONAL_RUNTIME_ADAPTER_ID = "veritas.operational-runtime-to-trajectory-v2"
+OPERATIONAL_RUNTIME_ADAPTER_VERSION = "1"
 
 
 class RolloutTraceAdapterContext(CanonicalModel):
@@ -108,7 +118,7 @@ def _resource_id(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _resource_call(index: int, event: TraceEvent) -> ResourceCallSummary:
+def _resource_call(index: int, event: TraceEvent | TrajectoryEvent) -> ResourceCallSummary:
     method = event.payload.get("method")
     operation = method if isinstance(method, str) and method else event.event_type
     success = event.payload.get("success")
@@ -232,4 +242,349 @@ def trajectory_v2_from_rollout_trace(
         visibility=ctx.visibility,
         public_metadata=copy.deepcopy(ctx.public_metadata),
         private_metadata=copy.deepcopy(ctx.private_metadata),
+    )
+
+
+class OperationalRuntimeAdapterContext(CanonicalModel):
+    """Identity and accounting facts that ``OperationalRuntime`` cannot supply.
+
+    Mirrors :class:`RolloutTraceAdapterContext`: ``None`` means *unknown*, not a default claim.
+    Everything an ``ActionEvent`` cannot represent stays here, so the adapter never infers
+    model/agent/harness identity, provider accounting, reset identity, or failure attribution.
+
+    Two fields are mandatory because the runtime does not retain them after ``submit()`` and
+    because ``TrajectoryV2`` requires an ``original_evaluation``:
+
+    - ``breakdown`` — the ``VerificationBreakdown`` returned by ``runtime.submit(...)``. The
+      adapter never re-scores, so the caller supplies the single evaluation the runtime already
+      performed (see the note on ``submission`` below for why it must carry both).
+    - ``submission`` — the ``EpisodeSubmission`` the caller passed to ``submit(...)``. The
+      reverification engine requires exactly one ``submit`` event whose payload *is* this
+      submission, so the adapter emits it from this context rather than inventing one; the
+      runtime's own ``submit()`` does not record an ``ActionEvent``. This is enforced, not
+      assumed: a missing submission is rejected rather than producing a trajectory that could
+      never satisfy that requirement.
+
+    ``verifier`` is the one mandatory *identity* case. ``TrajectoryV2.validate_trajectory``
+    requires ``original_evaluation.verifier == trajectory.verifier``; when the caller does not
+    name a verifier, the adapter uses the statically authorized operational binding
+    (:func:`current_operational_verifier_binding`) instead of inventing one.
+
+    State-digest scopes default to :attr:`StateDigestScope.SEMANTIC`, not the legacy adapter's
+    ``PUBLIC_SEMANTIC``: operational state is seeded from ``episode.oracle.initial_state``,
+    which is private-by-construction. Ordinary runtimes require ``initial_state_digest``
+    captured before execution, after substrate mounting. Native receipts supply their recorded
+    initial state; a contradictory caller digest is rejected. Computed digests use the existing
+    replay ``stable_hash`` rather than the trajectory identity's ``canonical_hash``.
+
+    ``world_id`` is deliberately *absent* here, unlike :class:`RolloutTraceAdapterContext`. The
+    operational runtime already names the world it executed (``runtime.episode.world_id``), so a
+    caller-supplied value is not enrichment but a potential contradiction of the recorded
+    execution. The adapter therefore derives it and cannot be overridden.
+    """
+
+    environment_id: str | None = None
+    world_version: str | None = None
+    world_bundle: ArtifactIdentity | None = None
+    portable_operational_contract: ArtifactIdentity | None = None
+    model: ModelIdentity = Field(default_factory=ModelIdentity)
+    agent: AgentIdentity = Field(default_factory=AgentIdentity)
+    harness_id: str | None = None
+    runtime_id: str | None = None
+    verifier: VerifierIdentity | None = None
+    reset_id: str | None = None
+    reset_index: int | None = Field(default=None, ge=0)
+    provider_calls: tuple[ProviderCallSummary, ...] = ()
+    resource_calls: tuple[ResourceCallSummary, ...] | None = None
+    observation_references: tuple[TrajectoryReference, ...] = ()
+    evidence_references: tuple[TrajectoryReference, ...] = ()
+    elapsed_s: float | None = Field(default=None, ge=0.0)
+    terminated: bool | None = None
+    truncated: bool | None = None
+    failure: FailureClassification = Field(default_factory=FailureClassification)
+    breakdown: Any = None
+    submission: Any = None
+    initial_state_digest: str | None = None
+    final_state_digest: str | None = None
+    initial_state_scope: StateDigestScope = StateDigestScope.SEMANTIC
+    final_state_scope: StateDigestScope = StateDigestScope.SEMANTIC
+    provenance: tuple[ProvenanceRecord, ...] = ()
+    public_metadata: dict[str, Any] = Field(default_factory=dict)
+    private_metadata: dict[str, Any] = Field(default_factory=dict)
+    visibility: VisibilityClass = VisibilityClass.PUBLIC
+
+
+_REWARD_COMPONENTS = (
+    "outcome",
+    "state",
+    "constraints",
+    "side_effects",
+    "process",
+    "efficiency",
+    "evidence",
+)
+
+
+def _operational_state_digest(
+    state: dict[str, Any],
+    *,
+    supplied: str | None,
+    scope: StateDigestScope,
+) -> StateDigest:
+    """Use the existing replay digest, never a fingerprint of guessed initial state."""
+    return StateDigest(digest=supplied if supplied is not None else stable_hash(state), scope=scope)
+
+
+def _operational_event(event: ActionEvent) -> TrajectoryEvent:
+    """Project one ``ActionEvent`` onto the payload shape ``_decode_operational_act`` decodes.
+
+    ``reverify/engine.py`` recovers ``(action_name, parameters)`` from a ``method == "act"`` event
+    whose ``args`` carries the action name and whose ``kwargs`` carries the parameters. That is
+    the only form emitted; no second action vocabulary exists.
+
+    Verifier-only fields (``state_changes``, ``side_effects``, ``forbidden``,
+    ``consequence_severity``, ``blocked_reason``) never enter the public payload. They are kept
+    in ``private_payload``, which ``public_payload()``/``buyer_safe_payload()`` drop, so the same
+    discipline the legacy adapter applies via its context's ``private_metadata`` applies here.
+    """
+
+    success = bool(event.effect_applied and not event.blocked)
+    private: dict[str, Any] = {
+        "sequence": event.sequence,
+        "kind": event.kind.value,
+        "system": event.system,
+        "state_changes": copy.deepcopy(event.state_changes),
+        "side_effects": copy.deepcopy(event.side_effects),
+        "forbidden": event.forbidden,
+        "consequence_severity": event.consequence_severity,
+        "effect_applied": event.effect_applied,
+        "blocked": event.blocked,
+    }
+    if event.blocked_reason is not None:
+        private["blocked_reason"] = event.blocked_reason
+    return TrajectoryEvent(
+        step=event.sequence - 1,
+        event_type="act",
+        payload={
+            "method": "act",
+            "action_name": event.action_name,
+            "args": [event.action_name],
+            "kwargs": copy.deepcopy(event.parameters),
+            "success": success,
+        },
+        cost=float(event.cost),
+        private_payload=private,
+        visibility=VisibilityClass.PUBLIC,
+    )
+
+
+def _submit_event(submission: Any, step: int, cost: float | None) -> TrajectoryEvent:
+    """Emit the single ``submit`` event the reverification engine requires.
+
+    ``_decode_submission`` accepts ``args = [<submission dict>]`` — a *mapping*, not the model
+    object, because it re-validates through ``EpisodeSubmission.model_validate``. The payload is
+    therefore the caller's submission serialized with ``model_dump(mode="json")``; the adapter
+    never synthesizes one.
+    """
+
+    return TrajectoryEvent(
+        step=step,
+        event_type="submit",
+        payload={
+            "method": "submit",
+            "args": [
+                copy.deepcopy(
+                    submission.model_dump(mode="json")
+                    if hasattr(submission, "model_dump")
+                    else submission
+                )
+            ],
+            "kwargs": {},
+            "success": True,
+        },
+        cost=cost,
+        visibility=VisibilityClass.PUBLIC,
+    )
+
+
+def trajectory_v2_from_operational_runtime(
+    runtime: OperationalRuntime,
+    *,
+    context: OperationalRuntimeAdapterContext | None = None,
+) -> TrajectoryV2:
+    """Deterministically record a submitted ``OperationalRuntime`` as a ``TrajectoryV2``.
+
+    Pure record conversion over already-recorded state: it never re-runs, re-scores, or forks
+    the runtime, and it never calls ``submit()`` on the caller's runtime. The runtime must
+    already be closed (``runtime.closed``), because ``TrajectoryV2`` requires an
+    ``original_evaluation`` and only a submitted runtime has one.
+
+    The evaluation and the submission are taken from ``OperationalRuntimeAdapterContext`` rather
+    than derived: ``OperationalRuntime.submit()`` returns its ``VerificationBreakdown`` without
+    retaining it, so the caller supplies the object it already holds. Re-scoring to recover them
+    would violate the no-re-scoring rule, so that is never done.
+
+    Facts unavailable from the runtime remain explicitly unknown unless the context names them.
+    The verifier identity is the exception: when the context does not supply one, the authorized
+    operational binding is used, and ``TrajectoryV2`` then enforces
+    ``original_evaluation.verifier == trajectory.verifier``.
+    """
+
+    if not runtime.closed:
+        raise ValueError("operational runtime must be submitted before trajectory adaptation")
+    ctx = context or OperationalRuntimeAdapterContext()
+    if ctx.submission is None:
+        # Fail closed before constructing anything: a trajectory without the submit event can
+        # never satisfy the reverification engine's EXACT_SUBMISSION_EVENT_REQUIRED rule, and
+        # the adapter must not synthesize one. See the note on ``submission`` above.
+        raise ValueError(
+            "operational trajectory adaptation requires the EpisodeSubmission passed to "
+            "runtime.submit() in OperationalRuntimeAdapterContext.submission"
+        )
+    breakdown = _breakdown(ctx, runtime)
+    receipt = getattr(runtime, "last_native_submission", None)
+    initial_digest = ctx.initial_state_digest
+    final_state = runtime.state_snapshot()
+    if receipt is not None:
+        recorded_initial = stable_hash(json.loads(receipt.initial_state_json))
+        if initial_digest is not None and initial_digest != recorded_initial:
+            raise ValueError("initial_state_digest does not match native receipt")
+        initial_digest = recorded_initial
+        final_state = json.loads(receipt.final_state_json)
+        if ctx.final_state_digest is not None and ctx.final_state_digest != stable_hash(
+            final_state
+        ):
+            raise ValueError("final_state_digest does not match native receipt")
+    if initial_digest is None:
+        raise ValueError(
+            "initial_state_digest must be captured before execution; "
+            "ordinary runtimes do not retain authoritative initial state"
+        )
+    episode = runtime.episode
+    acted = tuple(_operational_event(event) for event in runtime.events)
+    events = acted
+    if receipt is not None:
+        events = (
+            *events,
+            TrajectoryEvent(
+                step=len(events),
+                event_type="native_submission",
+                payload={"method": "verify_native_artifact", "receipt_id": receipt.receipt_id},
+                cost=0.0,
+                state_before=_operational_state_digest(
+                    json.loads(receipt.pre_state_json),
+                    supplied=None,
+                    scope=StateDigestScope.SEMANTIC,
+                ),
+                state_after=_operational_state_digest(
+                    json.loads(receipt.final_state_json),
+                    supplied=None,
+                    scope=StateDigestScope.SEMANTIC,
+                ),
+                visibility=VisibilityClass.EVALUATOR_PRIVATE,
+            ),
+        )
+    events = (*events, _submit_event(ctx.submission, len(events), 0.0))
+    resource_calls = (
+        ctx.resource_calls
+        if ctx.resource_calls is not None
+        else tuple(
+            _resource_call(index, event)
+            for index, event in enumerate(events)
+            if event.visibility is VisibilityClass.PUBLIC
+        )
+    )
+    verifier = ctx.verifier
+    if verifier is None:
+        verifier = current_operational_verifier_binding().identity
+    source_provenance = ProvenanceRecord(
+        source_kind="operational.episode_execution",
+        source_id=episode.episode_id,
+        source_version=None,
+        source_digest=canonical_hash(episode.model_dump(mode="json")),
+        adapter_id=OPERATIONAL_RUNTIME_ADAPTER_ID,
+        adapter_version=OPERATIONAL_RUNTIME_ADAPTER_VERSION,
+        visibility=VisibilityClass.BUYER_SAFE,
+        private_metadata={
+            "operational_episode_metadata": copy.deepcopy(episode.metadata),
+            "operational_breakdown": copy.deepcopy(breakdown.model_dump(mode="json")),
+        },
+    )
+    return TrajectoryV2(
+        world=WorldIdentity(
+            environment_id=ctx.environment_id,
+            environment_version=ctx.world_version,
+            # Runtime-derived, never caller-overridable: the recorded execution *is* this world,
+            # so a context value that disagrees would contradict the runtime being recorded and
+            # can also break the contract's WORLD_IDENTITY_MISMATCH reverification check.
+            world_id=episode.world_id,
+            world_version=ctx.world_version,
+            world_bundle=ctx.world_bundle,
+            portable_operational_contract=ctx.portable_operational_contract,
+        ),
+        task=TaskIdentity(
+            task_id=episode.task.task_id,
+            taskset_version=None,
+            split=None,
+        ),
+        model=ctx.model,
+        agent=ctx.agent,
+        harness=HarnessIdentity(harness_id=ctx.harness_id, version=None),
+        runtime=RuntimeIdentity(runtime_id=ctx.runtime_id, version=None),
+        verifier=verifier,
+        reset=ResetIdentity(
+            seed=None,
+            reset_id=ctx.reset_id,
+            reset_index=ctx.reset_index,
+        ),
+        initial_state=StateDigest(digest=initial_digest, scope=ctx.initial_state_scope),
+        events=events,
+        provider_calls=ctx.provider_calls,
+        resource_calls=resource_calls,
+        observation_references=ctx.observation_references,
+        evidence_references=ctx.evidence_references,
+        usage=UsageTotals(
+            environment_cost=float(runtime.budget.spent),
+            elapsed_s=ctx.elapsed_s,
+        ),
+        original_evaluation=EvaluationRecord(
+            verifier=verifier,
+            component_scores={name: float(getattr(breakdown, name)) for name in _REWARD_COMPONENTS},
+            reward=float(breakdown.overall_reward),
+        ),
+        termination=TerminationRecord(
+            reason="episode_submitted",
+            terminated=ctx.terminated if ctx.terminated is not None else True,
+            truncated=ctx.truncated,
+        ),
+        final_state=_operational_state_digest(
+            final_state,
+            supplied=ctx.final_state_digest,
+            scope=ctx.final_state_scope,
+        ),
+        failure=ctx.failure,
+        capability_tags=(),
+        provenance=(source_provenance, *ctx.provenance),
+        visibility=ctx.visibility,
+        public_metadata=copy.deepcopy(ctx.public_metadata),
+        private_metadata=copy.deepcopy(ctx.private_metadata),
+    )
+
+
+def _breakdown(context: OperationalRuntimeAdapterContext, runtime: OperationalRuntime) -> Any:
+    """Resolve the evaluation a submitted runtime already produced.
+
+    ``OperationalRuntime.submit()`` returns the ``VerificationBreakdown`` without retaining it, so
+    the caller supplies it in the context. It is the single evaluation the runtime performed;
+    nothing is re-scored here.
+
+    Native evaluator transitions are projected separately from their retained receipt.
+    The adapter consumes the caller's original breakdown without recomputing any component.
+    """
+
+    if context.breakdown is not None:
+        return context.breakdown
+    raise ValueError(
+        "operational trajectory adaptation requires the VerificationBreakdown returned by "
+        "runtime.submit() in OperationalRuntimeAdapterContext.breakdown"
     )
