@@ -1,0 +1,33 @@
+name: Forge offline candidate audit
+
+on:
+  push:
+    branches:
+      - company/forge-candidate-offline-audit-2026-10-30
+  pull_request:
+    branches:
+      - feature/forge-woyengi-asof-handoff-2026-10-26
+    paths:
+      - 'integrations/forge/**'
+      - '.github/workflows/forge-candidate-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-candidate-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      PYTHONPATH: integrations/forge/src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test candidate rejection and redaction (constructed only)
+        run: python -m unittest discover -s integrations/forge/tests -p 'test_*.py' -v
+      - name: Exercise CLI on bundled constructed candidate
+        run: |
+          python -m forge_data audit-candidate --input integrations/forge/examples/CONSTRUCTED_woyengi_candidate.json --as-of 2026-02-14T23:59:59Z
+          python -m forge_data audit-candidate --input integrations/forge/examples/CONSTRUCTED_woyengi_candidate.json --as-of 2026-02-15T00:00:00Z
