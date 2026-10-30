@@ -75,3 +75,48 @@ The converter keeps `claim.validFrom` as **fact-validity time**, NOT an observed
 A real-code interop CI workflow, `.github/workflows/forge-woyengi-source-gate.yml`, executes Woyengi's pinned source exporter against constructed ClaimLedger + CapabilityEngine records, then executes the standalone Forge conversion, normalizer, and point-in-time checks. The workflow produces *software contract* evidence only, not a licensed dataset, scientific experiment, Veritas independent scorer or deployed product. One fixture subject is insufficient for a meaningful independent subject-held-out scientific comparison.
 
 **Next gates:** external source consent/license audit, authenticated Woyengi host receipt, original publisher source and outcome evidence, multiple independent subjects and a frozen temporal split, a protected reference training runner, and an independent Veritas evaluation. The Forge security and reviewer prerequisites of PR #420 remain binding.
+
+## Offline candidate audit quickstart (stacked company integration draft)
+
+The read-only `audit-candidate` command validates a **constructed** Woyengi
+export, checks point-in-time visibility, and prints **only counts and nonqualification markers**.
+It neither writes a Forge release nor invokes a model, Veritas verifier or remote service.
+
+From the repository root, using Python 3.11+:
+
+```bash
+PYTHONPATH=integrations/forge/src python -m unittest discover -s integrations/forge/tests -p 'test_candidate_audit.py' -v
+PYTHONPATH=integrations/forge/src python -m forge_data audit-candidate \
+  --input integrations/forge/examples/CONSTRUCTED_woyengi_candidate.json \
+  --as-of 2026-02-14T23:59:59Z
+PYTHONPATH=integrations/forge/src python -m forge_data audit-candidate \
+  --input integrations/forge/examples/CONSTRUCTED_woyengi_candidate.json \
+  --as-of 2026-02-15T00:00:00Z
+```
+
+The first as-of instant must show **0 of 2** records visible; the second must show
+**2 of 2**. Both outputs must remain `STRUCTURAL_ONLY`, with
+`model_training_release: PROHIBITED`, `model_inference: NOT_PERFORMED`, and
+`device_offline_qualification: NOT_RUN`. These are fixture expectations, not
+measured model performance. Invalid/oversize JSON, duplicate keys and nonfinite
+numbers are rejected. No source identities or feature values are printed.
+
+The sample uses deliberately constructed identities and placeholder feature hashes,
+not genuine publisher provenance. This audit proves no Woyengi authentication,
+source licensing, independent outcome correctness, TrainLab scientific result,
+Veritas qualification, customer product or deployable model.
+
+**Required future workflow:** authorized source -> independently qualified Forge release
+-> reproducible TrainLab experiment -> Veritas independent qualification -> Woyengi
+local SDK. The source rights, operator approvals and model evidence gates remain separate.
+
+**Customer inference rule:** inputs, preprocessing, embeddings, state updates, inference,
+outputs and any speech processing stay entirely on the customer-controlled device,
+without a cloud call or hidden fallback. Cloud training, CI and signed delivery
+are permitted; hosted per-inference services are not a company offering.
+
+**First proposed device:** Samsung Galaxy A07 (SM-A075F, Android 16).
+Real ONNX operator support, numerical agreement, physical p50/p95 latency, peak RAM,
+energy and airplane-mode behavior remain **NOT RUN/BLOCKED**; Python fixture
+checks cannot qualify hardware. The commercial pathway is open models and local
+SDKs with paid integration, optimization, verification tooling and support.
