@@ -8,8 +8,14 @@ from investigation_world.operational.artifacts import (
     NativeArtifactVerification,
     attach_native_artifact_descriptor,
 )
-from investigation_world.operational.models import EpisodeSubmission, StateAssertion, VerificationBreakdown
-from investigation_world.operational.parameterized_artifacts import ParameterizedNativeArtifactWorkspace
+from investigation_world.operational.models import (
+    EpisodeSubmission,
+    StateAssertion,
+    VerificationBreakdown,
+)
+from investigation_world.operational.parameterized_artifacts import (
+    ParameterizedNativeArtifactWorkspace,
+)
 from investigation_world.operational.runtime import OperationalRuntime
 from investigation_world.operational.substrate import PersistentOperationalSubstrate
 
@@ -76,6 +82,18 @@ class NativeOperationalRuntime(OperationalRuntime):
                         expected_value=True,
                     )
                 )
+
+        if self.substrate is not None:
+            self.substrate.apply_changes(
+                world_id=self.episode.world_id,
+                domain=self.episode.task.domain,
+                actor="verifier",
+                action_name="verify_native_artifact",
+                changes={
+                    f"native_artifact.{check}": bool(passed)
+                    for check, passed in sorted(artifact_result.checks.items())
+                },
+            )
 
         result = super().submit(submission)
         failed = sorted(check for check, passed in artifact_result.checks.items() if not passed)
