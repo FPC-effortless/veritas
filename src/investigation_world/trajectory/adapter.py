@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import copy
-from typing import Protocol
-from typing import TYPE_CHECKING
-from typing import Any
+import json
+from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
 
-from investigation_world.foundry.models import RolloutTrace, TraceEvent
+from investigation_world.foundry.models import RolloutTrace, TraceEvent, stable_hash
 from investigation_world.trajectory.models import (
     AgentIdentity,
     ArtifactIdentity,
@@ -16,8 +15,8 @@ from investigation_world.trajectory.models import (
     FailureClassification,
     HarnessIdentity,
     ModelIdentity,
-    ProviderCallSummary,
     ProvenanceRecord,
+    ProviderCallSummary,
     ResetIdentity,
     ResourceCallSummary,
     RuntimeIdentity,
@@ -119,31 +118,7 @@ def _resource_id(payload: dict[str, Any]) -> str | None:
     return None
 
 
-class _ResourceCallEvent(Protocol):
-    """The event shape ``_resource_call`` reads.
-
-    ``TraceEvent`` (foundry) and ``TrajectoryEvent`` (trajectory) both carry the four members this
-    helper reads, so one definition serves both adapters instead of a second typed helper.
-    """
-
-    @property
-    def payload(self) -> dict[str, Any]:
-        ...
-
-    @property
-    def step(self) -> int:
-        ...
-
-    @property
-    def event_type(self) -> str:
-        ...
-
-    @property
-    def cost(self) -> float | None:
-        ...
-
-
-def _resource_call(index: int, event: _ResourceCallEvent) -> ResourceCallSummary:
+def _resource_call(index: int, event: TraceEvent | TrajectoryEvent) -> ResourceCallSummary:
     method = event.payload.get("method")
     operation = method if isinstance(method, str) and method else event.event_type
     success = event.payload.get("success")
@@ -297,9 +272,10 @@ class OperationalRuntimeAdapterContext(CanonicalModel):
 
     State-digest scopes default to :attr:`StateDigestScope.SEMANTIC`, not the legacy adapter's
     ``PUBLIC_SEMANTIC``: operational state is seeded from ``episode.oracle.initial_state``,
-    which is private-by-construction. ``initial_state_digest``/``final_state_digest`` override
-    the computed digest outright and win over ``scope``, so a caller that already holds the
-    exact digest the reverification engine requires can pass it through verbatim.
+    which is private-by-construction. Ordinary runtimes require ``initial_state_digest``
+    captured before execution, after substrate mounting. Native receipts supply their recorded
+    initial state; a contradictory caller digest is rejected. Computed digests use the existing
+    replay ``stable_hash`` rather than the trajectory identity's ``canonical_hash``.
 
     ``world_id`` is deliberately *absent* here, unlike :class:`RolloutTraceAdapterContext`. The
     operational runtime already names the world it executed (``runtime.episode.world_id``), so a
@@ -350,22 +326,13 @@ _REWARD_COMPONENTS = (
 
 
 def _operational_state_digest(
-    runtime: OperationalRuntime,
+    state: dict[str, Any],
     *,
     supplied: str | None,
     scope: StateDigestScope,
 ) -> StateDigest:
-    """Digest the harness-visible operational state at its recorded value.
-
-    ``runtime.state_snapshot()`` is documented harness-visible-but-not-agent-facing, and the
-    state is seeded from the episode's private oracle. The digest is therefore emitted at the
-    caller-chosen scope (``SEMANTIC`` by default) rather than silently downgraded to the legacy
-    adapter's ``PUBLIC_SEMANTIC``; a supplied digest always wins.
-    """
-
-    if supplied is not None:
-        return StateDigest(digest=supplied, scope=scope)
-    return StateDigest(digest=canonical_hash(runtime.state_snapshot()), scope=scope)
+    """Use the existing replay digest, never a fingerprint of guessed initial state."""
+    return StateDigest(digest=supplied if supplied is not None else stable_hash(state), scope=scope)
 
 
 def _operational_event(event: ActionEvent) -> TrajectoryEvent:
@@ -474,18 +441,62 @@ def trajectory_v2_from_operational_runtime(
             "operational trajectory adaptation requires the EpisodeSubmission passed to "
             "runtime.submit() in OperationalRuntimeAdapterContext.submission"
         )
+    breakdown = _breakdown(ctx, runtime)
+    receipt = getattr(runtime, "last_native_submission", None)
+    initial_digest = ctx.initial_state_digest
+    final_state = runtime.state_snapshot()
+    if receipt is not None:
+        recorded_initial = stable_hash(json.loads(receipt.initial_state_json))
+        if initial_digest is not None and initial_digest != recorded_initial:
+            raise ValueError("initial_state_digest does not match native receipt")
+        initial_digest = recorded_initial
+        final_state = json.loads(receipt.final_state_json)
+        if ctx.final_state_digest is not None and ctx.final_state_digest != stable_hash(
+            final_state
+        ):
+            raise ValueError("final_state_digest does not match native receipt")
+    if initial_digest is None:
+        raise ValueError(
+            "initial_state_digest must be captured before execution; "
+            "ordinary runtimes do not retain authoritative initial state"
+        )
     episode = runtime.episode
     acted = tuple(_operational_event(event) for event in runtime.events)
-    events = (*acted, _submit_event(ctx.submission, len(acted), 0.0))
+    events = acted
+    if receipt is not None:
+        events = (
+            *events,
+            TrajectoryEvent(
+                step=len(events),
+                event_type="native_submission",
+                payload={"method": "verify_native_artifact", "receipt_id": receipt.receipt_id},
+                cost=0.0,
+                state_before=_operational_state_digest(
+                    json.loads(receipt.pre_state_json),
+                    supplied=None,
+                    scope=StateDigestScope.SEMANTIC,
+                ),
+                state_after=_operational_state_digest(
+                    json.loads(receipt.final_state_json),
+                    supplied=None,
+                    scope=StateDigestScope.SEMANTIC,
+                ),
+                visibility=VisibilityClass.EVALUATOR_PRIVATE,
+            ),
+        )
+    events = (*events, _submit_event(ctx.submission, len(events), 0.0))
     resource_calls = (
         ctx.resource_calls
         if ctx.resource_calls is not None
-        else tuple(_resource_call(index, event) for index, event in enumerate(events))
+        else tuple(
+            _resource_call(index, event)
+            for index, event in enumerate(events)
+            if event.visibility is VisibilityClass.PUBLIC
+        )
     )
     verifier = ctx.verifier
     if verifier is None:
         verifier = current_operational_verifier_binding().identity
-    breakdown = _breakdown(ctx, runtime)
     source_provenance = ProvenanceRecord(
         source_kind="operational.episode_execution",
         source_id=episode.episode_id,
@@ -526,11 +537,7 @@ def trajectory_v2_from_operational_runtime(
             reset_id=ctx.reset_id,
             reset_index=ctx.reset_index,
         ),
-        initial_state=_operational_state_digest(
-            runtime,
-            supplied=ctx.initial_state_digest,
-            scope=ctx.initial_state_scope,
-        ),
+        initial_state=StateDigest(digest=initial_digest, scope=ctx.initial_state_scope),
         events=events,
         provider_calls=ctx.provider_calls,
         resource_calls=resource_calls,
@@ -551,7 +558,7 @@ def trajectory_v2_from_operational_runtime(
             truncated=ctx.truncated,
         ),
         final_state=_operational_state_digest(
-            runtime,
+            final_state,
             supplied=ctx.final_state_digest,
             scope=ctx.final_state_scope,
         ),
@@ -571,11 +578,8 @@ def _breakdown(context: OperationalRuntimeAdapterContext, runtime: OperationalRu
     the caller supplies it in the context. It is the single evaluation the runtime performed;
     nothing is re-scored here.
 
-    ``NativeOperationalRuntime`` is not special-cased. It records its native-artifact assertions
-    in ``episode.oracle.target_state`` and extends ``process_violations`` before scoring, so the
-    breakdown the caller holds already describes the episode the recorded events describe. The
-    adapter consumes ``runtime.events`` and that one breakdown generically, so both runtimes map
-    through the same code path.
+    Native evaluator transitions are projected separately from their retained receipt.
+    The adapter consumes the caller's original breakdown without recomputing any component.
     """
 
     if context.breakdown is not None:

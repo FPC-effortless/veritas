@@ -21,7 +21,6 @@ from investigation_world.experience import ExperienceMaturity, machine_experienc
 from investigation_world.foundry.models import stable_hash
 from investigation_world.operational.catalog import (
     build_enterprise_operations_world,
-    build_gis_operations_world,
     build_operational_suite,
 )
 from investigation_world.operational.models import (
@@ -30,7 +29,6 @@ from investigation_world.operational.models import (
     VerificationBreakdown,
     WorldDomain,
 )
-from investigation_world.operational.native_runtime import NativeOperationalRuntime
 from investigation_world.operational.realism import apply_domain_realism
 from investigation_world.operational.runtime import (
     OperationalRuntime,
@@ -149,9 +147,7 @@ def _solve(episode: OperationalEpisode) -> tuple[OperationalRuntime, EpisodeSubm
     return runtime, submission
 
 
-def _closed_runtime() -> tuple[
-    OperationalRuntime, EpisodeSubmission, VerificationBreakdown
-]:
+def _closed_runtime() -> tuple[OperationalRuntime, EpisodeSubmission, VerificationBreakdown]:
     runtime, submission = _solve(_catalog_episode())
     return runtime, submission, _fresh_breakdown(runtime)
 
@@ -198,11 +194,8 @@ def _context(
 ) -> OperationalRuntimeAdapterContext:
     """Build the adapter context, defaulting the state digests to the replay digests.
 
-    The evidence model hashes state with ``foundry.models.stable_hash`` while the adapter's own
-    computed digests use ``canonical_hash``; the two are different functions by design. Passing
-    the replay digests in explicitly is the documented way a caller reconciles them, so the
-    reverification round trip exercises that path rather than weakening either function. Explicit
-    ``overrides`` win, because ``kwargs.update`` applies them after the defaults.
+    Explicit ``overrides`` win. Separate tests exercise omitted native digests and fail-closed
+    ordinary adaptation when authoritative pre-execution context has not been provided.
     """
     initial_state, final_state = _replay_states(runtime)
     kwargs: dict = {
@@ -462,9 +455,7 @@ def test_missing_submission_is_rejected_rather_than_emitting_an_unsubmittable_tr
     # runtime to recover what it refused to adapt without. The recorded events are unchanged.
     assert runtime.closed is True
     assert all(event.blocked is False for event in runtime.events)
-    assert [event.sequence for event in runtime.events] == list(
-        range(1, len(runtime.events) + 1)
-    )
+    assert [event.sequence for event in runtime.events] == list(range(1, len(runtime.events) + 1))
 
 
 def test_world_id_is_derived_from_the_runtime_and_cannot_be_overridden_by_context() -> None:
@@ -617,35 +608,6 @@ def test_operational_package_does_not_import_trajectory() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_native_runtime_adapts_through_the_same_path(tmp_path) -> None:
-    """Adaptation is shared, but replay reverification is not claimed for the native runtime.
-
-    ``NativeOperationalRuntime.submit()`` writes ``native_artifact.*`` keys into the runtime
-    state *before* ``super().submit()`` scores, and asserts them in ``oracle.target_state``.
-    Those keys are not the ``state_changes`` of any ``ActionEvent``, so the state the engine
-    replays from the recorded events cannot equal the state the verifier scored. That is a
-    property of the native runtime's own scoring path, not of this adapter, which is why the
-    same-context, same-code-path adaptation is what this lane asserts.
-    """
-    episode = _apply_realism(
-        build_gis_operations_world(seed=42), index=3, family="projection_alignment"
-    )
-    runtime = NativeOperationalRuntime(episode, artifact_root=tmp_path)
-    _execute_required_actions(runtime)
-    submission = _submission(episode)
-    breakdown = runtime.submit(submission)
-
-    trajectory = trajectory_v2_from_operational_runtime(
-        runtime,
-        context=_context(runtime, submission, breakdown=breakdown),
-    )
-    assert [event.event_type for event in trajectory.events].count("submit") == 1
-    assert trajectory.usage.environment_cost == pytest.approx(float(runtime.budget.spent))
-    assert trajectory.original_evaluation.reward == pytest.approx(breakdown.overall_reward)
-    assert set(trajectory.original_evaluation.component_scores) == _REWARD_COMPONENTS
-    assert trajectory.provenance[0].adapter_id == OPERATIONAL_RUNTIME_ADAPTER_ID
-
-
 # ---------------------------------------------------------------------------
 # 10. Provenance, adapter identity, and unknown-not-default across the catalog.
 # ---------------------------------------------------------------------------
@@ -701,3 +663,165 @@ def test_every_catalog_domain_adapts_without_inventing_facts() -> None:
         assert trajectory.task.split is None
         assert trajectory.reset.seed is None
         assert trajectory.termination.truncated is None
+
+
+@pytest.mark.parametrize("persistent", [False, True])
+def test_ordinary_runtime_requires_authoritative_initial_digest(persistent):
+    from investigation_world.operational.substrate import PersistentOperationalSubstrate
+
+    runtime = OperationalRuntime(
+        _catalog_episode(),
+        substrate=PersistentOperationalSubstrate() if persistent else None,
+    )
+    initial = runtime.state_snapshot()
+    _execute_required_actions(runtime)
+    submission = _submission(runtime.episode)
+    result = runtime.submit(submission)
+    assert initial != runtime.state_snapshot()
+    with pytest.raises(ValueError, match="initial_state_digest"):
+        trajectory_v2_from_operational_runtime(
+            runtime,
+            context=OperationalRuntimeAdapterContext(submission=submission, breakdown=result),
+        )
+    trajectory = trajectory_v2_from_operational_runtime(
+        runtime,
+        context=OperationalRuntimeAdapterContext(
+            submission=submission, breakdown=result, initial_state_digest=stable_hash(initial)
+        ),
+    )
+    assert trajectory.initial_state.digest == stable_hash(initial)
+    assert trajectory.final_state.digest == stable_hash(runtime.state_snapshot())
+
+
+@pytest.mark.parametrize("domain", list(WorldDomain))
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_actual_native_adapter_round_trip(domain, persistent, corrupt, tmp_path, monkeypatch):
+    # Reuse the prerequisite's real execution/artifact-corruption fixtures, but replace its
+    # hand-built trajectory with the actual G-03 adapter. No hand-built transition can pass.
+    from test_native_submission_reverification import _run, episodes
+
+    episode = episodes.__wrapped__()[domain]
+    run = _run(episode, tmp_path, persistent=persistent, corrupt=corrupt, blocked=True)
+    runtime, contract, initial, submission, result = run
+    parity_run = _run(
+        episode, tmp_path / "parity", persistent=not persistent, corrupt=corrupt, blocked=True
+    )
+    assert result == parity_run[-1]
+    assert runtime.budget_snapshot() == parity_run[0].budget_snapshot()
+    receipt = runtime.last_native_submission
+    if persistent:
+        assert "organization.id" in initial
+        assert initial != runtime.episode.oracle.initial_state
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("adapter must not execute, inspect, materialize or rescore")
+
+    monkeypatch.setattr(runtime, "act", forbidden)
+    monkeypatch.setattr(runtime, "submit", forbidden)
+    monkeypatch.setattr(runtime.artifact_workspace, "verify", forbidden)
+    monkeypatch.setattr(runtime.artifact_workspace, "materialize", forbidden)
+    before = (runtime.trace(), runtime.state_snapshot(), runtime.budget_snapshot())
+    context = OperationalRuntimeAdapterContext(
+        submission=submission,
+        breakdown=result,
+        portable_operational_contract=ArtifactIdentity(
+            artifact_id=contract.contract_id,
+            contract="veritas.portable-operational-contract",
+            version=contract.schema_version,
+        ),
+    )
+    trajectory = trajectory_v2_from_operational_runtime(runtime, context=context)
+    assert trajectory == trajectory_v2_from_operational_runtime(runtime, context=context)
+    assert before == (runtime.trace(), runtime.state_snapshot(), runtime.budget_snapshot())
+    assert trajectory.initial_state.digest == stable_hash(initial)
+    assert trajectory.final_state.digest == stable_hash(runtime.state_snapshot())
+    assert trajectory.initial_state.digest != trajectory.final_state.digest
+    assert [e.event_type for e in trajectory.events] == ["act"] * len(runtime.events) + [
+        "native_submission",
+        "submit",
+    ]
+    transition = trajectory.events[-2]
+    assert transition.payload == {
+        "method": "verify_native_artifact",
+        "receipt_id": receipt.receipt_id,
+    }
+    assert transition.cost == 0
+    assert transition.visibility.value == "evaluator_private"
+    assert transition.state_before.digest == stable_hash(json.loads(receipt.pre_state_json))
+    assert transition.state_after.digest == stable_hash(json.loads(receipt.final_state_json))
+    for event, recorded in zip(trajectory.events, runtime.events):
+        assert event.cost == recorded.cost
+        assert event.payload["success"] == bool(recorded.effect_applied and not recorded.blocked)
+        assert reverification_engine._decode_operational_act(event) == (
+            recorded.action_name,
+            recorded.parameters,
+        )
+    assert trajectory.events[0].payload["success"] is False
+    assert trajectory.usage.environment_cost == runtime.budget.spent
+    evidence = OperationalReplayEvidence(
+        portable_contract=contract,
+        trajectory_events_digest=canonical_hash(trajectory.events),
+        initial_state=initial,
+        initial_state_digest=stable_hash(initial),
+        final_state=runtime.state_snapshot(),
+        final_state_digest=stable_hash(runtime.state_snapshot()),
+        action_events=tuple(runtime.events),
+        submission=submission,
+        tool_calls=runtime.budget.calls,
+        cost_spent=runtime.budget.spent,
+        native_submission=receipt,
+    )
+    payload = trajectory.model_dump(mode="python")
+    payload.update(trajectory_id="", evidence_references=(evidence.reference(),))
+    referenced = TrajectoryV2.model_validate(payload)
+    attached = attach_operational_replay_evidence(referenced, evidence.for_trajectory(referenced))
+    registry, verifier = _registry()
+    outcome = reverify_trajectory(attached, verifier=verifier, registry=registry)
+    assert outcome.status is ReverificationStatus.REVERIFIED, outcome
+    assert outcome.record.private_metadata["verification_breakdown"] == result.model_dump(
+        mode="json"
+    )
+    assert outcome.record.reward == result.overall_reward
+    assert outcome.record.component_scores == trajectory.original_evaluation.component_scores
+    assert outcome == reverify_trajectory(attached, verifier=verifier, registry=registry)
+    assert machine_experience_from_trajectory(attached).maturity is ExperienceMaturity.E0_TRACEABLE
+    verification = json.loads(receipt.verification_json)
+    assert verification["valid"] is (not corrupt)
+    for safe in (attached.public_payload(), attached.buyer_safe_payload()):
+        serialized = json.dumps(safe)
+        assert "native_submission" not in serialized
+        assert receipt.receipt_id not in serialized
+        assert str(tmp_path) not in serialized
+        assert "operational_reverification_evidence" not in serialized
+
+
+def test_operational_identity_is_stable_across_processes():
+    script = (
+        "import runpy; "
+        "ns = runpy.run_path('tests/trajectory/test_operational_runtime_adapter.py'); "
+        "print(ns['_trajectory']().trajectory_id)"
+    )
+    outputs = [
+        subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        for _ in range(2)
+    ]
+    assert outputs[0] == outputs[1] == _trajectory().trajectory_id
+
+
+def test_native_receipt_rejects_contradictory_state_context(tmp_path):
+    from test_native_submission_reverification import _run, episodes
+
+    runtime, _, _, submission, result = _run(
+        episodes.__wrapped__()[WorldDomain.DEVOPS_INCIDENT_RESPONSE], tmp_path
+    )
+    for field in ("initial_state_digest", "final_state_digest"):
+        with pytest.raises(ValueError, match=field):
+            trajectory_v2_from_operational_runtime(
+                runtime,
+                context=OperationalRuntimeAdapterContext(
+                    submission=submission, breakdown=result, **{field: "a" * 64}
+                ),
+            )
