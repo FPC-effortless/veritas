@@ -3,10 +3,12 @@ name: TrainLab local workbench
 on:
   pull_request:
     paths:
+      - 'integrations/forge/**'
       - 'integrations/trainlab/**'
       - '.github/workflows/trainlab-workbench.yml'
   push:
     paths:
+      - 'integrations/forge/**'
       - 'integrations/trainlab/**'
       - '.github/workflows/trainlab-workbench.yml'
 
@@ -32,10 +34,18 @@ jobs:
         run: PYTHONPATH=src python -m unittest discover -s tests -v
       - name: Check dashboard JavaScript
         run: node --check integrations/trainlab/src/trainlab/static/app.js
+      - name: Audit production runtime dependency and application source
+        if: matrix.python == '3.13'
+        working-directory: integrations/trainlab
+        run: |
+          python -m pip install pip-audit bandit
+          python -m pip_audit --no-deps --disable-pip --require-hashes -r requirements-server.txt
+          python -m bandit -r src/trainlab -q -ll
       - name: Package and exercise the installed CLI
         working-directory: integrations/trainlab
         run: |
-          python -m pip install .
+          python -m pip install --require-hashes -r requirements-server.txt
+          python -m pip install '.[server]'
           trainlab run examples/linear.json
           trainlab run examples/mean.json
           trainlab list
@@ -46,3 +56,30 @@ jobs:
           python -m pip install playwright
           python -m playwright install --with-deps chromium
           python tests/browser_smoke.py
+          python tests/production_smoke.py --evidence "$RUNNER_TEMP/trainlab-production-evidence"
+      - name: Build the portable production image and exercise recovery
+        if: matrix.python == '3.13'
+        run: |
+          docker build --build-arg VCS_REF="$GITHUB_SHA" -f integrations/trainlab/Dockerfile -t trainlab:ci .
+          python integrations/trainlab/tests/container_smoke.py --image trainlab:ci
+      - name: Reject high or critical container vulnerabilities
+        if: matrix.python == '3.13'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: trainlab:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          format: json
+          output: ${{ runner.temp }}/trainlab-image-audit.json
+      - name: Retain production acceptance and image audit evidence
+        if: always() && matrix.python == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: trainlab-production-evidence
+          path: |
+            ${{ runner.temp }}/trainlab-production-evidence
+            ${{ runner.temp }}/trainlab-image-audit.json
+          if-no-files-found: warn

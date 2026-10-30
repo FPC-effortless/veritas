@@ -1,0 +1,53 @@
+services:
+  trainlab:
+    build:
+      context: ../../..
+      dockerfile: integrations/trainlab/Dockerfile
+      args:
+        VCS_REF: ${TRAINLAB_REVISION:?Set the exact reviewed source commit}
+    image: trainlab:${TRAINLAB_REVISION:?Set the exact reviewed source commit}
+    init: true
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2
+    stop_grace_period: 15s
+    ports:
+      - "127.0.0.1:8765:8765"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001
+    volumes:
+      - trainlab-data:/data
+      - type: bind
+        source: ${TRAINLAB_RECIPES:?Set an absolute directory of approved recipes}
+        target: /recipes
+        read_only: true
+      - type: bind
+        source: ${TRAINLAB_AUTH_FILE:?Set the absolute private credentials file path}
+        target: /run/secrets/trainlab-auth.json
+        read_only: true
+    command:
+      - serve
+      - --production
+      - --host
+      - "0.0.0.0"
+      - --public-origin
+      - ${TRAINLAB_PUBLIC_ORIGIN:?Set the HTTPS origin served by your reverse proxy}
+      - --auth-file
+      - /run/secrets/trainlab-auth.json
+      - --runs
+      - /data/runs
+      - --experiments
+      - /recipes
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  trainlab-data:

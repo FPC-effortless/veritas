@@ -114,3 +114,10 @@ def test_refresh_preserves_retained_visibility_and_non_private_annotations():
 
     outcome.record.provenance[0].private_metadata["archival"] = "changed output"
     assert retained.provenance[0].private_metadata["archival"] == "private annotation"
+
+    retained.component_scores["outcome"] = 0.125
+    invalid = reverify_trajectory(original, verifier=verifier, registry=registry)
+    assert invalid.status is ReverificationStatus.UNKNOWN
+    assert invalid.reason_code == "TRAJECTORY_IDENTITY_INVALID"
+    assert invalid.record is None
+    assert invalid.trajectory_with_reverification is None
