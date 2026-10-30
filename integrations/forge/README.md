@@ -92,6 +92,8 @@ A real-code interop CI workflow, `.github/workflows/forge-woyengi-source-gate.ym
 
 ## TrainLab developer evidence receipt v0.1 — validation only
 
+The sibling [TrainLab local workbench](../trainlab/README.md) adds local experiment execution and a web dashboard for run records and comparisons. Its execution records are separate from this claim-checking receipt; neither surface independently qualifies science or devices.
+
 The local `validate-evidence` command checks an **untrusted** versioned receipt.
 It is an engineering *claim checker*, not a Veritas attestor, original-data verifier,
 qualified scientific scoring service, device benchmark or release authority.

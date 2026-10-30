@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="TrainLab local experiments, reproducible run records, and comparison reports.">
+  <title>TrainLab · Experiment workspace</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%231d4939'/%3E%3Cpath d='M16 19h32v7H36v23h-8V26H16z' fill='%23d4edab'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to workspace</a>
+  <aside class="sidebar">
+    <a class="brand" href="#runs" aria-label="TrainLab home"><span class="brandmark">T<span>→</span></span>TrainLab<span class="version">LOCAL</span></a>
+    <div class="workspace"><span class="workspace-icon">W</span><div><strong>My workspace</strong><small>Personal research lab</small></div><span class="chevron">⌄</span></div>
+    <span class="nav-label">WORKSPACE</span>
+    <nav aria-label="Main navigation">
+      <a href="#runs" data-view="runs"><span class="nav-icon" aria-hidden="true">▦</span>Overview<span class="nav-count" id="nav-count" aria-hidden="true">0</span></a>
+      <a href="#experiments" data-view="experiments"><span class="nav-icon" aria-hidden="true">⌘</span>Experiments</a>
+      <a href="#compare" data-view="compare"><span class="nav-icon" aria-hidden="true">⇄</span>Compare runs</a>
+    </nav>
+    <div class="sidebar-note"><span class="small-spark">✳</span><h3>Small lab. Clear evidence.</h3><p>Keep every command, metric, and artifact connected to its run.</p><button class="text-button" id="guide-button">Quick start <span>→</span></button></div>
+    <div class="sidebar-bottom"><span class="connection-dot"></span><div><strong id="connection-label">Connecting…</strong><small>Stored on this machine</small></div><span class="local-icon">⌁</span></div>
+  </aside>
+  <div class="shell">
+    <header class="topbar"><div class="breadcrumbs"><span>Workspace</span><b>/</b><strong id="breadcrumb">Overview</strong></div><div class="topbar-right"><span class="private-label">◈ &nbsp; Local workspace</span><button class="icon-button" id="help-button" aria-label="Open quick start">?</button><span class="avatar" aria-label="Personal workspace">ME</span></div></header>
+    <main id="main" tabindex="-1">
+      <div class="page-heading"><div><div class="eyebrow">THE EXPERIMENT WORKBENCH</div><h1 id="page-title">A clearer view of every run.</h1><p id="page-subtitle">Run locally. Compare carefully. Keep the evidence.</p></div><button class="button primary" id="new-button"><span>＋</span> Run experiment</button></div>
+      <div id="notice" role="status" hidden></div>
+      <section id="runs-view">
+        <div class="stats" aria-label="Run summary">
+          <article class="stat"><div>Total runs <span>▦</span></div><strong id="stat-total">0</strong><small>Every experiment, preserved</small></article>
+          <article class="stat"><div>Completed <span class="green">→</span></div><strong id="stat-completed">0</strong><small><span class="tiny-dot green-bg"></span>Metrics and artifacts recorded</small></article>
+          <article class="stat"><div>In progress <span>◷</span></div><strong id="stat-running">0</strong><small>Currently executing locally</small></article>
+          <article class="stat"><div>Needs attention <span>!</span></div><strong id="stat-failed">0</strong><small>Failed, timed out, or interrupted</small></article>
+        </div>
+        <section class="panel runs-panel" aria-labelledby="runs-heading">
+          <div class="panel-heading"><div><h2 id="runs-heading">Experiment runs <span id="run-total" class="pill">0</span></h2><p>A permanent record of what ran and what changed.</p></div><button class="button" id="compare-button" disabled>⇄ &nbsp; Compare <span id="selected-count"></span></button></div>
+          <div class="toolbar"><div class="filters" role="group" aria-label="Filter run status"><button data-status="all" class="active" aria-pressed="true">All runs</button><button data-status="succeeded" aria-pressed="false">Completed</button><button data-status="running" aria-pressed="false">Running</button><button data-status="attention" aria-pressed="false">Needs attention</button></div><div class="table-tools"><label class="search"><span>⌕</span><input id="search" type="search" placeholder="Search runs…" aria-label="Search runs"></label><select id="sort" aria-label="Sort runs"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="name">Name A–Z</option></select></div></div>
+          <div class="table-scroll"><table class="runs-table"><thead><tr><th class="check-col"><input id="select-all" type="checkbox" aria-label="Select all visible runs"></th><th>EXPERIMENT</th><th>STATUS</th><th>RECORDED METRIC</th><th>DURATION</th><th>STARTED</th><th aria-label="Details"></th></tr></thead><tbody id="runs-body"></tbody></table></div>
+          <div id="empty-state" class="empty" hidden><span class="empty-symbol">⌘</span><h3>Your next discovery starts here.</h3><p>Launch a registered experiment or save your first run with the CLI.</p><code>trainlab run examples/linear.json</code><button class="button" id="empty-run">Explore experiments <span>→</span></button></div>
+          <div class="table-footer"><span id="table-count">0 runs</span><span><span class="tiny-dot green-bg"></span>Auto-refreshes every 3 seconds</span></div>
+        </section>
+        <section class="evidence-note"><div class="evidence-icon">◈</div><div><h3>Good records are the beginning of good research.</h3><p>Run metrics are self-reported. Matching declarations and file hashes help you reproduce work; independent scientific and device qualification remain separate.</p></div><span class="outlined-pill">Evidence, kept in context</span></section>
+      </section>
+      <section id="experiments-view" hidden><div class="section-intro"><h2>Your experiment recipes</h2><p>Each recipe declares a local command, inputs, seed, metrics, and budget. Review the command before running it.</p></div><div id="recipes" class="recipes"></div></section>
+      <section id="compare-view" hidden><div id="comparison"></div></section>
+      <footer class="page-footer"><span>TRAINLAB <b>/</b> Make the work reproducible.</span><span>No scientific qualification inferred.</span></footer>
+    </main>
+  </div>
+  <dialog id="detail-dialog"><div class="dialog-top"><div><div class="eyebrow">RUN RECORD</div><h2 id="detail-name"></h2></div><button class="icon-button close-dialog" aria-label="Close run details">×</button></div><div id="detail-content"></div></dialog>
+  <dialog id="guide-dialog"><div class="dialog-top"><div><div class="eyebrow">A SMALL, REPRODUCIBLE START</div><h2>Welcome to your local lab.</h2></div><button class="icon-button close-dialog" aria-label="Close quick start">×</button></div><div class="guide-body"><p>TrainLab executes trusted experiment recipes and keeps their results together. Start from the TrainLab package directory:</p><pre>python -m pip install -e .
+trainlab run examples/linear.json
+trainlab run examples/mean.json
+trainlab serve --experiments examples</pre><ol><li><strong>Declare the experiment.</strong> Keep a JSON recipe beside its code and inputs. Declare every source file and the frozen split.</li><li><strong>Write the results.</strong> Your command writes <code>metrics.json</code> and declared artifacts into <code>TRAINLAB_OUTPUT_DIR</code>. Use <code>TRAINLAB_SEED</code> to seed your framework.</li><li><strong>Compare with context.</strong> Select two or more runs. TrainLab flags mismatched inputs, seeds, splits, metric definitions, or declared budgets.</li></ol><p class="muted">The included demos use constructed data. Commands run as your local user. Register only recipes you trust; keep secrets out of commands, logs, and artifacts. The dashboard stays on loopback.</p></div></dialog>
+  <noscript><p class="no-js">Enable JavaScript to use the TrainLab dashboard. The CLI works without JavaScript.</p></noscript>
+</body>
+</html>
