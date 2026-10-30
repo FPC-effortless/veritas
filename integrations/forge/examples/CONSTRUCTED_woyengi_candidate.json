@@ -1,0 +1,40 @@
+{
+  "kind": "PREDICTIVE_READ_EXPORT",
+  "schemaVersion": 1,
+  "status": "ADVISORY_ONLY",
+  "subject": "entity:CONSTRUCTED-fixture-workflow",
+  "predicate": "workflow:owner",
+  "validAt": "2026-02-05T00:00:00Z",
+  "recordedAt": "2026-02-15T00:00:00Z",
+  "predictionCutoff": "2026-02-15T00:00:00Z",
+  "selectedClaimId": "claim:fixture-second",
+  "conflictingClaimIds": [
+    "claim:fixture-first"
+  ],
+  "observations": [
+    {
+      "claimId": "claim:fixture-first",
+      "validFrom": "2026-02-01T00:00:00Z",
+      "knownFrom": "2026-02-01T12:00:00Z",
+      "sourceAvailableAt": "2026-02-01T12:00:00Z",
+      "featureHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "features": {
+        "observed_owner": "entity:constructed-one"
+      }
+    },
+    {
+      "claimId": "claim:fixture-second",
+      "validFrom": "2026-02-01T00:00:00Z",
+      "knownFrom": "2026-02-10T12:00:00Z",
+      "sourceAvailableAt": "2026-02-10T12:00:00Z",
+      "featureHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "features": {
+        "observed_owner": "entity:constructed-two"
+      }
+    }
+  ],
+  "qualification": "STRUCTURAL_EXPORT_ONLY",
+  "publisherAuthenticity": "NOT_ATTESTED_BY_THIS_EXPORTER",
+  "independentRewardVerification": "NOT_PERFORMED",
+  "actionAuthority": "NOT_GRANTED"
+}
