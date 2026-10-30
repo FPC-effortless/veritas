@@ -44,3 +44,7 @@ Free-form self-declared independence does not satisfy the gate.
 ## Mode independence
 
 These rules apply equally in ordinary Chat and ChatGPT Work. Mode changes the available execution surface, not the engineering standard. Resolve available tools at runtime; do not make the workflow depend on a mode-specific tool name.
+
+## Optional shared engineering skill
+
+For relevant tasks also read `.agents/skills/fpc-universal/SKILL.md`. This shared guide is subordinate to all repository-specific instructions and policies.
