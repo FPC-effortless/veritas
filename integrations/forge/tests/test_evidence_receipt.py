@@ -173,6 +173,12 @@ class ReceiptTest(unittest.TestCase):
                 with self.assertRaises(ForgeError):
                     validate_evidence(r)
 
+    def test_tac_100k_internal_claim_requires_explicit_baseline(self):
+        r = internal_candidate()
+        r["training"]["baselines"] = []
+        with self.assertRaisesRegex(ForgeError, "baseline controls"):
+            validate_evidence(r)
+
     def test_research_100k_budget(self):
         for bad in (94999, 105001, True, 100000.5):
             with self.subTest(bad=bad):
