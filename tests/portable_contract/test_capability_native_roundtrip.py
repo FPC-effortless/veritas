@@ -89,7 +89,10 @@ def test_bound_native_world_actual_adapter_offline_experience(
     )
     assert json.loads(receipt.verification_json)["valid"] is (not corrupt)
     assert runtime.events[0].blocked
-    experience = machine_experience_from_trajectory(attached)
+    reverified = outcome.trajectory_with_reverification
+    assert reverified is not None
+    experience = machine_experience_from_trajectory(reverified)
+    assert experience.trajectory.reverifications == (outcome.record,)
     assert experience.maturity is ExperienceMaturity.E0_TRACEABLE
     assert experience.trajectory.world.portable_operational_contract == identity
     for safe in (attached.public_payload(), attached.buyer_safe_payload()):

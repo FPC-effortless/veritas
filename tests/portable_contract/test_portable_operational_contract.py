@@ -243,9 +243,7 @@ def test_schema_1_0_contract_bytes_and_identity_remain_loadable() -> None:
     old_full["public"] = old_public
     old_full["contract_id"] = content_id("poc-v1", old_full)
 
-    restored = PortableOperationalContract.model_validate_json(
-        json.dumps(old_full)
-    )
+    restored = PortableOperationalContract.model_validate_json(json.dumps(old_full))
     serialized = json.loads(serialize_portable_contract(restored))
     serialized_public = json.loads(serialize_public_contract(restored))
 
@@ -269,11 +267,11 @@ def test_schema_1_1_missing_binding_defaults_to_explicit_null() -> None:
     assert json.loads(restored.canonical_bytes())["capability"] is None
 
 
-def test_source_provenance_matches_accepted_g02_candidate() -> None:
+def test_source_provenance_matches_published_joint_source_checkpoint() -> None:
     provenance = compile_operational_episode(_episode()).public.provenance
 
-    assert provenance.source_commit == "e722c04846d01c1f6df62fdbfbf1731ecc78630d"
-    assert provenance.source_model_git_blob_sha1 == "a93c95be4104089954366bc091056ad831543198"
+    assert provenance.source_commit == "62ca5642b2202f3cd75fbf6c389376d74f8c2def"
+    assert provenance.source_model_git_blob_sha1 == "1c6775322f89a9dac9f5840ceadc6762df80074f"
 
 
 def test_private_semantic_changes_change_full_identity_not_public_identity() -> None:
@@ -290,9 +288,7 @@ def test_private_semantic_changes_change_full_identity_not_public_identity() -> 
     changed_evaluator = baseline.private.evaluator.model_copy(
         update={"semantics_id": "test-verifier-semantics-v2"}
     )
-    evaluator_private = baseline.private.model_copy(
-        update={"evaluator": changed_evaluator}
-    )
+    evaluator_private = baseline.private.model_copy(update={"evaluator": changed_evaluator})
     evaluator = PortableOperationalContract(
         schema_version=baseline.schema_version,
         public=baseline.public,
@@ -456,3 +452,33 @@ def test_identity_bearing_json_values_are_recursively_immutable() -> None:
     assert contract.contract_id == original_id
     assert contract.public.public_id == original_public_id
     assert serialize_portable_contract(contract) == original_bytes
+
+
+def test_binding_findings_change_portable_identity_not_referenced_contract_identity() -> None:
+    episode = _episode()
+    episode.capability = CapabilityBinding(
+        capability_id="external-investigation",
+        content_digest="CCONTRACT-91A20E2ED9D0445EE997",
+    )
+    before = compile_operational_episode(episode)
+    episode.capability.binding_gaps = ("synthetic exact identifier not covered",)
+    after = compile_operational_episode(episode)
+    assert before.public.capability.content_digest == after.public.capability.content_digest
+    assert before.public.public_id != after.public.public_id
+    assert before.contract_id != after.contract_id
+
+
+@pytest.mark.parametrize("source_name", ["models.py", "runtime.py", "verifier.py"])
+def test_source_blob_drift_still_rejected(source_name, monkeypatch) -> None:
+    from investigation_world.portable_contract import compiler
+
+    actual_blob = compiler._git_blob_sha1
+    monkeypatch.setattr(
+        compiler,
+        "_git_blob_sha1",
+        lambda path: "0" * 40 if path.name == source_name else actual_blob(path),
+    )
+    with pytest.raises(UnsupportedOperationalSemanticError) as captured:
+        compile_operational_episode(_episode())
+    assert captured.value.code == "SOURCE_SEMANTICS_CHANGED"
+    assert captured.value.path.endswith(source_name)

@@ -425,7 +425,10 @@ def test_world_spec_accepts_and_drops_a_binding_independently():
     unbound = OperationalWorldSpec(seed=4242)
     assert unbound.capability is None
     # An additive optional field does not change the spec's other defaults.
-    assert unbound.region == spec.region or True
+    assert unbound.region is RegionGroup.GLOBAL
+    assert unbound.model_dump(exclude={"capability"}) == OperationalWorldSpec(
+        seed=4242, capability=binding
+    ).model_dump(exclude={"capability"})
 
 
 def test_binding_gaps_are_recorded_for_uncovered_oracle_keys():
