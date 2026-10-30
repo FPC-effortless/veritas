@@ -17,6 +17,8 @@
 - human-only auth/secrets -> `wizard`;
 - context transfer -> `handoff`.
 
+Repository-native handoff, exact-head review, branch/worktree discipline, and completion semantics are defined in [`handoff-contract.md`](handoff-contract.md). A chat transcript is never the canonical handoff record.
+
 ## Universal review axes
 
 Review material changes separately for:
