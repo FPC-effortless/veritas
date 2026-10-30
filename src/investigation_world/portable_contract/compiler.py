@@ -22,9 +22,11 @@ from investigation_world.operational.models import (
 from investigation_world.portable_contract.errors import UnsupportedOperationalSemanticError
 from investigation_world.portable_contract.identity import content_id, normalize_json_value
 from investigation_world.portable_contract.models import (
+    PORTABLE_CONTRACT_SCHEMA_VERSION,
     InteractionMode,
     PortableActionDefinition,
     PortableBudgetContract,
+    PortableCapabilityBinding,
     PortableEvaluatorBinding,
     PortableEvidenceContract,
     PortableEvidenceRecord,
@@ -52,11 +54,11 @@ from investigation_world.portable_contract.validation import (
     assert_operational_semantic_equivalence,
 )
 
-CONTRACT_SCHEMA_VERSION = "1.0.0"
+CONTRACT_SCHEMA_VERSION = PORTABLE_CONTRACT_SCHEMA_VERSION
 COMPILER_ID = "investigation_world.portable_contract.compile_operational_episode"
 COMPILER_VERSION = "1"
-SOURCE_COMMIT = "98500d7e081e48f8e291be51ba360ff851aa88fe"
-SOURCE_MODEL_BLOB = "69877f041a74826a480e7d8d6ab6f459eee1ddcb"
+SOURCE_COMMIT = "66de4a9611a8404ecd6d40cf7ac6ddd67adb081d"
+SOURCE_MODEL_BLOB = "54c8820cfbdc2c37612d9c92c75e03e8e9e96b39"
 SOURCE_RUNTIME_BLOB = "c82dfd6845a6f33f9bc636874d5cc23b59c37d3f"
 SOURCE_VERIFIER_BLOB = "37c344287cb19b8e22bd705235bcfab67989065e"
 VERIFIER_ENTRYPOINT = (
@@ -105,6 +107,7 @@ _EXPECTED_MODEL_FIELDS: dict[type[Any], set[str]] = {
         "records",
         "oracle",
         "metadata",
+        "capability",
     },
     TaskContract: {
         "task_id",
@@ -273,8 +276,16 @@ def _validate_source_episode(episode: OperationalEpisode) -> None:
             detail=str(exc),
         ) from exc
     source = normalize_json_value(
-        episode.model_dump(mode="python"),
+        episode.model_dump(mode="python", exclude={"capability"}),
         path="episode",
+    )
+    source["capability"] = (
+        None
+        if episode.capability is None
+        else normalize_json_value(
+            episode.capability.model_dump(mode="json"),
+            path="episode.capability",
+        )
     )
     for action_index, action in enumerate(episode.task.available_actions):
         if len(action.parameter_names) != len(set(action.parameter_names)):
@@ -292,6 +303,7 @@ def _validate_source_episode(episode: OperationalEpisode) -> None:
         "task": source["task"],
         "records": source["records"],
         "metadata": source["metadata"],
+        "capability": source["capability"],
     }
     _reject_private_keys(public_source, path="episode.public_payload")
 
@@ -377,7 +389,14 @@ def _observation_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["episode_id", "world_id", "task", "records", "metadata"],
+        "required": [
+            "episode_id",
+            "world_id",
+            "task",
+            "records",
+            "metadata",
+            "capability",
+        ],
         "properties": {
             "episode_id": {"type": "string"},
             "world_id": {"type": "string"},
@@ -387,6 +406,31 @@ def _observation_schema() -> dict[str, Any]:
                 "items": _record_schema(),
             },
             "metadata": {"type": "object"},
+            "capability": {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "required": [
+                            "capability_id",
+                            "content_digest",
+                            "binding_gaps",
+                        ],
+                        "properties": {
+                            "capability_id": {"type": "string", "minLength": 1},
+                            "content_digest": {
+                                "type": "string",
+                                "pattern": r"^CCONTRACT-[0-9A-F]{20}$",
+                            },
+                            "binding_gaps": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
+                    {"type": "null"},
+                ],
+            },
         },
     }
 
@@ -688,6 +732,13 @@ def _compile_operational_episode_unchecked(
         permitted_systems=tuple(episode.task.permitted_systems),
         constraints=tuple(episode.task.constraints),
         success_description=episode.task.success_description,
+        capability=(
+            None
+            if episode.capability is None
+            else PortableCapabilityBinding.model_validate(
+                episode.capability.model_dump(mode="python")
+            )
+        ),
         task_metadata=normalize_json_value(
             episode.task.metadata,
             path="episode.task.metadata",

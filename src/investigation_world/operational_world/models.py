@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from investigation_world.operational.models import CapabilityBinding
+
 
 class RegionGroup(StrEnum):
     GLOBAL = "global"
@@ -180,6 +182,7 @@ class OperationalWorldSpec(BaseModel):
             "TREASURY",
         ]
     )
+    capability: CapabilityBinding | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -10,6 +10,9 @@ from investigation_world.portable_contract.identity import (
     content_id,
 )
 
+PORTABLE_CONTRACT_SCHEMA_VERSION = "1.1.0"
+_LEGACY_PORTABLE_CONTRACT_SCHEMA_VERSION = "1.0.0"
+
 
 class FrozenDict(dict[str, Any]):
     """A recursively frozen JSON-object representation."""
@@ -104,6 +107,18 @@ class PortableTaskIdentity(FrozenContractModel):
     world_id: str
     task_id: str
     domain: str
+
+
+class PortableCapabilityBinding(FrozenContractModel):
+    capability_id: str = Field(min_length=1)
+    content_digest: str = Field(pattern=r"^CCONTRACT-[0-9A-F]{20}$")
+    binding_gaps: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_capability_id(self) -> "PortableCapabilityBinding":
+        if not self.capability_id.strip():
+            raise ValueError("capability binding requires a non-empty capability_id")
+        return self
 
 
 class PortableStateAssertion(FrozenContractModel):
@@ -362,6 +377,7 @@ class PortablePublicContract(FrozenContractModel):
     permitted_systems: tuple[str, ...]
     constraints: tuple[str, ...]
     success_description: str
+    capability: PortableCapabilityBinding | None = None
     task_metadata: dict[str, Any]
     episode_metadata: dict[str, Any]
     state: PortableStateContract
@@ -371,7 +387,7 @@ class PortablePublicContract(FrozenContractModel):
 
     @model_validator(mode="after")
     def bind_public_identity(self) -> "PortablePublicContract":
-        payload = self.model_dump(mode="python", exclude={"public_id"})
+        payload = self._identity_payload()
         expected = content_id("poc-public-v1", payload)
         if self.public_id and self.public_id != expected:
             raise ValueError("public_id does not match public contract content")
@@ -379,7 +395,18 @@ class PortablePublicContract(FrozenContractModel):
         return self
 
     def canonical_bytes(self) -> bytes:
-        return canonical_json_bytes(self.model_dump(mode="python"))
+        payload = self.model_dump(mode="python")
+        if self.schema_version == _LEGACY_PORTABLE_CONTRACT_SCHEMA_VERSION:
+            payload.pop("capability", None)
+        return canonical_json_bytes(payload)
+
+    def _identity_payload(self) -> dict[str, Any]:
+        payload = self.model_dump(mode="python", exclude={"public_id"})
+        if self.schema_version == _LEGACY_PORTABLE_CONTRACT_SCHEMA_VERSION:
+            if "capability" in self.model_fields_set:
+                raise ValueError("portable schema 1.0.0 cannot contain capability metadata")
+            payload.pop("capability", None)
+        return payload
 
 
 class PortableOperationalContract(FrozenContractModel):
@@ -443,6 +470,8 @@ class PortableOperationalContract(FrozenContractModel):
             raise ValueError("reset_identity does not match deterministic initial state")
 
         payload = self.model_dump(mode="python", exclude={"contract_id"})
+        if self.schema_version == _LEGACY_PORTABLE_CONTRACT_SCHEMA_VERSION:
+            payload["public"].pop("capability", None)
         expected = content_id("poc-v1", payload)
         if self.contract_id and self.contract_id != expected:
             raise ValueError("contract_id does not match portable contract content")
@@ -450,7 +479,10 @@ class PortableOperationalContract(FrozenContractModel):
         return self
 
     def canonical_bytes(self) -> bytes:
-        return canonical_json_bytes(self.model_dump(mode="python"))
+        payload = self.model_dump(mode="python")
+        if self.schema_version == _LEGACY_PORTABLE_CONTRACT_SCHEMA_VERSION:
+            payload["public"].pop("capability", None)
+        return canonical_json_bytes(payload)
 
     def public_bytes(self) -> bytes:
         return self.public.canonical_bytes()
