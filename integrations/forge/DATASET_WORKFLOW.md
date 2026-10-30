@@ -107,11 +107,13 @@ are not PASS. The package work remains stacked on unmerged Forge/TrainLab drafts
 it does not authorize their merge, scientific promotion, release or deployment.
 
 Local implementation evidence on Python 3.12: 68 Forge checks and 18 TrainLab
-checks passed without skips; the broader Veritas suite passed 1,251 tests with
+checks passed without skips; the broader Veritas suite passed 1,308 tests with
 2 existing skips. Chromium acceptance exercised recipe launch, replay, search,
 comparison, CSV/JSON export, logs, artifact verification and mobile layout.
 A separate browser check displayed the Forge-derived runs and their matched
 declared-condition comparison. Both wheel/sdist builds, package metadata checks,
 installed CLI smoke, new-file Ruff checks and dashboard JavaScript syntax passed.
+The full pinned Ruff/Mypy ratchet passed with zero introduced diagnostics;
+the committed baseline and ignore policy are unchanged.
 These are local software checks; hosted exact-head CI, parent integration,
 authentic-source qualification and physical-device evidence remain separate.

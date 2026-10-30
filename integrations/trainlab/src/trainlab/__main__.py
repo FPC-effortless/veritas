@@ -1,4 +1,5 @@
 """TrainLab local CLI and dashboard."""
+
 from __future__ import annotations
 
 import argparse
@@ -9,7 +10,9 @@ from .runner import LabError, compare_runs, list_runs, run_experiment, verify_ru
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="TrainLab: local experiments and comparison records")
+    parser = argparse.ArgumentParser(
+        description="TrainLab: local experiments and comparison records"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Execute a trusted local experiment config")
     run.add_argument("config", type=Path)
@@ -23,7 +26,11 @@ def main() -> int:
     check.add_argument("directory", type=Path)
     serve = commands.add_parser("serve", help="Open the local dashboard")
     serve.add_argument("--runs", type=Path, default=Path(".trainlab/runs"))
-    serve.add_argument("--experiments", type=Path, help="Enable execution of trusted *.json configs from this directory")
+    serve.add_argument(
+        "--experiments",
+        type=Path,
+        help="Enable execution of trusted *.json configs from this directory",
+    )
     serve.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     try:
@@ -40,6 +47,7 @@ def main() -> int:
             result = verify_run(args.directory)
         else:
             from .server import Dashboard
+
             with Dashboard(args.runs, args.experiments, args.port) as server:
                 print(f"TrainLab: http://127.0.0.1:{server.server_port}", flush=True)
                 try:

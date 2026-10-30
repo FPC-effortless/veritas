@@ -3,6 +3,7 @@
 Commands are trusted code, not sandboxed jobs. Only the CLI executes commands;
 the dashboard reads saved results and never accepts commands from a browser.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -65,7 +66,9 @@ def digest(path: Path) -> str:
 
 def write_json(path: Path, value: dict) -> None:
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
+    temporary.write_text(
+        json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
+    )
     temporary.replace(path)
 
 
@@ -91,16 +94,37 @@ def contained_file(root: Path, name: str) -> Path:
 
 def load_config(path: Path) -> dict:
     config = read_json(path)
-    fields = {"schema", "name", "description", "command", "seed", "timeout_seconds",
-              "source_kind", "split_identity", "inputs", "artifacts", "metrics", "budget"}
-    if not isinstance(config, dict) or set(config) != fields or config["schema"] != "trainlab.experiment.v1":
+    fields = {
+        "schema",
+        "name",
+        "description",
+        "command",
+        "seed",
+        "timeout_seconds",
+        "source_kind",
+        "split_identity",
+        "inputs",
+        "artifacts",
+        "metrics",
+        "budget",
+    }
+    if (
+        not isinstance(config, dict)
+        or set(config) != fields
+        or config["schema"] != "trainlab.experiment.v1"
+    ):
         raise LabError("unsupported experiment schema or fields")
     for key in ("name", "description", "split_identity"):
         if not isinstance(config[key], str) or not config[key].strip() or len(config[key]) > 500:
             raise LabError(f"{key} must be a bounded nonempty string")
     command = config["command"]
-    if not isinstance(command, list) or not command or len(command) > 128 or any(
-        not isinstance(arg, str) or not arg or "\0" in arg or len(arg) > 4096 for arg in command
+    if (
+        not isinstance(command, list)
+        or not command
+        or len(command) > 128
+        or any(
+            not isinstance(arg, str) or not arg or "\0" in arg or len(arg) > 4096 for arg in command
+        )
     ):
         raise LabError("command must be a nonempty argv array")
     if type(config["seed"]) is not int or not 0 <= config["seed"] <= 2**32 - 1:
@@ -119,15 +143,27 @@ def load_config(path: Path) -> dict:
         if len(set(names)) != len(names):
             raise LabError(f"duplicate {key}")
     metrics = config["metrics"]
-    if not isinstance(metrics, dict) or not 1 <= len(metrics) <= 64 or any(
-        not isinstance(key, str) or not key or len(key) > 80 or value not in ("min", "max")
-        for key, value in metrics.items()
+    if (
+        not isinstance(metrics, dict)
+        or not 1 <= len(metrics) <= 64
+        or any(
+            not isinstance(key, str) or not key or len(key) > 80 or value not in ("min", "max")
+            for key, value in metrics.items()
+        )
     ):
         raise LabError("metrics must map names to min or max")
     budget = config["budget"]
-    if not isinstance(budget, dict) or not 1 <= len(budget) <= 32 or any(
-        not isinstance(key, str) or not key or len(key) > 80 or type(value) is not int or value < 0
-        for key, value in budget.items()
+    if (
+        not isinstance(budget, dict)
+        or not 1 <= len(budget) <= 32
+        or any(
+            not isinstance(key, str)
+            or not key
+            or len(key) > 80
+            or type(value) is not int
+            or value < 0
+            for key, value in budget.items()
+        )
     ):
         raise LabError("budget must map names to nonnegative integer declarations")
     return config
@@ -135,8 +171,23 @@ def load_config(path: Path) -> dict:
 
 def _git_identity(root: Path) -> dict:
     try:
-        sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, timeout=5, check=True).stdout.strip()
-        dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=root, capture_output=True, timeout=5, check=True).stdout)
+        sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        ).stdout.strip()
+        dirty = bool(
+            subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=root,
+                capture_output=True,
+                timeout=5,
+                check=True,
+            ).stdout
+        )
         return {"commit": sha, "dirty": dirty}
     except (OSError, subprocess.SubprocessError):
         return {"commit": None, "dirty": None}
@@ -170,25 +221,54 @@ def run_experiment(config_path: Path, runs_root: Path) -> dict:
     output.mkdir()
     write_json(directory / "experiment.json", config)
     record = {
-        "schema": "trainlab.run.v1", "id": run_id, "name": config["name"],
-        "description": config["description"], "status": "running", "started_at": _now(),
-        "finished_at": None, "elapsed_seconds": None, "exit_code": None, "error": None,
-        "command": config["command"], "seed": config["seed"], "inputs": inputs,
-        "source_kind": config["source_kind"], "split_identity": config["split_identity"],
-        "metric_directions": config["metrics"], "budget": config["budget"],
-        "metrics": {}, "artifacts": {}, "files": {},
-        "git": _git_identity(cwd), "runtime": {"python": sys.version.split()[0], "platform": platform.platform()},
-        "qualification": "NOT_QUALIFIED", "source_rights": "NOT_INDEPENDENTLY_VERIFIED",
+        "schema": "trainlab.run.v1",
+        "id": run_id,
+        "name": config["name"],
+        "description": config["description"],
+        "status": "running",
+        "started_at": _now(),
+        "finished_at": None,
+        "elapsed_seconds": None,
+        "exit_code": None,
+        "error": None,
+        "command": config["command"],
+        "seed": config["seed"],
+        "inputs": inputs,
+        "source_kind": config["source_kind"],
+        "split_identity": config["split_identity"],
+        "metric_directions": config["metrics"],
+        "budget": config["budget"],
+        "metrics": {},
+        "artifacts": {},
+        "files": {},
+        "git": _git_identity(cwd),
+        "runtime": {"python": sys.version.split()[0], "platform": platform.platform()},
+        "qualification": "NOT_QUALIFIED",
+        "source_rights": "NOT_INDEPENDENTLY_VERIFIED",
     }
     write_json(directory / "run.json", record)
-    env = {**os.environ, "TRAINLAB_OUTPUT_DIR": str(output), "TRAINLAB_SEED": str(config["seed"]),
-           "PYTHONHASHSEED": str(config["seed"])}
+    env = {
+        **os.environ,
+        "TRAINLAB_OUTPUT_DIR": str(output),
+        "TRAINLAB_SEED": str(config["seed"]),
+        "PYTHONHASHSEED": str(config["seed"]),
+    }
     started = time.perf_counter()
     process = None
     try:
-        with (directory / "stdout.log").open("wb") as stdout, (directory / "stderr.log").open("wb") as stderr:
-            process = subprocess.Popen(config["command"], cwd=cwd, env=env, stdout=stdout, stderr=stderr,
-                                       stdin=subprocess.DEVNULL, start_new_session=os.name == "posix")
+        with (
+            (directory / "stdout.log").open("wb") as stdout,
+            (directory / "stderr.log").open("wb") as stderr,
+        ):
+            process = subprocess.Popen(
+                config["command"],
+                cwd=cwd,
+                env=env,
+                stdout=stdout,
+                stderr=stderr,
+                stdin=subprocess.DEVNULL,
+                start_new_session=os.name == "posix",
+            )
             try:
                 record["exit_code"] = process.wait(timeout=config["timeout_seconds"])
             except subprocess.TimeoutExpired:
@@ -200,11 +280,17 @@ def run_experiment(config_path: Path, runs_root: Path) -> dict:
                 if process.returncode != 0:
                     raise LabError("Experiment exited unsuccessfully; inspect local stderr.log.")
                 metrics = read_json(contained_file(output, "metrics.json"))
-                if not isinstance(metrics, dict) or set(metrics) != set(config["metrics"]) or any(
-                    not _finite(value) for value in metrics.values()
+                if (
+                    not isinstance(metrics, dict)
+                    or set(metrics) != set(config["metrics"])
+                    or any(not _finite(value) for value in metrics.values())
                 ):
-                    raise LabError("metrics.json must contain exactly the declared finite scalar metrics")
-                artifacts = {name: digest(contained_file(output, name)) for name in config["artifacts"]}
+                    raise LabError(
+                        "metrics.json must contain exactly the declared finite scalar metrics"
+                    )
+                artifacts = {
+                    name: digest(contained_file(output, name)) for name in config["artifacts"]
+                }
                 if any(digest(contained_file(cwd, name)) != sha for name, sha in inputs.items()):
                     raise LabError("Declared inputs changed during the experiment")
                 record.update(status="succeeded", metrics=metrics, artifacts=artifacts)
@@ -248,7 +334,9 @@ def validate_record(run: object) -> None:
     try:
         if not isinstance(run, dict) or run["schema"] != "trainlab.run.v1":
             raise LabError("unsupported run record")
-        if not isinstance(run["id"], str) or not re.fullmatch(r"\d{8}T\d{6}-[a-f0-9]{12}", run["id"]):
+        if not isinstance(run["id"], str) or not re.fullmatch(
+            r"\d{8}T\d{6}-[a-f0-9]{12}", run["id"]
+        ):
             raise LabError("invalid run identity")
         if run["status"] not in ("running", "succeeded", "failed", "timed_out", "interrupted"):
             raise LabError("invalid run status")
@@ -260,12 +348,18 @@ def validate_record(run: object) -> None:
             raise LabError("invalid source kind")
         if type(run["seed"]) is not int or not 0 <= run["seed"] <= 2**32 - 1:
             raise LabError("invalid run seed")
-        if run["elapsed_seconds"] is not None and (not _finite(run["elapsed_seconds"]) or run["elapsed_seconds"] < 0):
+        if run["elapsed_seconds"] is not None and (
+            not _finite(run["elapsed_seconds"]) or run["elapsed_seconds"] < 0
+        ):
             raise LabError("invalid run duration")
-        if not isinstance(run["metrics"], dict) or any(not _finite(v) for v in run["metrics"].values()):
+        if not isinstance(run["metrics"], dict) or any(
+            not _finite(v) for v in run["metrics"].values()
+        ):
             raise LabError("invalid run metrics")
-        if not isinstance(run["metric_directions"], dict) or not run["metric_directions"] or any(
-            v not in ("min", "max") for v in run["metric_directions"].values()
+        if (
+            not isinstance(run["metric_directions"], dict)
+            or not run["metric_directions"]
+            or any(v not in ("min", "max") for v in run["metric_directions"].values())
         ):
             raise LabError("invalid metric directions")
         if set(run["metrics"]) - set(run["metric_directions"]):
@@ -279,19 +373,32 @@ def validate_record(run: object) -> None:
                 _relative(name)
                 if not isinstance(sha, str) or not re.fullmatch("[a-f0-9]{64}", sha):
                     raise LabError("invalid file hash")
-        if not isinstance(run["budget"], dict) or any(type(v) is not int or v < 0 for v in run["budget"].values()):
+        if not isinstance(run["budget"], dict) or any(
+            type(v) is not int or v < 0 for v in run["budget"].values()
+        ):
             raise LabError("invalid run budget")
-        if not isinstance(run["command"], list) or any(not isinstance(v, str) for v in run["command"]):
+        if not isinstance(run["command"], list) or any(
+            not isinstance(v, str) for v in run["command"]
+        ):
             raise LabError("invalid run command")
         if run["error"] is not None and not isinstance(run["error"], str):
             raise LabError("invalid run error")
-        if not isinstance(run["git"], dict) or run["git"]["commit"] is not None and not isinstance(run["git"]["commit"], str):
+        if (
+            not isinstance(run["git"], dict)
+            or run["git"]["commit"] is not None
+            and not isinstance(run["git"]["commit"], str)
+        ):
             raise LabError("invalid source commit")
         if run["git"]["dirty"] is not None and type(run["git"]["dirty"]) is not bool:
             raise LabError("invalid source dirty state")
-        if not isinstance(run["runtime"], dict) or any(not isinstance(run["runtime"][key], str) for key in ("python", "platform")):
+        if not isinstance(run["runtime"], dict) or any(
+            not isinstance(run["runtime"][key], str) for key in ("python", "platform")
+        ):
             raise LabError("invalid runtime metadata")
-        if run["qualification"] != "NOT_QUALIFIED" or run["source_rights"] != "NOT_INDEPENDENTLY_VERIFIED":
+        if (
+            run["qualification"] != "NOT_QUALIFIED"
+            or run["source_rights"] != "NOT_INDEPENDENTLY_VERIFIED"
+        ):
             raise LabError("run metadata cannot confer qualification or source rights")
     except (KeyError, TypeError, ValueError) as exc:
         raise LabError("invalid run record") from exc
@@ -303,7 +410,10 @@ def verify_run(directory: Path) -> dict:
     if record.get("status") == "running":
         raise LabError("run is not finalized; it may be active or interrupted by a host shutdown")
     mismatches = []
-    hashes = {**record["files"], **{"output/" + name: sha for name, sha in record["artifacts"].items()}}
+    hashes = {
+        **record["files"],
+        **{"output/" + name: sha for name, sha in record["artifacts"].items()},
+    }
     for name, sha in hashes.items():
         try:
             if digest(contained_file(directory, name)) != sha:
@@ -323,8 +433,13 @@ def verify_run(directory: Path) -> dict:
                 mismatches.append("run.json artifact list")
         except (LabError, OSError):
             mismatches.append("saved experiment/metrics")
-    return {"id": record["id"], "valid": not mismatches, "mismatches": mismatches,
-            "scope": "RECORDED_FILE_HASHES_ONLY", "qualification": "NOT_QUALIFIED"}
+    return {
+        "id": record["id"],
+        "valid": not mismatches,
+        "mismatches": mismatches,
+        "scope": "RECORDED_FILE_HASHES_ONLY",
+        "qualification": "NOT_QUALIFIED",
+    }
 
 
 def compare_runs(runs: list[dict]) -> dict:
@@ -334,6 +449,13 @@ def compare_runs(runs: list[dict]) -> dict:
     mismatches = [key for key in fields if any(run[key] != runs[0][key] for run in runs[1:])]
     if any(run["status"] != "succeeded" for run in runs):
         mismatches.append("status")
-    return {"runs": runs, "matched_declared_conditions": not mismatches, "mismatches": mismatches,
-            "qualification": "NOT_QUALIFIED",
-            "note": "Declared matching conditions do not establish equal actual compute, source rights, independent evaluation or a scientific winner."}
+    return {
+        "runs": runs,
+        "matched_declared_conditions": not mismatches,
+        "mismatches": mismatches,
+        "qualification": "NOT_QUALIFIED",
+        "note": (
+            "Declared matching conditions do not establish equal actual compute, "
+            "source rights, independent evaluation or a scientific winner."
+        ),
+    }

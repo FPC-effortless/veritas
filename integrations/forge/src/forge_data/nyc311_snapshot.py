@@ -6,22 +6,21 @@ or eligibility for real TAC-OSM training. Captures are SOURCE CANDIDATES ONLY.
 
 Source: NYC Open Data erm2-nwe9. No API secrets or free-text/geolocation fields.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
 import tempfile
-from urllib.parse import urlencode, parse_qsl, urlsplit
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 SOURCE_BASE = "https://data.cityofnewyork.us/resource/erm2-nwe9.json"
 PUBLISHER_PAGE = "https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2020-to-Present/erm2-nwe9"
-SAFE_COLUMNS = (
-    "unique_key", "created_date", "closed_date", "agency", "complaint_type", "status"
-)
+SAFE_COLUMNS = ("unique_key", "created_date", "closed_date", "agency", "complaint_type", "status")
 MAX_BYTES = 3_000_000
 CAPTURE_SCHEMA = "forge.public-api-snapshot.v0.1"
 
@@ -49,19 +48,23 @@ def _parse_utc(value: object, name: str) -> datetime:
 def _source_url(limit: int) -> str:
     if type(limit) is not int or not 1 <= limit <= 100:
         raise SnapshotError("limited public source capture must request 1..100 rows")
-    query = urlencode({
-        "$select": ",".join(SAFE_COLUMNS),
-        "$order": "created_date DESC,unique_key DESC",
-        "$limit": str(limit),
-    })
+    query = urlencode(
+        {
+            "$select": ",".join(SAFE_COLUMNS),
+            "$order": "created_date DESC,unique_key DESC",
+            "$limit": str(limit),
+        }
+    )
     return SOURCE_BASE + "?" + query
 
 
 def _check_rows(raw: bytes, limit: int) -> list[dict]:
     if not raw or len(raw) > MAX_BYTES:
         raise SnapshotError("source response is empty or exceeds public capture bound")
+
     def no_constant(s):
         raise SnapshotError(f"nonfinite JSON source value {s}")
+
     try:
         parsed = json.loads(raw.decode("utf-8"), parse_constant=no_constant)
     except (ValueError, UnicodeDecodeError) as exc:
@@ -99,9 +102,15 @@ def make_snapshot(output_dir: Path, *, limit: int = 25, fetcher=None, clock=None
     clock = clock or _utc_now
     start = clock()
     _parse_utc(start, "acquisition_start_utc")
-    status, content_type, server_date, raw = fetcher(Request(url, headers={
-        "User-Agent": "ForgeTemporalSourceAudit/0.1 (scientific-source-qualification)"
-    }), MAX_BYTES)
+    status, content_type, server_date, raw = fetcher(
+        Request(
+            url,
+            headers={
+                "User-Agent": "ForgeTemporalSourceAudit/0.1 (scientific-source-qualification)"
+            },
+        ),
+        MAX_BYTES,
+    )
     end = clock()
     if _parse_utc(end, "acquisition_end_utc") < _parse_utc(start, "acquisition_start_utc"):
         raise SnapshotError("non-monotonic acquisition clock")
@@ -148,6 +157,7 @@ def make_snapshot(output_dir: Path, *, limit: int = 25, fetcher=None, clock=None
     finally:
         if stage.exists():
             import shutil
+
             shutil.rmtree(stage)
     return receipt
 
@@ -169,7 +179,10 @@ def inspect_capture(directory: Path) -> dict:
     raw = (directory / "publisher-response.json").read_bytes()
     if receipt.get("schema") != CAPTURE_SCHEMA:
         raise SnapshotError("unsupported source capture schema")
-    if receipt.get("publisher_page") != PUBLISHER_PAGE or receipt.get("dataset_id") != "NYC311/erm2-nwe9":
+    if (
+        receipt.get("publisher_page") != PUBLISHER_PAGE
+        or receipt.get("dataset_id") != "NYC311/erm2-nwe9"
+    ):
         raise SnapshotError("unexpected publisher reference")
     url = receipt.get("request_url")
     if not isinstance(url, str):

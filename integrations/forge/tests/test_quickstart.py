@@ -1,4 +1,5 @@
 """Constructed-only developer quickstart regression; not model or source qualification."""
+
 import json
 import os
 import subprocess
@@ -12,7 +13,9 @@ class QuickstartTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         env = dict(os.environ)
         source = str(root / "src")
-        env["PYTHONPATH"] = source + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        env["PYTHONPATH"] = source + (
+            os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+        )
         result = subprocess.run(
             [sys.executable, str(root / "examples" / "offline_quickstart.py")],
             cwd=root,

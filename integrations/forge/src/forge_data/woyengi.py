@@ -4,33 +4,64 @@ This converter does NOT authenticate a Woyengi host, legal source rights, identi
 or publisher data. It cannot independently attest source availability, model
 learning, verifier independence or use rights. No inference, network or release.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
-import json
 import math
+from datetime import datetime, timezone
 from typing import Any
 
 from .core import ForgeError, normalize
 
 _EXPORT_FIELDS = {
-    "kind", "schemaVersion", "status", "subject", "predicate", "validAt",
-    "recordedAt", "predictionCutoff", "selectedClaimId", "conflictingClaimIds",
-    "observations", "qualification", "publisherAuthenticity",
-    "independentRewardVerification", "actionAuthority",
+    "kind",
+    "schemaVersion",
+    "status",
+    "subject",
+    "predicate",
+    "validAt",
+    "recordedAt",
+    "predictionCutoff",
+    "selectedClaimId",
+    "conflictingClaimIds",
+    "observations",
+    "qualification",
+    "publisherAuthenticity",
+    "independentRewardVerification",
+    "actionAuthority",
 }
 _OBSERVATION_FIELDS = {
-    "claimId", "validFrom", "knownFrom", "sourceAvailableAt",
-    "featureHash", "features",
+    "claimId",
+    "validFrom",
+    "knownFrom",
+    "sourceAvailableAt",
+    "featureHash",
+    "features",
 }
 _SHA = __import__("re").compile(r"^[a-f0-9]{64}$")
-_FORBIDDEN = {"future", "label", "oracle", "reward", "gold", "target",
-              "outcome", "verified", "acceptance", "authority", "secret", "token"}
+_FORBIDDEN = {
+    "future",
+    "label",
+    "oracle",
+    "reward",
+    "gold",
+    "target",
+    "outcome",
+    "verified",
+    "acceptance",
+    "authority",
+    "secret",
+    "token",
+}
 
 
 def _when(value: object, label: str) -> datetime:
-    if not isinstance(value, str) or not value.endswith(("Z", "z")) and not __import__("re").search(r"[+-]\d{2}:\d{2}$", value):
+    if (
+        not isinstance(value, str)
+        or not value.endswith(("Z", "z"))
+        and not __import__("re").search(r"[+-]\d{2}:\d{2}$", value)
+    ):
         raise ForgeError(f"{label}: timezone required")
     try:
         instant = datetime.fromisoformat(value.replace("Z", "+00:00").replace("z", "+00:00"))
@@ -89,13 +120,16 @@ def convert_export_candidate(source: dict, *, source_id: str = "woyengi-unattest
     """
     d = _dict(source, "Woyengi predictive read export")
     _keys(d, _EXPORT_FIELDS, "Woyengi predictive read export")
-    if (d.get("kind") != "PREDICTIVE_READ_EXPORT"
-            or type(d.get("schemaVersion")) is not int or d["schemaVersion"] != 1
-            or d.get("status") != "ADVISORY_ONLY"
-            or d.get("qualification") != "STRUCTURAL_EXPORT_ONLY"
-            or d.get("publisherAuthenticity") != "NOT_ATTESTED_BY_THIS_EXPORTER"
-            or d.get("independentRewardVerification") != "NOT_PERFORMED"
-            or d.get("actionAuthority") != "NOT_GRANTED"):
+    if (
+        d.get("kind") != "PREDICTIVE_READ_EXPORT"
+        or type(d.get("schemaVersion")) is not int
+        or d["schemaVersion"] != 1
+        or d.get("status") != "ADVISORY_ONLY"
+        or d.get("qualification") != "STRUCTURAL_EXPORT_ONLY"
+        or d.get("publisherAuthenticity") != "NOT_ATTESTED_BY_THIS_EXPORTER"
+        or d.get("independentRewardVerification") != "NOT_PERFORMED"
+        or d.get("actionAuthority") != "NOT_GRANTED"
+    ):
         raise ForgeError("Woyengi authority or structural contract incompatible")
     subject = _text(d["subject"], "subject")
     predicate = _text(d["predicate"], "predicate")
@@ -132,7 +166,9 @@ def convert_export_candidate(source: dict, *, source_id: str = "woyengi-unattest
         raise ForgeError("Woyengi selected/conflict mismatch")
     if any(not isinstance(x, str) or x not in refs for x in conflicts):
         raise ForgeError("Woyengi unregistered conflict")
-    suffix = hashlib.sha256((subject + "\0" + predicate + "\0" + d["predictionCutoff"]).encode()).hexdigest()[:24]
+    suffix = hashlib.sha256(
+        (subject + "\0" + predicate + "\0" + d["predictionCutoff"]).encode()
+    ).hexdigest()[:24]
     prepared = []
     for item in rows:
         claim_id = item["claimId"]
@@ -165,6 +201,8 @@ def convert_export_candidate(source: dict, *, source_id: str = "woyengi-unattest
         "source_legal_permission_verified": False,
         "woyengi_host_authenticated": False,
         "independent_outcome_verified": False,
-        "recorded_semantics": "claim.validFrom is fact validity; full snapshot available only as-of predictionCutoff",
+        "recorded_semantics": (
+            "claim.validFrom is fact validity; full snapshot available only as-of predictionCutoff"
+        ),
         "rows": prepared,
     }

@@ -1,4 +1,5 @@
 """Loopback-only dashboard. Only operator-registered experiment files may run."""
+
 from __future__ import annotations
 
 import json
@@ -9,7 +10,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from .runner import LabError, compare_runs, contained_file, list_runs, load_config, run_experiment, verify_run
+from .runner import (
+    LabError,
+    compare_runs,
+    contained_file,
+    list_runs,
+    load_config,
+    run_experiment,
+    verify_run,
+)
 
 
 class Dashboard(ThreadingHTTPServer):
@@ -30,8 +39,22 @@ class Dashboard(ThreadingHTTPServer):
             for path in sorted(self.experiments.glob("*.json")):
                 try:
                     config = load_config(contained_file(self.experiments, path.name))
-                    result.append({"id": path.name, **{key: config[key] for key in (
-                        "name", "description", "command", "seed", "source_kind", "timeout_seconds")}})
+                    result.append(
+                        {
+                            "id": path.name,
+                            **{
+                                key: config[key]
+                                for key in (
+                                    "name",
+                                    "description",
+                                    "command",
+                                    "seed",
+                                    "source_kind",
+                                    "timeout_seconds",
+                                )
+                            },
+                        }
+                    )
                 except (LabError, OSError):
                     continue
         return result
@@ -57,7 +80,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+        )
         self.end_headers()
         self.wfile.write(data)
 
@@ -79,10 +106,20 @@ class Handler(BaseHTTPRequestHandler):
                 if self.server.active is not None and self.server.active.done():
                     error = self.server.active.exception()
                     if error is not None:
-                        job_error = "Experiment could not start. Check the registered recipe and its input files."
-                return self._send(200, {"runs": list_runs(self.server.runs), "experiments": self.server.recipes(),
-                                        "token": self.server.token, "job_error": job_error,
-                                        "busy": self.server.active is not None and not self.server.active.done()})
+                        job_error = (
+                            "Experiment could not start. "
+                            "Check the registered recipe and its input files."
+                        )
+                return self._send(
+                    200,
+                    {
+                        "runs": list_runs(self.server.runs),
+                        "experiments": self.server.recipes(),
+                        "token": self.server.token,
+                        "job_error": job_error,
+                        "busy": self.server.active is not None and not self.server.active.done(),
+                    },
+                )
             if url.path in ("/api/compare", "/api/verify", "/api/log"):
                 query = parse_qs(url.query)
                 runs = {run["id"]: run for run in list_runs(self.server.runs)}
@@ -105,9 +142,11 @@ class Handler(BaseHTTPRequestHandler):
                     source.seek(max(0, path.stat().st_size - 65536))
                     body = source.read(65536).decode("utf-8", errors="replace")
                 return self._send(200, {"text": body, "truncated": path.stat().st_size > 65536})
-            files = {"/": ("index.html", "text/html; charset=utf-8"),
-                     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                     "/style.css": ("style.css", "text/css; charset=utf-8")}
+            files = {
+                "/": ("index.html", "text/html; charset=utf-8"),
+                "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                "/style.css": ("style.css", "text/css; charset=utf-8"),
+            }
             if url.path in files:
                 name, mime = files[url.path]
                 return self._send(200, (Path(__file__).parent / "static" / name).read_bytes(), mime)
@@ -116,7 +155,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": str(exc)})
 
     def do_POST(self):
-        if not self._local() or not secrets.compare_digest(self.headers.get("X-TrainLab-Token", ""), self.server.token):
+        if not self._local() or not secrets.compare_digest(
+            self.headers.get("X-TrainLab-Token", ""), self.server.token
+        ):
             return self._send(403, {"error": "Local same-origin token required."})
         if self.path != "/api/run" or self.server.experiments is None:
             return self._send(404, {"error": "Experiment execution is not enabled."})
@@ -135,7 +176,9 @@ class Handler(BaseHTTPRequestHandler):
             path = contained_file(self.server.experiments, name)
             with self.server.lock:
                 if self.server.active is not None and not self.server.active.done():
-                    return self._send(409, {"error": "An experiment is already running. Wait for it to finish."})
+                    return self._send(
+                        409, {"error": "An experiment is already running. Wait for it to finish."}
+                    )
                 self.server.active = self.server.pool.submit(run_experiment, path, self.server.runs)
             return self._send(202, {"status": "accepted"})
         except (LabError, OSError, ValueError, TypeError) as exc:

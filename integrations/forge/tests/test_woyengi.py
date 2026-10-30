@@ -1,9 +1,10 @@
 """Constructed no-fit Woyengi->Forge projection tests; NOT real source rights evidence."""
+
 import copy
-import unittest
 import json
-from pathlib import Path
 import tempfile
+import unittest
+from pathlib import Path
 
 from forge_data.core import ForgeError, point_in_time, release
 from forge_data.woyengi import convert_export_candidate
@@ -12,14 +13,21 @@ from forge_data.woyengi import convert_export_candidate
 def constructed_export():
     def row(cid, leader, known, sha):
         return {
-            "claimId": cid, "validFrom": "2026-02-01T00:00:00Z",
-            "knownFrom": known, "sourceAvailableAt": known, "featureHash": sha,
+            "claimId": cid,
+            "validFrom": "2026-02-01T00:00:00Z",
+            "knownFrom": known,
+            "sourceAvailableAt": known,
+            "featureHash": sha,
             "features": {"observed_owner": leader},
         }
+
     return {
-        "kind": "PREDICTIVE_READ_EXPORT", "schemaVersion": 1,
-        "status": "ADVISORY_ONLY", "subject": "entity:fixture-workflow",
-        "predicate": "workflow:owner", "validAt": "2026-02-05T00:00:00Z",
+        "kind": "PREDICTIVE_READ_EXPORT",
+        "schemaVersion": 1,
+        "status": "ADVISORY_ONLY",
+        "subject": "entity:fixture-workflow",
+        "predicate": "workflow:owner",
+        "validAt": "2026-02-05T00:00:00Z",
         "recordedAt": "2026-02-15T00:00:00Z",
         "predictionCutoff": "2026-02-15T00:00:00Z",
         "selectedClaimId": "claim:fixture-second",
@@ -51,18 +59,22 @@ class WoyengiForgeContractTest(unittest.TestCase):
             source = root / "events.jsonl"
             spec = root / "spec.json"
             source.write_text("\n".join(json.dumps(row) for row in result["rows"]) + "\n")
-            spec.write_text(json.dumps({
-                "dataset_id": "CONSTRUCTED_NOT_A_REAL_SOURCE",
-                "source_id": "woyengi-unattested",
-                "source_version": "fixture-v1",
-                "license_id": "claimed-fixture-only",
-                "provenance_uri": "fixture://woyengi",
-                "ai_use_allowed": True,
-                "redistribution_allowed": True,
-                "privacy_reviewed": True,
-                "adapter": "operations-jsonl",
-                "split_salt": "fixture-only",
-            }))
+            spec.write_text(
+                json.dumps(
+                    {
+                        "dataset_id": "CONSTRUCTED_NOT_A_REAL_SOURCE",
+                        "source_id": "woyengi-unattested",
+                        "source_version": "fixture-v1",
+                        "license_id": "claimed-fixture-only",
+                        "provenance_uri": "fixture://woyengi",
+                        "ai_use_allowed": True,
+                        "redistribution_allowed": True,
+                        "privacy_reviewed": True,
+                        "adapter": "operations-jsonl",
+                        "split_salt": "fixture-only",
+                    }
+                )
+            )
             output = root / "release"
             with self.assertRaisesRegex(ForgeError, "UNATTESTED"):
                 release(source, spec, output)

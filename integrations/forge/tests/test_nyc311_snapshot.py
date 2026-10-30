@@ -1,24 +1,38 @@
 """No-network unit tests for honest NYC311 public acquisition evidence."""
+
 from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from forge_data.nyc311_snapshot import (
-    SnapshotError, _source_url, inspect_capture, make_snapshot,
+    SnapshotError,
+    _source_url,
+    inspect_capture,
+    make_snapshot,
 )
 
 
 def source_bytes():
-    return json.dumps([
-        {"unique_key":"fixture-1", "created_date":"2026-10-26T13:00:00.000",
-         "agency":"DOT", "status":"Open"},
-        {"unique_key":"fixture-2", "created_date":"2026-10-26T12:00:00.000",
-         "closed_date":"2026-10-26T12:15:00.000", "status":"Closed"},
-    ]).encode()
+    return json.dumps(
+        [
+            {
+                "unique_key": "fixture-1",
+                "created_date": "2026-10-26T13:00:00.000",
+                "agency": "DOT",
+                "status": "Open",
+            },
+            {
+                "unique_key": "fixture-2",
+                "created_date": "2026-10-26T12:00:00.000",
+                "closed_date": "2026-10-26T12:15:00.000",
+                "status": "Closed",
+            },
+        ]
+    ).encode()
 
 
 def clocks():
@@ -33,9 +47,14 @@ class PublicSourceCaptureTests(unittest.TestCase):
         output = root / "capture"
         capture_clock = clocks()
         receipt = make_snapshot(
-            output, limit=25,
-            fetcher=lambda request, n: (status, content_type, "Mon, 26 Oct 2026 14:00:00 GMT",
-                                        source_bytes() if raw is None else raw),
+            output,
+            limit=25,
+            fetcher=lambda request, n: (
+                status,
+                content_type,
+                "Mon, 26 Oct 2026 14:00:00 GMT",
+                source_bytes() if raw is None else raw,
+            ),
             clock=lambda: next(capture_clock),
         )
         return output, receipt
@@ -64,13 +83,14 @@ class PublicSourceCaptureTests(unittest.TestCase):
         self.assertNotIn("incident_address", url)
 
     def test_reject_unexpected_sensitive_source_fields(self):
-        raw = json.dumps([{"unique_key":"1","created_date":"2026-01-01",
-                           "incident_address":"private"}]).encode()
+        raw = json.dumps(
+            [{"unique_key": "1", "created_date": "2026-01-01", "incident_address": "private"}]
+        ).encode()
         with self.assertRaisesRegex(SnapshotError, "unexpected or sensitive"):
             self.capture(raw=raw)
 
     def test_reject_duplicates(self):
-        raw = json.dumps([{"unique_key":"same","created_date":"2026-01-01"}]*2).encode()
+        raw = json.dumps([{"unique_key": "same", "created_date": "2026-01-01"}] * 2).encode()
         with self.assertRaisesRegex(SnapshotError, "duplicate"):
             self.capture(raw=raw)
 
@@ -130,12 +150,15 @@ class PublicSourceCaptureTests(unittest.TestCase):
             self.capture(raw=b"[]")
 
     def test_nonmonotonic_acquisition_clock(self):
-        reverse = iter(["2026-10-26T14:01:00.000000Z","2026-10-26T14:00:00.000000Z"])
+        reverse = iter(["2026-10-26T14:01:00.000000Z", "2026-10-26T14:00:00.000000Z"])
         with tempfile.TemporaryDirectory() as root:
             with self.assertRaisesRegex(SnapshotError, "non-monotonic"):
-                make_snapshot(Path(root)/"capture",limit=2,
-                    fetcher=lambda *_:(200,"application/json",None,source_bytes()),
-                    clock=lambda:next(reverse))
+                make_snapshot(
+                    Path(root) / "capture",
+                    limit=2,
+                    fetcher=lambda *_: (200, "application/json", None, source_bytes()),
+                    clock=lambda: next(reverse),
+                )
 
 
 if __name__ == "__main__":

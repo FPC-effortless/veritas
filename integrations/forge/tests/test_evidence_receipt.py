@@ -1,5 +1,5 @@
 """TrainLab developer evidence tests use constructed claims only, never actual science."""
-import copy
+
 import json
 import tempfile
 import unittest
@@ -7,7 +7,9 @@ from pathlib import Path
 
 from forge_data.core import ForgeError
 from forge_data.evidence_receipt import (
-    MAX_RECEIPT_BYTES, validate_evidence, validate_evidence_file,
+    MAX_RECEIPT_BYTES,
+    validate_evidence,
+    validate_evidence_file,
 )
 
 
@@ -28,22 +30,38 @@ def constructed_receipt():
             "split_review": "CONSTRUCTED_CHECK",
         },
         "training": {
-            "status": "NOT_RUN", "model_commit": None, "learned_parameters": None,
-            "checkpoint_sha256": None, "optimizer_rng_replay_sha256": None,
-            "data_split_identity": None, "train_tokens": None,
-            "train_updates": None, "tuning_budget": None, "baselines": [],
+            "status": "NOT_RUN",
+            "model_commit": None,
+            "learned_parameters": None,
+            "checkpoint_sha256": None,
+            "optimizer_rng_replay_sha256": None,
+            "data_split_identity": None,
+            "train_tokens": None,
+            "train_updates": None,
+            "tuning_budget": None,
+            "baselines": [],
         },
         "device": {
-            "status": "NOT_RUN", "model": None, "os": None, "export_format": None,
-            "operator_support": None, "numerical_max_abs_error": None,
-            "p50_ms": None, "p95_ms": None, "peak_ram_mb": None,
-            "energy_mj": None, "airplane_mode": None,
-            "network_trace_sha256": None, "state_replay": None,
-            "delivery_sha256": None, "local_stages": None,
+            "status": "NOT_RUN",
+            "model": None,
+            "os": None,
+            "export_format": None,
+            "operator_support": None,
+            "numerical_max_abs_error": None,
+            "p50_ms": None,
+            "p95_ms": None,
+            "peak_ram_mb": None,
+            "energy_mj": None,
+            "airplane_mode": None,
+            "network_trace_sha256": None,
+            "state_replay": None,
+            "delivery_sha256": None,
+            "local_stages": None,
             "remote_fallback": None,
         },
         "veritas": {
-            "status": "NOT_RUN", "report_sha256": None,
+            "status": "NOT_RUN",
+            "report_sha256": None,
             "protected_test_authorized": False,
             "independent_review": False,
         },
@@ -53,37 +71,62 @@ def constructed_receipt():
 def internal_candidate():
     r = constructed_receipt()
     r["source"].update(
-        kind="AUTHENTIC_CANDIDATE", publisher_id="publisher:NOT_VERIFIED",
+        kind="AUTHENTIC_CANDIDATE",
+        publisher_id="publisher:NOT_VERIFIED",
         original_sha256="a" * 64,
         rights_review="REVIEW_PENDING",
-        point_in_time_review="INTERNAL_CHECK", split_review="INTERNAL_CHECK",
+        point_in_time_review="INTERNAL_CHECK",
+        split_review="INTERNAL_CHECK",
     )
     r["training"].update(
-        status="INTERNAL_MEASURED", model_commit="abc123abc123",
-        learned_parameters=100_000, checkpoint_sha256="b" * 64,
+        status="INTERNAL_MEASURED",
+        model_commit="abc123abc123",
+        learned_parameters=100_000,
+        checkpoint_sha256="b" * 64,
         optimizer_rng_replay_sha256="c" * 64,
-        data_split_identity="candidate-split-1", train_tokens=1000,
-        train_updates=100, tuning_budget=0,
-        baselines=[{
-            "name": "GRU-fixture", "learned_parameters": 100_500,
-            "data_split_identity": "candidate-split-1",
-            "train_tokens": 1000, "train_updates": 100, "tuning_budget": 0,
-        }],
+        data_split_identity="candidate-split-1",
+        train_tokens=1000,
+        train_updates=100,
+        tuning_budget=0,
+        baselines=[
+            {
+                "name": "GRU-fixture",
+                "learned_parameters": 100_500,
+                "data_split_identity": "candidate-split-1",
+                "train_tokens": 1000,
+                "train_updates": 100,
+                "tuning_budget": 0,
+            }
+        ],
     )
     r["device"].update(
-        status="INTERNAL_PHYSICAL_MEASURED", model="CONSTRUCTED_Samsung A07",
-        os="Android 16", export_format="ONNX",
-        operator_support=True, numerical_max_abs_error=0.001,
-        p50_ms=10.0, p95_ms=20.0, peak_ram_mb=64,
-        energy_mj=2.3, airplane_mode=True,
-        network_trace_sha256="d" * 64, state_replay=True,
+        status="INTERNAL_PHYSICAL_MEASURED",
+        model="CONSTRUCTED_Samsung A07",
+        os="Android 16",
+        export_format="ONNX",
+        operator_support=True,
+        numerical_max_abs_error=0.001,
+        p50_ms=10.0,
+        p95_ms=20.0,
+        peak_ram_mb=64,
+        energy_mj=2.3,
+        airplane_mode=True,
+        network_trace_sha256="d" * 64,
+        state_replay=True,
         delivery_sha256="e" * 64,
         local_stages={
-            key: True for key in (
-                "input", "preprocessing", "embeddings", "inference",
-                "persistent_state", "output", "speech_if_used"
+            key: True
+            for key in (
+                "input",
+                "preprocessing",
+                "embeddings",
+                "inference",
+                "persistent_state",
+                "output",
+                "speech_if_used",
             )
-        }, remote_fallback=False,
+        },
+        remote_fallback=False,
     )
     r["veritas"]["status"] = "REVIEW_PENDING"
     return r
@@ -189,8 +232,15 @@ class ReceiptTest(unittest.TestCase):
                     validate_evidence(r)
 
     def test_measured_device_requires_complete_local_pipeline(self):
-        for key in ("input", "preprocessing", "embeddings", "inference",
-                    "persistent_state", "output", "speech_if_used"):
+        for key in (
+            "input",
+            "preprocessing",
+            "embeddings",
+            "inference",
+            "persistent_state",
+            "output",
+            "speech_if_used",
+        ):
             with self.subTest(stage=key):
                 r = internal_candidate()
                 r["device"]["local_stages"][key] = False
