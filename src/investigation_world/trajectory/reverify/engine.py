@@ -417,7 +417,10 @@ def reverify_trajectory(
         None,
     )
     if existing is not None:
-        # Private annotations are not identity-bound: return freshly computed evidence.
+        # Retain archival annotations/classification, but refresh verifier evidence.
+        record = ReverificationRecord.model_validate(
+            {**existing.model_dump(mode="python"), "private_metadata": record.private_metadata}
+        )
         payload = canonical.model_dump(mode="python")
         payload["reverifications"] = tuple(
             record if item.record_id == record.record_id else item

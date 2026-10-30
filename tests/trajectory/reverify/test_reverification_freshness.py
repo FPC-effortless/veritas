@@ -4,7 +4,7 @@ import pytest
 from test_reverification import _registry, _reverifiable_trajectory
 
 from investigation_world.experience import MachineExperience
-from investigation_world.trajectory import ReverificationRecord, TrajectoryV2
+from investigation_world.trajectory import ReverificationRecord, TrajectoryV2, VisibilityClass
 from investigation_world.trajectory.reverify import (
     AuthorizedVerifierRegistry,
     ReverificationStatus,
@@ -77,3 +77,40 @@ def test_existing_identity_returns_fresh_evidence_without_mutating_input(metadat
     rejected = reverify_trajectory(missing, verifier=verifier, registry=registry)
     assert rejected.status is ReverificationStatus.NOT_REVERIFIABLE
     assert rejected.record is None
+
+
+def test_refresh_preserves_retained_visibility_and_non_private_annotations():
+    trajectory, _ = _reverifiable_trajectory()
+    registry, verifier = _registry()
+    fresh = reverify_trajectory(trajectory, verifier=verifier, registry=registry).record
+    assert fresh is not None
+    provenance = [item.model_dump(mode="python") for item in fresh.provenance]
+    provenance[0].update(
+        visibility=VisibilityClass.SEALED,
+        public_metadata={"archival": "public annotation"},
+        private_metadata={"archival": "private annotation"},
+    )
+    retained = ReverificationRecord.model_validate(
+        {
+            **fresh.model_dump(mode="python"),
+            "provenance": provenance,
+            "visibility": VisibilityClass.SEALED,
+            "public_metadata": {
+                "archival_annotation": "caller retained, not verification evidence"
+            },
+            "private_metadata": {},
+        }
+    )
+    original = trajectory.with_reverification(retained)
+    outcome = reverify_trajectory(original, verifier=verifier, registry=registry)
+    assert outcome.record is not None
+    assert outcome.record.visibility is VisibilityClass.SEALED
+    assert outcome.record.public_metadata == retained.public_metadata
+    assert outcome.record.provenance == retained.provenance
+    assert outcome.record.private_metadata == fresh.private_metadata
+    assert outcome.record.record_id == retained.record_id
+    assert outcome.trajectory_with_reverification.reverifications == (outcome.record,)
+    assert original.reverifications == (retained,)
+
+    outcome.record.provenance[0].private_metadata["archival"] = "changed output"
+    assert retained.provenance[0].private_metadata["archival"] == "private annotation"
