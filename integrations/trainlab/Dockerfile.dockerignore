@@ -12,6 +12,7 @@
 !integrations/trainlab/examples/**
 !integrations/forge/
 !integrations/forge/pyproject.toml
+!integrations/forge/WORKBENCH.md
 !integrations/forge/src/
 !integrations/forge/src/**
 !integrations/forge/examples/

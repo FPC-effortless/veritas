@@ -12,6 +12,14 @@ recipes; it does not provide untrusted-job or tenant isolation. Public access
 requires HTTPS, operator authentication and a configured origin. A merge or a
 constructed demo alone does not qualify an installed production deployment.
 
+## Forge dataset workbench
+
+With the sibling Forge package installed, add `--forge-workspace /private/forge`
+to `trainlab serve`. The real Forge GUI opens at `/forge/`, and the header switches
+between datasets and experiments. It supports JSONL import, immutable release
+creation, temporal train/validation previews, provenance, verification, exports
+and dataset comparisons. See [Forge workbench](../forge/WORKBENCH.md).
+
 ## Start in under ten minutes
 
 From `integrations/trainlab`:

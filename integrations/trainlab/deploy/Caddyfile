@@ -2,7 +2,7 @@
 # Issue/renew TLS only after DNS, firewall and deployment approval are in place.
 {$TRAINLAB_DOMAIN} {
     request_body {
-        max_size 4KB
+        max_size 12MB
     }
     reverse_proxy 127.0.0.1:8765
 }

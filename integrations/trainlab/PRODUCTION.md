@@ -1,6 +1,6 @@
 # TrainLab production deployment contract
 
-TrainLab 0.2.0 is a production-hardening **candidate** for a single workspace
+TrainLab 0.3.0 is a production-hardening **candidate** for a single workspace
 operated by trusted people and approved recipes. Users can choose a local Python
 installation, their own Linux server, or a Linux container host. No cloud vendor
 is required. The container includes Forge so the pinned-dataset handoff also
@@ -28,10 +28,13 @@ quotas or monitoring accounts, publish an image, or grant release authority.
   finalizes its record. Recipes must wait for workers and must not detach them
   into new sessions. Container PID/memory/CPU limits apply to the whole service.
   Windows local use retains its immediate-child termination limitation.
-- One job runs at a time per service; run one service per run store. Do not share
+- One experiment runs at a time per TrainLab run store; run one service per store.
+  Forge permits one separate dataset operation in the combined service. Do not share
   a writable store across replicas or mix independent CLI writers with the
   service. Waitress uses eight request workers, 64 connections, a 15-second idle
-  channel timeout, 16 KiB headers and 4 KiB request bodies.
+  channel timeout and 16 KiB headers. Command requests are limited to 4 KiB.
+  Enabling Forge raises the transport envelope to 12 MiB for bounded dataset
+  ingestion; the TrainLab command API retains its 4 KiB check.
 - Each process stream retains at most 16 MiB; excess output fails the job. The
   active store supports 1,000 records and 8 MiB of aggregate run metadata.
   Archive and rotate stores before that limit. This is a bounded workbench, not
@@ -43,6 +46,21 @@ quotas or monitoring accounts, publish an image, or grant release authority.
   POSIX directory entries are fsynced. Filesystem/hardware durability guarantees
   still depend on the deployment. A power loss can leave unfinished records;
   this is explicit rather than inferred success or automatic resumption.
+
+## Forge GUI in the shared service
+
+Add `--forge-workspace /private/forge` to the serving command to enable the real
+Forge dataset GUI at `/forge/`. Both interfaces share production authentication
+and origin checks; Forge retains a separate action token. The default container
+command and Compose deployment enable Forge under `/data/forge`. Its documented
+upload/body limits, immutable data and TEST boundaries are in
+[Forge WORKBENCH.md](../forge/WORKBENCH.md). The reverse-proxy body limit is 12 MiB;
+experiment command bodies remain limited to 4 KiB inside the TrainLab API.
+
+The `trainlab backup` command covers the finalized **run store only**. Back up
+Forge's separate source/release workspace offline with an access-controlled
+filesystem snapshot, test restoration to a new location, and reverify the dataset
+pins. Do not infer that a run-store backup also protects the datasets.
 
 ## Install on a chosen machine
 
