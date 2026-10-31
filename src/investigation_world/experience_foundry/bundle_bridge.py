@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import dataclass
+from typing import Any
 
 from investigation_world.experience_foundry.admission import (
     RecordedExperience,
     admit_experience,
-    public_training_fixture,
+)
+from investigation_world.experience_foundry.public_profiles import (
+    profile_fixture,
+    profile_id_from_trace,
 )
 from investigation_world.foundry.models import DistributionSplit
 from investigation_world.foundry.training_product import (
@@ -32,7 +36,8 @@ class VerifiedLearningBundle:
 def _trainer_row(source: RecordedExperience) -> dict:
     # The exact source fixture was independently matched at admission. Arbitrary metadata,
     # private traces, digests, seed, episode IDs and evaluator annotations never enter here.
-    case, _ = public_training_fixture()
+    profile_id = profile_id_from_trace(source.companion)
+    case, _ = profile_fixture(profile_id)
     task = case.episode.task
     actions = {action.name: action for action in task.available_actions}
     calls = []
@@ -46,7 +51,7 @@ def _trainer_row(source: RecordedExperience) -> dict:
         if set(parameters) - set(actions[name].parameter_names):
             raise ValueError("NONPUBLIC_ACTION_PARAMETER")
         calls.append({"action": name, "parameters": parameters})
-    return {
+    row: dict[str, Any] = {
         "prompt": {
             "objective": task.objective,
             "records": [
@@ -67,6 +72,11 @@ def _trainer_row(source: RecordedExperience) -> dict:
         # SFT action-only sequence, not fabricated observations or a new result schema.
         "target": calls,
     }
+    if profile_id is not None:
+        row["prompt"]["constraints"] = list(task.constraints)
+        for public, record in zip(row["prompt"]["records"], case.episode.records, strict=True):
+            public["related_object_ids"] = list(record.related_object_ids)
+    return row
 
 
 def compile_verified_bundle(
@@ -115,7 +125,9 @@ def compile_verified_bundle(
         if checked.lineage["source_digest"] in frozen_panel_source_digests:
             raise ValueError("FROZEN_PANEL_SOURCE_OVERLAP")
         admitted.append(checked)
-    _, capability = public_training_fixture()
+    capability = admitted[0].source.capability
+    if any(item.source.capability != capability for item in admitted):
+        raise ValueError("MIXED_CAPABILITY_CONTRACTS")
     bundle = compile_training_bundle(capability, recipe, [item.verified for item in admitted])
     if (
         len(bundle.train_examples) != len(sources)
