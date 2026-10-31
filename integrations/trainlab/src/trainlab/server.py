@@ -1,4 +1,4 @@
-"""Loopback-only dashboard. Only operator-registered experiment files may run."""
+"""Shared dashboard application and loopback-only development HTTP adapter."""
 
 from __future__ import annotations
 
@@ -20,18 +20,53 @@ from .runner import (
     verify_run,
 )
 
+SECURITY_HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    ),
+}
 
-class Dashboard(ThreadingHTTPServer):
-    daemon_threads = True
 
-    def __init__(self, runs: Path, experiments: Path | None, port: int = 8765):
-        super().__init__(("127.0.0.1", port), Handler)
+class Workspace:
+    brand = "TrainLab"
+    body_limit = 4096
+
+    def __init__(
+        self,
+        runs: Path,
+        experiments: Path | None,
+        *,
+        log_limit=16 * 1024 * 1024,
+        forge_workspace: Path | None = None,
+    ):
         self.runs = runs.resolve()
+        self.runs.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.experiments = experiments.resolve() if experiments is not None else None
+        self.log_limit = log_limit
         self.token = secrets.token_urlsafe(32)
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="trainlab")
         self.lock = threading.Lock()
         self.active = None
+        self.cancel = threading.Event()
+        self.forge = None
+        if forge_workspace is not None:
+            try:
+                from forge_data.workbench import ForgeWorkspace
+            except ImportError as error:
+                raise LabError("install the Forge package to enable its workbench") from error
+            self.forge = ForgeWorkspace(forge_workspace, None)
+            self.forge.trainlab_url = "/"
+            self.body_limit = self.forge.body_limit
+
+    def close(self):
+        self.cancel.set()
+        self.pool.shutdown(wait=True, cancel_futures=True)
+        if self.forge is not None:
+            self.forge.close()
 
     def recipes(self):
         result = []
@@ -59,127 +94,204 @@ class Dashboard(ThreadingHTTPServer):
                     continue
         return result
 
+    def dispatch(self, method, path, headers, body=b""):
+        """Host/origin/auth checks are the HTTP adapter's responsibility."""
+        from .operations import store_health
+
+        url = urlsplit(path)
+        if self.forge is not None and (
+            url.path in ("/forge", "/forge/") or url.path.startswith(("/forge/", "/api/forge/"))
+        ):
+            return self.forge.dispatch(method, path, headers, body)
+        try:
+            if method == "GET":
+                if url.path == "/healthz":
+                    health = store_health(self.runs)
+                    if self.forge is not None:
+                        forge_status, forge_health, _ = self.forge.dispatch("GET", "/healthz", {})
+                        health["forge"] = forge_health
+                        if forge_status != 200:
+                            health["status"] = "degraded"
+                    return (200 if health["status"] == "ok" else 503), health, "application/json"
+                if url.path == "/api/state":
+                    job_error = None
+                    if (
+                        self.active is not None
+                        and self.active.done()
+                        and self.active.exception() is not None
+                    ):
+                        job_error = (
+                            "Experiment could not start. "
+                            "Check the registered recipe and its input files."
+                        )
+                    return (
+                        200,
+                        {
+                            "runs": list_runs(self.runs),
+                            "experiments": self.recipes(),
+                            "token": self.token,
+                            "job_error": job_error,
+                            "busy": self.active is not None and not self.active.done(),
+                            "forge_enabled": self.forge is not None,
+                        },
+                        "application/json",
+                    )
+                if url.path in ("/api/compare", "/api/verify", "/api/log"):
+                    query = parse_qs(url.query)
+                    runs = {run["id"]: run for run in list_runs(self.runs)}
+                    if url.path == "/api/compare":
+                        ids = query.get("id", [])
+                        if len(set(ids)) != len(ids) or any(key not in runs for key in ids):
+                            raise LabError("select distinct existing runs")
+                        return 200, compare_runs([runs[key] for key in ids]), "application/json"
+                    run_id = query.get("id", [""])[0]
+                    if run_id not in runs:
+                        raise LabError("unknown run")
+                    directory = self.runs / run_id
+                    if url.path == "/api/verify":
+                        return 200, verify_run(directory), "application/json"
+                    name = query.get("name", [""])[0]
+                    if name not in ("stdout.log", "stderr.log"):
+                        raise LabError("unknown log")
+                    file = contained_file(directory, name)
+                    size = file.stat().st_size
+                    with file.open("rb") as source:
+                        source.seek(max(0, size - 65536))
+                        text = source.read(65536).decode("utf-8", errors="replace")
+                    return 200, {"text": text, "truncated": size > 65536}, "application/json"
+                files = {
+                    "/": ("index.html", "text/html; charset=utf-8"),
+                    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                    "/style.css": ("style.css", "text/css; charset=utf-8"),
+                }
+                if url.path in files:
+                    name, mime = files[url.path]
+                    return 200, (Path(__file__).parent / "static" / name).read_bytes(), mime
+                return 404, {"error": "Not found"}, "application/json"
+            if method != "POST":
+                return 405, {"error": "Method not allowed"}, "application/json"
+            if not secrets.compare_digest(headers.get("X-TrainLab-Token", ""), self.token):
+                return 403, {"error": "Local same-origin token required."}, "application/json"
+            if url.path != "/api/run" or self.experiments is None:
+                return 404, {"error": "Experiment execution is not enabled."}, "application/json"
+            if headers.get("Content-Type") != "application/json" or not 0 < len(body) <= 4096:
+                raise LabError("bounded application/json request required")
+            payload = json.loads(body)
+            if not isinstance(payload, dict) or set(payload) != {"experiment"}:
+                raise LabError("select one registered experiment")
+            name = payload["experiment"]
+            if name not in {recipe["id"] for recipe in self.recipes()}:
+                raise LabError("unknown experiment")
+            recipe = contained_file(self.experiments, name)
+            with self.lock:
+                if self.cancel.is_set():
+                    return 503, {"error": "Service is shutting down."}, "application/json"
+                if self.active is not None and not self.active.done():
+                    return (
+                        409,
+                        {"error": "An experiment is already running. Wait for it to finish."},
+                        "application/json",
+                    )
+                self.active = self.pool.submit(
+                    run_experiment, recipe, self.runs, log_limit=self.log_limit, cancel=self.cancel
+                )
+            return 202, {"status": "accepted"}, "application/json"
+        except (LabError, OSError, ValueError, KeyError, TypeError):
+            # Detailed source paths or exception text can contain operator data.
+            return (
+                400,
+                {"error": "Invalid request or unavailable saved record."},
+                "application/json",
+            )
+
+
+def local_request(headers, port, public_origin=None):
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    origins = {"http://" + host for host in hosts}
+    if public_origin:
+        hosts.add(urlsplit(public_origin).netloc)
+        origins.add(public_origin)
+    return headers.get("Host") in hosts and (
+        headers.get("Origin") is None or headers.get("Origin") in origins
+    )
+
+
+class Dashboard(ThreadingHTTPServer):
+    """Development/local adapter. Use the optional production WSGI server remotely."""
+
+    daemon_threads = True
+
+    def __init__(
+        self,
+        runs: Path,
+        experiments: Path | None,
+        port=8765,
+        *,
+        workspace_factory=Workspace,
+        forge_workspace=None,
+    ):
+        ThreadingHTTPServer.__init__(self, ("127.0.0.1", port), Handler)
+        options = {"forge_workspace": forge_workspace} if forge_workspace is not None else {}
+        try:
+            self.workspace = workspace_factory(runs, experiments, **options)
+        except BaseException:
+            ThreadingHTTPServer.server_close(self)
+            raise
+
+    @property
+    def active(self):
+        return self.workspace.active
+
+    @property
+    def token(self):
+        return self.workspace.token
+
+    def dispatch(self, *args):
+        return self.workspace.dispatch(*args)
+
     def server_close(self):
-        super().server_close()
-        self.pool.shutdown(wait=True, cancel_futures=True)
+        ThreadingHTTPServer.server_close(self)
+        self.workspace.close()
 
 
 class Handler(BaseHTTPRequestHandler):
     server: Dashboard
 
     def log_message(self, *args):
-        # Do not print query strings or experiment metadata in access logs.
         pass
 
     def _send(self, status, data, mime="application/json"):
         if mime == "application/json":
             data = json.dumps(data, allow_nan=False).encode()
         self.send_response(status)
-        self.send_header("Content-Type", mime)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header(
-            "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
-        )
+        for key, value in {
+            **SECURITY_HEADERS,
+            "Content-Type": mime,
+            "Content-Length": str(len(data)),
+        }.items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
 
-    def _local(self):
-        port = self.server.server_port
-        hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
-        origin = self.headers.get("Origin")
-        return self.headers.get("Host") in hosts and (
-            origin is None or origin in {"http://" + host for host in hosts}
-        )
+    def _handle(self, method):
+        if not local_request(self.headers, self.server.server_port):
+            return self._send(403, {"error": "Local same-origin access required."})
+        try:
+            self.connection.settimeout(10)
+            body = b""
+            if method == "POST":
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= self.server.workspace.body_limit:
+                    return self._send(400, {"error": "Invalid request size."})
+                body = self.rfile.read(size)
+                if len(body) != size:
+                    return self._send(400, {"error": "Incomplete request body."})
+            self._send(*self.server.dispatch(method, self.path, self.headers, body))
+        except (ValueError, TimeoutError):
+            self._send(400, {"error": "Invalid or incomplete request."})
 
     def do_GET(self):
-        if not self._local():
-            return self._send(403, {"error": "Local same-origin access required."})
-        url = urlsplit(self.path)
-        try:
-            if url.path == "/api/state":
-                job_error = None
-                if self.server.active is not None and self.server.active.done():
-                    error = self.server.active.exception()
-                    if error is not None:
-                        job_error = (
-                            "Experiment could not start. "
-                            "Check the registered recipe and its input files."
-                        )
-                return self._send(
-                    200,
-                    {
-                        "runs": list_runs(self.server.runs),
-                        "experiments": self.server.recipes(),
-                        "token": self.server.token,
-                        "job_error": job_error,
-                        "busy": self.server.active is not None and not self.server.active.done(),
-                    },
-                )
-            if url.path in ("/api/compare", "/api/verify", "/api/log"):
-                query = parse_qs(url.query)
-                runs = {run["id"]: run for run in list_runs(self.server.runs)}
-                if url.path == "/api/compare":
-                    ids = query.get("id", [])
-                    if len(set(ids)) != len(ids) or any(key not in runs for key in ids):
-                        raise LabError("select distinct existing runs")
-                    return self._send(200, compare_runs([runs[key] for key in ids]))
-                run_id = query.get("id", [""])[0]
-                if run_id not in runs:
-                    raise LabError("unknown run")
-                directory = self.server.runs / run_id
-                if url.path == "/api/verify":
-                    return self._send(200, verify_run(directory))
-                name = query.get("name", [""])[0]
-                if name not in ("stdout.log", "stderr.log"):
-                    raise LabError("unknown log")
-                path = contained_file(directory, name)
-                with path.open("rb") as source:
-                    source.seek(max(0, path.stat().st_size - 65536))
-                    body = source.read(65536).decode("utf-8", errors="replace")
-                return self._send(200, {"text": body, "truncated": path.stat().st_size > 65536})
-            files = {
-                "/": ("index.html", "text/html; charset=utf-8"),
-                "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                "/style.css": ("style.css", "text/css; charset=utf-8"),
-            }
-            if url.path in files:
-                name, mime = files[url.path]
-                return self._send(200, (Path(__file__).parent / "static" / name).read_bytes(), mime)
-            return self._send(404, {"error": "Not found"})
-        except (LabError, OSError, ValueError, KeyError) as exc:
-            return self._send(400, {"error": str(exc)})
+        self._handle("GET")
 
     def do_POST(self):
-        if not self._local() or not secrets.compare_digest(
-            self.headers.get("X-TrainLab-Token", ""), self.server.token
-        ):
-            return self._send(403, {"error": "Local same-origin token required."})
-        if self.path != "/api/run" or self.server.experiments is None:
-            return self._send(404, {"error": "Experiment execution is not enabled."})
-        try:
-            if self.headers.get("Content-Type") != "application/json":
-                raise LabError("application/json required")
-            size = int(self.headers.get("Content-Length", "0"))
-            if not 0 < size <= 4096:
-                raise LabError("invalid request size")
-            body = json.loads(self.rfile.read(size))
-            if not isinstance(body, dict) or set(body) != {"experiment"}:
-                raise LabError("select one registered experiment")
-            name = body["experiment"]
-            if name not in {recipe["id"] for recipe in self.server.recipes()}:
-                raise LabError("unknown experiment")
-            path = contained_file(self.server.experiments, name)
-            with self.server.lock:
-                if self.server.active is not None and not self.server.active.done():
-                    return self._send(
-                        409, {"error": "An experiment is already running. Wait for it to finish."}
-                    )
-                self.server.active = self.server.pool.submit(run_experiment, path, self.server.runs)
-            return self._send(202, {"status": "accepted"})
-        except (LabError, OSError, ValueError, TypeError) as exc:
-            return self._send(400, {"error": str(exc)})
+        self._handle("POST")

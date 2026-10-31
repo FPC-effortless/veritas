@@ -12,13 +12,20 @@ import math
 import os
 import platform
 import re
+import select
 import signal
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
+from itertools import islice
 from pathlib import Path
+
+MAX_ACTIVE_RUNS = 1000
+MAX_ACTIVE_RECORD_BYTES = 8 * 1024 * 1024
 
 
 class LabError(ValueError):
@@ -65,11 +72,26 @@ def digest(path: Path) -> str:
 
 
 def write_json(path: Path, value: dict) -> None:
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(
-        json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
-    )
-    temporary.replace(path)
+    data = (json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=".metadata-", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+        if os.name == "posix":
+            descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _relative(name: object) -> str:
@@ -208,8 +230,18 @@ def _stop(process: subprocess.Popen) -> None:
     process.wait()
 
 
-def run_experiment(config_path: Path, runs_root: Path) -> dict:
+def run_experiment(
+    config_path: Path,
+    runs_root: Path,
+    *,
+    log_limit: int = 16 * 1024 * 1024,
+    cancel: threading.Event | None = None,
+) -> dict:
     """Run explicitly selected trusted code, using a unique output directory."""
+    if type(log_limit) is not int or not 1 <= log_limit <= 1024 * 1024 * 1024:
+        raise LabError("log limit must be an integer between 1 byte and 1 GiB")
+    if sum(1 for _ in islice(runs_root.glob("*/run.json"), MAX_ACTIVE_RUNS)) >= MAX_ACTIVE_RUNS:
+        raise LabError("active run store is full; archive it and start a new store")
     config_path = config_path.resolve()
     config = load_config(config_path)
     cwd = config_path.parent
@@ -245,6 +277,7 @@ def run_experiment(config_path: Path, runs_root: Path) -> dict:
         "runtime": {"python": sys.version.split()[0], "platform": platform.platform()},
         "qualification": "NOT_QUALIFIED",
         "source_rights": "NOT_INDEPENDENTLY_VERIFIED",
+        "execution_limits": {"log_bytes_per_stream": log_limit},
     }
     write_json(directory / "run.json", record)
     env = {
@@ -255,28 +288,94 @@ def run_experiment(config_path: Path, runs_root: Path) -> dict:
     }
     started = time.perf_counter()
     process = None
+    readers = []
+    exceeded = threading.Event()
+    capture_errors = []
+    drain_deadline = None
+    abandoned = threading.Event()
+
+    def capture(source, destination):
+        try:
+            with source, destination.open("wb") as stream:
+                retained = 0
+                while True:
+                    if os.name == "posix":
+                        if drain_deadline is not None and time.monotonic() >= drain_deadline:
+                            abandoned.set()
+                            break
+                        if not select.select([source], [], [], 0.05)[0]:
+                            continue
+                    block = source.read(65536)
+                    if not block:
+                        break
+                    remaining = log_limit - retained
+                    stream.write(block[:remaining])
+                    retained += min(len(block), remaining)
+                    if len(block) > remaining:
+                        exceeded.set()
+        except OSError:
+            capture_errors.append("Could not persist process logs.")
+            exceeded.set()
+
     try:
-        with (
-            (directory / "stdout.log").open("wb") as stdout,
-            (directory / "stderr.log").open("wb") as stderr,
-        ):
+        if cancel is not None and cancel.is_set():
+            record.update(
+                status="interrupted", error="Interrupted by operator or service shutdown."
+            )
+        else:
             process = subprocess.Popen(
                 config["command"],
                 cwd=cwd,
                 env=env,
-                stdout=stdout,
-                stderr=stderr,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 stdin=subprocess.DEVNULL,
                 start_new_session=os.name == "posix",
+                bufsize=0,
             )
-            try:
-                record["exit_code"] = process.wait(timeout=config["timeout_seconds"])
-            except subprocess.TimeoutExpired:
-                _stop(process)
-                record["exit_code"] = process.returncode
-                record["status"] = "timed_out"
-                record["error"] = "Experiment exceeded its declared timeout."
-            else:
+            for source, name in ((process.stdout, "stdout.log"), (process.stderr, "stderr.log")):
+                reader = threading.Thread(
+                    target=capture, args=(source, directory / name), daemon=True
+                )
+                reader.start()
+                readers.append(reader)
+            deadline = time.monotonic() + config["timeout_seconds"]
+            while True:
+                if cancel is not None and cancel.is_set():
+                    record.update(
+                        status="interrupted", error="Interrupted by operator or service shutdown."
+                    )
+                    break
+                if exceeded.is_set():
+                    record.update(
+                        status="failed",
+                        error="Experiment exceeded its log limit or log storage failed.",
+                    )
+                    break
+                if time.monotonic() >= deadline:
+                    record.update(
+                        status="timed_out", error="Experiment exceeded its declared timeout."
+                    )
+                    break
+                try:
+                    process.wait(timeout=min(0.05, max(0.001, deadline - time.monotonic())))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+            # Freeze the process group and fully drain bounded pipes BEFORE
+            # reading metrics or hashing outputs; children cannot race snapshots.
+            _stop(process)
+            drain_deadline = time.monotonic() + 0.5
+            record["exit_code"] = process.returncode
+            for reader in readers:
+                reader.join(timeout=2)
+            if abandoned.is_set() or any(reader.is_alive() for reader in readers):
+                raise LabError("Experiment left detached workers holding process logs open.")
+            if exceeded.is_set():
+                raise LabError("Experiment exceeded its log limit or log storage failed.")
+            if capture_errors:
+                raise LabError(capture_errors[0])
+            if record["status"] == "running":
                 if process.returncode != 0:
                     raise LabError("Experiment exited unsuccessfully; inspect local stderr.log.")
                 metrics = read_json(contained_file(output, "metrics.json"))
@@ -305,6 +404,9 @@ def run_experiment(config_path: Path, runs_root: Path) -> dict:
         # wait for their workers and may not leave background jobs running.
         if process is not None and os.name == "posix":
             _stop(process)
+        drain_deadline = time.monotonic() + 0.5
+        for reader in readers:
+            reader.join(timeout=2)
         record["elapsed_seconds"] = round(time.perf_counter() - started, 6)
         record["finished_at"] = _now()
         for name in ("experiment.json", "stdout.log", "stderr.log", "output/metrics.json"):
@@ -318,14 +420,21 @@ def run_experiment(config_path: Path, runs_root: Path) -> dict:
 
 def list_runs(root: Path) -> list[dict]:
     runs = []
-    for path in sorted(root.glob("*/run.json"), reverse=True):
+    paths = list(islice(root.glob("*/run.json"), MAX_ACTIVE_RUNS + 1))
+    if len(paths) > MAX_ACTIVE_RUNS:
+        raise LabError("active run store exceeds supported capacity; archive it offline")
+    retained_bytes = 0
+    for path in sorted(paths, reverse=True):
         try:
             run = read_json(contained_file(root, path.relative_to(root).as_posix()))
             validate_record(run)
             if run["id"] == path.parent.name:
                 runs.append(run)
+                retained_bytes += len(json.dumps(run, allow_nan=False).encode())
         except (LabError, OSError):
             continue
+        if retained_bytes > MAX_ACTIVE_RECORD_BYTES:
+            raise LabError("active run metadata exceeds supported capacity; archive it offline")
     return runs
 
 

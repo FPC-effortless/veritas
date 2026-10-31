@@ -417,13 +417,23 @@ def reverify_trajectory(
         None,
     )
     if existing is not None:
+        # Retain archival annotations/classification, but refresh verifier evidence.
+        record = ReverificationRecord.model_validate(
+            {**existing.model_dump(mode="python"), "private_metadata": record.private_metadata}
+        )
+        payload = canonical.model_dump(mode="python")
+        payload["reverifications"] = tuple(
+            record if item.record_id == record.record_id else item
+            for item in canonical.reverifications
+        )
+        updated = TrajectoryV2.model_validate(payload)
         return _result(
             trajectory=canonical,
             requested_verifier=verifier,
             status=ReverificationStatus.ALREADY_RECORDED,
             reason_code="REVERIFICATION_RECORD_ALREADY_PRESENT",
-            record=existing,
-            updated=canonical,
+            record=record,
+            updated=updated,
         )
 
     updated = canonical.with_reverification(record)

@@ -91,32 +91,79 @@ private-derived hashes or reason strings. Fully buyer-visible sources yield only
 fixed observation/metric fields. The projection hash binds only rendered scalar
 observations/metrics, not private annotations or opaque full-source identity.
 
-## Explicit remaining acceptance gap
+## Validated controlled-contrast consumer
 
-This is **not a claim that all of #153 is complete**. No source currently supplies
-an independently bound MachineExperience intervention receipt suitable for
-intervention-supported causal candidates. Existing `execute_counterfactual` is
-real execution, but its returned runtime is not such a receipt. Retained
-reverification folds recorded state changes and verifies outcomes; two matching
-reverified runs alone are not controlled intervention proof. This package does
-not replace #156 by inventing intervention linkage or replay orchestration.
+The merged #156 provider supplies `CounterfactualReceipt` v1. Use
+`diagnose_counterfactual(receipt, source=recorded_source)` and
+`intervention_failure_families([(receipt, recorded_source), ...])`. These APIs call
+`validate_counterfactual_receipt` on every input, freshly verifying retained native
+artifacts and recomputing exact source, companion, capability, runtime, cut,
+unchanged prefix/suffix/submission, baseline reproduction and alternative-repeat
+bindings. Parsing a receipt or attaching a prior PASS is insufficient. Missing
+artifacts, forged source/capability/bindings and inconsistent evidence raise errors;
+they cannot generate a diagnostic. No recorder or replay engine is duplicated.
 
-Causal candidates therefore remain unavailable; capability gaps/prerequisites
-are not promoted. Reference qualification and truth/calibration-quality evidence
-are also not fabricated. Completion of those acceptance portions requires a
-supported exact-source intervention/qualification evidence provider, not an
-unconditional UNKNOWN implementation being counted as completed capability.
+The typed evidence status is **OBSERVED_CONTROLLED_CONTRAST**, mechanism status is
+**HYPOTHESIZED**, and causal status remains **UNKNOWN**. A canonical
+`StructuralRecord(record_type="causal_candidate")` retains the bound action
+replacement hypothesis, target-count direction and all residual violation lists.
+Direction has typed basis `verifier_target_counts_only`, not overall success or
+preference: more met targets may coexist with residual process violations.
+No-effect and worse alternatives are retained, not filtered for positive results.
+An identical replacement has no causal candidate or action-divergence assertion.
+This is a simulated, content-bound executed contrast, not cryptographic independent
+execution attestation, a model mechanism, or general causal qualification.
 
-### Sequencing decision required, not an automatic dependency waiver
+The first divergence is the exact changed call at the validated common cut state;
+its reference type is `controlled_action_difference`. It is not proof the source
+policy erred. A failed baseline and changed alternative with complete target success
+and no remaining violations supports `counterfactual_valid_outcome_restoration`.
+This references a valid alternative execution sequence, **not** a retry that happened
+inside the original trajectory. A successful alternative is a task-local valid
+reference, not an optimal or generally qualified policy. Failed alternatives,
+unchanged actions and already-successful baselines do not count as recovery.
 
-The original #153 requires causal candidates where valid intervention evidence is
-available; #156 explicitly depends on #153 merged and owns the exact-source
-counterfactual/alternative-experience linkage. Counting this partial foundation
-as full #153 completion merely to unblock #156 would conceal that dependency loop.
-The smallest proposed sequencing option is an **owner-accepted diagnostic
-foundation milestone** comprising this observed-evidence producer, then a bounded
-#156 evidence-linkage implementation using existing replay, followed by #153's
-intervention-supported consumer and full acceptance review. Alternatively, an
-explicitly authorized joint #153/#156 implementation can resolve both together.
-Neither option is authorized by this document. All original requirements remain;
-no #156 contract/status/paths are changed, and no `/done` is warranted here.
+## Capability association and failure-family candidates
+
+The receipt authenticates the full `CapabilityContract` and its portable task
+binding, rather than trusting caller tags. Typed mapping scope is
+**DECLARED_TASK_ASSOCIATION**: these are observations about tasks exercising a
+declared capability, not measured agent competence. Native verification extends the
+target set beyond the original contract's success terms. Existing verification
+supplies target counts, not individual failed target IDs; individual failure and
+contract-term attribution remain UNKNOWN. Severity is normalized unmet-target
+fraction, not general harm. Residual invariant/process/evidence reasons remain
+explicitly available without claiming they identify the model's root mechanism.
+
+Families group failed sources with the same capability ID **and content digest**,
+retain canonical source IDs and exact receipt references, and require at least two
+distinct semantic source protocols. Artifact paths, baseline copies and independent
+repeats cannot inflate frequency. Deterministic representative selection uses source
+ID then receipt ID; duplicate-protocol receipts are not independent evidence.
+`CapabilityFailureCandidate` wraps the canonical family and `CapabilityGap` with
+HYPOTHESIZED status and OBSERVED_BOUND_TASK_FAILURES evidence. Frequency means
+sampled distinct protocols, not independent agents, environments, a population
+failure rate or demonstrated generalization. Prerequisites, missing procedures and
+abstraction deficits are not invented; no capability graph or qualification state
+is changed.
+
+All contrast reports, candidate records, families, gaps and evidence references are
+evaluator-private. Both public and buyer-safe methods return only a fixed UNKNOWN
+withholding reason; no receipt/source hashes, paths, private reasons or parameters
+are rendered. Raw model dumps are private evaluator material, never trainer/export
+payloads. Canonical source experiences, evaluations and maturity remain unchanged.
+
+## Acceptance and qualification boundary
+
+The original #153 requirements remain in force. This consumer removes the former
+missing-provider implementation gap without treating coarse Gold-10 snapshots as
+longitudinal evidence. The conditional computations have positive, negative and
+unsupported-input tests; no unconditional UNKNOWN placeholder is counted as an
+implemented causal consumer. Gold-10 still demonstrates recorded component symptoms;
+synthetic paired histories demonstrate protocol metrics; actual public TRAIN native
+execution demonstrates bounded intervention/recovery. These do not demonstrate
+truth/calibration accuracy, general recoverability, training usefulness, scientific
+causality, Frontier performance or measured capability deficits. Those empirical
+claims remain UNKNOWN pending their separately authorized evidence programs.
+
+No document or passing test itself closes #153 or grants formal review/merge authority.

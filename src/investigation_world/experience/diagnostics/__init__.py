@@ -1,5 +1,11 @@
 """Evidence-bounded diagnostic producers, not causal or training qualification."""
 
+from .interventions import (
+    CapabilityFailureCandidate,
+    InterventionDiagnostic,
+    diagnose_counterfactual,
+    intervention_failure_families,
+)
 from .producers import (
     DiagnosticObservation,
     DiagnosticReport,
@@ -11,6 +17,10 @@ from .producers import (
 )
 
 __all__ = [
+    "CapabilityFailureCandidate",
+    "InterventionDiagnostic",
+    "diagnose_counterfactual",
+    "intervention_failure_families",
     "DiagnosticObservation",
     "DiagnosticReport",
     "FailureFamilyCandidate",

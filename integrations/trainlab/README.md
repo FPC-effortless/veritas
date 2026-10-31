@@ -1,6 +1,24 @@
 # TrainLab local workbench
 
-Run declared experiments, keep a reproducible record, and compare saved results in a local web dashboard. This standalone Python 3.11+ package has **no runtime dependencies**, remote services, or telemetry. It is incubated beside Forge in Veritas; it is not a new Veritas release or a scientific qualification service.
+Run declared experiments, keep a reproducible record, and compare saved results in a web dashboard. The Python 3.11+ local runner has no runtime dependencies or telemetry. Optional authenticated production hosting adds Waitress. The package is incubated beside Forge in Veritas; it is not a new Veritas release or a scientific qualification service.
+
+## Production deployment
+
+See [PRODUCTION.md](PRODUCTION.md) for the exact support contract, authenticated
+server, portable container/Compose deployment, TLS setup, bounded execution,
+health monitoring, crash recovery, backup/restore and deployment acceptance.
+Production hosting serves one shared workspace for trusted operators and approved
+recipes; it does not provide untrusted-job or tenant isolation. Public access
+requires HTTPS, operator authentication and a configured origin. A merge or a
+constructed demo alone does not qualify an installed production deployment.
+
+## Forge dataset workbench
+
+With the sibling Forge package installed, add `--forge-workspace /private/forge`
+to `trainlab serve`. The real Forge GUI opens at `/forge/`, and the header switches
+between datasets and experiments. It supports JSONL import, immutable release
+creation, temporal train/validation previews, provenance, verification, exports
+and dataset comparisons. See [Forge workbench](../forge/WORKBENCH.md).
 
 ## Start in under ten minutes
 
@@ -48,11 +66,11 @@ TrainLab supplies `TRAINLAB_OUTPUT_DIR`, `TRAINLAB_SEED`, and `PYTHONHASHSEED`. 
 import json, os, random
 from pathlib import Path
 
-random.seed(int(os.environ['TRAINLAB_SEED']))
-output = Path(os.environ['TRAINLAB_OUTPUT_DIR'])
+random.seed(int(os.environ["TRAINLAB_SEED"]))
+output = Path(os.environ["TRAINLAB_OUTPUT_DIR"])
 # Train and evaluate your model here.
-(output / 'metrics.json').write_text(json.dumps({'validation_loss': 0.25}))
-(output / 'checkpoint.json').write_text(json.dumps({'weights': [0.1, 0.2]}))
+(output / "metrics.json").write_text(json.dumps({"validation_loss": 0.25}))
+(output / "checkpoint.json").write_text(json.dumps({"weights": [0.1, 0.2]}))
 ```
 
 Run IDs are unique; runs never overwrite each other. `run.json` captures the config, command, seed, input SHA-256s, Git commit and dirty state, host runtime, declared budget, UTC start/end, elapsed time, status, exit code, metrics, and artifact hashes. Config snapshots and logs stay beside the outputs. Inputs changed during execution invalidate success. Missing/invalid metrics or artifacts fail the run, and timeouts retain an explicit `timed_out` record. CLI non-success returns a nonzero exit code. A host crash can leave a `running` record; it is not proof that a job is still alive, and verification rejects unfinished records.
@@ -89,6 +107,6 @@ Browser tooling is a development-only dependency. Neither install nor browser ac
 
 Run recipes only if you trust their code. The runner is **not a sandbox**: a recipe can access the local account's files, environment, and network. This tool adds no training service, network access, or credentials. Do not put tokens or secrets in command arguments, recipe files, output artifacts, or logs. These are deliberately retained locally. The dashboard does not scan the filesystem: it reads the specified run store and explicitly registered config directory. It binds only to `127.0.0.1`, rejects unexpected Host/Origin values, requires a per-session same-origin token for launching recipes, and accepts no browser-supplied commands or file paths. Do not expose it through public forwarding.
 
-POSIX timeouts terminate the process group; on Windows only the immediate process can be terminated with the standard library. Windows experiments must not detach workers. Logs are streamed to local disk rather than memory; they have no disk quota, so use a bounded-output experiment and an appropriately sized run store. Input/record files have bounded JSON sizes. Artifact checksums prove byte identity against the saved record, not signed authenticity; editing both a file and its local record is outside this integrity check.
+POSIX timeouts terminate the process group; on Windows only the immediate process can be terminated with the standard library. Experiments must not detach workers. Each stdout/stderr stream is capped at 16 MiB; exceeding it fails the run. Artifact/dataset space still requires a host filesystem quota. Active stores support 1,000 runs and 8 MiB of aggregate metadata; archive/rotate stores before that limit. Input/record files have bounded JSON sizes. Artifact checksums prove byte identity against the saved record, not signed authenticity; editing both a file and its local record is outside this integrity check.
 
 The initial commercial hypothesis remains open models/local SDKs with paid integration, optimization, evidence tooling, and support. No customer adoption, revenue, hardware qualification, or commercial release is claimed.

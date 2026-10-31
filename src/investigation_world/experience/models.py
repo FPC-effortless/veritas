@@ -435,13 +435,13 @@ class MachineExperience(CanonicalModel):
                 raise ValueError(f"{label} ids must be unique")
 
     def public_payload(self) -> dict[str, Any]:
-        payload = _safe_payload(self, VisibilityClass.PUBLIC, root=True)
+        payload = _safe_payload(self, VisibilityClass.PUBLIC)
         if payload is _DROP:
             raise ValueError("experience is not classified for public serialization")
         return payload
 
     def buyer_safe_payload(self) -> dict[str, Any]:
-        payload = _safe_payload(self, VisibilityClass.BUYER_SAFE, root=True)
+        payload = _safe_payload(self, VisibilityClass.BUYER_SAFE)
         if payload is _DROP:
             raise ValueError("experience is not classified for buyer-safe serialization")
         return payload
@@ -557,8 +557,6 @@ _PRIVATE_BUCKETS = frozenset({"private_metadata", "private_payload"})
 def _safe_payload(
     value: Any,
     maximum: VisibilityClass,
-    *,
-    root: bool = False,
 ) -> Any:
     if isinstance(value, TrajectoryV2):
         if maximum is VisibilityClass.PUBLIC:
@@ -567,7 +565,7 @@ def _safe_payload(
             return value.buyer_safe_payload()
     if isinstance(value, BaseModel):
         visibility = getattr(value, "visibility", None)
-        if not root and isinstance(visibility, VisibilityClass):
+        if isinstance(visibility, VisibilityClass):
             if _VISIBILITY_RANK[visibility] > _VISIBILITY_RANK[maximum]:
                 return _DROP
         model_result: dict[str, Any] = {}
