@@ -159,7 +159,7 @@ def _protocol(source: VerifiedExecution, step: int, replacement: dict[str, Any])
 
 
 class CounterfactualExperience(MachineExperience):
-    """Evaluator-private derivative; canonical root projections do not enforce its label."""
+    """Evaluator-private derivative; explicit refusal reinforces the canonical root gate."""
 
     def public_payload(self):
         raise ValueError("COUNTERFACTUAL_DERIVATIVE_IS_EVALUATOR_PRIVATE")

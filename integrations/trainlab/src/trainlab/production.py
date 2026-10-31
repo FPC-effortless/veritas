@@ -58,6 +58,8 @@ class ProductionApp:
         public_origin: str | None,
         port=8765,
         log_limit=16 * 1024 * 1024,
+        workspace_factory=Workspace,
+        forge_workspace=None,
     ):
         if auth_file is None:
             raise LabError("production hosting requires an operator credentials file")
@@ -94,7 +96,8 @@ class ProductionApp:
         self.auth = auth
         self.public_origin = public_origin
         self.port = port
-        self.workspace = Workspace(runs, experiments, log_limit=log_limit)
+        options = {"forge_workspace": forge_workspace} if forge_workspace is not None else {}
+        self.workspace = workspace_factory(runs, experiments, log_limit=log_limit, **options)
 
     def close(self):
         self.workspace.close()
@@ -141,11 +144,11 @@ class ProductionApp:
                 {"error": "Operator authentication required."},
                 "application/json",
             )
-            extra["WWW-Authenticate"] = 'Basic realm="TrainLab", charset="UTF-8"'
+            extra["WWW-Authenticate"] = f'Basic realm="{self.workspace.brand}", charset="UTF-8"'
         else:
             try:
                 size = int(environ.get("CONTENT_LENGTH") or "0")
-                if not 0 <= size <= 4096:
+                if not 0 <= size <= self.workspace.body_limit:
                     raise LabError("request body too large")
                 body = environ["wsgi.input"].read(size)
                 if len(body) != size:
@@ -181,6 +184,8 @@ def serve_production(
     public_origin: str | None,
     host="127.0.0.1",
     port=8765,
+    workspace_factory=Workspace,
+    forge_workspace=None,
 ):
     if host not in ("127.0.0.1", "localhost") and not public_origin:
         raise LabError("remote binding requires an HTTPS public origin and TLS reverse proxy")
@@ -189,7 +194,13 @@ def serve_production(
     except ImportError as error:
         raise LabError("install trainlab-local[server] to enable production hosting") from error
     application = ProductionApp(
-        runs, experiments, auth_file=auth_file, public_origin=public_origin, port=port
+        runs,
+        experiments,
+        auth_file=auth_file,
+        public_origin=public_origin,
+        port=port,
+        workspace_factory=workspace_factory,
+        forge_workspace=forge_workspace,
     )
     server = None
     previous = None
@@ -202,7 +213,7 @@ def serve_production(
             connection_limit=64,
             channel_timeout=15,
             cleanup_interval=5,
-            max_request_body_size=4096,
+            max_request_body_size=application.workspace.body_limit,
             max_request_header_size=16384,
             expose_tracebacks=False,
             clear_untrusted_proxy_headers=True,
@@ -214,7 +225,8 @@ def serve_production(
 
         previous = signal.signal(signal.SIGTERM, terminate)
         print(
-            f"TrainLab production server listening on {host}:{server.effective_port}; "
+            f"{application.workspace.brand} production server listening on "
+            f"{host}:{server.effective_port}; "
             "trusted operators only; TLS reverse proxy required for remote access.",
             flush=True,
         )

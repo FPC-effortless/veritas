@@ -95,6 +95,8 @@ shutil.copytree('/data/forge-demo/runs','/data/runs')
             "/data/runs",
             "--experiments",
             "/recipes/forge-demo",
+            "--forge-workspace",
+            "/data/forge-workspace",
         )
         deadline = time.monotonic() + 30
         while True:
@@ -143,6 +145,15 @@ for _ in range(150):
 assert len(state['runs']) == 3 and all(r['status']=='succeeded' for r in state['runs'])
 for run in state['runs']: assert request('/api/verify?id='+run['id'])['valid']
 print(json.dumps({'anonymous_denied':True,'verified_runs':len(state['runs'])}))
+forge=request('/api/forge/state')
+source=request('/api/forge/example')
+request('/api/forge/releases',source,forge['token'])
+for _ in range(150):
+    forge=request('/api/forge/state')
+    if len(forge['releases'])==1 and not forge['busy']: break
+    time.sleep(.1)
+assert len(forge['releases'])==1 and forge['releases'][0]['records']==30
+print('PASS: installed Forge GUI creates a verified dataset inside hardened container')
 """
         print(docker("exec", container, "python", "-c", exercise))
         docker("stop", "--time", "15", container)

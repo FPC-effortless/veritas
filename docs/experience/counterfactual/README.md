@@ -135,13 +135,14 @@ public; more restrictive sources currently reject rather than widen classificati
 paths, outcomes, interventions or private values. The derivative's public and buyer-safe
 projection methods reject. Both supported public projection paths are tested.
 
-**Raw `model_dump`, JSON serialization, nested recorded objects, and coercion into a base
-`MachineExperience` are evaluator-only operations, not safe export APIs.** A Python caller
-can deliberately erase subclass guards by coercion; this adapter does not claim to prevent
-that. Do not serialize a receipt, a companion, or a derived base-coerced object for agents,
-trainers or buyers. The canonical root-visibility issue was reported separately for a
-scoped shared fix; this lane does not modify canonical models. No hidden reasoning is
-recorded or treated as executed evidence.
+**Raw `model_dump`, JSON serialization and nested recorded objects are evaluator-only
+operations, not safe export APIs.** Do not serialize a receipt, companion or derivative
+with raw model serialization for agents, trainers or buyers. The separately merged #454
+canonical root-visibility gate now enforces classification even after coercion into base
+`MachineExperience`: both its public and buyer-safe projections reject this private
+derivative. A regression exercises those base-coerced paths as well as the retained
+subclass refusal. This lane does not modify canonical models and does not claim that raw
+serialization enforces privacy. No hidden reasoning is recorded or treated as executed evidence.
 
 ## Verification scope
 

@@ -29,6 +29,9 @@ def main() -> int:
     serve = commands.add_parser("serve", help="Open the local dashboard")
     serve.add_argument("--runs", type=Path, default=Path(".trainlab/runs"))
     serve.add_argument(
+        "--forge-workspace", type=Path, help="Enable the Forge dataset GUI at /forge/"
+    )
+    serve.add_argument(
         "--experiments",
         type=Path,
         help="Enable execution of trusted *.json configs from this directory",
@@ -113,13 +116,16 @@ def main() -> int:
                     public_origin=args.public_origin,
                     host=args.host,
                     port=args.port,
+                    forge_workspace=args.forge_workspace,
                 )
                 return 0
             if args.host != "127.0.0.1" or args.auth_file or args.public_origin:
                 raise LabError("remote/authentication options require --production")
             from .server import Dashboard
 
-            with Dashboard(args.runs, args.experiments, args.port) as server:
+            with Dashboard(
+                args.runs, args.experiments, args.port, forge_workspace=args.forge_workspace
+            ) as server:
                 print(f"TrainLab: http://127.0.0.1:{server.server_port}", flush=True)
                 try:
                     server.serve_forever()

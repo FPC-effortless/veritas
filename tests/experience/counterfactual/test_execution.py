@@ -383,11 +383,14 @@ def test_supported_projections_and_raw_serialization_boundary(executed, tmp_path
     assert str(tmp_path) not in str(receipt.public_payload())
     # Raw model serialization is deliberately evaluator-only, not an export API.
     assert str(tmp_path) in receipt.model_dump_json()
-    # Base coercion is NOT a supported projection and cannot preserve subclass guards.
+    # Base coercion preserves classification; the merged canonical root gate must reject.
     from investigation_world.experience import MachineExperience
 
     coerced = MachineExperience.model_validate(derivative.model_dump(mode="python"))
     assert coerced.visibility == derivative.visibility
+    for projection in (coerced.public_payload, coerced.buyer_safe_payload):
+        with pytest.raises(ValueError):
+            projection()
 
 
 def test_source_retained_bytes_unchanged(tmp_path):
