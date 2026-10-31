@@ -1,7 +1,7 @@
 """First public native TRAIN fixture and exact, fail-closed companion admission.
 
-ponytail: only the first financial TRAIN case of the fixed config is supported;
-new profiles need their own evidenced mapping, not an inferred inverse adapter.
+ponytail: the original fixture and two closed structural derivatives only;
+new profiles need equivalent regeneration evidence, not an inferred inverse adapter.
 """
 
 from __future__ import annotations
@@ -15,6 +15,13 @@ from pathlib import Path
 from typing import Any
 
 from investigation_world.experience import MachineExperience, machine_experience_from_trajectory
+from investigation_world.experience_foundry.public_profiles import (
+    profile_fixture,
+    profile_id_from_trace,
+    recorder_metadata,
+    recorder_version,
+    validate_profile_action_events,
+)
 from investigation_world.foundry.expert_trajectories import (
     ExpertiseAssessment,
     TrainingUse,
@@ -153,8 +160,10 @@ class PublicTrainingRecorder:
     Observations are not invented; this SFT format records only the submitted action sequence.
     """
 
-    def __init__(self, artifact_root: str | Path):
-        self.case, self.capability = public_training_fixture()
+    def __init__(self, artifact_root: str | Path, *, profile_id: str | None = None):
+        self.profile_id = profile_id
+        self.recorder_version = recorder_version(profile_id)
+        self.case, self.capability = profile_fixture(profile_id)
         self.runtime = NativeOperationalRuntime(
             self.case.episode.model_copy(deep=True), artifact_root=artifact_root
         )
@@ -212,7 +221,7 @@ class PublicTrainingRecorder:
             task_seed=self.case.seed,
             split=self.case.split,
             taskset_version=self.case.episode.metadata["distribution_version"],
-            harness_version=RECORDER_VERSION,
+            harness_version=self.recorder_version,
             runtime_version=self.runtime_digest,
             initial_state_hash=stable_hash(self.initial),
             events=[*self.events, *mapped[len(self.events) :]],
@@ -221,7 +230,7 @@ class PublicTrainingRecorder:
             final_state_hash=stable_hash(self.runtime.state_snapshot()),
             termination_reason="episode_submitted",
             total_cost=float(self.runtime.budget.spent),
-            metadata={"recorder": RECORDER_VERSION, "source_digest": self.source_digest},
+            metadata=recorder_metadata(self.profile_id, self.source_digest),
         )
         companion.trace_id = _trace_id(companion)
         evidence = OperationalReplayEvidence(
@@ -244,7 +253,7 @@ class PublicTrainingRecorder:
                     ProvenanceRecord(
                         source_kind=COMPANION_SOURCE,
                         source_id=companion.trace_id,
-                        source_version=RECORDER_VERSION,
+                        source_version=self.recorder_version,
                         source_digest=canonical_hash(companion.model_dump(mode="json")),
                         visibility=VisibilityClass.EVALUATOR_PRIVATE,
                     ),
@@ -267,7 +276,9 @@ def admit_experience(
     experience = MachineExperience.model_validate(source.experience.model_dump(mode="python"))
     trajectory = experience.trajectory
     trace = RolloutTrace.model_validate(source.companion.model_dump(mode="python"))
-    case, capability = public_training_fixture()
+    profile_id = profile_id_from_trace(trace)
+    version_recorder = recorder_version(profile_id)
+    case, capability = profile_fixture(profile_id)
     expected_episode = case.episode
     if source.capability.model_dump(mode="json") != capability.model_dump(mode="json"):
         raise ValueError("CAPABILITY_IDENTITY_MISMATCH")
@@ -304,7 +315,7 @@ def admit_experience(
     companions = [p for p in trajectory.provenance if p.source_kind == COMPANION_SOURCE]
     if len(companions) != 1 or (
         companions[0].source_id != trace.trace_id
-        or companions[0].source_version != RECORDER_VERSION
+        or companions[0].source_version != version_recorder
         or companions[0].source_digest != canonical_hash(trace.model_dump(mode="json"))
     ):
         raise ValueError("COMPANION_BINDING_MISMATCH")
@@ -312,6 +323,7 @@ def admit_experience(
     if raw is None:
         raise ValueError("REPLAY_REQUIRED")
     evidence = OperationalReplayEvidence.model_validate(raw)
+    validate_profile_action_events(profile_id, trace, evidence.action_events)
     receipt = evidence.native_submission
     if receipt is None:
         raise ValueError("NATIVE_RECEIPT_REQUIRED")
@@ -373,12 +385,11 @@ def admit_experience(
         "task_seed": case.seed,
         "environment_version": version,
         "taskset_version": version,
-        "harness_version": RECORDER_VERSION,
+        "harness_version": version_recorder,
         "runtime_version": runtime_source_digest(),
-        "metadata": {
-            "recorder": RECORDER_VERSION,
-            "source_digest": canonical_hash(expected_episode.model_dump(mode="json")),
-        },
+        "metadata": recorder_metadata(
+            profile_id, canonical_hash(expected_episode.model_dump(mode="json"))
+        ),
         "initial_state_hash": evidence.initial_state_digest,
         "final_state_hash": evidence.final_state_digest,
         "total_cost": float(evidence.cost_spent),
