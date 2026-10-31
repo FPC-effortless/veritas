@@ -190,6 +190,9 @@ def main():
             passed("GUI verifies frozen hashes and retains completed verification activity")
             page.locator('[data-view="create"]').click()
             page.get_by_role("button", name="Load constructed example", exact=False).click()
+            expect(
+                page.get_by_role("button", name="Load constructed example", exact=False)
+            ).to_be_enabled()
             page.get_by_label("Dataset name", exact=True).fill(
                 "Workshop observations · version two"
             )
