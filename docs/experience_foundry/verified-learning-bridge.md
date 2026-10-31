@@ -3,8 +3,9 @@
 Implements approved proposal [#445](https://github.com/FPC-effortless/veritas/issues/445)
 through the separately enrolled [#446](https://github.com/FPC-effortless/veritas/issues/446)
 (`LEARN-BRIDGE-IMPL-001`). The earlier proposal remains a design/history record;
-its trusted status was not manually rewritten. #160 remains blocked with its diagnostics,
-counterfactual, curriculum and broader derivative dependencies unchanged.
+its trusted status was not manually rewritten. #160 adds a separate
+[candidate-derivation boundary](candidate-derivation.md), without relaxing this bridge's
+successful-TRAIN admission or public trainer projection.
 
 ## Supported source, not a generic inverse
 
