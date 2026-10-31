@@ -117,13 +117,20 @@ function pendingInput(delta) {inputTasks+=delta;$('#submit-release').disabled=st
 function clearDeclarations() {for(const id of ['ai-use','redistribution','privacy'])$('#'+id).checked=false;}
 async function loadExample() {
   const version=++sourceVersion,metadata=++specVersion;pendingInput(1);
+  $('#create-form').inert=true;$('#create-form').setAttribute('aria-busy','true');
+  for(const button of document.querySelectorAll('[data-example]'))button.disabled=true;
+  notice('Loading the constructed example…');
   try {
     const value=await request('example');if(version!==sourceVersion||metadata!==specVersion)return;
     source={name:value.source_name,text:value.source_jsonl};fillSpec(value.spec);
     $('#source-file').value='';$('#source-paste').value='';$('#source-file-label').textContent=value.source_name;
     $('#source-state').hidden=false;$('#source-state').className='source-state example';$('#source-state').textContent='Constructed example loaded · 30 sensor records · no real-world data or verified labels.';
     location.hash='create';notice('The example is ready to review. Create an immutable release when you are ready.');
-  } finally {pendingInput(-1);}
+  } finally {
+    $('#create-form').inert=false;$('#create-form').removeAttribute('aria-busy');
+    for(const button of document.querySelectorAll('[data-example]'))button.disabled=false;
+    pendingInput(-1);
+  }
 }
 $('#source-file').addEventListener('change',async event=>{
   const version=++sourceVersion;const file=event.target.files[0];if(!file)return;
