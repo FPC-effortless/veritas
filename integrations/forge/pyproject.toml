@@ -1,17 +1,25 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "forge-temporal-data"
-version = "0.1.0"
+version = "0.2.0"
 description = "Standalone evidence-preserving chronological data release toolkit"
+readme = "WORKBENCH.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 dependencies = []
 
+[project.optional-dependencies]
+workbench = ["trainlab-local[server]>=0.3.0,<0.4"]
+
 [project.scripts]
 forge-temporal = "forge_data.__main__:main"
+forge-workbench = "forge_data.workbench:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+forge_data = ["static/*"]

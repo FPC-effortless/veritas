@@ -10,6 +10,7 @@ COPY integrations/trainlab/pyproject.toml integrations/trainlab/README.md integr
 COPY integrations/trainlab/src ./src
 COPY integrations/trainlab/examples ./examples
 COPY integrations/forge/pyproject.toml /opt/forge/pyproject.toml
+COPY integrations/forge/WORKBENCH.md /opt/forge/WORKBENCH.md
 COPY integrations/forge/src /opt/forge/src
 COPY integrations/forge/examples/dataset_quickstart.py /opt/forge/examples/dataset_quickstart.py
 RUN --mount=type=secret,id=proxy_ca \
@@ -25,4 +26,4 @@ EXPOSE 8765
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3).read()"]
 ENTRYPOINT ["trainlab"]
-CMD ["serve", "--production", "--runs", "/data/runs", "--auth-file", "/run/secrets/trainlab-auth.json"]
+CMD ["serve", "--production", "--runs", "/data/runs", "--auth-file", "/run/secrets/trainlab-auth.json", "--forge-workspace", "/data/forge"]
