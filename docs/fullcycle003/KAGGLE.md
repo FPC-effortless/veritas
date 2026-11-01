@@ -21,16 +21,23 @@ artifact verification. Interrupted work is not relabeled as completed training.
 
 Recovery requires the saved data/ and run/ output folders, identical source/runtime
 and GPU count. Existing output folders are never overwritten by an input restore.
-The core source/runtime/checkpoint guards remain intact. A changed Kaggle image
+Resume also compares the entire resolved configuration against this exact full
+recipe, including model, seed, precision, stage budgets, prepared release and
+tokenizer pins. A valid checkpoint from a different pilot cannot qualify as this
+run. The core source/runtime/checkpoint guards remain intact. A changed Kaggle image
 can cause strict replay to refuse recovery; that is not bypassed.
 
 Process supervision requires Linux `/proc` to use the current PID namespace and
 refuses to start compute when that condition fails. It tracks detached training
 ranks, gives their checkpoint handlers time to finish, then removes any remaining
 owned process groups. This staging host has a mismatched `/proc` namespace, so
-the four process integration fixtures are skipped here. The cheap CPU-only
+the five process integration fixtures are skipped here. The cheap CPU-only
 `Kaggle launch controls` workflow runs them on a normal Ubuntu runner; GPU/NCCL
 behavior still requires the actual Kaggle run.
+
+The notebook calls the supervisor directly in its kernel. Notebook interruption
+therefore reaches the checkpoint grace handler without an extra subprocess
+wrapper that could terminate the supervisor early.
 
 Build the notebook after publishing a concrete source commit:
 

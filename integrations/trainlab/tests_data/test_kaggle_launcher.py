@@ -1,9 +1,12 @@
 """CPU controls for Kaggle launch arithmetic, persistence and process shutdown."""
 
+import _thread
+import copy
 import importlib.util
 import json
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +48,53 @@ class KaggleLauncherControls(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no accelerator fallback"):
                 launcher.hardware(2)
 
+    def test_resume_rejects_a_valid_but_different_recipe_before_probe(self):
+        config = launcher.world_config(json.loads((EXAMPLES / "tac-10m-full.json").read_bytes()), 2)
+        with tempfile.TemporaryDirectory() as d:
+            output = Path(d)
+            config["dataset"] = {
+                "directory": str(output / "data/release"),
+                "manifest_sha256": launcher.RELEASE_SHA256,
+                "source_plan_sha256": launcher.PLAN_SHA256,
+                "acquisition_sha256": launcher.ACQUISITION_SHA256,
+            }
+            config["tokenizer"] = {
+                "kind": "artifact",
+                "artifact_path": str(output / "data/tokenizer.json"),
+                "artifact_sha256": launcher.TOKENIZER_SHA256,
+            }
+            launcher.verify_full_recipe(config, output, 2)
+            variants = [copy.deepcopy(config) for _ in range(7)]
+            variants[0]["stages"][0]["steps"] = 256
+            variants[1]["model"]["layers"] = 4
+            variants[2]["dataset"]["manifest_sha256"] = "a" * 64
+            variants[3]["tokenizer"]["artifact_sha256"] = "b" * 64
+            variants[4]["seed"] += 1
+            variants[5]["precision"] = "bf16"
+            variants[6]["parameter_target"] = 1000000
+            (output / "run").mkdir()
+            (output / "run/protocol.json").write_text('{"world_size":2}')
+            for changed in variants:
+                with self.subTest(config=changed):
+                    (output / "run/pipeline.json").write_text(json.dumps(changed))
+                    with (
+                        patch.object(launcher, "hardware"),
+                        patch.object(launcher.subprocess, "run") as probe,
+                        patch.dict(
+                            sys.modules,
+                            {
+                                "trainlab.fullcycle.pipeline": SimpleNamespace(
+                                    prepare_configuration=None
+                                )
+                            },
+                        ),
+                    ):
+                        with self.assertRaisesRegex(ValueError, "full-training recipe"):
+                            launcher.worker(
+                                SimpleNamespace(output=output, gpus=2, resume_input=None)
+                            )
+                        self.assertFalse(probe.called)
+
     def test_restore_refuses_existing_targets_and_symlinks(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -76,6 +126,31 @@ class KaggleLauncherControls(unittest.TestCase):
             )
             result = launcher.launch([sys.executable, "-c", script], 0.5, grace=2)
             self.assertTrue(result["budget_expired"])
+            self.assertEqual(result["returncode"], 0)
+            self.assertTrue(marker.exists())
+
+    @unittest.skipUnless(
+        launcher.compatible_proc_namespace(), "requires a matching /proc PID namespace"
+    )
+    def test_operator_interrupt_preserves_checkpoint_grace(self):
+        with tempfile.TemporaryDirectory() as d:
+            marker = Path(d) / "saved"
+            script = (
+                "import signal,time,pathlib\n"
+                f"def stop(*args):\n time.sleep(.2)\n pathlib.Path({str(marker)!r}).touch()\n"
+                " raise SystemExit(0)\n"
+                "signal.signal(signal.SIGINT,stop)\n"
+                "while True:time.sleep(.05)\n"
+            )
+            interrupt = threading.Timer(0.5, _thread.interrupt_main)
+            interrupt.start()
+            try:
+                result = launcher.launch([sys.executable, "-c", script], 10, grace=2)
+            finally:
+                interrupt.cancel()
+                interrupt.join()
+            self.assertTrue(result["operator_interrupted"])
+            self.assertFalse(result["budget_expired"])
             self.assertEqual(result["returncode"], 0)
             self.assertTrue(marker.exists())
 
@@ -253,3 +328,19 @@ class KaggleLauncherControls(unittest.TestCase):
             self.assertTrue(
                 all(c.execution_count is None for c in notebook.cells if c.cell_type == "code")
             )
+            parameters = next(c.source for c in notebook.cells if c.cell_type == "code")
+            scope = {}
+            exec(compile(parameters, "parameters", "exec"), scope)
+            calls = []
+            scope["runpy"] = SimpleNamespace(
+                run_path=lambda path: {"main": lambda args: calls.append((path, args))}
+            )
+            scope["subprocess"] = SimpleNamespace(run=lambda *a, **kw: self.fail("extra wrapper"))
+            handoff = next(
+                c.source
+                for c in notebook.cells
+                if c.cell_type == "code" and "runpy.run_path" in c.source
+            )
+            exec(compile(handoff, "training handoff", "exec"), scope)
+            self.assertEqual(len(calls), 1)
+            self.assertIn("--budget-seconds", calls[0][1])

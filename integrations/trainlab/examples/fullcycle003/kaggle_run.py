@@ -17,6 +17,8 @@ from pathlib import Path
 
 RELEASE_SHA256 = "7685a510195b2e2466878c9b634abe7f888e02096c271d41f14272001e5b4b9b"
 TOKENIZER_SHA256 = "87567e3e62a688ab666c2e8d25e76917df7709986a7a53cc5be36697d3552609"
+PLAN_SHA256 = "31f4e8d46e711812e925ac6dd77742b0a9f57a649b5e356bb4bf13f2115ac327"
+ACQUISITION_SHA256 = "72938960b41800710df0275e5a06f931e13c6013df628e0d264585486945921f"
 EXAMPLES = Path(__file__).resolve().parent
 
 
@@ -47,6 +49,25 @@ def hardware(gpus):
     if any("T4" not in name for name in devices):
         raise ValueError("requested Kaggle T4 hardware is unavailable; no accelerator fallback")
     return {"visible_devices": devices, "training_ranks": gpus, "torch": str(torch.__version__)}
+
+
+def verify_full_recipe(config, output, gpus):
+    """An internally valid checkpoint must also belong to this exact full run."""
+    expected = world_config(json.loads((EXAMPLES / "tac-10m-full.json").read_bytes()), gpus)
+    data = Path(output).resolve() / "data"
+    expected["dataset"] = {
+        "directory": str(data / "release"),
+        "manifest_sha256": RELEASE_SHA256,
+        "source_plan_sha256": PLAN_SHA256,
+        "acquisition_sha256": ACQUISITION_SHA256,
+    }
+    expected["tokenizer"] = {
+        "kind": "artifact",
+        "artifact_path": str(data / "tokenizer.json"),
+        "artifact_sha256": TOKENIZER_SHA256,
+    }
+    if config != expected:
+        raise ValueError("configuration is not the pinned Kaggle full-training recipe")
 
 
 def publish_data(config, destination):
@@ -192,7 +213,14 @@ def launch(command, seconds, *, grace=120):
                 os.killpg(group, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-    code = child.wait()
+        # SIGKILL delivery is asynchronous; do not return with a surviving rank.
+        stop_at = time.monotonic() + 5
+        while refresh_tree(child.pid, tracked) and time.monotonic() < stop_at:
+            child.poll()
+            time.sleep(0.05)
+        if refresh_tree(child.pid, tracked):
+            raise RuntimeError("owned training processes survived forced shutdown")
+    code = child.wait(timeout=5)
     return {
         "returncode": code,
         "budget_expired": timed_out,
@@ -285,6 +313,8 @@ def worker(args):
         protocol = read_json(run / "protocol.json")
         if protocol["world_size"] != args.gpus:
             raise ValueError("resume must use the original GPU count")
+        verify_full_recipe(read_json(run / "pipeline.json"), args.output, args.gpus)
+        publish_data(read_json(run / "pipeline.json"), args.output / "data")
     else:
         config = world_config(read_json(EXAMPLES / "tac-10m-full.json"), args.gpus)
         config["dataset"] = {
@@ -294,6 +324,7 @@ def worker(args):
         temporary_config = args.output / "acquisition-config.json"
         write_json(temporary_config, config)
         config = publish_data(prepare_configuration(temporary_config), args.output / "data")
+        verify_full_recipe(config, args.output, args.gpus)
         write_json(args.output / "training-config.json", config)
         # Raw shards are no longer needed by the trainer. These hints change no bytes.
         if hasattr(os, "posix_fadvise"):
@@ -321,7 +352,7 @@ def worker(args):
     subprocess.run(command, check=True)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("/kaggle/working/fullcycle003"))
     parser.add_argument("--cache", type=Path, default=Path("/tmp/fullcycle003-cache"))
@@ -330,7 +361,7 @@ def main():
     parser.add_argument("--resume-input", type=Path)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--probe", action="store_true", help=argparse.SUPPRESS)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args.output, args.cache = args.output.resolve(), args.cache.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")

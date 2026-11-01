@@ -46,6 +46,7 @@ import os
 import subprocess
 import sys
 import json
+import runpy
 
 SOURCE_COMMIT = {commit!r}
 GPUS = 2
@@ -100,12 +101,13 @@ the controller refuses incompatible recovery. Save the complete output folder.
 """),
         nbf.v4.new_code_cell("""launcher = SOURCE / "integrations/trainlab/examples/fullcycle003"
 launcher = launcher / "kaggle_run.py"
-command = [sys.executable, str(launcher),
-           "--output", str(OUTPUT), "--gpus", str(GPUS),
-           "--budget-seconds", str(SESSION_BUDGET_SECONDS)]
+arguments = ["--output", str(OUTPUT), "--gpus", str(GPUS),
+             "--budget-seconds", str(SESSION_BUDGET_SECONDS)]
 if PREVIOUS_OUTPUT_ROOT:
-    command += ["--resume-input", str(PREVIOUS_OUTPUT_ROOT)]
-subprocess.run(command, check=True)
+    arguments += ["--resume-input", str(PREVIOUS_OUTPUT_ROOT)]
+# Run the supervisor in this kernel so Stop reaches its checkpoint grace handler.
+# An extra subprocess.run wrapper would kill the supervisor too early on interrupt.
+runpy.run_path(str(launcher))["main"](arguments)
 """),
         nbf.v4.new_markdown_cell("## 5. Inspect actual status and preserve outputs"),
         nbf.v4.new_code_cell("""receipt = json.loads((OUTPUT / "session-receipt.json").read_text())
