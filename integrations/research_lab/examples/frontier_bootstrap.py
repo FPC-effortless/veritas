@@ -100,7 +100,7 @@ def bootstrap(root, manifest, *, seconds=3600, cpu_slots=2):
         own = prefix + "lane." + lane["id"]
         link(lab, own, "derived_from", prefix + "mission")
         for dep in lane["dependencies"]:
-            link(lab, own, "depends_on", prefix + "lane." + dep)
+            link(lab, prefix + "lane." + dep, "next", own)
     return {"program": manifest["program_id"], "status": manifest["status"],
             "lanes_registered": len(manifest["lanes"]),
             "jobs_scheduled": 0, "trained_models": 0, "paid_compute_authorized": False}
