@@ -15,7 +15,7 @@ jobs:
       - name: Install optional training stack
         run: |
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -e . -e integrations/forge -e 'integrations/trainlab[training]' ruff
+          python -m pip install -e . -e integrations/forge -e 'integrations/trainlab[training]' ruff 'nbformat>=5.10,<6'
       - name: Integrity and interrupted replay
         run: |
           python -m unittest discover -s integrations/trainlab/tests_fullcycle -v
