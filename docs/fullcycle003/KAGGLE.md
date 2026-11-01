@@ -7,9 +7,13 @@ does not alter the native architecture, tokenizer or core training mathematics.
 Two ranks reduce pretraining accumulation from 4 to 2, preserving the global batch
 and **200,015,872** pretraining token presentations. Mid/SFT/DPO also preserve
 their global batches. RL changes 64 to 32 updates, preserving 256 total trajectories;
-its per-update global group batch differs. GPU/DDP execution remains unverified
-until the actual job runs. A synthetic one-update gradient/communication probe
-runs first and discards its weights before the full seeded initialization.
+its per-update global group batch differs. A synthetic diagnostic runs two
+optimizer updates at each phase's maximum training shapes (pretrain, SFT including
+replay, DPO including reference/replay, and RL including reference/replay). This
+tests memory, finite gradients and agreement between independently fed DDP ranks;
+its cross-entropy objectives do not validate DPO/GRPO or capability. Its weights
+are discarded before the full seeded initialization. It runs before fresh public
+data acquisition; attached inputs are validated before any optimizer work.
 
 The launcher checks real T4 hardware before downloading, fits the same TRAIN-only
 BPE, refuses a release/tokenizer hash mismatch, and copies only the prepared
@@ -48,7 +52,7 @@ python integrations/trainlab/examples/fullcycle003/build_kaggle.py \
 ```
 
 Select GPU T4 x2 and Internet in Kaggle, then run all cells. The notebook installs
-the pinned source, acquires public inputs, runs the GPU probe and starts training.
+the pinned source, runs the GPU shape probe, acquires public inputs and starts training.
 No Kaggle credential is embedded. The source checkout refuses unexpected changes.
 For an additional session, attach previous outputs and set PREVIOUS_OUTPUT_ROOT.
 
@@ -87,3 +91,34 @@ and tokenizer are copied; old protocols and optimizer state are excluded.
 Use `PREVIOUS_OUTPUT_ROOT` only for compatible optimizer-state recovery; the two
 input options are mutually exclusive. Source/runtime/checkpoint guards remain
 unchanged, so a changed core starts a fresh run.
+
+Recovery notebook `eweewee2/fullcycle003-tac10m-recovery01`, version 2, ran source
+`a356106253d257e56897293840093840ebb3221b` with public downloads and no attached
+inputs. It reproduced the prepared data, completed baseline evaluation (about
+22.5 minutes), and logged a real pretraining optimizer update at loss 8.0707.
+Both T4s then exhausted device memory during checkpoint recomputation. The
+session receipt contains no saved pretraining checkpoint. Logging at update 1
+and 128 does not establish the exact number of completed, uncommitted updates.
+This run does not establish full pretraining or any later training stage.
+
+The memory repair removes unused module hierarchy attribution from the stage-wide
+PyTorch FLOP counter. The standard tracker accumulates backward-hook handles
+through repeated checkpointed forwards. TrainLab consumes only its Global total,
+so the replacement retains PyTorch's supported-operator registry and Global scope
+without registering module/autograd attribution hooks. Uncounted operators remain
+uncounted; this is not a measurement of all hardware FLOPs.
+
+The controlled four-layer CPU comparison in [MEMORY_COUNTER_AB.json](MEMORY_COUNTER_AB.json)
+ran twelve identical updates: all losses, final weights and supported-operator
+FLOP totals matched exactly. The original tracker retained 399 then 4,788 handles;
+the replacement retained zero. Observed RSS growth was 78,602,240 versus 5,533,696
+bytes. RSS is allocator/environment dependent; this evidence establishes a local
+retention mechanism, not a successful T4 repair. A permanent training regression
+also compares losses, weights and FLOPs and checks bounded hook ownership.
+
+The trainer now commits update 1 before continuing with its ordinary checkpoint
+cadence, so a later failure can preserve an early recovery point. The architecture,
+precision, global batches and optimization objectives remain unchanged. The new
+maximum-shape GPU diagnostic and subsequent full training must pass before claiming
+that the device-memory failure is resolved. Independent qualification remains
+NOT_QUALIFIED and independent execution remains UNKNOWN.

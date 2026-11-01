@@ -242,13 +242,44 @@ def torch_command(gpus):
     return command
 
 
+def probe_shapes(gpus):
+    """Maximum training shapes; SFT also covers mid-training's identical geometry."""
+    config = world_config(json.loads((EXAMPLES / "tac-10m-full.json").read_bytes()), gpus)
+    phases = []
+    for stage in config["stages"]:
+        name = stage["name"]
+        if name == "midtrain":
+            continue
+        batch = stage["batch_size"]
+        batches = [batch, batch] if name == "dpo" else [batch]
+        if name == "rl":
+            # completion_grpo evaluates the sampled group as one policy batch.
+            batches = [batch * stage["group_size"]]
+        references = [0, 1] if name == "dpo" else [0] if name == "rl" else []
+        if stage.get("replay_weight", 0):
+            batches.append(batch)
+        phases.append(
+            {
+                "stage": name,
+                "batch_size": stage["batch_size"],
+                "sequence_length": stage.get("sequence_length", config["model"]["context"]),
+                "accumulation": stage.get("gradient_accumulation", 1),
+                "gradient_batch_sizes": batches,
+                "reference_forward_indices": references,
+                "updates": 2,
+            }
+        )
+    return phases
+
+
 def probe(output, gpus):
-    """One synthetic optimizer update, discarded before the independently initialized full run."""
+    """Repeated maximum-shape memory/gradient checks; all synthetic weights discarded."""
     from datetime import timedelta
 
     import torch
     import torch.distributed as dist
     from torch.nn.parallel import DistributedDataParallel
+    from trainlab.fullcycle._work_counter import GlobalFlopCounter
     from trainlab.fullcycle.backends import create_model
     from trainlab.runner import read_json, write_json
 
@@ -264,27 +295,76 @@ def probe(output, gpus):
         model = create_model(config).to(f"cuda:{rank}")
         network = DistributedDataParallel(model, device_ids=[rank]) if gpus > 1 else model
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
-        x = torch.randint(0, 3072, (1, 65), device=f"cuda:{rank}")
-        loss = torch.nn.functional.cross_entropy(
-            network(x[:, :-1]).flatten(0, 1), x[:, 1:].flatten()
-        )
-        loss.backward()
-        finite = all(
-            p.grad is not None and bool(torch.isfinite(p.grad).all()) for p in model.parameters()
-        )
-        flag = torch.tensor(int(finite), device=f"cuda:{rank}")
-        if gpus > 1:
-            dist.all_reduce(flag, op=dist.ReduceOp.MIN)
-        if not flag.item():
-            raise ValueError("GPU diagnostic produced nonfinite or missing gradients")
-        optimizer.step()
+        generator = torch.Generator(device=f"cuda:{rank}").manual_seed(10601 + 100003 * rank)
+        phases = []
+        for shape in probe_shapes(gpus):
+            optimizer.zero_grad(set_to_none=True)
+            reference = copy.deepcopy(model).eval() if shape["reference_forward_indices"] else None
+            if reference is not None:
+                reference.requires_grad_(False)
+            torch.cuda.empty_cache()
+            torch.cuda.reset_peak_memory_stats(rank)
+            allocations = []
+            with GlobalFlopCounter():
+                for update in range(shape["updates"]):
+                    optimizer.zero_grad(set_to_none=True)
+                    for _ in range(shape["accumulation"]):
+                        pieces = []
+                        for index, batch in enumerate(shape["gradient_batch_sizes"]):
+                            x = torch.randint(
+                                0,
+                                3072,
+                                (batch, shape["sequence_length"] + 1),
+                                device=f"cuda:{rank}",
+                                generator=generator,
+                            )
+                            logits = network(x[:, :-1])
+                            pieces.append(
+                                torch.nn.functional.cross_entropy(
+                                    logits.flatten(0, 1), x[:, 1:].flatten()
+                                )
+                            )
+                            if index in shape["reference_forward_indices"]:
+                                with torch.no_grad():
+                                    reference(x[:, :-1])
+                        loss = torch.stack(pieces).mean() / shape["accumulation"]
+                        loss.backward()
+                        del pieces, loss, logits, x
+                    finite = all(
+                        p.grad is not None and bool(torch.isfinite(p.grad).all())
+                        for p in model.parameters()
+                    )
+                    flag = torch.tensor(int(finite), device=f"cuda:{rank}")
+                    if gpus > 1:
+                        dist.all_reduce(flag, op=dist.ReduceOp.MIN)
+                    if not flag.item():
+                        raise ValueError("GPU diagnostic produced nonfinite or missing gradients")
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0, error_if_nonfinite=True)
+                    optimizer.step()
+                    torch.cuda.synchronize(rank)
+                    allocations.append(torch.cuda.memory_allocated(rank))
+                    if rank == 0:
+                        print(
+                            f"GPU shape diagnostic {shape['stage']} "
+                            f"{update + 1}/{shape['updates']}",
+                            flush=True,
+                        )
+            phases.append(
+                dict(
+                    shape,
+                    allocated_bytes_after_updates=allocations,
+                    peak_allocated_bytes=torch.cuda.max_memory_allocated(rank),
+                )
+            )
+            del reference
         h = hashlib.sha256()
         for p in model.parameters():
             h.update(p.detach().cpu().numpy().tobytes())
-        hashes = [h.hexdigest()]
+        diagnostics = [{"weight_sha256": h.hexdigest(), "phases": phases}]
         if gpus > 1:
-            hashes = [None] * gpus
-            dist.all_gather_object(hashes, h.hexdigest())
+            diagnostics = [None] * gpus
+            dist.all_gather_object(diagnostics, {"weight_sha256": h.hexdigest(), "phases": phases})
+        hashes = [d["weight_sha256"] for d in diagnostics]
         if len(set(hashes)) != 1:
             raise ValueError("distributed diagnostic weights differ between ranks")
         if rank == 0:
@@ -294,9 +374,11 @@ def probe(output, gpus):
                     "passed": True,
                     "hardware": hardware(gpus),
                     "parameters": sum(p.numel() for p in model.parameters()),
-                    "optimizer_updates_per_rank": 1,
+                    "optimizer_updates_per_rank": sum(s["updates"] for s in phases),
+                    "maximum_shape_diagnostics_by_rank": diagnostics,
                     "rank_weight_hashes": hashes,
-                    "scope": "synthetic GPU gradient/communication diagnostic; weights discarded",
+                    "scope": "synthetic maximum-shape gradient/memory/communication diagnostic; "
+                    "not DPO/GRPO validation; weights discarded",
                     "qualification": "NOT_QUALIFIED",
                 },
             )
@@ -315,35 +397,27 @@ def worker(args):
     run = args.output / "run"
     if args.prepared_input and run.exists():
         raise ValueError("prepared inputs require a fresh run; use resume for existing training")
-    if (run / "protocol.json").exists():
+    resuming = (run / "protocol.json").exists()
+
+    def commit_inputs(config):
+        config = publish_data(config, args.output / "data")
+        verify_full_recipe(config, args.output, args.gpus)
+        write_json(args.output / "training-config.json", config)
+
+    if resuming:
         # The core controller also enforces exact source/runtime/world-size pins.
         protocol = read_json(run / "protocol.json")
         if protocol["world_size"] != args.gpus:
             raise ValueError("resume must use the original GPU count")
         verify_full_recipe(read_json(run / "pipeline.json"), args.output, args.gpus)
         publish_data(read_json(run / "pipeline.json"), args.output / "data")
-    else:
-        if args.prepared_input:
-            config = full_recipe(args.output, args.gpus)
-            config["dataset"]["directory"] = str(args.prepared_input / "release")
-            config["tokenizer"]["artifact_path"] = str(args.prepared_input / "tokenizer.json")
-        else:
-            config = world_config(read_json(EXAMPLES / "tac-10m-full.json"), args.gpus)
-            config["dataset"] = {
-                "source_plan": str(EXAMPLES / "data-plan.json"),
-                "cache": str(args.cache),
-            }
-            temporary_config = args.output / "acquisition-config.json"
-            write_json(temporary_config, config)
-            config = prepare_configuration(temporary_config)
-        config = publish_data(config, args.output / "data")
-        verify_full_recipe(config, args.output, args.gpus)
-        write_json(args.output / "training-config.json", config)
-        # Raw shards are no longer needed by the trainer. These hints change no bytes.
-        if hasattr(os, "posix_fadvise"):
-            for path in (args.cache / "raw").rglob("*.parquet"):
-                with path.open("rb") as f:
-                    os.posix_fadvise(f.fileno(), 0, 0, os.POSIX_FADV_DONTNEED)
+    elif args.prepared_input:
+        config = full_recipe(args.output, args.gpus)
+        config["dataset"]["directory"] = str(args.prepared_input / "release")
+        config["tokenizer"]["artifact_path"] = str(args.prepared_input / "tokenizer.json")
+        commit_inputs(config)
+    # Validate attached inputs first, but exercise real maximum training shapes
+    # before spending a fresh session's time downloading and fitting public data.
     subprocess.run(
         torch_command(args.gpus)
         + [
@@ -356,6 +430,20 @@ def worker(args):
         ],
         check=True,
     )
+    if not resuming and not args.prepared_input:
+        config = world_config(read_json(EXAMPLES / "tac-10m-full.json"), args.gpus)
+        config["dataset"] = {
+            "source_plan": str(EXAMPLES / "data-plan.json"),
+            "cache": str(args.cache),
+        }
+        temporary_config = args.output / "acquisition-config.json"
+        write_json(temporary_config, config)
+        commit_inputs(prepare_configuration(temporary_config))
+    # Raw shards are no longer needed by the trainer. These hints change no bytes.
+    if hasattr(os, "posix_fadvise"):
+        for path in (args.cache / "raw").rglob("*.parquet"):
+            with path.open("rb") as f:
+                os.posix_fadvise(f.fileno(), 0, 0, os.POSIX_FADV_DONTNEED)
     command = torch_command(args.gpus) + ["-m", "trainlab", "pipeline"]
     command += (
         ["resume", str(run)]

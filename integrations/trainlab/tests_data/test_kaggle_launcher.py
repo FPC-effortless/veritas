@@ -4,13 +4,14 @@ import _thread
 import copy
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples/fullcycle003"
 spec = importlib.util.spec_from_file_location("fullcycle_kaggle", EXAMPLES / "kaggle_run.py")
@@ -19,6 +20,57 @@ spec.loader.exec_module(launcher)
 
 
 class KaggleLauncherControls(unittest.TestCase):
+    def test_probe_covers_maximum_shapes_and_repeated_optimizer_updates(self):
+        shapes = {s["stage"]: s for s in launcher.probe_shapes(2)}
+        self.assertEqual(set(shapes), {"pretrain", "sft", "dpo", "rl"})
+        for name, batch, length, accumulation, batches, references in (
+            ("pretrain", 8, 512, 2, [8], []),
+            ("sft", 4, 1024, 1, [4, 4], []),
+            ("dpo", 2, 1024, 1, [2, 2, 2], [0, 1]),
+            ("rl", 1, 1024, 1, [4, 1], [0]),
+        ):
+            shape = shapes[name]
+            self.assertEqual(
+                (shape["batch_size"], shape["sequence_length"], shape["accumulation"]),
+                (batch, length, accumulation),
+            )
+            self.assertEqual(
+                (shape["gradient_batch_sizes"], shape["reference_forward_indices"]),
+                (batches, references),
+            )
+            self.assertEqual(shape["updates"], 2)
+        single = {s["stage"]: s for s in launcher.probe_shapes(1)}
+        self.assertEqual(single["pretrain"]["accumulation"], 4)
+        self.assertEqual(single["sft"]["accumulation"], 2)
+
+    def test_failed_shape_probe_prevents_public_data_acquisition(self):
+        with tempfile.TemporaryDirectory() as d:
+            with (
+                patch.object(launcher, "hardware"),
+                patch.object(
+                    launcher.subprocess,
+                    "run",
+                    side_effect=subprocess.CalledProcessError(1, "probe"),
+                ),
+                patch.dict(
+                    sys.modules,
+                    {"trainlab.fullcycle.pipeline": SimpleNamespace(prepare_configuration=Mock())},
+                ),
+            ):
+                from trainlab.fullcycle.pipeline import prepare_configuration
+
+                with self.assertRaises(subprocess.CalledProcessError):
+                    launcher.worker(
+                        SimpleNamespace(
+                            output=Path(d),
+                            cache=Path(d) / "cache",
+                            gpus=2,
+                            resume_input=None,
+                            prepared_input=None,
+                        )
+                    )
+                prepare_configuration.assert_not_called()
+
     def test_two_rank_recipe_preserves_work_without_mutating_source(self):
         original = json.loads((EXAMPLES / "tac-10m-full.json").read_bytes())
         single, dual = [launcher.world_config(original, n) for n in (1, 2)]

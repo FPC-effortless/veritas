@@ -18,6 +18,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from trainlab.runner import LabError, contained_file, digest, read_json, write_json
 
+from ._work_counter import GlobalFlopCounter
 from .backends import configuration, create_model
 from .tokenization import RecordSource
 
@@ -271,9 +272,7 @@ def train_stage(
         for p in rollout_directory.glob(f"step-*-rank-{rank}.json"):
             if int(p.name.split("-")[1]) > step:
                 p.unlink()
-    from torch.utils.flop_counter import FlopCounterMode
-
-    counter = FlopCounterMode(display=False)
+    counter = GlobalFlopCounter()
     prior_flops = runtime.get("counted_flops", 0)
     started = time.perf_counter()
     previous_handlers, interrupted = {}, [False]
@@ -582,7 +581,7 @@ def train_stage(
                 flag = torch.tensor(int(stop), device=device)
                 dist.all_reduce(flag, op=dist.ReduceOp.MAX)
                 stop = bool(flag.item())
-            if step % checkpoint_every == 0 or stop or step == stage["steps"]:
+            if step == 1 or step % checkpoint_every == 0 or stop or step == stage["steps"]:
                 save()
             if rank == 0 and (
                 step == 1 or step % checkpoint_every == 0 or stop or step == stage["steps"]
@@ -652,7 +651,8 @@ def train_stage(
         "gpu_hours": elapsed * world_size / 3600 if str(device).startswith("cuda") else 0,
         "actual_training_flops": None,
         "counted_training_operator_flops": counted_flops,
-        "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed "
+        "flop_counter_scope": "PyTorch Global supported operators without module attribution, "
+        "across executed "
         "forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
         "estimated_6N_forward_token_flops": 6
         * sum(p.numel() for p in model.parameters())
