@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import torch
 from forge_data.language import ForgeError, LanguageRelease, build_release, canonical, digest
+from trainlab.fullcycle._work_counter import GlobalFlopCounter
 from trainlab.fullcycle.backends import ModelConfig, create_model
 from trainlab.fullcycle.tokenization import Tokens, fit_tokenizer, pack_training
 from trainlab.fullcycle.training import (
@@ -262,6 +263,78 @@ class IntegrityTests(unittest.TestCase):
         for key in a["model"]:
             torch.testing.assert_close(a["model"][key], b["model"][key], atol=0, rtol=0)
 
+    def test_checkpointed_tac_global_counter_preserves_math_without_retained_hooks(self):
+        from torch.utils.flop_counter import FlopCounterMode
+        from trainlab.runner import write_json as original_write
+
+        config = dataclasses.asdict(
+            ModelConfig(
+                backend="tac104",
+                vocab_size=256,
+                width=120,
+                layers=4,
+                heads=4,
+                context=64,
+                activation_checkpointing=True,
+            )
+        )
+        stage = {
+            "name": "pretrain",
+            "steps": 3,
+            "batch_size": 1,
+            "sequence_length": 32,
+            "gradient_accumulation": 2,
+            "learning_rate": 0.001,
+        }
+        results, retained = [], []
+        original_step = torch.optim.AdamW.step
+        for name in ("attributed", "global"):
+            counter = (
+                FlopCounterMode(display=False) if name == "attributed" else GlobalFlopCounter()
+            )
+            hooks, commits = [], []
+
+            def observed_step(optimizer, *args, **kwargs):
+                hooks.append(len(counter.mod_tracker._hooks))
+                return original_step(optimizer, *args, **kwargs)
+
+            def observed_write(path, value):
+                if Path(path).name == "checkpoint-index.json":
+                    commits.append(value["step"])
+                return original_write(path, value)
+
+            output = self.root / name
+            with (
+                patch("trainlab.fullcycle.training.GlobalFlopCounter", return_value=counter),
+                patch.object(torch.optim.AdamW, "step", observed_step),
+                patch("trainlab.fullcycle.training.write_json", side_effect=observed_write),
+            ):
+                metrics = train_stage(
+                    model_config=config,
+                    stage=stage,
+                    release=self.release,
+                    tokens=self.tokens,
+                    packed=self.root / "tokens",
+                    output=output,
+                    checkpoint_every=128,
+                )
+            self.assertEqual(commits, [1, 3])
+            results.append((metrics, checkpoint_load(output / "checkpoint.pt")))
+            retained.append(hooks)
+        self.assertGreater(retained[0][-1], retained[0][0])
+        self.assertEqual(retained[1], [0, 0, 0])
+        first, second = results
+        self.assertEqual(first[1]["losses"], second[1]["losses"])
+        self.assertGreater(second[0]["counted_training_operator_flops"], 0)
+        self.assertEqual(
+            first[0]["counted_training_operator_flops"],
+            second[0]["counted_training_operator_flops"],
+        )
+        for key in first[1]["model"]:
+            torch.testing.assert_close(
+                first[1]["model"][key], second[1]["model"][key], atol=0, rtol=0
+            )
+
     def test_exact_interrupted_optimizer_rng_replay_all_objectives(self):
         config = dataclasses.asdict(
             ModelConfig(vocab_size=256, width=32, layers=1, heads=4, context=128)
@@ -288,6 +361,9 @@ class IntegrityTests(unittest.TestCase):
             first, second = (checkpoint_load(p / "checkpoint.pt") for p in (continuous, paused))
             self.assertEqual(first["losses"], second["losses"])
             self.assertEqual(first["trained_tokens"], second["trained_tokens"])
+            self.assertEqual(
+                first["runtimes"][0]["counted_flops"], second["runtimes"][0]["counted_flops"]
+            )
             for key in first["model"]:
                 torch.testing.assert_close(
                     first["model"][key], second["model"][key], rtol=0, atol=0

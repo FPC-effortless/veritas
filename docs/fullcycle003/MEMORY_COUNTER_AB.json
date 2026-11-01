@@ -1,0 +1,214 @@
+{
+  "scope": "Constructed CPU retention diagnostic; no GPU repair or model capability claim",
+  "environment": {
+    "torch": "2.15.0+cpu",
+    "cpu_threads": 2
+  },
+  "model": {
+    "backend": "tac104",
+    "width": 120,
+    "layers": 4,
+    "heads": 4,
+    "vocab_size": 3072,
+    "context": 512,
+    "activation_checkpointing": true
+  },
+  "experiment": {
+    "seed": 10601,
+    "updates": 12,
+    "batch_size": 1,
+    "sequence_length": 64,
+    "optimizer": "AdamW",
+    "learning_rate": 1e-05,
+    "fixed_optimizer_defaults": "PyTorch 2.15.0",
+    "data": "independent seeded torch.randint batches shared identically across compared executions"
+  },
+  "results": {
+    "stage": {
+      "mode": "stage",
+      "records": [
+        {
+          "step": 1,
+          "loss": 8.075401306152344,
+          "live_block_inputs": 0,
+          "observer_hooks": 399,
+          "rss": 370647040
+        },
+        {
+          "step": 2,
+          "loss": 8.055124282836914,
+          "live_block_inputs": 0,
+          "observer_hooks": 798,
+          "rss": 386048000
+        },
+        {
+          "step": 3,
+          "loss": 8.044257164001465,
+          "live_block_inputs": 0,
+          "observer_hooks": 1197,
+          "rss": 398131200
+        },
+        {
+          "step": 4,
+          "loss": 8.07532787322998,
+          "live_block_inputs": 0,
+          "observer_hooks": 1596,
+          "rss": 408317952
+        },
+        {
+          "step": 5,
+          "loss": 8.086359977722168,
+          "live_block_inputs": 0,
+          "observer_hooks": 1995,
+          "rss": 419557376
+        },
+        {
+          "step": 6,
+          "loss": 8.039397239685059,
+          "live_block_inputs": 0,
+          "observer_hooks": 2394,
+          "rss": 430190592
+        },
+        {
+          "step": 7,
+          "loss": 8.039295196533203,
+          "live_block_inputs": 0,
+          "observer_hooks": 2793,
+          "rss": 436785152
+        },
+        {
+          "step": 8,
+          "loss": 8.033442497253418,
+          "live_block_inputs": 0,
+          "observer_hooks": 3192,
+          "rss": 435867648
+        },
+        {
+          "step": 9,
+          "loss": 8.031200408935547,
+          "live_block_inputs": 0,
+          "observer_hooks": 3591,
+          "rss": 440958976
+        },
+        {
+          "step": 10,
+          "loss": 8.022841453552246,
+          "live_block_inputs": 0,
+          "observer_hooks": 3990,
+          "rss": 442425344
+        },
+        {
+          "step": 11,
+          "loss": 8.042171478271484,
+          "live_block_inputs": 0,
+          "observer_hooks": 4389,
+          "rss": 445247488
+        },
+        {
+          "step": 12,
+          "loss": 8.042768478393555,
+          "live_block_inputs": 0,
+          "observer_hooks": 4788,
+          "rss": 449249280
+        }
+      ],
+      "flops": 8190689280,
+      "weights_sha256": "7eaff950b761c136c526ea076349b13becbc77397fb6a033e2d909f037c37467",
+      "live_inputs_after_exit": 0
+    },
+    "global": {
+      "mode": "global",
+      "records": [
+        {
+          "step": 1,
+          "loss": 8.075401306152344,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 361488384
+        },
+        {
+          "step": 2,
+          "loss": 8.055124282836914,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 366358528
+        },
+        {
+          "step": 3,
+          "loss": 8.044257164001465,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 365494272
+        },
+        {
+          "step": 4,
+          "loss": 8.07532787322998,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 367005696
+        },
+        {
+          "step": 5,
+          "loss": 8.086359977722168,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 367009792
+        },
+        {
+          "step": 6,
+          "loss": 8.039397239685059,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 365527040
+        },
+        {
+          "step": 7,
+          "loss": 8.039295196533203,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 366886912
+        },
+        {
+          "step": 8,
+          "loss": 8.033442497253418,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 366886912
+        },
+        {
+          "step": 9,
+          "loss": 8.031200408935547,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 366723072
+        },
+        {
+          "step": 10,
+          "loss": 8.022841453552246,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 367001600
+        },
+        {
+          "step": 11,
+          "loss": 8.042171478271484,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 365584384
+        },
+        {
+          "step": 12,
+          "loss": 8.042768478393555,
+          "live_block_inputs": 0,
+          "observer_hooks": 0,
+          "rss": 367022080
+        }
+      ],
+      "flops": 8190689280,
+      "weights_sha256": "7eaff950b761c136c526ea076349b13becbc77397fb6a033e2d909f037c37467",
+      "live_inputs_after_exit": 0
+    }
+  },
+  "qualification": "NOT_QUALIFIED",
+  "independent_execution": "UNKNOWN"
+}
