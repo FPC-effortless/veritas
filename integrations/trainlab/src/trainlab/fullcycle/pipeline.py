@@ -40,6 +40,8 @@ def source_identity():
 
     paths = sorted([*Path(__file__).parent.glob("*.py"), *Path(__file__).parent.glob("*.html")]) + [
         Path(forge_data.language.__file__),
+        Path(forge_data.language.__file__).with_name("hub.py"),
+        Path(forge_data.language.__file__).with_name("verifiers.py"),
         Path(investigation_world.lm_evaluation.__file__),
     ]
     return {
@@ -142,6 +144,12 @@ def _evaluation(checkpoint, tokenizer, config, output, split="validation"):
             "split": split,
             "budget": config.get("evaluation_token_budget", 4096),
             "evaluator": source_identity(),
+            "case_limit": config.get("evaluation_case_limit"),
+            "generation_limit": config.get("evaluation_generation_limit", 8),
+            "max_new_tokens": config.get("evaluation_max_new_tokens", 48),
+            "device": "cuda"
+            if config.get("device") in ("cuda", "auto") and torch.cuda.is_available()
+            else "cpu",
         }
     )
     if receipt_path.exists():
@@ -169,6 +177,16 @@ def _evaluation(checkpoint, tokenizer, config, output, split="validation"):
         "--text-token-budget",
         str(config.get("evaluation_token_budget", 4096)),
     ]
+    if config.get("evaluation_case_limit") is not None:
+        argv += ["--case-limit", str(config["evaluation_case_limit"])]
+    argv += [
+        "--generation-limit",
+        str(config.get("evaluation_generation_limit", 8)),
+        "--max-new-tokens",
+        str(config.get("evaluation_max_new_tokens", 48)),
+        "--device",
+        "cuda" if config.get("device") in ("cuda", "auto") and torch.cuda.is_available() else "cpu",
+    ]
     # New process loads weights and held-out data; no trainer metric argument exists.
     result = subprocess.run(argv, capture_output=True, text=True, timeout=900)
     if result.returncode:
@@ -179,12 +197,45 @@ def _evaluation(checkpoint, tokenizer, config, output, split="validation"):
     return result
 
 
+def prepare_configuration(config_path):
+    """Resolve a source plan before distributed initialization or optimizer creation."""
+    config_path = Path(config_path).resolve()
+    config = validate_config(read_json(config_path))
+    dataset = config["dataset"]
+    if "source_plan" in dataset:
+        from forge_data.hub import prepare
+
+        plan_path = (config_path.parent / dataset["source_plan"]).resolve()
+        cache = (config_path.parent / dataset["cache"]).resolve()
+        result = prepare(plan_path, cache)
+        config["dataset"] = {
+            "directory": str(cache / result["release"]),
+            "manifest_sha256": result["manifest_sha256"],
+            "source_plan_sha256": result["plan_sha256"],
+            "acquisition_sha256": result["acquisition_sha256"],
+        }
+        config["tokenizer"] = {
+            "kind": "artifact",
+            "artifact_path": str(cache / result["tokenizer"]["path"]),
+            "artifact_sha256": result["tokenizer"]["sha256"],
+        }
+    else:
+        config["dataset"]["directory"] = str((config_path.parent / dataset["directory"]).resolve())
+        if config["tokenizer"].get("kind") == "artifact":
+            config["tokenizer"]["artifact_path"] = str(
+                (config_path.parent / config["tokenizer"]["artifact_path"]).resolve()
+            )
+    return config
+
+
 def run_pipeline(config_path=None, output=None, *, resume=False, stop_stage=None, stop_after=None):
+    # Data preparation is serialized by a cache lock and precedes process-group timeouts.
+    prepared_config = prepare_configuration(config_path) if not resume else None
     world = int(os.environ.get("WORLD_SIZE", "1"))
     rank = int(os.environ.get("RANK", "0"))
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     if world > 1 and not dist.is_initialized():
-        launch_config = read_json(Path(output) / "pipeline.json" if resume else Path(config_path))
+        launch_config = read_json(Path(output) / "pipeline.json") if resume else prepared_config
         use_cuda = launch_config.get("device") in ("cuda", "auto") and torch.cuda.is_available()
         if use_cuda:
             torch.cuda.set_device(local_rank)
@@ -203,9 +254,7 @@ def run_pipeline(config_path=None, output=None, *, resume=False, stop_stage=None
             if protocol["world_size"] != world:
                 raise LabError("resume world size differs")
         else:
-            config = validate_config(read_json(Path(config_path)))
-            data = Path(config["dataset"]["directory"])
-            config["dataset"]["directory"] = str((Path(config_path).parent / data).resolve())
+            config = prepared_config
             if (output / "protocol.json").exists():
                 raise LabError("pipeline exists; use resume")
             protocol = {
@@ -272,6 +321,13 @@ def run_pipeline(config_path=None, output=None, *, resume=False, stop_stage=None
                 raise LabError("initial receipt missing after stage promotion")
             torch.manual_seed(config["seed"])
             model = create_model(model_config)
+            if "parameter_target" in config:
+                count = sum(p.numel() for p in model.parameters())
+                if (
+                    abs(count - config["parameter_target"])
+                    > config.get("parameter_tolerance", 0.01) * config["parameter_target"]
+                ):
+                    raise LabError("actual model exceeds the pinned parameter tolerance")
             atomic_checkpoint(initial, {"model": model.state_dict(), "model_config": model_config})
             write_json(output / "initial-receipt.json", {"sha256": digest(initial)})
         if world > 1:
@@ -387,9 +443,15 @@ def run_pipeline(config_path=None, output=None, *, resume=False, stop_stage=None
                 "limitations": [
                     "Single seed engineering run; no general capability claim.",
                     "Public within-source/group splits; not protected benchmarks.",
-                    "RL uses constrained one-token integer comparisons.",
+                    (
+                        "RL uses public math completion rewards; bounded generations do not "
+                        "establish general reasoning capability."
+                        if any(s.get("rl_mode") == "completion" for s in config["stages"])
+                        else "RL uses constrained one-token integer comparisons."
+                    ),
                     "No coding or agentic environment capability evaluation.",
-                    "Actual FLOPs not instrumented; GPU claims require GPU evidence.",
+                    "Operator FLOPs are counted where supported; total hardware FLOPs and "
+                    "scan/elementwise overhead are not measured. GPU claims require GPU evidence.",
                 ],
             }
             write_json(output / "report.json", report)

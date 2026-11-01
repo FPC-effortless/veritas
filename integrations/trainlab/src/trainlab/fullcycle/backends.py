@@ -22,10 +22,11 @@ class ModelConfig:
     heads: int = 4
     context: int = 128
     activation_checkpointing: bool = False
+    native: dict | None = None
 
     def validate(self):
         if (
-            self.backend not in ("transformer", "tac098")
+            self.backend not in ("transformer", "tac098", "tac104")
             or any(
                 type(v) is not int or v < 1
                 for v in (self.vocab_size, self.width, self.layers, self.heads, self.context)
@@ -36,6 +37,8 @@ class ModelConfig:
             raise LabError("invalid model configuration")
         if self.backend == "tac098" and (self.width, self.layers, self.heads) != (32, 1, 1):
             raise LabError("TAC098 has fixed native dimensions; use width=32,layers=1,heads=1")
+        if self.native is not None and self.backend != "tac104":
+            raise LabError("native geometry applies only to TAC104")
         if self.backend == "tac098" and self.vocab_size != 256:
             raise LabError("exact TAC098 requires byte-v1 tokenizer (256 symbols)")
 
@@ -121,10 +124,62 @@ class TAC098(nn.Module):
         return self.native(tokens, state=state)
 
 
+class TAC104(nn.Module):
+    """Deeper token-vocabulary extension of the actual four-layer width blueprint."""
+
+    def __init__(self, config):
+        super().__init__()
+        from ._tac104 import Config104, DeepCacheTAC104
+
+        geometry = dict(
+            key_dim=16,
+            value_dim=16,
+            write_rank=2,
+            ffn_dim=224,
+            window=128,
+            chunk_size=32,
+            rotary=True,
+            local_rope=True,
+            tied_embedding=True,
+        )
+        if config.native:
+            if set(config.native) - set(geometry):
+                raise LabError("unknown native TAC geometry field")
+            geometry.update(config.native)
+        self.native = DeepCacheTAC104(
+            Config104(
+                d_model=config.width,
+                n_layers=config.layers,
+                n_heads=config.heads,
+                vocab_size=config.vocab_size,
+                activation_checkpointing=config.activation_checkpointing,
+                **geometry,
+            )
+        )
+        self.config = config
+
+    def forward(self, tokens):
+        return self.native(tokens)[0]
+
+    def step(self, tokens, state=None):
+        owners = (
+            state.owners
+            if state is not None
+            else tuple(f"fresh-{i}" for i in range(tokens.shape[0]))
+        )
+        return self.native(
+            tokens,
+            state=state,
+            owners=owners,
+            mode="recurrent" if tokens.shape[1] == 1 else "chunk",
+        )
+
+
 def create_model(config):
     config = config if isinstance(config, ModelConfig) else ModelConfig(**config)
     config.validate()
-    return Transformer(config) if config.backend == "transformer" else TAC098(config)
+    constructors = {"transformer": Transformer, "tac098": TAC098, "tac104": TAC104}
+    return constructors[config.backend](config)
 
 
 def configuration(model):

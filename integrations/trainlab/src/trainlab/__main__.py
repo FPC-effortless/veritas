@@ -12,8 +12,9 @@ from .runner import LabError, compare_runs, list_runs, run_experiment, verify_ru
 
 
 def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] in ("pipeline", "model"):
+    if len(sys.argv) > 1 and sys.argv[1] in ("pipeline", "model", "data"):
         from .fullcycle.cli import main as fullcycle_main
+
         return fullcycle_main(sys.argv[1:])
     parser = argparse.ArgumentParser(
         description="TrainLab: local experiments and comparison records"

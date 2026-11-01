@@ -1,0 +1,37 @@
+{
+  "adapted": {
+    "d_model": 120,
+    "layers": 40,
+    "parameters": 10040600,
+    "vocab_size": 3072,
+    "width_and_bank_geometry_preserved": true
+  },
+  "model_initialization": "new random weights; not a trained weight expansion",
+  "modifications": [
+    "parameterized token vocabulary",
+    "unique deeper stack",
+    "optional activation checkpointing"
+  ],
+  "original_parameters": 998024,
+  "original_source_sha256": {
+    "kernels.py": "1c2782bbaaac7aa54722f420bbbad8c5215f260ed591a6cef154c0540f41b8d1",
+    "tac_model.py": "84507fd17ace7eb2e880d5f15ee7a3a80c41543041eee103ca926966bcd1e882"
+  },
+  "schema": "fullcycle003.blueprint.v1",
+  "scientific_qualification": "NOT_QUALIFIED",
+  "source": "LANGDEPTH106 four-layer allocation over LANGCACHE104",
+  "source_config": {
+    "chunk_size": 32,
+    "d_model": 120,
+    "ffn_dim": 224,
+    "key_dim": 16,
+    "local_rope": true,
+    "n_heads": 4,
+    "n_layers": 4,
+    "rotary": true,
+    "tied_embedding": true,
+    "value_dim": 16,
+    "window": 128,
+    "write_rank": 2
+  }
+}

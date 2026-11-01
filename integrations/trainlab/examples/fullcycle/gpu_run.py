@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import torch
+from trainlab.fullcycle.pipeline import prepare_configuration
 
 
 def main():
@@ -23,14 +24,11 @@ def main():
         parser.error("requested number of real CUDA devices is unavailable")
     if args.output.exists():
         parser.error("use a new output directory; resume with the same torchrun world size")
-    config = json.loads(args.config.read_bytes())
-    config["dataset"]["directory"] = str(
-        (args.config.parent / config["dataset"]["directory"]).resolve()
-    )
+    config = prepare_configuration(args.config)
     config["device"] = "cuda"
     config["precision"] = (
         "fp32"
-        if config["model"]["backend"] == "tac098"
+        if config["model"]["backend"] in ("tac098", "tac104")
         else "bf16"
         if torch.cuda.is_bf16_supported()
         else "fp16"
