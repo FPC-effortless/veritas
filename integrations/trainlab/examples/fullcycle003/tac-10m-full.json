@@ -6,11 +6,13 @@
     "source_plan": "data-plan.json"
   },
   "deterministic": true,
+  "distributed_timeout_seconds": 18000,
   "device": "cuda",
   "evaluation_case_limit": 32,
   "evaluation_generation_limit": 8,
   "evaluation_max_new_tokens": 128,
   "evaluation_token_budget": 8192,
+  "evaluation_timeout_seconds": 1800,
   "model": {
     "activation_checkpointing": true,
     "backend": "tac104",

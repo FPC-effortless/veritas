@@ -58,7 +58,32 @@ initialization; overwritten resume data; or submission/completion claimed from a
 unexecuted notebook. CPU fixtures cover arithmetic, fail-closed device selection,
 restore boundaries, timed process shutdown and notebook syntax/schema.
 
-Current access: the Hugging Face Jobs operation is unavailable; Kaggle has no
-available connector or configured API credential, and browser initialization fails
-with `failed to start node_repl backend: Connection closed`. No Kaggle job has
-been submitted. Notebook GPU execution and visual browser inspection are unrun.
+Kaggle version 1 was submitted using the user-provided API credential:
+https://www.kaggle.com/code/eweewee2/fullcycle003-tac10m-deep40-t4-20261101 .
+It reproduced the exact prepared-release and tokenizer pins above, packed all
+eight token streams and passed the synthetic GPU diagnostic on two Tesla T4s
+(PyTorch 2.11.0+cu128). Each rank performed one discarded diagnostic optimizer
+update; their resulting weight hashes agreed. These are not pretraining updates.
+
+Version 1 failed before a pretraining checkpoint: rank 1 reached the training-entry
+barrier while rank 0 performed baseline evaluation; NCCL's default 600-second
+timeout expired. The notebook then encountered a separate editable-install import
+failure while reporting that primary error. No full training/capability result
+is established by that execution.
+
+The full Kaggle recipe now explicitly allows five hours for distributed
+coordination and thirty minutes per independent evaluation. Other configurations
+retain the library's distributed default and the prior fifteen-minute evaluation
+default. The launcher's four-hour job budget plus shutdown grace still applies;
+longer coordination also delays timeout detection of a live but stalled collective.
+This change does not establish NCCL correctness or completed training.
+
+The notebook installs packaged wheels, checks its own TrainLab import before
+starting work, and reports phase boundaries plus the first optimizer update.
+A stdlib-only FAILED receipt is persisted before optional artifact inspection.
+To start a fresh run with the saved inputs, attach version 1's outputs and set
+`PREPARED_DATA_ROOT` to its `fullcycle003/data` directory. Only the pinned release
+and tokenizer are copied; old protocols and optimizer state are excluded.
+Use `PREVIOUS_OUTPUT_ROOT` only for compatible optimizer-state recovery; the two
+input options are mutually exclusive. Source/runtime/checkpoint guards remain
+unchanged, so a changed core starts a fresh run.

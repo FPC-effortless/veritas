@@ -91,7 +91,9 @@ class KaggleLauncherControls(unittest.TestCase):
                     ):
                         with self.assertRaisesRegex(ValueError, "full-training recipe"):
                             launcher.worker(
-                                SimpleNamespace(output=output, gpus=2, resume_input=None)
+                                SimpleNamespace(
+                                    output=output, gpus=2, resume_input=None, prepared_input=None
+                                )
                             )
                         self.assertFalse(probe.called)
 
@@ -261,6 +263,32 @@ class KaggleLauncherControls(unittest.TestCase):
             receipt = json.loads((root / "session-receipt.json").read_bytes())
             self.assertEqual(receipt["status"], "FAILED")
 
+    def test_primary_failure_receipt_survives_missing_optional_import(self):
+        with tempfile.TemporaryDirectory() as d:
+            with (
+                patch.object(
+                    launcher,
+                    "launch",
+                    return_value={
+                        "returncode": 42,
+                        "budget_expired": False,
+                        "operator_interrupted": False,
+                    },
+                ),
+                patch.dict(sys.modules, {"trainlab.runner": None}),
+            ):
+                with self.assertRaises(ModuleNotFoundError):
+                    launcher.main(["--output", d, "--budget-seconds", "60"])
+            receipt = json.loads((Path(d) / "session-receipt.json").read_bytes())
+            self.assertEqual(receipt["status"], "FAILED")
+            self.assertEqual(receipt["returncode"], 42)
+
+    def test_prepared_inputs_and_optimizer_resume_are_mutually_exclusive(self):
+        with patch.object(launcher, "launch") as start:
+            with self.assertRaises(SystemExit):
+                launcher.main(["--resume-input", "old", "--prepared-input", "data"])
+            self.assertFalse(start.called)
+
     def test_incompatible_proc_refuses_before_starting_compute(self):
         with (
             patch.object(launcher, "compatible_proc_namespace", return_value=False),
@@ -306,6 +334,43 @@ class KaggleLauncherControls(unittest.TestCase):
                 result = launcher.publish_data(config, root / "persisted")
                 self.assertFalse((root / "persisted/release/unlisted-link").exists())
                 self.assertEqual(result["dataset"]["manifest_sha256"], pin)
+                # A fresh run may reuse only these pinned inputs, never old protocol/state.
+                (root / "persisted/run").mkdir()
+                (root / "persisted/run/protocol.json").write_text('{"old_run":true}')
+                output = root / "fresh-output"
+                output.mkdir()
+                args = SimpleNamespace(
+                    output=output,
+                    prepared_input=root / "persisted",
+                    resume_input=None,
+                    cache=root / "unused-cache",
+                    gpus=2,
+                )
+                with (
+                    patch.object(launcher, "hardware"),
+                    patch.object(launcher.subprocess, "run") as compute,
+                    patch.dict(
+                        sys.modules,
+                        {
+                            "trainlab.fullcycle.pipeline": SimpleNamespace(
+                                prepare_configuration=lambda *a: self.fail(
+                                    "must reuse prepared inputs"
+                                )
+                            )
+                        },
+                    ),
+                ):
+                    launcher.worker(args)
+                    self.assertEqual(compute.call_count, 2)
+                    self.assertFalse((output / "run").exists())
+                    self.assertFalse(args.cache.exists())
+                    training = json.loads((output / "training-config.json").read_bytes())
+                    launcher.verify_full_recipe(training, output, 2)
+                    compute.reset_mock()
+                    (output / "run").mkdir()
+                    with self.assertRaisesRegex(ValueError, "fresh run"):
+                        launcher.worker(args)
+                    self.assertFalse(compute.called)
                 (root / "persisted/tokenizer.json").write_text("tampered")
                 with self.assertRaisesRegex(ValueError, "tokenizer changed"):
                     launcher.publish_data(config, root / "persisted")

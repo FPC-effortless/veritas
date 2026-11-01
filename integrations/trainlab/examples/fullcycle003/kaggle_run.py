@@ -51,8 +51,8 @@ def hardware(gpus):
     return {"visible_devices": devices, "training_ranks": gpus, "torch": str(torch.__version__)}
 
 
-def verify_full_recipe(config, output, gpus):
-    """An internally valid checkpoint must also belong to this exact full run."""
+def full_recipe(output, gpus):
+    """Resolve the reviewed recipe without downloading or fitting anything."""
     expected = world_config(json.loads((EXAMPLES / "tac-10m-full.json").read_bytes()), gpus)
     data = Path(output).resolve() / "data"
     expected["dataset"] = {
@@ -66,7 +66,12 @@ def verify_full_recipe(config, output, gpus):
         "artifact_path": str(data / "tokenizer.json"),
         "artifact_sha256": TOKENIZER_SHA256,
     }
-    if config != expected:
+    return expected
+
+
+def verify_full_recipe(config, output, gpus):
+    """An internally valid checkpoint must also belong to this exact full run."""
+    if config != full_recipe(output, gpus):
         raise ValueError("configuration is not the pinned Kaggle full-training recipe")
 
 
@@ -308,6 +313,8 @@ def worker(args):
     if args.resume_input:
         restore_input(args.resume_input, args.output)
     run = args.output / "run"
+    if args.prepared_input and run.exists():
+        raise ValueError("prepared inputs require a fresh run; use resume for existing training")
     if (run / "protocol.json").exists():
         # The core controller also enforces exact source/runtime/world-size pins.
         protocol = read_json(run / "protocol.json")
@@ -316,14 +323,20 @@ def worker(args):
         verify_full_recipe(read_json(run / "pipeline.json"), args.output, args.gpus)
         publish_data(read_json(run / "pipeline.json"), args.output / "data")
     else:
-        config = world_config(read_json(EXAMPLES / "tac-10m-full.json"), args.gpus)
-        config["dataset"] = {
-            "source_plan": str(EXAMPLES / "data-plan.json"),
-            "cache": str(args.cache),
-        }
-        temporary_config = args.output / "acquisition-config.json"
-        write_json(temporary_config, config)
-        config = publish_data(prepare_configuration(temporary_config), args.output / "data")
+        if args.prepared_input:
+            config = full_recipe(args.output, args.gpus)
+            config["dataset"]["directory"] = str(args.prepared_input / "release")
+            config["tokenizer"]["artifact_path"] = str(args.prepared_input / "tokenizer.json")
+        else:
+            config = world_config(read_json(EXAMPLES / "tac-10m-full.json"), args.gpus)
+            config["dataset"] = {
+                "source_plan": str(EXAMPLES / "data-plan.json"),
+                "cache": str(args.cache),
+            }
+            temporary_config = args.output / "acquisition-config.json"
+            write_json(temporary_config, config)
+            config = prepare_configuration(temporary_config)
+        config = publish_data(config, args.output / "data")
         verify_full_recipe(config, args.output, args.gpus)
         write_json(args.output / "training-config.json", config)
         # Raw shards are no longer needed by the trainer. These hints change no bytes.
@@ -358,7 +371,9 @@ def main(argv=None):
     parser.add_argument("--cache", type=Path, default=Path("/tmp/fullcycle003-cache"))
     parser.add_argument("--gpus", type=int, choices=(1, 2), default=2)
     parser.add_argument("--budget-seconds", type=int, default=14400)
-    parser.add_argument("--resume-input", type=Path)
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("--resume-input", type=Path)
+    inputs.add_argument("--prepared-input", type=Path)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--probe", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -387,6 +402,8 @@ def main(argv=None):
     ]
     if args.resume_input:
         command += ["--resume-input", str(args.resume_input)]
+    if args.prepared_input:
+        command += ["--prepared-input", str(args.prepared_input)]
     receipt = launch(command, args.budget_seconds)
     receipt.update(
         schema="trainlab.kaggle-session.v1",
@@ -394,7 +411,10 @@ def main(argv=None):
         training_ranks=args.gpus,
         budget_seconds=args.budget_seconds,
         qualification="NOT_QUALIFIED",
+        status="FAILED",
     )
+    # Preserve the primary worker outcome even if later artifact inspection fails.
+    (args.output / "session-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     report = args.output / "run/report.json"
     if report.exists() and receipt["returncode"] == 0:
         from trainlab.fullcycle.pipeline import verify_pipeline

@@ -47,11 +47,13 @@ import subprocess
 import sys
 import json
 import runpy
+import importlib
 
 SOURCE_COMMIT = {commit!r}
 GPUS = 2
 SESSION_BUDGET_SECONDS = 14400
 PREVIOUS_OUTPUT_ROOT = None  # Optional attached prior output containing data/ and run/.
+PREPARED_DATA_ROOT = None  # Optional verified data/ folder for a fresh run.
 SOURCE = Path("/kaggle/working/fullcycle003-source")
 OUTPUT = Path("/kaggle/working/fullcycle003")
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -83,9 +85,12 @@ dirty = subprocess.check_output(["git", "-C", str(SOURCE), "status", "--porcelai
 if head != SOURCE_COMMIT or dirty:
     raise RuntimeError("Existing source is different or modified; use a fresh source directory.")
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check",
-                "-e", str(SOURCE), "-e", str(SOURCE / "integrations/forge"),
-                "-e", str(SOURCE / "integrations/trainlab") + "[training]",
+                str(SOURCE), str(SOURCE / "integrations/forge"),
+                str(SOURCE / "integrations/trainlab") + "[training]",
                 "tokenizers==0.23.3"], check=True)
+# Packaged installs are visible to this already-running notebook kernel.
+importlib.invalidate_caches()
+_ = importlib.import_module("trainlab.runner")
 """),
         nbf.v4.new_markdown_cell("""## 4. Acquire, verify, probe GPUs and train
 
@@ -98,6 +103,9 @@ evaluation data or account token is embedded here.
 To resume in a new Kaggle session, attach the previous outputs and set
 `PREVIOUS_OUTPUT_ROOT` to their root. Keep the same source, runtime and GPU count;
 the controller refuses incompatible recovery. Save the complete output folder.
+For a fresh run reusing only approved data, set `PREPARED_DATA_ROOT` to the
+previous `data/` directory. This verifies/copies the release and tokenizer without
+copying an old run protocol or optimizer state. Set only one input option.
 """),
         nbf.v4.new_code_cell("""launcher = SOURCE / "integrations/trainlab/examples/fullcycle003"
 launcher = launcher / "kaggle_run.py"
@@ -105,6 +113,8 @@ arguments = ["--output", str(OUTPUT), "--gpus", str(GPUS),
              "--budget-seconds", str(SESSION_BUDGET_SECONDS)]
 if PREVIOUS_OUTPUT_ROOT:
     arguments += ["--resume-input", str(PREVIOUS_OUTPUT_ROOT)]
+if PREPARED_DATA_ROOT:
+    arguments += ["--prepared-input", str(PREPARED_DATA_ROOT)]
 # Run the supervisor in this kernel so Stop reaches its checkpoint grace handler.
 # An extra subprocess.run wrapper would kill the supervisor too early on interrupt.
 runpy.run_path(str(launcher))["main"](arguments)

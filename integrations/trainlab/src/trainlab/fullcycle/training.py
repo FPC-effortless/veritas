@@ -584,10 +584,10 @@ def train_stage(
                 stop = bool(flag.item())
             if step % checkpoint_every == 0 or stop or step == stage["steps"]:
                 save()
-                if rank == 0:
-                    print(
-                        f"{stage_name} {step}/{stage['steps']} loss={update_loss:.4f}", flush=True
-                    )
+            if rank == 0 and (
+                step == 1 or step % checkpoint_every == 0 or stop or step == stage["steps"]
+            ):
+                print(f"{stage_name} {step}/{stage['steps']} loss={update_loss:.4f}", flush=True)
             if stop:
                 break
     finally:

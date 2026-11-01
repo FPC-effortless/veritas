@@ -30,6 +30,25 @@ class DataContracts(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
+    def test_operational_timeouts_reject_invalid_values_without_changing_budgets(self):
+        from trainlab.fullcycle.pipeline import validate_config
+        from trainlab.runner import LabError
+
+        path = PLAN.with_name("tac-10m-full.json")
+        config = json.loads(path.read_bytes())
+        config["device"] = "cpu"
+        validate_config(config)
+        self.assertEqual(config["distributed_timeout_seconds"], 18000)
+        self.assertEqual(config["evaluation_timeout_seconds"], 1800)
+        self.assertEqual(config["stages"][0]["steps"], 12208)
+        for key in ("distributed_timeout_seconds", "evaluation_timeout_seconds"):
+            for value in (0, -1, True, 3.5, "18000", None):
+                with self.subTest(key=key, value=value):
+                    changed = copy.deepcopy(config)
+                    changed[key] = value
+                    with self.assertRaisesRegex(LabError, key):
+                        validate_config(changed)
+
     def test_floating_revision_and_test_mislabel_rejected(self):
         plan = json.loads(PLAN.read_bytes())
         plan["datasets"][0]["revision"] = "main"
