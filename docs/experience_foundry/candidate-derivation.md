@@ -25,8 +25,9 @@ training uses to `VerifiedTrajectory`, create `TrainingBundle` examples, alter l
 
 ## Validated input boundary
 
-`compile_learning_assets` supports exactly the existing public financial TRAIN recorder
-profile. It reuses `experience.counterfactual.validation.verify_recorded`, which validates
+`compile_learning_assets` supports the original public financial TRAIN recorder
+profile and the two independently regenerated [v2 structural profiles](public-profiles.md).
+It reuses `experience.counterfactual.validation.verify_recorded`, which validates
 source, companion, installed runtime, capability/portable contract, adapter identities,
 original evaluation and retained native artifact, then freshly reverifies successes **and
 failures**. Canonical split/runtime/model unknowns remain unknown; the separately captured
