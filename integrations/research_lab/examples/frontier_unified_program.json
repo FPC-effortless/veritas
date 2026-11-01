@@ -179,7 +179,9 @@
     "eligible": "Only G2 mechanisms may be integration candidates; G3 must be earned by integrated improvement not standalone score.",
     "interaction_studies": "Test mechanism A and B separately and combined with equal parameter/compute costs; check synergistic and antagonistic interactions.",
     "selection": "Maintain a Pareto frontier, not a single arbitrary weighted score. Prefer smallest module yielding reproducible quality, throughput, retrieval or adaptability gain.",
-    "rollback": "Remove module if downstream regressions, reproducibility failure, data contamination or physical compute cost falsify benefit."
+    "rollback": "Remove module if downstream regressions, reproducibility failure, data contamination or physical compute cost falsify benefit.",
+    "parallelism": "All lane-level discovery runs are independently schedulable after shared benchmark contracts are frozen; dependency edges are only for work requiring a preceding artifact. Do not block PSN, FLOCK, geometric or other lanes on TAC_CORE training completion.",
+    "integration_checkpoint": "Shared baseline checkpoints are reference artifacts, not dependency barriers; candidate integration is a separate gated task with an explicit G2 predecessor."
   },
   "lanes": [
     {
@@ -213,9 +215,7 @@
       ],
       "source_evidence": "ARCHPAR002",
       "next_falsifier": "Fix fresh append-adapter value retrieval on held-out histories before integration",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -232,9 +232,7 @@
       ],
       "source_evidence": "ARCHPAR001",
       "next_falsifier": "Remove pulse path under frozen seeds and matched decoder",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -251,9 +249,7 @@
       ],
       "source_evidence": "ARCHPAR002",
       "next_falsifier": "Compare graph association update versus explicit replacement after unrelated-key edits",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -270,9 +266,7 @@
       ],
       "source_evidence": "ARCHPAR002",
       "next_falsifier": "Factor relevance gating from query addressing and audit retrieval at fixed context",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -289,9 +283,7 @@
       ],
       "source_evidence": "ARCHPAR001",
       "next_falsifier": "Specify a geometry-requiring task and ablate transport",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -308,9 +300,7 @@
       ],
       "source_evidence": "ARCHPAR001",
       "next_falsifier": "Qualify fresh-factor learning before measuring retention",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -327,9 +317,7 @@
       ],
       "source_evidence": "ARCHPAR002",
       "next_falsifier": "Freeze compact features and test fresh seeds and longer delays",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -347,9 +335,7 @@
       ],
       "source_evidence": "FLOCK004;COLLECT005",
       "next_falsifier": "Hold load and sequence length independently; compare split-address and matrix state; stress multiple writes",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -366,9 +352,7 @@
       ],
       "source_evidence": "SSA001-SSA008",
       "next_falsifier": "Profile gather/scatter and require an actual GPU win at comparable accuracy",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -385,9 +369,7 @@
       ],
       "source_evidence": "PRS",
       "next_falsifier": "Test energy-calibrated stopping with wrong-future and stale-state interventions",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -404,9 +386,7 @@
       ],
       "source_evidence": "REAL004;REAL013-017;TAC-SIE-v3.2",
       "next_falsifier": "Make full stateful repair surpass decoder-only with blind compositional tests",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -423,9 +403,7 @@
       ],
       "source_evidence": "KAK-001;GEOMETRY",
       "next_falsifier": "Train geometry-pretext and matched text controls; isolate geometric mechanism",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -442,9 +420,7 @@
       ],
       "source_evidence": "SENSE-TOK-009",
       "next_falsifier": "Address observed BYTE routing collapse using frozen compute and held-out text",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -480,10 +456,7 @@
       ],
       "source_evidence": "LANGCACHE104",
       "next_falsifier": "Reconcile sequential/parallel gradients and benchmark T4 with actual events",
-      "dependencies": [
-        "TAC_CORE",
-        "FLOCK_COLLECT"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -500,9 +473,7 @@
       ],
       "source_evidence": "Woyengi Memory;PLM",
       "next_falsifier": "Build timeline/edit benchmark independent of language model implementation",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     },
@@ -519,9 +490,7 @@
       ],
       "source_evidence": "TAC-OCR-001/002/003",
       "next_falsifier": "Establish real image-grounding and leak-free multilingual test set before scaling",
-      "dependencies": [
-        "TAC_CORE"
-      ],
+      "dependencies": [],
       "state": "NOT_STARTED_IN_THIS_PROGRAM",
       "promotion": "G0->G1->G2->G3->G4"
     }
