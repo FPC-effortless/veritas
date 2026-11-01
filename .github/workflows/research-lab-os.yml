@@ -24,7 +24,7 @@ jobs:
       matrix:
         python: ['3.11', '3.13']
     env:
-      PYTHONPATH: integrations/research_lab/src:integrations/trainlab/src:integrations/forge/src
+      PYTHONPATH: ${{ github.workspace }}/integrations/research_lab/src:${{ github.workspace }}/integrations/trainlab/src:${{ github.workspace }}/integrations/forge/src
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,6 +48,12 @@ jobs:
       - name: Execute constructed CPU acceptance; zero model fits
         if: matrix.python == '3.13'
         run: python integrations/research_lab/examples/run_acceptance.py --root "$RUNNER_TEMP/labos001" --run
+      - name: Browser acceptance of real research, TrainLab and Forge views
+        if: matrix.python == '3.13'
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+          python integrations/research_lab/tests/browser_smoke.py --root "$RUNNER_TEMP/labos001" --evidence "$RUNNER_TEMP/labos001/browser"
       - name: Retain constructed execution evidence
         if: always() && matrix.python == '3.13'
         uses: actions/upload-artifact@v4

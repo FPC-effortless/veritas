@@ -363,6 +363,12 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaisesRegex(LabError, "already bound"):
             self.lab.finish(second["id"], second["token"], "succeeded", receipt, 0.1)
 
+    def test_database_context_closes_its_connection(self):
+        with self.lab.connect() as connection:
+            self.assertEqual(connection.execute("SELECT 1").fetchone()[0], 1)
+        with self.assertRaises(sqlite3.ProgrammingError):
+            connection.execute("SELECT 1")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -191,25 +191,23 @@ class Controller:
                 );
             """)
 
+    @contextmanager
     def connect(self):
         db = sqlite3.connect(self.db_path, timeout=30)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         db.execute("PRAGMA busy_timeout=30000")
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     @contextmanager
     def transaction(self):
-        db = self.connect()
-        try:
+        with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             yield db
-            db.commit()
-        except BaseException:
-            db.rollback()
-            raise
-        finally:
-            db.close()
 
     def _event(self, db, kind, payload):
         previous = db.execute("SELECT hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone()
