@@ -17,7 +17,7 @@ PLAN = Path(__file__).resolve().parents[1] / "examples/fullcycle003/data-plan.js
 def constructed_inputs():
     plan = json.loads(PLAN.read_bytes())
     plan.update(
-        vocab_size=264,
+        vocab_size=300,
         tokenizer_training_bytes=4096,
         pretrain_tokens=512,
         evaluation_text_tokens=64,
@@ -97,7 +97,15 @@ class PreparationContracts(unittest.TestCase):
     def test_preparation_is_repeatable_and_reserves_even_unretained_test_prompts(self):
         plan, rows, excluded = constructed_inputs()
 
-        def stream(plan, root, kind=None, upstream_split=None, *, skip_text=False):
+        def stream(
+            plan,
+            root,
+            kind=None,
+            upstream_split=None,
+            *,
+            skip_text=False,
+            conversation_component=None,
+        ):
             return (
                 copy.deepcopy(row)
                 for row in rows
@@ -131,7 +139,15 @@ class PreparationContracts(unittest.TestCase):
     def test_missing_heldout_text_budget_fails_instead_of_freezing(self):
         plan, rows, _ = constructed_inputs()
 
-        def stream(plan, root, kind=None, upstream_split=None, *, skip_text=False):
+        def stream(
+            plan,
+            root,
+            kind=None,
+            upstream_split=None,
+            *,
+            skip_text=False,
+            conversation_component=None,
+        ):
             return (
                 copy.deepcopy(row)
                 for row in rows

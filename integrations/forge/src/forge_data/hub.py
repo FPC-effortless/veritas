@@ -198,14 +198,21 @@ def _acquire(plan, root):
     return receipt
 
 
-def parquet_rows(path):
+def parquet_rows(path, *, columns=None, component=None):
+    import pyarrow.compute as pc
     import pyarrow.parquet as pq
 
-    for batch in pq.ParquetFile(path).iter_batches(batch_size=64):
+    source = pq.ParquetFile(path)
+    selected = [name for name in columns if name in source.schema_arrow.names] if columns else None
+    for batch in source.iter_batches(batch_size=64, columns=selected):
+        if component is not None:
+            batch = batch.filter(pc.equal(batch.column("source"), component))
         yield from batch.to_pylist()
 
 
-def source_rows(plan, root, kind=None, upstream_split=None, *, skip_text=False):
+def source_rows(
+    plan, root, kind=None, upstream_split=None, *, skip_text=False, conversation_component=None
+):
     for source in plan["datasets"]:
         if skip_text and source["kind"] == "text":
             continue
@@ -215,7 +222,17 @@ def source_rows(plan, root, kind=None, upstream_split=None, *, skip_text=False):
             if upstream_split and item["upstream_split"] != upstream_split:
                 continue
             path = root / "raw" / source["name"] / item["path"]
-            for row in parquet_rows(path):
+            columns = {
+                "text": ("text", "url", "id"),
+                "conversation": ("source", "messages"),
+                "preference": ("prompt", "chosen", "rejected", "score_chosen", "score_rejected"),
+                "task": ("question", "answer"),
+            }[source["kind"]]
+            for row in parquet_rows(
+                path,
+                columns=columns,
+                component=conversation_component if source["kind"] == "conversation" else None,
+            ):
                 yield source, item["upstream_split"], row
 
 
@@ -508,7 +525,11 @@ def _prepare(plan, root, acquisition):
             # Official TEST is processed first so later exact prompt overlap cannot enter TRAIN.
             for requested in ("test", "train"):
                 for source, upstream, raw in source_rows(
-                    plan, root, upstream_split=requested, skip_text=True
+                    plan,
+                    root,
+                    upstream_split=requested,
+                    skip_text=True,
+                    conversation_component="smol-magpie-ultra-short",
                 ):
                     kind = source["kind"]
                     if kind == "text":

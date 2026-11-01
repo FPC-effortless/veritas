@@ -9,9 +9,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from forge_data.hub import HeldoutScreen, acquire, heldout_prompts, question_group, read_plan
+from forge_data.hub import (
+    HeldoutScreen,
+    acquire,
+    heldout_prompts,
+    parquet_rows,
+    question_group,
+    read_plan,
+)
 from forge_data.language import ForgeError, build_release, canonical, digest
 from forge_data.verifiers import extract_gsm8k_answer, verify_math
+from trainlab.fullcycle.tokenization import fit_tokenizer
 
 PLAN = Path(__file__).resolve().parents[1] / "examples/fullcycle003/data-plan.json"
 
@@ -122,6 +130,34 @@ class DataContracts(unittest.TestCase):
         screen = HeldoutScreen(questions)
         self.assertTrue(screen.contains("Text embedding this " + prompt))
 
+    def test_parquet_projection_keeps_requested_component_without_changing_heldout_read(self):
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        path = self.root / "conversations.parquet"
+        pq.write_table(
+            pa.Table.from_pylist(
+                [
+                    {
+                        "source": "selected",
+                        "messages": [{"role": "user", "content": "First"}],
+                        "unused": 1,
+                    },
+                    {
+                        "source": "other",
+                        "messages": [{"role": "user", "content": "Second"}],
+                        "unused": 2,
+                    },
+                ]
+            ),
+            path,
+        )
+        selected = list(parquet_rows(path, columns=("source", "messages"), component="selected"))
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]["messages"][0]["content"], "First")
+        self.assertNotIn("unused", selected[0])
+        self.assertEqual(len(list(parquet_rows(path, columns=("source", "messages")))), 2)
+
     def test_normalized_public_question_overlap_screen(self):
         question = "A farmer has twelve sheep and buys eight more sheep. How many sheep now?"
         screen = HeldoutScreen([question])
@@ -141,3 +177,30 @@ class DataContracts(unittest.TestCase):
             self.assertEqual(verify_math(row, text), 0, text)
         large = "123456789012345678901234567890123456789"
         self.assertEqual(extract_gsm8k_answer("#### " + large), large)
+
+    def test_artifact_tokenizer_is_hash_checked_without_reading_heldout(self):
+        artifact, output = self.root / "fitted.json", self.root / "copied.json"
+        artifact.write_text('{"kind":"byte-v1"}')
+
+        class ForbiddenReader:
+            def iter_rows(self, *args):
+                raise AssertionError("fitted artifact must not consume any dataset split")
+
+        expected = digest(artifact)
+        actual = fit_tokenizer(
+            ForbiddenReader(),
+            output,
+            kind="artifact",
+            artifact_path=artifact,
+            artifact_sha256=expected,
+        )
+        self.assertEqual(actual, expected)
+        artifact.write_text('{"kind":"changed"}')
+        with self.assertRaisesRegex(ValueError, "artifact hash mismatch"):
+            fit_tokenizer(
+                ForbiddenReader(),
+                output,
+                kind="artifact",
+                artifact_path=artifact,
+                artifact_sha256=expected,
+            )

@@ -35,7 +35,7 @@ SHA256s, upstream splits and license metadata. Public anonymous downloads work;
 written into a manifest. The SDK retains interrupted-download state. Acquisition
 refuses an altered cached shard or a changed plan in an existing cache.
 
-Nine shards total **3,127,500,554 bytes**. Raw corpora and prepared artifacts live
+Ten shards total **3,359,380,492 bytes**. Raw corpora and prepared artifacts live
 in ignored `.trainlab/`, outside Git. Shards are read in batches of 64 rows.
 Deduplication and source-group isolation use disk-backed SQLite; the public prompt
 fingerprint automaton and the tokenizer fitting sample are bounded by the pinned
