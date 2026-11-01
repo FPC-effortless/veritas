@@ -9,13 +9,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import math
 import time
 from pathlib import Path
-
-import torch
-from torch.nn import functional as F
 
 
 def evaluate_checkpoint(
@@ -28,12 +26,18 @@ def evaluate_checkpoint(
     text_token_budget=4096,
     generation_limit=8,
 ):
-    from forge_data.language import LanguageRelease
-    from trainlab.fullcycle.backends import create_model
-    from trainlab.fullcycle.inference import inference_benchmark, reply
-    from trainlab.fullcycle.tokenization import Tokens
-    from trainlab.fullcycle.training import checkpoint_load, task_reward
-    from trainlab.runner import digest
+    # The public evaluator is an optional TrainLab integration, not a core dependency.
+    # Load its installed providers at runtime so a base Veritas install stays usable.
+    torch = importlib.import_module("torch")
+    F = importlib.import_module("torch.nn.functional")
+    LanguageRelease = importlib.import_module("forge_data.language").LanguageRelease
+    create_model = importlib.import_module("trainlab.fullcycle.backends").create_model
+    inference = importlib.import_module("trainlab.fullcycle.inference")
+    inference_benchmark, reply = inference.inference_benchmark, inference.reply
+    Tokens = importlib.import_module("trainlab.fullcycle.tokenization").Tokens
+    training = importlib.import_module("trainlab.fullcycle.training")
+    checkpoint_load, task_reward = training.checkpoint_load, training.task_reward
+    digest = importlib.import_module("trainlab.runner").digest
 
     if split not in ("validation", "test"):
         raise ValueError("evaluator requires explicit public held-out split")
@@ -179,7 +183,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--text-token-budget", type=int, default=4096)
     args = parser.parse_args()
-    torch.set_num_threads(2)
+    importlib.import_module("torch").set_num_threads(2)
     result = evaluate_checkpoint(
         args.checkpoint,
         args.tokenizer,

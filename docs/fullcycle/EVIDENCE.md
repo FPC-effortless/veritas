@@ -27,3 +27,5 @@ General-text replay repaired the pilot’s large language regression. Expanded g
 GPU and mixed-precision training did not run. Two-rank Gloo startup was attempted and blocked by socket permissions. Distributed correctness/replay remain unverified; the new manual workflow was not dispatched. Full-operation FLOPs remain unknown; supported-operator counts and a separate 6N heuristic are reported.
 
 No protected Veritas panel was opened. Outputs remain NOT_QUALIFIED, execution attestation UNKNOWN and training_validated=false. Full numbers and failed samples are in [EVIDENCE.json](EVIDENCE.json). This is a bounded training reference, not a 100M–500M capability demonstration or a production-scale platform.
+
+Training artifact source commit: `816d1891041ad8749770d83e5abb1c6dd60c88b7`. A subsequent typing correction loads optional evaluation providers at runtime; it does not alter training or evaluation mathematics. Recorded training source hashes remain those of the training commit.
