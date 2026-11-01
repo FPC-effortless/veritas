@@ -19,7 +19,9 @@ jobs:
       - name: Integrity and interrupted replay
         run: |
           python -m unittest discover -s integrations/trainlab/tests_fullcycle -v
+          python -m unittest discover -s integrations/trainlab/tests_data -v
           python -m ruff check integrations/trainlab/src/trainlab/fullcycle integrations/trainlab/tests_fullcycle integrations/forge/src/forge_data/language.py src/investigation_world/lm_evaluation.py
+          python -m ruff check integrations/trainlab/tests_data integrations/forge/src/forge_data/hub.py integrations/forge/src/forge_data/verifiers.py integrations/trainlab/examples/fullcycle003/check_recovery.py
       - name: Acquire public-domain corpus and freeze public fixture
         run: |
           curl --fail --location https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt -o "$RUNNER_TEMP/shakespeare.txt"

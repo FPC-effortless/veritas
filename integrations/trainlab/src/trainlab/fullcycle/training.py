@@ -66,6 +66,10 @@ def dpo_loss(chosen, rejected, ref_chosen, ref_rejected, beta):
 
 def task_reward(row, completion):
     """Public bounded verifier; no eval-label file or caller-supplied reward."""
+    if row["verifier"] == "gsm8k-exact-v1":
+        from forge_data.verifiers import verify_math
+
+        return verify_math(row, completion)
     if row["verifier"] != "integer-comparison-v1":
         raise LabError("unsupported rollout verifier")
     expected = "0" if row["left"] > row["right"] else "1"
@@ -99,10 +103,44 @@ def validate_stage(stage, checkpoint_every=25):
         value = stage.get(key, default)
         if type(value) not in (float, int) or not math.isfinite(value) or value < 0:
             raise LabError(f"invalid stage {key}")
+    if stage.get("rl_mode", "comparison") not in ("comparison", "completion"):
+        raise LabError("unsupported RL trajectory mode")
+    for key in ("sequence_length", "max_new_tokens"):
+        if key in stage and (type(stage[key]) is not int or stage[key] < 1):
+            raise LabError(f"{key} must be a positive integer")
+    if stage.get("lr_schedule", "constant") not in ("constant", "cosine"):
+        raise LabError("invalid learning-rate schedule")
+    warmup = stage.get("warmup_steps", 0)
+    if type(warmup) is not int or not 0 <= warmup < stage["steps"]:
+        raise LabError("warmup must be a nonnegative update count below stage length")
+    if not 0 <= stage.get("min_lr_ratio", 0.1) <= 1:
+        raise LabError("invalid minimum learning-rate ratio")
+    betas = stage.get("betas", [0.9, 0.999])
+    if len(betas) != 2 or any(type(v) not in (int, float) or not 0 <= v < 1 for v in betas):
+        raise LabError("invalid AdamW betas")
+    temperature = stage.get("temperature", 1.0)
+    if (
+        type(temperature) not in (int, float)
+        or not math.isfinite(temperature)
+        or not 0 < temperature <= 2
+    ):
+        raise LabError("invalid policy sampling temperature")
     if "max_seconds" in stage:
         value = stage["max_seconds"]
         if type(value) not in (float, int) or not math.isfinite(value) or value <= 0:
             raise LabError("max_seconds must be positive and finite")
+
+
+def learning_rate_at(stage, step):
+    base = stage["learning_rate"]
+    if stage.get("lr_schedule", "constant") == "constant":
+        return base
+    warmup = stage.get("warmup_steps", 0)
+    if step < warmup:
+        return base * (step + 1) / warmup
+    progress = (step - warmup) / max(1, stage["steps"] - warmup - 1)
+    minimum = stage.get("min_lr_ratio", 0.1)
+    return base * (minimum + (1 - minimum) * 0.5 * (1 + math.cos(math.pi * progress)))
 
 
 def train_stage(
@@ -137,18 +175,22 @@ def train_stage(
         dist.barrier()
     torch.manual_seed(seed)
     model = create_model(model_config).to(device)
+    model_config = configuration(model)
     if previous:
         model.load_state_dict(checkpoint_load(previous)["model"])
     reference = copy.deepcopy(model).eval() if stage_name in ("dpo", "rl") else None
     if reference is not None:
         reference.requires_grad_(False)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=stage["learning_rate"], weight_decay=stage.get("weight_decay", 0.01)
+        model.parameters(),
+        lr=stage["learning_rate"],
+        weight_decay=stage.get("weight_decay", 0.01),
+        betas=tuple(stage.get("betas", [0.9, 0.999])),
     )
     if precision not in ("fp32", "bf16", "fp16"):
         raise LabError("unknown precision")
-    if model_config["backend"] == "tac098" and precision != "fp32":
-        raise LabError("native TAC098 mixed precision is not qualified; use fp32")
+    if model_config["backend"] in ("tac098", "tac104") and precision != "fp32":
+        raise LabError("native TAC mixed precision is not qualified; use fp32")
     if precision != "fp32" and not str(device).startswith("cuda"):
         raise LabError("mixed precision requires CUDA in this adapter")
     scaler = torch.amp.GradScaler("cuda", enabled=precision == "fp16")
@@ -195,7 +237,10 @@ def train_stage(
         else model
     )
     model.train()
-    batch_size, context = stage["batch_size"], model.config.context
+    batch_size = stage["batch_size"]
+    context = stage.get("sequence_length", model.config.context)
+    if context > model.config.context:
+        raise LabError("stage sequence length exceeds model context")
     accumulation = stage.get("gradient_accumulation", 1)
     examples, preferences, tasks, memory = [], [], [], None
     if stage_name == "pretrain" or stage.get("replay_weight", 0) > 0:
@@ -214,10 +259,11 @@ def train_stage(
         tasks = RecordSource(packed, "task")
         if not tasks:
             raise LabError("missing TRAIN rollout tasks")
-        choice_ids = [tokens.encode(s) for s in ("0", "1")]
-        if any(len(ids) != 1 for ids in choice_ids):
-            raise LabError("bounded comparison rollout requires single-symbol choices")
-        choice_ids = torch.tensor([ids[0] for ids in choice_ids], device=device)
+        if stage.get("rl_mode", "comparison") == "comparison":
+            choice_ids = [tokens.encode(s) for s in ("0", "1")]
+            if any(len(ids) != 1 for ids in choice_ids):
+                raise LabError("bounded comparison rollout requires single-symbol choices")
+            choice_ids = torch.tensor([ids[0] for ids in choice_ids], device=device)
     rollout_directory = output / "rollouts"
     if stage_name == "rl":
         rollout_directory.mkdir(exist_ok=True)
@@ -312,6 +358,8 @@ def train_stage(
     counter.__enter__()
     try:
         while step < stage["steps"]:
+            for group in optimizer.param_groups:
+                group["lr"] = learning_rate_at(stage, step)
             optimizer.zero_grad(set_to_none=True)
             update_loss, update_reward, update_rollouts = 0.0, [], []
             for micro in range(accumulation):
@@ -395,6 +443,23 @@ def train_stage(
                             bc[0].numel() + br[0].numel(),
                             int(bc[2].sum() + br[2].sum()),
                         )
+                    elif stage_name == "rl" and stage.get("rl_mode") == "completion":
+                        from .rl import completion_grpo
+
+                        selected = [
+                            tasks[i]
+                            for i in torch.randint(
+                                len(tasks), (batch_size,), generator=generator
+                            ).tolist()
+                        ]
+                        loss, used, targets, n, records, sampled_rewards = completion_grpo(
+                            network, model, reference, selected, tokens, generator, stage
+                        )
+                        update_reward.extend(sampled_rewards)
+                        update_rollouts.extend(
+                            {"step": step + 1, "micro": micro, **r} for r in records
+                        )
+                        rollouts += n
                     else:
                         group_size = stage.get("group_size", 8)
                         rows = [
@@ -577,6 +642,8 @@ def train_stage(
         "mean_rollout_reward": sum(rewards) / len(rewards) if rewards else None,
         "parameters": sum(p.numel() for p in model.parameters()),
         "replay_weight": stage.get("replay_weight", 0.0),
+        "last_learning_rate": optimizer.param_groups[0]["lr"],
+        "rl_mode": stage.get("rl_mode") if stage_name == "rl" else None,
         "precision": precision,
         "world_size": world_size,
         "peak_cuda_allocated_bytes": torch.cuda.max_memory_allocated(device)

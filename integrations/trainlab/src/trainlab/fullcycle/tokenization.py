@@ -77,10 +77,26 @@ class Tokens:
 
 
 def fit_tokenizer(
-    release, output, *, kind="bpe", vocab_size=512, max_training_bytes=8 * 1024 * 1024
+    release,
+    output,
+    *,
+    kind="bpe",
+    vocab_size=512,
+    max_training_bytes=8 * 1024 * 1024,
+    artifact_path=None,
+    artifact_sha256=None,
 ):
     output = Path(output)
-    if kind == "byte":
+    if kind == "artifact":
+        import shutil
+
+        artifact = Path(artifact_path)
+        if digest(artifact) != artifact_sha256:
+            raise LabError("prepared tokenizer artifact hash mismatch")
+        Tokens(artifact)
+        if artifact.resolve() != output.resolve():
+            shutil.copyfile(artifact, output)
+    elif kind == "byte":
         write_json(
             output,
             {
@@ -125,7 +141,7 @@ def fit_tokenizer(
         tok.train_from_iterator(texts(), trainer=trainer)
         tok.save(str(output))
     else:
-        raise LabError("tokenizer must be bpe or byte")
+        raise LabError("tokenizer must be bpe, byte or a pinned artifact")
     return digest(output)
 
 

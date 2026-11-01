@@ -21,6 +21,13 @@ def main(argv):
     for action in ("resume", "status", "report", "verify"):
         p = pipeline.add_parser(action)
         p.add_argument("directory", type=Path)
+    data = commands.add_parser("data").add_subparsers(dest="action", required=True)
+    for action in ("fetch", "prepare"):
+        command = data.add_parser(action)
+        command.add_argument("plan", type=Path)
+        command.add_argument("--cache", type=Path, required=True)
+    status = data.add_parser("status")
+    status.add_argument("directory", type=Path)
     models = commands.add_parser("model").add_subparsers(dest="action", required=True)
     chat = models.add_parser("chat")
     chat.add_argument("directory", type=Path)
@@ -33,7 +40,20 @@ def main(argv):
     serve.add_argument("--device", default="cpu")
     args = parser.parse_args(argv)
     try:
-        if args.command == "pipeline":
+        if args.command == "data":
+            from forge_data.hub import acquire, prepare
+
+            if args.action == "fetch":
+                result = acquire(args.plan, args.cache)
+            elif args.action == "prepare":
+                result = prepare(args.plan, args.cache)
+            else:
+                result = {
+                    name: read_json(args.directory / name, limit=32 * 1024 * 1024)
+                    for name in ("acquisition.json", "prepared.json")
+                    if (args.directory / name).exists()
+                }
+        elif args.command == "pipeline":
             if args.action in ("run", "resume"):
                 from .pipeline import run_pipeline
 
@@ -95,11 +115,12 @@ def main(argv):
                 messages.append({"role": "assistant", "content": answer})
                 print("model> " + answer)
             return 0
-        import torch.distributed as dist
+        if args.command == "pipeline":
+            import torch.distributed as dist
 
-        if dist.is_initialized():
-            dist.barrier()
-            dist.destroy_process_group()
+            if dist.is_initialized():
+                dist.barrier()
+                dist.destroy_process_group()
         print(json.dumps(result, sort_keys=True, indent=2))
         return 0
     except (LabError, ValueError, OSError) as exc:

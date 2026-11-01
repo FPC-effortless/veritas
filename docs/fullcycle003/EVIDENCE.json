@@ -1,0 +1,732 @@
+{
+  "archive_audit": {
+    "archive_sha256": "1324ad164ebb54f74c9d9154ad3678f2acdb889d6d32f935021b78429ee2883a",
+    "manifest_sha256": "7685a510195b2e2466878c9b634abe7f888e02096c271d41f14272001e5b4b9b",
+    "offline_recipe_binds_tokenizer_and_release": true,
+    "passed": true,
+    "raw_hf_cache_required_for_this_recipe": false,
+    "release_files_verified": 100
+  },
+  "artifacts": {
+    "FULLCYCLE-003-pilot-dpo-checkpoint.zip": {
+      "bytes": 150073558,
+      "library_file_id": "libfile_593d2f5697648191990254954a280a4e",
+      "sha256": "67d43ad5d2a45c35fb75f84fd6334b68208408c2434b956d024cfcdb2742ca0b"
+    },
+    "FULLCYCLE-003-pilot-midtrain-checkpoint.zip": {
+      "bytes": 112760761,
+      "library_file_id": "libfile_33b91ae9d47c8191b82d4cb6bf2bf38c",
+      "sha256": "f5df58446306fbeea05c077b4e8b500f8647e231ae9766d052575b1009a61cfe"
+    },
+    "FULLCYCLE-003-pilot-model.zip": {
+      "bytes": 37204983,
+      "library_file_id": "libfile_d5f8e6b2656c8191a3d697bfc4dde0e4",
+      "sha256": "7cd331a86880311c55e606aae0489498720846d284dd4a9d17a35bac27c02d25"
+    },
+    "FULLCYCLE-003-pilot-pretrain-checkpoint.zip": {
+      "bytes": 112510320,
+      "library_file_id": "libfile_d54ad7c132ac81918b3e051c8d46604d",
+      "sha256": "803702c3c08fe1b1ad50aa8201e6c8768a3bfc6c1074456d6dac9824f67fc6b6"
+    },
+    "FULLCYCLE-003-pilot-rl-checkpoint.zip": {
+      "bytes": 150348316,
+      "library_file_id": "libfile_a867ac9763808191ab13cabe3828fe60",
+      "sha256": "010ac68d2362a1c1ea75be4d55217f345f18b18bcfaf677ba09e3ad9b01dcb20"
+    },
+    "FULLCYCLE-003-pilot-sft-checkpoint.zip": {
+      "bytes": 112755995,
+      "library_file_id": "libfile_1c5082c9a03481919af89e63797829a5",
+      "sha256": "3c794112f6d3402d31c09e2e546cd2c6a7be7878b2e2930a95029a6a12249e1f"
+    },
+    "pilot_evidence": {
+      "bytes": 105523,
+      "library_file_id": "libfile_cde3725c5de48191a1e4ac5cab2cfdbb",
+      "sha256": "6346c4ad40e2b2f58fdf7b7d8228d44a7a87d51b0044ad0317945eeb0c27c75e"
+    },
+    "prepared_data": {
+      "bytes": 303554879,
+      "library_file_id": "libfile_54a58f500e608191b02128b02692d5aa",
+      "sha256": "1324ad164ebb54f74c9d9154ad3678f2acdb889d6d32f935021b78429ee2883a"
+    },
+    "recovery_check": {
+      "bytes": 371938394,
+      "library_file_id": "libfile_5075c25fbce081919f07fa36053c38b1",
+      "sha256": "1fa62b8bc0d425ea36cddeb525bb8fb5820719ade8a9c3da9b875344c57f5a47"
+    }
+  },
+  "capability_outcome": "FAIL: repetitive free chat, 0/2 final public math tasks, 0/2 instruction exact matches, zero verified rewards in all four actual RL trajectories; no DPO/RL capability gain established.",
+  "dataset": {
+    "acquisition_sha256": "72938960b41800710df0275e5a06f931e13c6013df628e0d264585486945921f",
+    "counts": {
+      "test/conversation": 1447,
+      "test/preference": 64,
+      "test/smoltalk_conversation": 128,
+      "test/task": 1319,
+      "test/text": 108,
+      "train/conversation": 26927,
+      "train/preference": 4000,
+      "train/smoltalk_conversation": 20000,
+      "train/task": 6927,
+      "train/text": 135786,
+      "validation/conversation": 502,
+      "validation/preference": 64,
+      "validation/smoltalk_conversation": 128,
+      "validation/task": 374,
+      "validation/text": 86
+    },
+    "manifest_sha256": "7685a510195b2e2466878c9b634abe7f888e02096c271d41f14272001e5b4b9b",
+    "plan_sha256": "31f4e8d46e711812e925ac6dd77742b0a9f57a649b5e356bb4bf13f2115ac327",
+    "preparation_identity": "fd46d32447ea76943a32119708e8e7b5a4bb99948bd89043e48b4000bf891f40",
+    "qualification": "NOT_QUALIFIED",
+    "rejected": {
+      "cross_split_group_collision": 11,
+      "exact_duplicate_payload": 29,
+      "gsm8k_train_overlap_heldout": 167,
+      "invalid_conversation": 11,
+      "over_context_conversation": 169237,
+      "over_context_preference": 1631,
+      "preference_tie_or_invalid": 8080,
+      "public_eval_question_in_conversation": 21302,
+      "public_eval_question_in_preference": 1715,
+      "text_control_or_public_eval_overlap": 51,
+      "unsupported_preference_shape": 10
+    },
+    "release": "release",
+    "schema": "forge.hub-prepared.v1",
+    "tokenizer": {
+      "path": "tokenizer.json",
+      "sha256": "87567e3e62a688ab666c2e8d25e76917df7709986a7a53cc5be36697d3552609"
+    },
+    "training_text_tokens_before_pack": {
+      "test": 131895,
+      "train": 200100507,
+      "validation": 131470
+    }
+  },
+  "date": "2026-11-01",
+  "full_gpu_training": "NOT_RUN_NO_CUDA",
+  "full_sequence_smoke": {
+    "all_gradients_finite": true,
+    "batch_size": 1,
+    "checkpointing": true,
+    "device": "cpu",
+    "forward_backward_seconds": 36.12570584900095,
+    "input_source": "actual screened TRAIN BPE stream",
+    "loss": 8.074814796447754,
+    "model_config": {
+      "activation_checkpointing": true,
+      "backend": "tac104",
+      "context": 1024,
+      "heads": 4,
+      "layers": 40,
+      "native": {
+        "chunk_size": 32,
+        "ffn_dim": 224,
+        "key_dim": 16,
+        "local_rope": true,
+        "rotary": true,
+        "tied_embedding": true,
+        "value_dim": 16,
+        "window": 128,
+        "write_rank": 2
+      },
+      "vocab_size": 3072,
+      "width": 120
+    },
+    "parameters": 10040600,
+    "peak_process_rss_bytes": 530481152,
+    "scope": "full pretraining sequence smoke, no optimizer update or GPU claim",
+    "sequence_length": 512
+  },
+  "hardware": {
+    "cpu_count": 9,
+    "cuda_available": false,
+    "cuda_device_count": 0,
+    "full_gpu_training": "NOT_RUN_NO_CUDA",
+    "full_pretrain_token_presentations_one_gpu": 200015872,
+    "torch_version": "2.15.0+cpu"
+  },
+  "http_chat": {
+    "cpu_threads": 2,
+    "csrf_and_origin": {
+      "bad_json": 400,
+      "cross_origin": 403,
+      "missing_token": 403
+    },
+    "done_event": true,
+    "fresh_installed_wheel_server": true,
+    "http_status": 200,
+    "passed": true,
+    "scope": "local 10M model registry chat plumbing in same isolated network namespace; quality is not established",
+    "stream_events": 49
+  },
+  "interruption": {
+    "cache_release": {
+      "action": "POSIX_FADV_DONTNEED on own completed data/acquisition/archive files; no file modifications",
+      "cgroup_memory_after": 2582446080,
+      "cgroup_memory_before": 6673801216,
+      "files": 257,
+      "logical_bytes": 15673840088
+    },
+    "cgroup_memory_limit_bytes": 8589934592,
+    "checkpoint_sha256": "1b8446e32b62a465364103b8fb50c7552930f8b4a7ce33f422828b0be1c9200c",
+    "checkpoint_sha256_verified": true,
+    "checkpoint_step": 192,
+    "discarded_optimizer_updates": "UNKNOWN; between 0 and 32 before the next checkpoint",
+    "exit_code": 137,
+    "oom_kill_observed": true,
+    "resource_accounting": "Committed metrics exclude any uncheckpointed work discarded by the kill",
+    "resumed_checkpoint_step": 224,
+    "status": "RECOVERED",
+    "time": 1793541550.3425612
+  },
+  "limitations": [
+    "One-seed CPU engineering run; tiny public held-out panels.",
+    "Public exact normalized fingerprints do not establish semantic decontamination.",
+    "GPU/AMP/distributed throughput and correspondence remain unverified.",
+    "Full 200M-token training has not run.",
+    "Actual shared8GiB host OOM recovered from checkpoint192; discarded uncommitted work is not fully measured.",
+    "File-cache release hints were needed during the CPU pilot; stage timing is a shared-host observation.",
+    "The full public data release was frozen once; full-corpus independent rebuild was not repeated."
+  ],
+  "long_decode": {
+    "decoded_utf8_bytes": 910,
+    "finite_logits_and_state": true,
+    "passed": true,
+    "sampled_tokens": 273,
+    "scope": "forced-length numerical stress; all stop/control tokens masked; no language-quality or natural stopping claim",
+    "seconds": 12.487088534006034,
+    "state_clock": 286,
+    "temperature": 0.9
+  },
+  "model_parameters": 10040600,
+  "pipeline_verification": {
+    "execution_attestation": "UNKNOWN",
+    "qualification": "NOT_QUALIFIED",
+    "stages": [
+      "pretrain",
+      "midtrain",
+      "sft",
+      "dpo",
+      "rl"
+    ],
+    "valid": true
+  },
+  "qualification": "NOT_QUALIFIED",
+  "qualitative_inference": {
+    "fresh_request_isolation": true,
+    "fresh_wheel": "/workspace/scratch/f15b59b71de0/veritas/.trainlab/fullcycle003-wheel-env/lib/python3.12/site-packages/trainlab/fullcycle/backends.py",
+    "generation": "greedy, maximum32 tokens",
+    "parameters": 10040600,
+    "registry_hash_verified": true,
+    "responses": [
+      {
+        "prompt": "Hello. What are you?",
+        "response": ".\n\n\n\n the the the the the the the the the the the the the the the the the the the the the the the the the the the",
+        "seconds": 1.6229895080032293
+      },
+      {
+        "prompt": "Explain what a checkpoint is.",
+        "response": ".\n\n\n the the the the the the the the the the the the the the the the the the the the the the the the the the the the",
+        "seconds": 1.4479286069981754
+      },
+      {
+        "prompt": "What is 2 + 3? Finish with #### and the answer.",
+        "response": ".\n\n\n\n\n\n\n the the the the the the the the the the the the the the the the the the the the the the the the",
+        "seconds": 1.464573310004198
+      },
+      {
+        "prompt": "Name one planet.",
+        "response": ".\n\n\n\n\n\n\n\n\n\n\n the the the the the the the the the the the the the the the the the the the the",
+        "seconds": 1.4290171370084863
+      }
+    ],
+    "scope": "qualitative CPU pilot behavior, not a capability benchmark"
+  },
+  "recovery": {
+    "checks": {
+      "cuda_rng": true,
+      "data_rng": true,
+      "losses": true,
+      "model": true,
+      "optimizer": true,
+      "scaler": true,
+      "step": true,
+      "target_tokens": true,
+      "torch_rng": true,
+      "trained_tokens": true
+    },
+    "compared_at": 33,
+    "control_checkpoint_sha256": "3d7bdbf1be4abdd7b87d150ae25d85b427cf0bb7dca89af6748222f0527210a4",
+    "control_optimizer_updates": 33,
+    "passed": true,
+    "paused_at": 32,
+    "qualification": "NOT_QUALIFIED",
+    "resumed_checkpoint_sha256": "6d6145de9e828ce91b5b2df57a405b12528e1f47213b7340a826723bb5a7873d",
+    "runtime": {
+      "cuda_runtime": null,
+      "cudnn": null,
+      "device": "cpu",
+      "numpy": "2.3.5",
+      "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+      "precision": "fp32",
+      "python": "3.12.14",
+      "tokenizers": "0.23.3",
+      "torch": "2.15.0+cpu",
+      "torch_build_sha256": "0fe87689fb3058e61b13f1ae3e91525ead91ae5d1b8b133786551616ca788937"
+    },
+    "schema": "trainlab.fullcycle003-recovery.v1",
+    "scope": "bit-exact CPU correspondence; control work is outside the primary run",
+    "source_files": {
+      "forge_data/hub.py": "decb189fbf93077a713a6a5f8acf9db7ad8e7adad76e36e47ed32e5e220a7337",
+      "forge_data/language.py": "0b304523c9557d257800983b50770a3d78f230df3110844aae379bdd353bf5e9",
+      "forge_data/verifiers.py": "45ee30936523b60f715c6b724cbd108c291206cf350c46809cf606aad2f25ab9",
+      "fullcycle/__init__.py": "23e9996a8d35e4bf074786e523044098ec56f0006384791b9b201c1d63baa368",
+      "fullcycle/_tac098.py": "0e02ad03c01010783487298fc068b53d48033f272d77228eadfc67514e140e9d",
+      "fullcycle/_tac104.py": "afb05d6844e0d35c6c6a03b7fd977572973ae6030b35fa49857d4b78090104de",
+      "fullcycle/_tac104_kernels.py": "258264b9e8942523e4524c8628fa0c63def277622df8fbaa655ffabc18751af6",
+      "fullcycle/backends.py": "eb4521808842f41c7503bec8c684b82592075a4ebda5f3c2e45d64588970c871",
+      "fullcycle/chat.html": "20764b07744681168eea2fd4a65bc4f953e9ca6830b161e23ba1bb9b6acb44a3",
+      "fullcycle/cli.py": "db91828212508aa009e390f7b8ec92105f516a5dc5c69c7656ee3dc7149e56b4",
+      "fullcycle/inference.py": "70ee7e3bce9b4fdb810396082f0d40d8a4c57dabf1f6b7c21d8cad3c0ac0cbeb",
+      "fullcycle/pipeline.py": "b3d4547899cfc9ff311886a7eacbb6e7810ae2efb2dd4d3f80829640d4fe5497",
+      "fullcycle/rl.py": "7798815751dcbba5d2251d38951d68dfbcdb00668bd7e08c13d1a2dbee91e06d",
+      "fullcycle/tokenization.py": "520205d4c8ae493441a82e8d0f2269926e3546e72cefa5c1004654c109c71d5b",
+      "fullcycle/training.py": "b91dbe9bfa648e480018d6f2aef533729d4cf3fd995771e93414b61a49237652",
+      "investigation_world/lm_evaluation.py": "960cfed414adb85ef1c86445b3a1a97bba2246b9d5d47ae65165c38ec40e7e94"
+    }
+  },
+  "release_audit": {
+    "counts": {
+      "test/conversation": 1447,
+      "test/preference": 64,
+      "test/task": 1319,
+      "test/text": 108,
+      "train/conversation": 26927,
+      "train/preference": 4000,
+      "train/task": 6927,
+      "train/text": 135786,
+      "validation/conversation": 502,
+      "validation/preference": 64,
+      "validation/task": 374,
+      "validation/text": 86
+    },
+    "group_split_isolation": true,
+    "groups_checked": 168980,
+    "manifest_sha256": "7685a510195b2e2466878c9b634abe7f888e02096c271d41f14272001e5b4b9b",
+    "official_test_not_reassigned": true,
+    "passed": true
+  },
+  "remote_gpu_access": {
+    "full_gpu_job_started": false,
+    "hf_jobs": "operation not available in connected tools",
+    "kaggle": "No local credential or callable dispatch operation; existing protected TAC-OSM workflow read only, not invoked",
+    "local_cuda_devices": 0
+  },
+  "run_summary": {
+    "baseline_validation_loss": 8.06194806098938,
+    "final_test": {
+      "decision": {
+        "accuracy": 0.0,
+        "action_space": "full-vocabulary multi-token completion",
+        "cases": 2,
+        "scope": "public GSM8K exact final-answer marker"
+      },
+      "inference": {
+        "decode_milliseconds_per_token": 42.17872837489267,
+        "decode_seconds": 0.6748596539982827,
+        "decode_tokens": 16,
+        "decode_tokens_per_second": 23.70863320277954,
+        "device": "cpu",
+        "hardware": "CPU",
+        "measurement_scope": "local warmed single-sequence wall time; no statistical claim",
+        "prefill_seconds": 0.07002400400233455,
+        "prefill_tokens": 7,
+        "prefill_tokens_per_second": 99.96572032308556,
+        "replicates": 1,
+        "state_bytes_after_decode": 829440
+      },
+      "instruction": {
+        "assistant_loss": 6.9941050106717135,
+        "generated_cases": 2,
+        "generation_exact_match": 0.0,
+        "target_tokens": 970
+      },
+      "language": {
+        "bits_per_decoded_utf8_byte": 3.0621592956913197,
+        "decoded_utf8_bytes": 1658,
+        "loss": 6.873339653015137,
+        "perplexity": 966.1698558948221,
+        "scope": "first deterministic held-out token budget; tokenizers may differ",
+        "tokens": 512
+      },
+      "preference": {
+        "accuracy": 0.0,
+        "cases": 2
+      }
+    },
+    "model_manifest_sha256": "5bbae25a64a9d541d533f8098bca5f1634044fd9891ebebcd417d045d1ff3f43",
+    "observed_lifecycle_wall_seconds": 2943.3224732875824,
+    "stages": [
+      {
+        "decision": {
+          "accuracy": 0.0,
+          "action_space": "full-vocabulary multi-token completion",
+          "cases": 2,
+          "scope": "public GSM8K exact final-answer marker"
+        },
+        "instruction": {
+          "assistant_loss": 6.911224599984976,
+          "generated_cases": 2,
+          "generation_exact_match": 0.0,
+          "target_tokens": 1040
+        },
+        "language": {
+          "bits_per_decoded_utf8_byte": 2.990723315975257,
+          "decoded_utf8_bytes": 1696,
+          "loss": 6.86685037612915,
+          "perplexity": 959.9204112999065,
+          "scope": "first deterministic held-out token budget; tokenizers may differ",
+          "tokens": 512
+        },
+        "metrics": {
+          "active_seconds": 1156.7584009569837,
+          "actual_training_flops": null,
+          "counted_training_operator_flops": 2242358804480,
+          "estimated_6N_forward_token_flops": 1974062284800,
+          "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+          "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+          "forward_token_positions": 32768,
+          "gpu_hours": 0,
+          "last_learning_rate": 2.9999999999999997e-05,
+          "loss_first": 8.054239273071289,
+          "loss_last": 7.262737274169922,
+          "mean_rollout_reward": null,
+          "milliseconds_per_update": 4518.5875037382175,
+          "optimizer_updates": 256,
+          "parameters": 10040600,
+          "peak_cuda_allocated_bytes": null,
+          "policy_rollouts_per_rank": 0,
+          "precision": "fp32",
+          "replay_weight": 0.0,
+          "rl_mode": null,
+          "stage": "pretrain",
+          "status": "complete",
+          "target_tokens": 32768,
+          "tokens_per_second": 28.32743637123457,
+          "world_size": 1
+        },
+        "name": "pretrain",
+        "preference": {
+          "accuracy": 1.0,
+          "cases": 2
+        }
+      },
+      {
+        "decision": {
+          "accuracy": 0.0,
+          "action_space": "full-vocabulary multi-token completion",
+          "cases": 2,
+          "scope": "public GSM8K exact final-answer marker"
+        },
+        "instruction": {
+          "assistant_loss": 6.897801443246695,
+          "generated_cases": 2,
+          "generation_exact_match": 0.0,
+          "target_tokens": 1040
+        },
+        "language": {
+          "bits_per_decoded_utf8_byte": 2.9904802298556072,
+          "decoded_utf8_bytes": 1696,
+          "loss": 6.866292238235474,
+          "perplexity": 959.3847928318327,
+          "scope": "first deterministic held-out token budget; tokenizers may differ",
+          "tokens": 512
+        },
+        "metrics": {
+          "active_seconds": 64.93361556901073,
+          "actual_training_flops": null,
+          "counted_training_operator_flops": 505220421120,
+          "estimated_6N_forward_token_flops": 429235650000,
+          "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+          "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+          "forward_token_positions": 7125,
+          "gpu_hours": 0,
+          "last_learning_rate": 2.9999999999999997e-05,
+          "loss_first": 9.504202842712402,
+          "loss_last": 8.974493026733398,
+          "mean_rollout_reward": null,
+          "milliseconds_per_update": 16233.403892252682,
+          "optimizer_updates": 4,
+          "parameters": 10040600,
+          "peak_cuda_allocated_bytes": null,
+          "policy_rollouts_per_rank": 0,
+          "precision": "fp32",
+          "replay_weight": 0.3,
+          "rl_mode": null,
+          "stage": "midtrain",
+          "status": "complete",
+          "target_tokens": 7125,
+          "tokens_per_second": 109.72744914269603,
+          "world_size": 1
+        },
+        "name": "midtrain",
+        "preference": {
+          "accuracy": 1.0,
+          "cases": 2
+        }
+      },
+      {
+        "decision": {
+          "accuracy": 0.0,
+          "action_space": "full-vocabulary multi-token completion",
+          "cases": 2,
+          "scope": "public GSM8K exact final-answer marker"
+        },
+        "instruction": {
+          "assistant_loss": 6.880615351750301,
+          "generated_cases": 2,
+          "generation_exact_match": 0.0,
+          "target_tokens": 1040
+        },
+        "language": {
+          "bits_per_decoded_utf8_byte": 2.9882399124564434,
+          "decoded_utf8_bytes": 1696,
+          "loss": 6.861148357391357,
+          "perplexity": 954.462502464857,
+          "scope": "first deterministic held-out token budget; tokenizers may differ",
+          "tokens": 512
+        },
+        "metrics": {
+          "active_seconds": 133.3337027739908,
+          "actual_training_flops": null,
+          "counted_training_operator_flops": 991769318400,
+          "estimated_6N_forward_token_flops": 842807964000,
+          "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+          "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+          "forward_token_positions": 13990,
+          "gpu_hours": 0,
+          "last_learning_rate": 2.9999999999999997e-05,
+          "loss_first": 9.055930137634277,
+          "loss_last": 8.86355209350586,
+          "mean_rollout_reward": null,
+          "milliseconds_per_update": 16666.71284674885,
+          "optimizer_updates": 8,
+          "parameters": 10040600,
+          "peak_cuda_allocated_bytes": null,
+          "policy_rollouts_per_rank": 0,
+          "precision": "fp32",
+          "replay_weight": 0.2,
+          "rl_mode": null,
+          "stage": "sft",
+          "status": "complete",
+          "target_tokens": 12801,
+          "tokens_per_second": 104.92470927409815,
+          "world_size": 1
+        },
+        "name": "sft",
+        "preference": {
+          "accuracy": 1.0,
+          "cases": 2
+        }
+      },
+      {
+        "decision": {
+          "accuracy": 0.0,
+          "action_space": "full-vocabulary multi-token completion",
+          "cases": 2,
+          "scope": "public GSM8K exact final-answer marker"
+        },
+        "instruction": {
+          "assistant_loss": 6.887848839393029,
+          "generated_cases": 2,
+          "generation_exact_match": 0.0,
+          "target_tokens": 1040
+        },
+        "language": {
+          "bits_per_decoded_utf8_byte": 2.9915539207898996,
+          "decoded_utf8_bytes": 1696,
+          "loss": 6.868757486343384,
+          "perplexity": 961.7528320799541,
+          "scope": "first deterministic held-out token budget; tokenizers may differ",
+          "tokens": 512
+        },
+        "metrics": {
+          "active_seconds": 108.14379936999467,
+          "actual_training_flops": null,
+          "counted_training_operator_flops": 680052551680,
+          "estimated_6N_forward_token_flops": 496226533200,
+          "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+          "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+          "forward_token_positions": 8237,
+          "gpu_hours": 0,
+          "last_learning_rate": 1e-05,
+          "loss_first": 2.039768695831299,
+          "loss_last": 2.2239365577697754,
+          "mean_rollout_reward": null,
+          "milliseconds_per_update": 27035.949842498667,
+          "optimizer_updates": 4,
+          "parameters": 10040600,
+          "peak_cuda_allocated_bytes": null,
+          "policy_rollouts_per_rank": 0,
+          "precision": "fp32",
+          "replay_weight": 0.2,
+          "rl_mode": null,
+          "stage": "dpo",
+          "status": "complete",
+          "target_tokens": 6821,
+          "tokens_per_second": 76.16710387452338,
+          "world_size": 1
+        },
+        "name": "dpo",
+        "preference": {
+          "accuracy": 1.0,
+          "cases": 2
+        }
+      },
+      {
+        "decision": {
+          "accuracy": 0.0,
+          "action_space": "full-vocabulary multi-token completion",
+          "cases": 2,
+          "scope": "public GSM8K exact final-answer marker"
+        },
+        "instruction": {
+          "assistant_loss": 6.886325542743389,
+          "generated_cases": 2,
+          "generation_exact_match": 0.0,
+          "target_tokens": 1040
+        },
+        "language": {
+          "bits_per_decoded_utf8_byte": 2.9908534257180683,
+          "decoded_utf8_bytes": 1696,
+          "loss": 6.867149114608765,
+          "perplexity": 960.2072193022892,
+          "scope": "first deterministic held-out token budget; tokenizers may differ",
+          "tokens": 512
+        },
+        "metrics": {
+          "active_seconds": 67.74397591198795,
+          "actual_training_flops": null,
+          "counted_training_operator_flops": 198966348800,
+          "estimated_6N_forward_token_flops": 179766902400,
+          "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+          "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+          "forward_token_positions": 2984,
+          "gpu_hours": 0,
+          "last_learning_rate": 2.0000000000000003e-06,
+          "loss_first": 0.6738792657852173,
+          "loss_last": 0.6675636768341064,
+          "mean_rollout_reward": 0.0,
+          "milliseconds_per_update": 33871.98795599397,
+          "optimizer_updates": 2,
+          "parameters": 10040600,
+          "peak_cuda_allocated_bytes": null,
+          "policy_rollouts_per_rank": 4,
+          "precision": "fp32",
+          "replay_weight": 0.1,
+          "rl_mode": "completion",
+          "stage": "rl",
+          "status": "complete",
+          "target_tokens": 2112,
+          "tokens_per_second": 44.048197051155846,
+          "world_size": 1
+        },
+        "name": "rl",
+        "preference": {
+          "accuracy": 1.0,
+          "cases": 2
+        }
+      }
+    ],
+    "status": "complete",
+    "updates": 274
+  },
+  "schema": "fullcycle003.executed-evidence.v1",
+  "source_files": {
+    "forge_data/hub.py": "decb189fbf93077a713a6a5f8acf9db7ad8e7adad76e36e47ed32e5e220a7337",
+    "forge_data/language.py": "0b304523c9557d257800983b50770a3d78f230df3110844aae379bdd353bf5e9",
+    "forge_data/verifiers.py": "45ee30936523b60f715c6b724cbd108c291206cf350c46809cf606aad2f25ab9",
+    "fullcycle/__init__.py": "23e9996a8d35e4bf074786e523044098ec56f0006384791b9b201c1d63baa368",
+    "fullcycle/_tac098.py": "0e02ad03c01010783487298fc068b53d48033f272d77228eadfc67514e140e9d",
+    "fullcycle/_tac104.py": "afb05d6844e0d35c6c6a03b7fd977572973ae6030b35fa49857d4b78090104de",
+    "fullcycle/_tac104_kernels.py": "258264b9e8942523e4524c8628fa0c63def277622df8fbaa655ffabc18751af6",
+    "fullcycle/backends.py": "eb4521808842f41c7503bec8c684b82592075a4ebda5f3c2e45d64588970c871",
+    "fullcycle/chat.html": "20764b07744681168eea2fd4a65bc4f953e9ca6830b161e23ba1bb9b6acb44a3",
+    "fullcycle/cli.py": "db91828212508aa009e390f7b8ec92105f516a5dc5c69c7656ee3dc7149e56b4",
+    "fullcycle/inference.py": "70ee7e3bce9b4fdb810396082f0d40d8a4c57dabf1f6b7c21d8cad3c0ac0cbeb",
+    "fullcycle/pipeline.py": "b3d4547899cfc9ff311886a7eacbb6e7810ae2efb2dd4d3f80829640d4fe5497",
+    "fullcycle/rl.py": "7798815751dcbba5d2251d38951d68dfbcdb00668bd7e08c13d1a2dbee91e06d",
+    "fullcycle/tokenization.py": "520205d4c8ae493441a82e8d0f2269926e3546e72cefa5c1004654c109c71d5b",
+    "fullcycle/training.py": "b91dbe9bfa648e480018d6f2aef533729d4cf3fd995771e93414b61a49237652",
+    "investigation_world/lm_evaluation.py": "960cfed414adb85ef1c86445b3a1a97bba2246b9d5d47ae65165c38ec40e7e94"
+  },
+  "training_source_commit": "eefc1d4c500584bc1f0e8e08b0bd35a600c3a0ed",
+  "training_status": "CPU_PILOT_COMPLETED",
+  "verification": {
+    "completed_stage_skipping": {
+      "after": {
+        "dpo/checkpoint.pt": "12f4e57a1358337f37c1d7c7f695bff56f6adad19742c681d093508a0263c363",
+        "dpo/metrics.json": "3c00783df77bae5f0a88ab30b716b2c89122844e9a233a6ecb39ad76055f7ab0",
+        "dpo/receipt.json": "77d0e38d5dfde4b48cf1344d51121ebc21f68a93de85a4dcd2472db9a335109d",
+        "midtrain/checkpoint.pt": "231c222f3c822b4726ebb5ba6e62722d96823b0a10632342ac7335c2879164e4",
+        "midtrain/metrics.json": "6b77239e14a56485295504287f6ad1cc5c5ef857ea1450f5568f2d152e875fd6",
+        "midtrain/receipt.json": "052321b78c729828b4054e77f2cfc219852ba6cb18be0a542c7637409b76bd22",
+        "pretrain/checkpoint.pt": "591783d2336ee81f3a502a28063c56abd1e5af9608a64c97d30a7f035bc690bf",
+        "pretrain/metrics.json": "282356495ef13f1362cd373910c960cb5fbbcbdd253ba4f5824d40f2729c33b4",
+        "pretrain/receipt.json": "f7ffed78fa6724c51bcf79df751dc3175ae0465646267c5810bf730d31140a32",
+        "report.json": "643aee4d0d62ead30094521cf676339e5d70b28a3252543e637a59863e0b1ea6",
+        "rl/checkpoint.pt": "e93c4e1a8a0d44f056009a171ea4a2cd3817c82f6791dc5728f3e847d3b1d67d",
+        "rl/metrics.json": "7378768e88af083fa7b0a33f593564bd615ca91f391a23ba30707a0003979fdb",
+        "rl/receipt.json": "c95dbf994e4439d7c55e910ec1df43f6dd8013800252fbbf984f5597a9bfd966",
+        "sft/checkpoint.pt": "1215dd86fa4967fb33fa6047506481f2e00fca34689ddb6efa6e6eee2798e923",
+        "sft/metrics.json": "3cb2cbfddbb8beac1775272c209e5fdfd2162a8d2c8b91aad49b69b4ac60951a",
+        "sft/receipt.json": "f355b3f016572e610d098a4e9bd8a28920bc44ff584145fac3b0cf5f280b9c4f"
+      },
+      "before": {
+        "dpo/checkpoint.pt": "12f4e57a1358337f37c1d7c7f695bff56f6adad19742c681d093508a0263c363",
+        "dpo/metrics.json": "3c00783df77bae5f0a88ab30b716b2c89122844e9a233a6ecb39ad76055f7ab0",
+        "dpo/receipt.json": "77d0e38d5dfde4b48cf1344d51121ebc21f68a93de85a4dcd2472db9a335109d",
+        "midtrain/checkpoint.pt": "231c222f3c822b4726ebb5ba6e62722d96823b0a10632342ac7335c2879164e4",
+        "midtrain/metrics.json": "6b77239e14a56485295504287f6ad1cc5c5ef857ea1450f5568f2d152e875fd6",
+        "midtrain/receipt.json": "052321b78c729828b4054e77f2cfc219852ba6cb18be0a542c7637409b76bd22",
+        "pretrain/checkpoint.pt": "591783d2336ee81f3a502a28063c56abd1e5af9608a64c97d30a7f035bc690bf",
+        "pretrain/metrics.json": "282356495ef13f1362cd373910c960cb5fbbcbdd253ba4f5824d40f2729c33b4",
+        "pretrain/receipt.json": "f7ffed78fa6724c51bcf79df751dc3175ae0465646267c5810bf730d31140a32",
+        "report.json": "643aee4d0d62ead30094521cf676339e5d70b28a3252543e637a59863e0b1ea6",
+        "rl/checkpoint.pt": "e93c4e1a8a0d44f056009a171ea4a2cd3817c82f6791dc5728f3e847d3b1d67d",
+        "rl/metrics.json": "7378768e88af083fa7b0a33f593564bd615ca91f391a23ba30707a0003979fdb",
+        "rl/receipt.json": "c95dbf994e4439d7c55e910ec1df43f6dd8013800252fbbf984f5597a9bfd966",
+        "sft/checkpoint.pt": "1215dd86fa4967fb33fa6047506481f2e00fca34689ddb6efa6e6eee2798e923",
+        "sft/metrics.json": "3cb2cbfddbb8beac1775272c209e5fdfd2162a8d2c8b91aad49b69b4ac60951a",
+        "sft/receipt.json": "f355b3f016572e610d098a4e9bd8a28920bc44ff584145fac3b0cf5f280b9c4f"
+      },
+      "checkpoint_metrics_and_receipt_hashes_unchanged": true,
+      "committed_optimizer_updates": 274,
+      "files_checked": 16,
+      "passed": true,
+      "report_hash_unchanged": true,
+      "resume_result": {
+        "directory": "/workspace/scratch/f15b59b71de0/veritas/.trainlab/fullcycle003-pilot",
+        "model": "/workspace/scratch/f15b59b71de0/veritas/.trainlab/fullcycle003-pilot/model",
+        "report": "/workspace/scratch/f15b59b71de0/veritas/.trainlab/fullcycle003-pilot/report.json",
+        "status": "complete",
+        "updates": 274
+      }
+    },
+    "distributed_execution": "UNVERIFIED",
+    "forge_tests_passed": 68,
+    "fresh_wheel_native_forward_backward": true,
+    "fresh_wheels_build": true,
+    "gpu_execution": "UNVERIFIED",
+    "lifecycle_tests_passed": 13,
+    "manual_http_chat": "PASS",
+    "new_tests_passed": 17,
+    "original_four_layer_logit_correspondence": "BIT_EXACT",
+    "quality_ratchet_introduced": 0,
+    "total": 175,
+    "trained_40_layer_temperature_0_9_forced_decode": "273 tokens /910 UTF8 bytes, finite logits/state; stop tokens masked",
+    "training_qualification_regressions_passed": 39,
+    "trainlab_tests_passed": 38
+  }
+}

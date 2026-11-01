@@ -91,6 +91,16 @@ def payload(row):
             raise ForgeError("identical preference alternatives")
         return {k: row[k] for k in ("prompt", "chosen", "rejected")}
     if kind == "task":
+        if row.get("verifier") == "gsm8k-exact-v1":
+            if (
+                not isinstance(row.get("prompt"), str)
+                or not row["prompt"].strip()
+                or not isinstance(row.get("expected_answer"), str)
+                or not re.fullmatch(r"-?\d+(?:\.\d+)?", row["expected_answer"])
+                or len(row["expected_answer"]) > 64
+            ):
+                raise ForgeError("invalid public GSM8K task")
+            return {k: row[k] for k in ("prompt", "expected_answer", "verifier")}
         if row.get("verifier") != "integer-comparison-v1":
             raise ForgeError("unsupported public task verifier")
         if any(type(row[k]) is not int for k in ("left", "right")):
@@ -129,6 +139,9 @@ def build_release(source, spec, destination, *, shard_bytes=8 * 1024 * 1024):
         or not spec.get("split_salt")
     ):
         raise ForgeError("invalid language source specification or hash")
+    near_screen = spec.get("near_dedupe", "minhash4")
+    if near_screen not in ("minhash4", "exact-only"):
+        raise ForgeError("unsupported explicit near-duplicate screen")
     sources = spec["sources"]
     for s in sources.values():
         if (
@@ -154,20 +167,6 @@ def build_release(source, spec, destination, *, shard_bytes=8 * 1024 * 1024):
             group = row.get("group")
             if not isinstance(group, str) or not group:
                 raise ForgeError("source grouping required")
-            data = payload(row)
-            key = hashlib.sha256(canonical(data)).hexdigest()
-            try:
-                con.execute("INSERT INTO seen VALUES (?)", (key,))
-            except sqlite3.IntegrityError:
-                rejected["exact_duplicates"] += 1
-                continue
-            sig = _signature(data["text"]) if row["kind"] == "text" else None
-            if sig:
-                try:
-                    con.execute("INSERT INTO near VALUES (?)", (sig,))
-                except sqlite3.IntegrityError:
-                    rejected["minhash_duplicates"] += 1
-                    continue
             # Group is global: shared semantic/source groups cannot cross splits.
             score = (
                 int(
@@ -176,13 +175,49 @@ def build_release(source, spec, destination, *, shard_bytes=8 * 1024 * 1024):
                 % 100
             )
             split = "train" if score < 90 else "validation" if score < 95 else "test"
+            if ("split" in row) != ("upstream_split" in row):
+                raise ForgeError("explicit split and upstream split must be supplied together")
+            if "split" in row:
+                policy = sources[row["source_id"]].get("upstream_splits")
+                upstream = row.get("upstream_split")
+                if (
+                    not isinstance(policy, dict)
+                    or upstream not in policy
+                    or row["split"] not in SPLITS
+                    or row["split"] not in policy[upstream]
+                ):
+                    raise ForgeError("upstream held-out boundary or explicit split violation")
+                if upstream == "test" and row["split"] != "test":
+                    raise ForgeError("upstream TEST cannot enter TRAIN or validation")
+                split = row["split"]
+
             con.execute("INSERT OR IGNORE INTO groups VALUES (?,?)", (group, split))
             if (
                 con.execute("SELECT split FROM groups WHERE name=?", (group,)).fetchone()[0]
                 != split
             ):
                 raise ForgeError("source group crosses splits")
+            data = payload(row)
+            key = hashlib.sha256(canonical(data)).hexdigest()
+            try:
+                con.execute("INSERT INTO seen VALUES (?)", (key,))
+            except sqlite3.IntegrityError:
+                rejected["exact_duplicates"] += 1
+                continue
+            sig = (
+                _signature(data["text"])
+                if row["kind"] == "text" and near_screen == "minhash4"
+                else None
+            )
+            if sig:
+                try:
+                    con.execute("INSERT INTO near VALUES (?)", (sig,))
+                except sqlite3.IntegrityError:
+                    rejected["minhash_duplicates"] += 1
+                    continue
             clean = {"kind": row["kind"], "source_id": row["source_id"], "group": group, **data}
+            if "split" in row:
+                clean["upstream_split"] = row["upstream_split"]
             line = canonical(clean) + b"\n"
             slot = (split, row["kind"])
             if slot not in handles or handles[slot].tell() + len(line) > shard_bytes:
@@ -208,9 +243,18 @@ def build_release(source, spec, destination, *, shard_bytes=8 * 1024 * 1024):
             "files": files,
             "counts": dict(counts),
             "rejected": dict(rejected),
-            "split_method": "global-group-sha256-mod100-90/5/5-v1",
-            "contamination_screen": "exact payload + long-text 4-MinHash signature; "
-            "no semantic contamination attestation",
+            "split_method": (
+                "source-declared-upstream-boundaries-plus-global-group-v1"
+                if any(x.get("upstream_splits") for x in sources.values())
+                else "global-group-sha256-mod100-90/5/5-v1"
+            ),
+            "contamination_screen": (
+                "exact payload + long-text 4-MinHash signature; "
+                "no semantic contamination attestation"
+                if near_screen == "minhash4"
+                else "exact payload only here; upstream/public-benchmark screens recorded in "
+                "source specification; no semantic contamination attestation"
+            ),
             "qualification": "NOT_QUALIFIED",
         }
         write_json(temp / "manifest.json", manifest)

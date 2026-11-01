@@ -148,7 +148,7 @@ def inference_benchmark(model, tokens):
             logits, state = model.step(logits[:, -1].argmax(-1, keepdim=True), state)
         sync()
         decode = time.perf_counter() - start
-    if model.config.backend == "tac098":
+    if hasattr(state, "tensor_bytes"):
         state_bytes = state.tensor_bytes()
     else:
         state_bytes = sum(t.numel() * t.element_size() for pair in state for t in pair)
