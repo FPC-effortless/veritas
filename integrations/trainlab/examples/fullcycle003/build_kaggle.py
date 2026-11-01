@@ -24,8 +24,9 @@ def build(commit, output):
     notebook.cells = [
         nbf.v4.new_markdown_cell("""# Full-cycle TAC-OSM 10M on Kaggle T4
 
-This job definition is **staged, not submitted or GPU-executed**. Choose GPU T4 ×2
-and enable Internet in Kaggle. The two-rank recipe preserves 200,015,872
+This file is a source template; runtime logs and verified session receipts establish
+whether GPU work actually ran. Choose GPU T4 ×2 and enable Internet in Kaggle.
+The two-rank recipe preserves 200,015,872
 pretraining token presentations and 256 total RL trajectories; it changes the
 RL optimizer-update count from 64 to 32. It trains 40 layers at width120 with a
 3072-token fitted BPE and 10,040,600 parameters.
@@ -36,9 +37,8 @@ Only a verified `COMPLETE` session receipt means the full lifecycle finished.
 Outputs under `/kaggle/working/fullcycle003` include the prepared release and run
 state. Raw public downloads stay in temporary storage, outside Git and outputs.
 
-GPU execution and notebook browser preview could not be performed during staging:
-the staging host has no CUDA device and its browser connection failed. Schema,
-Python cell syntax, budget arithmetic and launcher controls are tested separately.
+The builder checks schema and Python cell syntax without executing this template.
+Budget arithmetic and launcher controls are tested separately from GPU execution.
 """),
         nbf.v4.new_markdown_cell("## 1. Parameters"),
         nbf.v4.new_code_cell(f"""from pathlib import Path
@@ -47,11 +47,13 @@ import subprocess
 import sys
 import json
 import runpy
+import importlib
 
 SOURCE_COMMIT = {commit!r}
 GPUS = 2
 SESSION_BUDGET_SECONDS = 14400
 PREVIOUS_OUTPUT_ROOT = None  # Optional attached prior output containing data/ and run/.
+PREPARED_DATA_ROOT = None  # Optional verified data/ folder for a fresh run.
 SOURCE = Path("/kaggle/working/fullcycle003-source")
 OUTPUT = Path("/kaggle/working/fullcycle003")
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -83,9 +85,12 @@ dirty = subprocess.check_output(["git", "-C", str(SOURCE), "status", "--porcelai
 if head != SOURCE_COMMIT or dirty:
     raise RuntimeError("Existing source is different or modified; use a fresh source directory.")
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check",
-                "-e", str(SOURCE), "-e", str(SOURCE / "integrations/forge"),
-                "-e", str(SOURCE / "integrations/trainlab") + "[training]",
+                str(SOURCE), str(SOURCE / "integrations/forge"),
+                str(SOURCE / "integrations/trainlab") + "[training]",
                 "tokenizers==0.23.3"], check=True)
+# Packaged installs are visible to this already-running notebook kernel.
+importlib.invalidate_caches()
+_ = importlib.import_module("trainlab.runner")
 """),
         nbf.v4.new_markdown_cell("""## 4. Acquire, verify, probe GPUs and train
 
@@ -98,6 +103,9 @@ evaluation data or account token is embedded here.
 To resume in a new Kaggle session, attach the previous outputs and set
 `PREVIOUS_OUTPUT_ROOT` to their root. Keep the same source, runtime and GPU count;
 the controller refuses incompatible recovery. Save the complete output folder.
+For a fresh run reusing only approved data, set `PREPARED_DATA_ROOT` to the
+previous `data/` directory. This verifies/copies the release and tokenizer without
+copying an old run protocol or optimizer state. Set only one input option.
 """),
         nbf.v4.new_code_cell("""launcher = SOURCE / "integrations/trainlab/examples/fullcycle003"
 launcher = launcher / "kaggle_run.py"
@@ -105,6 +113,8 @@ arguments = ["--output", str(OUTPUT), "--gpus", str(GPUS),
              "--budget-seconds", str(SESSION_BUDGET_SECONDS)]
 if PREVIOUS_OUTPUT_ROOT:
     arguments += ["--resume-input", str(PREVIOUS_OUTPUT_ROOT)]
+if PREPARED_DATA_ROOT:
+    arguments += ["--prepared-input", str(PREPARED_DATA_ROOT)]
 # Run the supervisor in this kernel so Stop reaches its checkpoint grace handler.
 # An extra subprocess.run wrapper would kill the supervisor too early on interrupt.
 runpy.run_path(str(launcher))["main"](arguments)
@@ -138,7 +148,7 @@ else:
         "python_cells_compiled": True,
         "gpu_executed": False,
         "browser_preview_inspected": False,
-        "blocker": "Kaggle browser backend unavailable; API credential not configured",
+        "execution_scope": "source generation only; submission and GPU evidence are separate",
     }
     output.with_suffix(".staging.json").write_text(json.dumps(receipt, indent=2) + "\n")
     return receipt

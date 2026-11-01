@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import asdict
+from datetime import timedelta
 from pathlib import Path
 
 import torch
@@ -93,6 +94,9 @@ def validate_config(config):
         raise LabError("device must be cpu, cuda or auto")
     if config.get("device") == "cuda" and not torch.cuda.is_available():
         raise LabError("CUDA was requested but is unavailable")
+    for key in ("distributed_timeout_seconds", "evaluation_timeout_seconds"):
+        if key in config and (type(config[key]) is not int or config[key] < 1):
+            raise LabError(f"{key} must be a positive integer")
     return config
 
 
@@ -192,11 +196,15 @@ def _evaluation(checkpoint, tokenizer, config, output, split="validation"):
         # The trainer's tensors are gone; free cached blocks for the evaluator process.
         torch.cuda.empty_cache()
     # New process loads weights and held-out data; no trainer metric argument exists.
-    result = subprocess.run(argv, capture_output=True, text=True, timeout=900)
+    print(f"evaluation start: {output.name} on {evaluation_device}", flush=True)
+    result = subprocess.run(
+        argv, capture_output=True, text=True, timeout=config.get("evaluation_timeout_seconds", 900)
+    )
     if result.returncode:
         raise LabError("public evaluator failed: " + result.stderr[-4000:])
     result = read_json(temporary, limit=16 * 1024 * 1024)
     temporary.replace(output)
+    print(f"evaluation complete: {output.name}", flush=True)
     write_json(receipt_path, {"input_identity": expected, "sha256": digest(output)})
     return result
 
@@ -240,10 +248,16 @@ def run_pipeline(config_path=None, output=None, *, resume=False, stop_stage=None
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     if world > 1 and not dist.is_initialized():
         launch_config = read_json(Path(output) / "pipeline.json") if resume else prepared_config
+        validate_config(launch_config)
         use_cuda = launch_config.get("device") in ("cuda", "auto") and torch.cuda.is_available()
         if use_cuda:
             torch.cuda.set_device(local_rank)
-        dist.init_process_group("nccl" if use_cuda else "gloo")
+        # Rank-zero packing/evaluation may require a longer coordination budget.
+        seconds = launch_config.get("distributed_timeout_seconds")
+        dist.init_process_group(
+            "nccl" if use_cuda else "gloo",
+            timeout=timedelta(seconds=seconds) if seconds is not None else None,
+        )
     output = Path(output).resolve()
     with run_lock(output, rank):
         if resume:
@@ -292,6 +306,7 @@ def run_pipeline(config_path=None, output=None, *, resume=False, stop_stage=None
         tokens_path = output / "tokenizer.json"
         data_path = output / "tokens"
         if rank == 0 and not (output / "data-receipt.json").exists():
+            print("token packing start", flush=True)
             if data_path.exists():
                 shutil.rmtree(data_path)
             fit_tokenizer(release, tokens_path, **config["tokenizer"])
@@ -305,6 +320,7 @@ def run_pipeline(config_path=None, output=None, *, resume=False, stop_stage=None
                     "protocol_sha256": object_hash(protocol),
                 },
             )
+            print("token packing complete", flush=True)
         if world > 1:
             dist.barrier()
         data_receipt = read_json(output / "data-receipt.json")
