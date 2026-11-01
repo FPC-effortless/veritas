@@ -135,6 +135,9 @@ def run_lock(directory, rank):
 
 def _evaluation(checkpoint, tokenizer, config, output, split="validation"):
     output = Path(output)
+    evaluation_device = (
+        "cuda" if config.get("device") in ("cuda", "auto") and torch.cuda.is_available() else "cpu"
+    )
     receipt_path = output.with_suffix(".receipt.json")
     expected = object_hash(
         {
@@ -147,9 +150,7 @@ def _evaluation(checkpoint, tokenizer, config, output, split="validation"):
             "case_limit": config.get("evaluation_case_limit"),
             "generation_limit": config.get("evaluation_generation_limit", 8),
             "max_new_tokens": config.get("evaluation_max_new_tokens", 48),
-            "device": "cuda"
-            if config.get("device") in ("cuda", "auto") and torch.cuda.is_available()
-            else "cpu",
+            "device": evaluation_device,
         }
     )
     if receipt_path.exists():
@@ -185,8 +186,11 @@ def _evaluation(checkpoint, tokenizer, config, output, split="validation"):
         "--max-new-tokens",
         str(config.get("evaluation_max_new_tokens", 48)),
         "--device",
-        "cuda" if config.get("device") in ("cuda", "auto") and torch.cuda.is_available() else "cpu",
+        evaluation_device,
     ]
+    if evaluation_device == "cuda":
+        # The trainer's tensors are gone; free cached blocks for the evaluator process.
+        torch.cuda.empty_cache()
     # New process loads weights and held-out data; no trainer metric argument exists.
     result = subprocess.run(argv, capture_output=True, text=True, timeout=900)
     if result.returncode:

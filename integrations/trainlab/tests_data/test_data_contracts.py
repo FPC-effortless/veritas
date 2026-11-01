@@ -204,3 +204,36 @@ class DataContracts(unittest.TestCase):
                 artifact_path=artifact,
                 artifact_sha256=expected,
             )
+
+    def test_cuda_evaluator_handoff_releases_parent_cache_before_spawn(self):
+        from types import SimpleNamespace
+
+        from trainlab.fullcycle.pipeline import _evaluation
+
+        checkpoint, tokenizer = self.root / "checkpoint.pt", self.root / "tokenizer.json"
+        checkpoint.write_bytes(b"CONSTRUCTED checkpoint bytes")
+        tokenizer.write_text("{}")
+        order = []
+
+        def execute(argv, **kwargs):
+            order.append("spawn")
+            self.assertEqual(argv[-1], "cuda")
+            Path(argv[argv.index("--output") + 1]).write_text('{"fixture":true}')
+            return SimpleNamespace(returncode=0)
+
+        with (
+            patch("trainlab.fullcycle.pipeline.source_identity", return_value={"fixture": "x"}),
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.empty_cache", side_effect=lambda: order.append("release")),
+            patch("trainlab.fullcycle.pipeline.subprocess.run", side_effect=execute),
+        ):
+            _evaluation(
+                checkpoint,
+                tokenizer,
+                {
+                    "device": "cuda",
+                    "dataset": {"directory": str(self.root), "manifest_sha256": "x"},
+                },
+                self.root / "evaluation.json",
+            )
+        self.assertEqual(order, ["release", "spawn"])
