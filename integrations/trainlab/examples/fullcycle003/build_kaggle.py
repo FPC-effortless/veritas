@@ -24,8 +24,9 @@ def build(commit, output):
     notebook.cells = [
         nbf.v4.new_markdown_cell("""# Full-cycle TAC-OSM 10M on Kaggle T4
 
-This job definition is **staged, not submitted or GPU-executed**. Choose GPU T4 ×2
-and enable Internet in Kaggle. The two-rank recipe preserves 200,015,872
+This file is a source template; runtime logs and verified session receipts establish
+whether GPU work actually ran. Choose GPU T4 ×2 and enable Internet in Kaggle.
+The two-rank recipe preserves 200,015,872
 pretraining token presentations and 256 total RL trajectories; it changes the
 RL optimizer-update count from 64 to 32. It trains 40 layers at width120 with a
 3072-token fitted BPE and 10,040,600 parameters.
@@ -36,9 +37,8 @@ Only a verified `COMPLETE` session receipt means the full lifecycle finished.
 Outputs under `/kaggle/working/fullcycle003` include the prepared release and run
 state. Raw public downloads stay in temporary storage, outside Git and outputs.
 
-GPU execution and notebook browser preview could not be performed during staging:
-the staging host has no CUDA device and its browser connection failed. Schema,
-Python cell syntax, budget arithmetic and launcher controls are tested separately.
+The builder checks schema and Python cell syntax without executing this template.
+Budget arithmetic and launcher controls are tested separately from GPU execution.
 """),
         nbf.v4.new_markdown_cell("## 1. Parameters"),
         nbf.v4.new_code_cell(f"""from pathlib import Path
@@ -148,7 +148,7 @@ else:
         "python_cells_compiled": True,
         "gpu_executed": False,
         "browser_preview_inspected": False,
-        "blocker": "Kaggle browser backend unavailable; API credential not configured",
+        "execution_scope": "source generation only; submission and GPU evidence are separate",
     }
     output.with_suffix(".staging.json").write_text(json.dumps(receipt, indent=2) + "\n")
     return receipt
