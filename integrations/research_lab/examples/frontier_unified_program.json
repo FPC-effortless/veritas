@@ -1,0 +1,535 @@
+{
+  "schema": "research_lab.frontier_program.v1",
+  "program_id": "frontier-architecture-research",
+  "version": "2026-11-02",
+  "status": "COORDINATION_SPEC_ONLY_NO_AUTONOMOUS_WORKERS_STARTED",
+  "objective": "Discover and independently validate a novel frontier-competitive sequence/computational architecture using coordinated parallel falsifiable research, before selective integration into TAC-OSM / PLM.",
+  "governance": {
+    "research_director": "Maintains frozen questions, lane contracts, dependency order, compute caps and a balanced portfolio; cannot certify its own hypotheses.",
+    "lane_leads": "Produce hypotheses, code, trials and failure reports independently; findings are evidence candidates.",
+    "replication_lead": "Independent worker/session repeats frozen runs and checks leakage, ablations, complete seeds and exact artifact hashes.",
+    "integration_lead": "Ports only qualified mechanisms behind stable module contracts, benchmarks complete assembled models and measures interactions.",
+    "human_authority": "Required for paid GPU budgets, public novelty/state-of-the-art claims, changes to final test suites, training scale advancement and merge/release.",
+    "no_auto_promotion": true
+  },
+  "science_rules": [
+    "Never relabel a reported source experiment as independently rerun, nor a deterministic store as a trained neural result.",
+    "Freeze datasets/splits/seed lists, model parameters, batch+token budget, evaluation code, baselines, kernel settings and selection criterion before final evaluation.",
+    "Use three or more matched seeds for initial evidence; five or more or independent distribution replications for promotion where statistically feasible.",
+    "Pair model size (within 1% when practical) and tune baselines at matched optimizer steps/tokens/FLOPs and reasonable search budgets.",
+    "Compare quality, training FLOPs, wall clock, GPU memory, decode latency, and total energy where measured; never call FLOP reductions measured speedups.",
+    "Retain failed seeds and negative results; any change after blind holdout means a new test version.",
+    "Compare mechanisms through isolated component removal, alternative same-cost mechanism and state interventions.",
+    "Present confidence intervals and task-specific effect sizes; no composite leaderboard from incompatible metrics.",
+    "Do not claim frontier capability from synthetic-only results, no-fit implementations, report-level summaries or incomplete training.",
+    "Research protocols and evidence may be parallel; shared hidden final test sets must remain quarantined from training/tuning."
+  ],
+  "benchmarks": [
+    {
+      "id": "B_RETRIEVAL",
+      "type": "controlled",
+      "axes": [
+        "8/32/128/256 pairs",
+        "fixed lengths 256/512/1024/2048",
+        "independent load and length",
+        "1/4/16 target versions",
+        "independent target ages"
+      ],
+      "metrics": [
+        "exact_recall",
+        "query_swap_delta",
+        "stale_value_error",
+        "interference_curve"
+      ]
+    },
+    {
+      "id": "B_LANGUAGE",
+      "type": "real",
+      "axes": [
+        "validation corpora with leak-free partitions",
+        "high-temperature generation",
+        "short and long decoding"
+      ],
+      "metrics": [
+        "bits_per_byte",
+        "NLL",
+        "generation_repetition",
+        "tokens_per_second"
+      ]
+    },
+    {
+      "id": "B_CODE",
+      "type": "real",
+      "axes": [
+        "held-out repositories",
+        "autocomplete",
+        "multi-file repair"
+      ],
+      "metrics": [
+        "exact_success",
+        "test_pass",
+        "edit_validity",
+        "cost_per_pass"
+      ]
+    },
+    {
+      "id": "B_STRUCTURE",
+      "type": "synthetic_and_real",
+      "axes": [
+        "novel operators",
+        "OOD graph structures",
+        "verified repair"
+      ],
+      "metrics": [
+        "transfer_accuracy",
+        "repair_success",
+        "causal_state_gap"
+      ]
+    },
+    {
+      "id": "B_CONTINUAL",
+      "type": "controlled_and_real",
+      "axes": [
+        "new task acquisition",
+        "stale info correction",
+        "deletion",
+        "temporal truth"
+      ],
+      "metrics": [
+        "new_task_score",
+        "retained_task_score",
+        "interference",
+        "retraction_validity"
+      ]
+    },
+    {
+      "id": "B_EFFICIENCY",
+      "type": "accelerator",
+      "axes": [
+        "train parallel",
+        "recurrent decode",
+        "kv/state bytes",
+        "compute budgets"
+      ],
+      "metrics": [
+        "train_tokens_per_s",
+        "decode_tokens_per_s",
+        "peak_gpu_bytes",
+        "energy_if_measured"
+      ]
+    }
+  ],
+  "scales": [
+    {
+      "params": "1M",
+      "stage": "discriminating_screen",
+      "minimum": "Evidence of training and causal mechanism effect"
+    },
+    {
+      "params": "10M",
+      "stage": "integrated_pilot",
+      "minimum": "Matched Transformer/GRU/SSM and end-to-end language evaluation"
+    },
+    {
+      "params": "50M",
+      "stage": "scale_validation",
+      "minimum": "Mechanistic gains survive deeper model and longer training"
+    },
+    {
+      "params": "100M+",
+      "stage": "frontier_path",
+      "minimum": "Real-text capability, compute-optimal quality and external validation"
+    }
+  ],
+  "gates": [
+    {
+      "id": "G0",
+      "label": "Correctness and source recovery",
+      "rule": "Pinned authentic code/data, runnable smoke, gradient checks, parameter accounting, frozen protocol"
+    },
+    {
+      "id": "G1",
+      "label": "Mechanism discovery",
+      "rule": "Paired train results over >=3 seeds beat relevant no-mechanism or matched alternative on preregistered target metric"
+    },
+    {
+      "id": "G2",
+      "label": "Causal and robust validation",
+      "rule": "Independent replay; state knockout/swap/control, load-length disentanglement, unseen distributions, uncertainty and negative results"
+    },
+    {
+      "id": "G3",
+      "label": "Integration promotion",
+      "rule": "Full backbone + mechanism shows a nontrivial Pareto improvement on target metrics without preregistered unacceptable regression; full GPU profile and equal compute"
+    },
+    {
+      "id": "G4",
+      "label": "Scale and external qualification",
+      "rule": "10M -> 50M -> 100M+ after progressive real-data tests, blind holdout, accepted external baseline and independent replication"
+    }
+  ],
+  "interfaces": {
+    "common_adapter": "Module.forward(x, state, mask, context)-> (features, new_state, diagnostics); a no-state adapter is permitted.",
+    "state_contract": "Typed shapes/initial/reset/detach/serialize; carry/reset/swap/read-only ablations; never silently consume future target information.",
+    "compute_contract": "Record parameter counts, optimizer configs, GPU/kernel versions, FLOPs estimate, wall time and bytes; inapplicable dimensions marked N/A.",
+    "evidence_contract": "Every claim points to source commit, training receipt, data manifest, metric manifest and failure taxonomy; report-only remains unverified."
+  },
+  "integration_policy": {
+    "baseline_first": "Keep TAC_CORE unchanged as an equal-budget reference, plus strongest external rival and simple shortcut diagnostics.",
+    "eligible": "Only G2 mechanisms may be integration candidates; G3 must be earned by integrated improvement not standalone score.",
+    "interaction_studies": "Test mechanism A and B separately and combined with equal parameter/compute costs; check synergistic and antagonistic interactions.",
+    "selection": "Maintain a Pareto frontier, not a single arbitrary weighted score. Prefer smallest module yielding reproducible quality, throughput, retrieval or adaptability gain.",
+    "rollback": "Remove module if downstream regressions, reproducibility failure, data contamination or physical compute cost falsify benefit."
+  },
+  "lanes": [
+    {
+      "id": "TAC_CORE",
+      "category": "core",
+      "campaign": "B",
+      "hypothesis": "Train a width/depth-scalable persistent-state backbone, not assumed superior to attention.",
+      "primary_outcome": "Matched quality per training FLOP and decode throughput",
+      "comparators": [
+        "Transformer",
+        "Mamba-2",
+        "Gated DeltaNet-2",
+        "GRU"
+      ],
+      "source_evidence": "LANGCACHE104;LANGDEPTH106",
+      "next_falsifier": "Freeze a matched 1M/10M suite including long decoding, high-temperature text and carried-state knockout",
+      "dependencies": [],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "PSN",
+      "category": "candidate",
+      "campaign": "A",
+      "hypothesis": "Learn selective persistent writes, readout and verification.",
+      "primary_outcome": "Delayed keyed recall and correct write correction",
+      "comparators": [
+        "TAC_CORE",
+        "GRU",
+        "Gated DeltaNet-2"
+      ],
+      "source_evidence": "ARCHPAR002",
+      "next_falsifier": "Fix fresh append-adapter value retrieval on held-out histories before integration",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "PSN2",
+      "category": "candidate",
+      "campaign": "A",
+      "hypothesis": "Test whether node/pulse communication improves local/global computation.",
+      "primary_outcome": "Unseen operation composition at matched model size and cost",
+      "comparators": [
+        "Node-free decoder",
+        "Transformer",
+        "TAC_CORE"
+      ],
+      "source_evidence": "ARCHPAR001",
+      "next_falsifier": "Remove pulse path under frozen seeds and matched decoder",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "DPSL",
+      "category": "candidate",
+      "campaign": "A",
+      "hypothesis": "Learn graph-structured memory with correct deletion and supersession.",
+      "primary_outcome": "Multi-hop retrieval and mutable-history correctness",
+      "comparators": [
+        "Exact store diagnostic",
+        "Gated DeltaNet-2",
+        "TAC_CORE"
+      ],
+      "source_evidence": "ARCHPAR002",
+      "next_falsifier": "Compare graph association update versus explicit replacement after unrelated-key edits",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "BOUNDED_FIELD",
+      "category": "candidate",
+      "campaign": "A",
+      "hypothesis": "Use stable recurrent field dynamics without losing address selectivity.",
+      "primary_outcome": "Gradient stability and old-key recall with long delays",
+      "comparators": [
+        "GRU",
+        "Mamba-2",
+        "TAC_CORE"
+      ],
+      "source_evidence": "ARCHPAR002",
+      "next_falsifier": "Factor relevance gating from query addressing and audit retrieval at fixed context",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "ATLAS_CASSA",
+      "category": "exploratory",
+      "campaign": "A",
+      "hypothesis": "Test whether non-Euclidean transport actually enables structural generalization.",
+      "primary_outcome": "OOD relational composition requiring geometry",
+      "comparators": [
+        "Euclidean same-parameter control",
+        "Transformer",
+        "TAC_CORE"
+      ],
+      "source_evidence": "ARCHPAR001",
+      "next_falsifier": "Specify a geometry-requiring task and ablate transport",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "USEF_X",
+      "category": "candidate",
+      "campaign": "A",
+      "hypothesis": "Test specialized local populations and adaptive routing.",
+      "primary_outcome": "Held-out factor acquisition without forgetting",
+      "comparators": [
+        "MoE router",
+        "online count diagnostic",
+        "TAC_CORE"
+      ],
+      "source_evidence": "ARCHPAR001",
+      "next_falsifier": "Qualify fresh-factor learning before measuring retention",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "NSF_V8_NFD",
+      "category": "candidate",
+      "campaign": "A",
+      "hypothesis": "Test local plasticity and neural-field dynamics for online adaptation.",
+      "primary_outcome": "Retention/adaptation tradeoff across delays and seeds",
+      "comparators": [
+        "GRU",
+        "TAC_CORE",
+        "replay baseline"
+      ],
+      "source_evidence": "ARCHPAR002",
+      "next_falsifier": "Freeze compact features and test fresh seeds and longer delays",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "FLOCK_COLLECT",
+      "category": "core",
+      "campaign": "F",
+      "hypothesis": "Develop learned address/value-separated corrective and collective memory.",
+      "primary_outcome": "Load×length retrieval;overwrites;query causality;GPU time",
+      "comparators": [
+        "Local attention",
+        "Gated DeltaNet-2",
+        "matrix linear attention",
+        "GRU"
+      ],
+      "source_evidence": "FLOCK004;COLLECT005",
+      "next_falsifier": "Hold load and sequence length independently; compare split-address and matrix state; stress multiple writes",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "SSA",
+      "category": "candidate",
+      "campaign": "B",
+      "hypothesis": "Sparse structure selection, survival and lifecycle management.",
+      "primary_outcome": "Real accelerator throughput plus structured transfer",
+      "comparators": [
+        "Optimized sparse attention",
+        "dense routing",
+        "TAC_CORE"
+      ],
+      "source_evidence": "SSA001-SSA008",
+      "next_falsifier": "Profile gather/scatter and require an actual GPU win at comparable accuracy",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "PRS",
+      "category": "candidate",
+      "campaign": "D",
+      "hypothesis": "Persist, update and reuse task-dependent routing under resource scarcity.",
+      "primary_outcome": "Future ablation and dynamic policy cost at fixed success",
+      "comparators": [
+        "Direct",
+        "learned repair",
+        "graph search"
+      ],
+      "source_evidence": "PRS",
+      "next_falsifier": "Test energy-calibrated stopping with wrong-future and stale-state interventions",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "SCM_SIE",
+      "category": "core",
+      "campaign": "C",
+      "hypothesis": "Discover and reuse executable structures with verifiable repair.",
+      "primary_outcome": "Novel-operator transfer and held-out repair success",
+      "comparators": [
+        "Decoder-only",
+        "Transformer",
+        "program-search baseline"
+      ],
+      "source_evidence": "REAL004;REAL013-017;TAC-SIE-v3.2",
+      "next_falsifier": "Make full stateful repair surpass decoder-only with blind compositional tests",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "GEOMETRIC_KAKEYA",
+      "category": "exploratory",
+      "campaign": "C",
+      "hypothesis": "Evaluate geometric representation and transformation inductive biases.",
+      "primary_outcome": "Geometric OOD prediction/transfer, not visual plausibility",
+      "comparators": [
+        "Euclidean latent",
+        "graph neural network",
+        "Transformer"
+      ],
+      "source_evidence": "KAK-001;GEOMETRY",
+      "next_falsifier": "Train geometry-pretext and matched text controls; isolate geometric mechanism",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "TOKENIZATION",
+      "category": "candidate",
+      "campaign": "C",
+      "hypothesis": "Evaluate geometric/reversible/latent/byte representation policies.",
+      "primary_outcome": "Bits per byte, accuracy and sequence efficiency",
+      "comparators": [
+        "BPE",
+        "byte tokenizer",
+        "unigram"
+      ],
+      "source_evidence": "SENSE-TOK-009",
+      "next_falsifier": "Address observed BYTE routing collapse using frozen compute and held-out text",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "LEARNING_OBJECTIVES",
+      "category": "candidate",
+      "campaign": "C",
+      "hypothesis": "Compare predictive, structured, executable and verifier-conditioned training.",
+      "primary_outcome": "OOD structure transfer per token/FLOP",
+      "comparators": [
+        "Next-token",
+        "contrastive",
+        "masked-prediction"
+      ],
+      "source_evidence": "GEOMETRIC;SCM_SIE",
+      "next_falsifier": "Train exact same backbone and data with controlled objectives",
+      "dependencies": [
+        "SCM_SIE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "GPU_KERNELS",
+      "category": "enabler",
+      "campaign": "B",
+      "hypothesis": "Implement correct parallel scans and high-throughput state updates.",
+      "primary_outcome": "Training/decode tokens/s;peak bytes;end-to-end GPU cost",
+      "comparators": [
+        "FlashAttention",
+        "optimized Mamba-2",
+        "Gated DeltaNet-2"
+      ],
+      "source_evidence": "LANGCACHE104",
+      "next_falsifier": "Reconcile sequential/parallel gradients and benchmark T4 with actual events",
+      "dependencies": [
+        "TAC_CORE",
+        "FLOCK_COLLECT"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "MEMORY_GOVERNANCE",
+      "category": "enabler",
+      "campaign": "D",
+      "hypothesis": "Study reliable temporal reconstruction, retraction, provenance and ownership.",
+      "primary_outcome": "Correct temporal truth/retraction with zero unauthorized disclosure",
+      "comparators": [
+        "Mem0",
+        "Letta",
+        "event-store baseline"
+      ],
+      "source_evidence": "Woyengi Memory;PLM",
+      "next_falsifier": "Build timeline/edit benchmark independent of language model implementation",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    },
+    {
+      "id": "TAC_OCR",
+      "category": "application",
+      "campaign": "C",
+      "hypothesis": "Use the architecture in long-document visual transcription as a transfer stress test.",
+      "primary_outcome": "Character/word error and page throughput on authentic held-out scans",
+      "comparators": [
+        "PaddleOCR",
+        "dots.ocr",
+        "olmOCR"
+      ],
+      "source_evidence": "TAC-OCR-001/002/003",
+      "next_falsifier": "Establish real image-grounding and leak-free multilingual test set before scaling",
+      "dependencies": [
+        "TAC_CORE"
+      ],
+      "state": "NOT_STARTED_IN_THIS_PROGRAM",
+      "promotion": "G0->G1->G2->G3->G4"
+    }
+  ],
+  "provenance": {
+    "historic_seven": "PR #470 report-grounded seven_architecture_backlog.json (ARCHPAR001 and ARCHPAR002); not rerun here.",
+    "flock": "User-reported FLOCK004: 36 fits approx 1.04M; attention 99.6/99.9/97.4 and corrective 98.8/60.0/16.1 at 8/32/128, changes both load and length.",
+    "collect": "User-reported COLLECT005: competing keys fixed sequence: attention 95.3->95.3, corrective 56.5->9.4; 6 existing ~225K models; no new fits.",
+    "latest_comparator": "Gated DeltaNet-2 (2026) separates erase/write; not a unique novelty claim for TAC until specific mechanism comparisons."
+  }
+}
