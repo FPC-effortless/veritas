@@ -1,0 +1,50 @@
+name: Fullcycle public engineering smoke (manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install optional training stack
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e . -e integrations/forge -e 'integrations/trainlab[training]' ruff
+      - name: Integrity and interrupted replay
+        run: |
+          python -m unittest discover -s integrations/trainlab/tests_fullcycle -v
+          python -m ruff check integrations/trainlab/src/trainlab/fullcycle integrations/trainlab/tests_fullcycle integrations/forge/src/forge_data/language.py src/investigation_world/lm_evaluation.py
+      - name: Acquire public-domain corpus and freeze public fixture
+        run: |
+          curl --fail --location https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt -o "$RUNNER_TEMP/shakespeare.txt"
+          python integrations/trainlab/examples/fullcycle/prepare_demo.py "$RUNNER_TEMP/shakespeare.txt" .trainlab/data --steps-scale 0.02
+      - name: Train both backends with pause and resume
+        run: |
+          for architecture in transformer tac098; do
+            python -m trainlab pipeline run ".trainlab/data/$architecture.json" --output ".trainlab/$architecture" --stop-stage pretrain --stop-after 1
+            python -m trainlab pipeline resume ".trainlab/$architecture"
+            python -m trainlab pipeline verify ".trainlab/$architecture"
+            python -m trainlab model chat ".trainlab/$architecture/model" --prompt 'Say exactly: lamp'
+          done
+      - name: Exercise two-rank CPU orchestration on host with Gloo sockets
+        run: |
+          python -m torch.distributed.run --nproc_per_node=2 --master_addr=127.0.0.1 --master_port=29500 -m trainlab pipeline run .trainlab/data/transformer.json --output .trainlab/ddp
+          python -m trainlab pipeline verify .trainlab/ddp
+      - name: Retain public engineering evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fullcycle-public-engineering
+          path: |
+            .trainlab/**/report.json
+            .trainlab/**/metrics.json
+            .trainlab/**/receipt.json
+            .trainlab/**/evaluation.json
+            .trainlab/**/rollout-manifest.json
+            .trainlab/**/rollouts/*.json

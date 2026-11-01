@@ -13,6 +13,7 @@ dependencies = []
 
 [project.optional-dependencies]
 server = ["waitress>=3.0.2,<4"]
+training = ["torch>=2.5,<3", "numpy>=1.24,<3", "tokenizers>=0.21,<1", "forge-temporal-data>=0.2,<0.3", "investigation-world>=0.11,<0.12"]
 
 [project.scripts]
 trainlab = "trainlab.__main__:main"
@@ -23,3 +24,4 @@ Issues = "https://github.com/FPC-effortless/veritas/issues"
 
 [tool.setuptools.package-data]
 trainlab = ["static/*"]
+"trainlab.fullcycle" = ["chat.html"]

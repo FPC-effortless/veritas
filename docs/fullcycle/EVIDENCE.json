@@ -1,0 +1,848 @@
+{
+  "capability_outcome": "FAIL: unreliable free chat; test decisions 6/19 versus majority control 13/19; no RL held-out gain.",
+  "comparison_scope": "Different sizes and tokenizers; not an architecture ranking.",
+  "date": "2026-11-01",
+  "limits": [
+    "One seed, constructed posttraining, within-source public text chunks.",
+    "No multi-token agent RL, standard coding/reasoning benchmarks, FSDP or external inference engine.",
+    "No source authenticity or semantic contamination attestation.",
+    "CPU timings share the host with other verification jobs."
+  ],
+  "models": {
+    "FULLCYCLE-001-verified": {
+      "baseline_validation_loss": 6.256901502609253,
+      "expanded_final": {
+        "test": {
+          "decision": {
+            "accuracy": 0.3157894736842105,
+            "action_space": [
+              "0",
+              "1"
+            ],
+            "cases": 19,
+            "label_counts": {
+              "0": 13,
+              "1": 6
+            },
+            "majority_constant_baseline": 0.6842105263157895,
+            "scope": "constructed integer comparison, constrained one-token choice"
+          },
+          "instruction": {
+            "assistant_loss": 2.755145608266788,
+            "generated_cases": 31,
+            "generation_exact_match": 0.1935483870967742,
+            "panel_scope": "all held-out conversation rows in this small public fixture",
+            "target_tokens": 268
+          },
+          "language": {
+            "bits_per_decoded_utf8_byte": 2.9051262777872164,
+            "decoded_utf8_bytes": 3983,
+            "loss": 3.9162538051605225,
+            "perplexity": 50.2119881100288,
+            "scope": "first deterministic held-out token budget; tokenizers may differ",
+            "tokens": 2048
+          }
+        },
+        "validation": {
+          "decision": {
+            "accuracy": 0.8095238095238095,
+            "action_space": [
+              "0",
+              "1"
+            ],
+            "cases": 21,
+            "label_counts": {
+              "0": 4,
+              "1": 17
+            },
+            "majority_constant_baseline": 0.8095238095238095,
+            "scope": "constructed integer comparison, constrained one-token choice"
+          },
+          "instruction": {
+            "assistant_loss": 2.511662518487701,
+            "generated_cases": 26,
+            "generation_exact_match": 0.6538461538461539,
+            "panel_scope": "all held-out conversation rows in this small public fixture",
+            "target_tokens": 158
+          },
+          "language": {
+            "bits_per_decoded_utf8_byte": 2.943647568782115,
+            "decoded_utf8_bytes": 3897,
+            "loss": 3.8825023472309113,
+            "perplexity": 48.545541008339946,
+            "scope": "first deterministic held-out token budget; tokenizers may differ",
+            "tokens": 2048
+          }
+        }
+      },
+      "model_manifest_sha256": "4c55fe0955db201174a6378515f7018301c878125e0797111e0e6d5403c75304",
+      "optimizer_updates": 580,
+      "parameters": 1438992,
+      "qualitative_chat": [
+        {
+          "prompt": "What does Forge do?",
+          "response": "A grother, letions."
+        },
+        {
+          "prompt": "Say exactly: lamp",
+          "response": "pencalculatoratoratorater"
+        },
+        {
+          "prompt": "What is a checkpoint?",
+          "response": "A gapolow intencalpeatoratorater."
+        },
+        {
+          "prompt": "Compare integers: 4, 9. Answer 0 if first is larger, else 1.",
+          "response": "1"
+        }
+      ],
+      "source_identity": {
+        "forge_data/language.py": "001ca680354d3e631a10c3d8e9dd7c35dac22d6c736301f9ffb101fa7d15696f",
+        "fullcycle/__init__.py": "23e9996a8d35e4bf074786e523044098ec56f0006384791b9b201c1d63baa368",
+        "fullcycle/_tac098.py": "0e02ad03c01010783487298fc068b53d48033f272d77228eadfc67514e140e9d",
+        "fullcycle/backends.py": "e55ff865b35b0161ff6498b824eed66c831684f54508f731ed8a355f2e87f027",
+        "fullcycle/chat.html": "20764b07744681168eea2fd4a65bc4f953e9ca6830b161e23ba1bb9b6acb44a3",
+        "fullcycle/cli.py": "60c1cfd4c4b3f0961bb5c8c72c1408b3bf020d955c019e8bbdbd0d6254f88c96",
+        "fullcycle/inference.py": "1170df219408e0ff18206ae45a5dcd301541800d2d5f2e68ae9b3ae84a518178",
+        "fullcycle/pipeline.py": "5b85ddc9eff03c4d7dabd7b7c0743ac8cda46d97a793fbd428f8b0acb95b86dd",
+        "fullcycle/tokenization.py": "853c5cf41394407efecd289c75de413b2ce5f40e09a0004234a364a9afa7f8ea",
+        "fullcycle/training.py": "c3317b6d4466da7290db3c11887738ced29dd45f4aed17b7b967af1bf29ea501",
+        "investigation_world/lm_evaluation.py": "fe5ba7dd2461afb12d012dc649a2520f0fad95761feef83c6042c83f3e801864"
+      },
+      "stages": [
+        {
+          "metrics": {
+            "active_seconds": 77.12800971101387,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 6432384614400,
+            "estimated_6N_forward_token_flops": 5304700108800,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 614400,
+            "gpu_hours": 0,
+            "loss_first": 6.273168563842773,
+            "loss_last": 3.9182894229888916,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 257.09336570337956,
+            "optimizer_updates": 300,
+            "parameters": 1438992,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.0,
+            "stage": "pretrain",
+            "status": "complete",
+            "target_tokens": 614400,
+            "tokens_per_second": 7965.97762994348,
+            "world_size": 1
+          },
+          "name": "pretrain",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 7.042526752133913,
+              "generated_cases": 8,
+              "generation_exact_match": 0.0,
+              "target_tokens": 158
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 2.9845452504014607,
+              "decoded_utf8_bytes": 3897,
+              "loss": 3.936444044113159,
+              "perplexity": 51.23608372708421,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.19047619047619047,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 13.368912928999634,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 982507161600,
+            "estimated_6N_forward_token_flops": 830102681088,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 96144,
+            "gpu_hours": 0,
+            "loss_first": 8.855033874511719,
+            "loss_last": 4.414397716522217,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 334.22282322499086,
+            "optimizer_updates": 40,
+            "parameters": 1438992,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "midtrain",
+            "status": "complete",
+            "target_tokens": 92751,
+            "tokens_per_second": 7191.6094083794915,
+            "world_size": 1
+          },
+          "name": "midtrain",
+          "validation": {
+            "decision": {
+              "accuracy": 0.7619047619047619,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 3.4000665281392353,
+              "generated_cases": 8,
+              "generation_exact_match": 0.875,
+              "target_tokens": 158
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 3.0727025450207313,
+              "decoded_utf8_bytes": 3897,
+              "loss": 4.052718460559845,
+              "perplexity": 57.5537020453734,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.5238095238095238,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 53.36413131500012,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 3902200418304,
+            "estimated_6N_forward_token_flops": 3294025367040,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 381520,
+            "gpu_hours": 0,
+            "loss_first": 5.761880874633789,
+            "loss_last": 3.7103285789489746,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 333.52582071875077,
+            "optimizer_updates": 160,
+            "parameters": 1438992,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "sft",
+            "status": "complete",
+            "target_tokens": 334607,
+            "tokens_per_second": 7149.371508512845,
+            "world_size": 1
+          },
+          "name": "sft",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 2.3807352087165734,
+              "generated_cases": 8,
+              "generation_exact_match": 0.875,
+              "target_tokens": 158
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 3.009110639697665,
+              "decoded_utf8_bytes": 3897,
+              "loss": 3.968844383955002,
+              "perplexity": 52.92333643113148,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.8095238095238095,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 17.980183094012318,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 1109178777600,
+            "estimated_6N_forward_token_flops": 895168143360,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 103680,
+            "gpu_hours": 0,
+            "loss_first": 2.727339744567871,
+            "loss_last": 2.6863389015197754,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 449.50457735030795,
+            "optimizer_updates": 40,
+            "parameters": 1438992,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "dpo",
+            "status": "complete",
+            "target_tokens": 83200,
+            "tokens_per_second": 5766.348399117641,
+            "world_size": 1
+          },
+          "name": "dpo",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 2.509946810859668,
+              "generated_cases": 8,
+              "generation_exact_match": 0.875,
+              "target_tokens": 158
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 2.9505720406294262,
+              "decoded_utf8_bytes": 3897,
+              "loss": 3.8916353285312653,
+              "perplexity": 48.99093732879637,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.8095238095238095,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 15.183648280988564,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 504730589184,
+            "estimated_6N_forward_token_flops": 444510384768,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 51484,
+            "gpu_hours": 0,
+            "loss_first": 2.0100667476654053,
+            "loss_last": 1.9497160911560059,
+            "mean_rollout_reward": 0.51875,
+            "milliseconds_per_update": 379.5912070247141,
+            "optimizer_updates": 40,
+            "parameters": 1438992,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 1280,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "rl",
+            "status": "complete",
+            "target_tokens": 42240,
+            "tokens_per_second": 3390.752936793398,
+            "world_size": 1
+          },
+          "name": "rl",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 2.511662518487701,
+              "generated_cases": 8,
+              "generation_exact_match": 0.875,
+              "target_tokens": 158
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 2.943647568782115,
+              "decoded_utf8_bytes": 3897,
+              "loss": 3.8825023472309113,
+              "perplexity": 48.545541008339946,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.8095238095238095,
+              "cases": 21
+            }
+          }
+        }
+      ],
+      "tokenizer": "BPE-512",
+      "training_seconds": 177.0248853300145
+    },
+    "FULLCYCLE-002": {
+      "baseline_validation_loss": 5.548013746738434,
+      "expanded_final": {
+        "test": {
+          "decision": {
+            "accuracy": 0.3157894736842105,
+            "action_space": [
+              "0",
+              "1"
+            ],
+            "cases": 19,
+            "label_counts": {
+              "0": 13,
+              "1": 6
+            },
+            "majority_constant_baseline": 0.6842105263157895,
+            "scope": "constructed integer comparison, constrained one-token choice"
+          },
+          "instruction": {
+            "assistant_loss": 2.21904003491559,
+            "generated_cases": 31,
+            "generation_exact_match": 0.1935483870967742,
+            "panel_scope": "all held-out conversation rows in this small public fixture",
+            "target_tokens": 394
+          },
+          "language": {
+            "bits_per_decoded_utf8_byte": 3.1261332022735204,
+            "decoded_utf8_bytes": 2048,
+            "loss": 2.166870415210724,
+            "perplexity": 8.730917094153329,
+            "scope": "first deterministic held-out token budget; tokenizers may differ",
+            "tokens": 2048
+          }
+        },
+        "validation": {
+          "decision": {
+            "accuracy": 0.8095238095238095,
+            "action_space": [
+              "0",
+              "1"
+            ],
+            "cases": 21,
+            "label_counts": {
+              "0": 4,
+              "1": 17
+            },
+            "majority_constant_baseline": 0.8095238095238095,
+            "scope": "constructed integer comparison, constrained one-token choice"
+          },
+          "instruction": {
+            "assistant_loss": 1.9791218167892448,
+            "generated_cases": 26,
+            "generation_exact_match": 0.6538461538461539,
+            "panel_scope": "all held-out conversation rows in this small public fixture",
+            "target_tokens": 222
+          },
+          "language": {
+            "bits_per_decoded_utf8_byte": 3.1246593109556264,
+            "decoded_utf8_bytes": 2048,
+            "loss": 2.1658487915992737,
+            "perplexity": 8.722001937842828,
+            "scope": "first deterministic held-out token budget; tokenizers may differ",
+            "tokens": 2048
+          }
+        }
+      },
+      "model_manifest_sha256": "24b1b732fe4c756e769375494bdefdb0ce170603e08c2232dae82f402ad61e1d",
+      "optimizer_updates": 580,
+      "parameters": 100370,
+      "qualitative_chat": [
+        {
+          "prompt": "What does Forge do?",
+          "response": "1"
+        },
+        {
+          "prompt": "Say exactly: lamp",
+          "response": "ger the he he he he he he he he he he he he he h"
+        },
+        {
+          "prompt": "What is a checkpoint?",
+          "response": "ger the he the he he he he he he he he he he he "
+        },
+        {
+          "prompt": "Compare integers: 4, 9. Answer 0 if first is larger, else 1.",
+          "response": "1"
+        }
+      ],
+      "source_identity": {
+        "forge_data/language.py": "001ca680354d3e631a10c3d8e9dd7c35dac22d6c736301f9ffb101fa7d15696f",
+        "fullcycle/__init__.py": "23e9996a8d35e4bf074786e523044098ec56f0006384791b9b201c1d63baa368",
+        "fullcycle/_tac098.py": "0e02ad03c01010783487298fc068b53d48033f272d77228eadfc67514e140e9d",
+        "fullcycle/backends.py": "e55ff865b35b0161ff6498b824eed66c831684f54508f731ed8a355f2e87f027",
+        "fullcycle/chat.html": "20764b07744681168eea2fd4a65bc4f953e9ca6830b161e23ba1bb9b6acb44a3",
+        "fullcycle/cli.py": "60c1cfd4c4b3f0961bb5c8c72c1408b3bf020d955c019e8bbdbd0d6254f88c96",
+        "fullcycle/inference.py": "1170df219408e0ff18206ae45a5dcd301541800d2d5f2e68ae9b3ae84a518178",
+        "fullcycle/pipeline.py": "5b85ddc9eff03c4d7dabd7b7c0743ac8cda46d97a793fbd428f8b0acb95b86dd",
+        "fullcycle/tokenization.py": "853c5cf41394407efecd289c75de413b2ce5f40e09a0004234a364a9afa7f8ea",
+        "fullcycle/training.py": "c3317b6d4466da7290db3c11887738ced29dd45f4aed17b7b967af1bf29ea501",
+        "investigation_world/lm_evaluation.py": "fe5ba7dd2461afb12d012dc649a2520f0fad95761feef83c6042c83f3e801864"
+      },
+      "stages": [
+        {
+          "metrics": {
+            "active_seconds": 19.68547857599333,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 335639347200,
+            "estimated_6N_forward_token_flops": 370003968000,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 614400,
+            "gpu_hours": 0,
+            "loss_first": 5.55006217956543,
+            "loss_last": 2.1993539333343506,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 65.61826191997777,
+            "optimizer_updates": 300,
+            "parameters": 100370,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.0,
+            "stage": "pretrain",
+            "status": "complete",
+            "target_tokens": 614400,
+            "tokens_per_second": 31210.82363470035,
+            "world_size": 1
+          },
+          "name": "pretrain",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 5.124127998008384,
+              "generated_cases": 8,
+              "generation_exact_match": 0.0,
+              "target_tokens": 222
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 3.1193352440328663,
+              "decoded_utf8_bytes": 2048,
+              "loss": 2.16215842962265,
+              "perplexity": 8.689873912015836,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.19047619047619047,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 4.674034894007491,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 58920438528,
+            "estimated_6N_forward_token_flops": 64953040320,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 107856,
+            "gpu_hours": 0,
+            "loss_first": 5.506124496459961,
+            "loss_last": 3.2291879653930664,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 116.85087235018727,
+            "optimizer_updates": 40,
+            "parameters": 100370,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "midtrain",
+            "status": "complete",
+            "target_tokens": 101859,
+            "tokens_per_second": 23075.565853879383,
+            "world_size": 1
+          },
+          "name": "midtrain",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 2.852797808947864,
+              "generated_cases": 8,
+              "generation_exact_match": 0.0,
+              "target_tokens": 222
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 3.5877643471922354,
+              "decoded_utf8_bytes": 2048,
+              "loss": 2.4868487417697906,
+              "perplexity": 12.023327748766253,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.8095238095238095,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 18.490872155001853,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 232928462592,
+            "estimated_6N_forward_token_flops": 256776972480,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 426384,
+            "gpu_hours": 0,
+            "loss_first": 4.479674339294434,
+            "loss_last": 2.88863205909729,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 115.56795096876158,
+            "optimizer_updates": 160,
+            "parameters": 100370,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "sft",
+            "status": "complete",
+            "target_tokens": 337531,
+            "tokens_per_second": 23059.161105316576,
+            "world_size": 1
+          },
+          "name": "sft",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 1.7302391142458529,
+              "generated_cases": 8,
+              "generation_exact_match": 0.875,
+              "target_tokens": 222
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 3.3519235491638235,
+              "decoded_utf8_bytes": 2048,
+              "loss": 2.3233763575553894,
+              "perplexity": 10.21008908650636,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.8095238095238095,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 6.505850920002558,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 75915094016,
+            "estimated_6N_forward_token_flops": 75099242880,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 124704,
+            "gpu_hours": 0,
+            "loss_first": 1.8601648807525635,
+            "loss_last": 1.7999097108840942,
+            "mean_rollout_reward": null,
+            "milliseconds_per_update": 162.64627300006396,
+            "optimizer_updates": 40,
+            "parameters": 100370,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 0,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "dpo",
+            "status": "complete",
+            "target_tokens": 83200,
+            "tokens_per_second": 19167.97687702794,
+            "world_size": 1
+          },
+          "name": "dpo",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 1.949905611239038,
+              "generated_cases": 8,
+              "generation_exact_match": 0.875,
+              "target_tokens": 222
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 3.1407921005241493,
+              "decoded_utf8_bytes": 2048,
+              "loss": 2.1770311892032623,
+              "perplexity": 8.820082195590837,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.8095238095238095,
+              "cases": 21
+            }
+          }
+        },
+        {
+          "metrics": {
+            "active_seconds": 10.420306591011467,
+            "actual_training_flops": null,
+            "counted_training_operator_flops": 31847679920,
+            "estimated_6N_forward_token_flops": 37196720520,
+            "flop_counter_scope": "PyTorch FlopCounterMode supported operators across executed forward/backward/rollout/reference work; elementwise/scan overhead may be omitted",
+            "flop_note": "parameter heuristic; excludes reference/rollout forwards, attention and scan overhead; not measured FLOPs",
+            "forward_token_positions": 61766,
+            "gpu_hours": 0,
+            "loss_first": 1.1841613054275513,
+            "loss_last": 1.0978881120681763,
+            "mean_rollout_reward": 0.50390625,
+            "milliseconds_per_update": 260.5076647752867,
+            "optimizer_updates": 40,
+            "parameters": 100370,
+            "peak_cuda_allocated_bytes": null,
+            "policy_rollouts_per_rank": 1280,
+            "precision": "fp32",
+            "replay_weight": 0.5,
+            "stage": "rl",
+            "status": "complete",
+            "target_tokens": 42240,
+            "tokens_per_second": 5927.464749768419,
+            "world_size": 1
+          },
+          "name": "rl",
+          "validation": {
+            "decision": {
+              "accuracy": 0.8095238095238095,
+              "action_space": [
+                "0",
+                "1"
+              ],
+              "cases": 21,
+              "scope": "constructed integer comparison, constrained one-token choice"
+            },
+            "instruction": {
+              "assistant_loss": 1.9791218167892448,
+              "generated_cases": 8,
+              "generation_exact_match": 0.875,
+              "target_tokens": 222
+            },
+            "language": {
+              "bits_per_decoded_utf8_byte": 3.1246593109556264,
+              "decoded_utf8_bytes": 2048,
+              "loss": 2.1658487915992737,
+              "perplexity": 8.722001937842828,
+              "scope": "first deterministic held-out token budget; tokenizers may differ",
+              "tokens": 2048
+            },
+            "preference": {
+              "accuracy": 0.8095238095238095,
+              "cases": 21
+            }
+          }
+        }
+      ],
+      "tokenizer": "byte-256",
+      "training_seconds": 59.7765431360167
+    }
+  },
+  "qualification": "NOT_QUALIFIED",
+  "schema": "fullcycle.public-engineering-summary.v1",
+  "status": "ENGINEERING_LIFECYCLE_COMPLETED",
+  "streaming": {
+    "identical_releases": true,
+    "input_bytes": 2149737022,
+    "input_sha256": "e4b165917dd873a2d27bfdbff98335dfcdca3d64742be72d36b2a90476084b68",
+    "peak_process_rss_bytes": 22503424,
+    "qualification": "NOT_QUALIFIED",
+    "records": 2051,
+    "release_manifest_sha256": [
+      "813cf6000c84c6b2ebdb3ce98d6f5f2174aeb2e11b48cbdc7de772a5a873ebd6",
+      "813cf6000c84c6b2ebdb3ce98d6f5f2174aeb2e11b48cbdc7de772a5a873ebd6"
+    ],
+    "release_seconds": [
+      39.57837558900064,
+      38.57097610800702
+    ],
+    "scope": "streaming release + hash verification only; excludes tokenizer/training",
+    "source_kind": "CONSTRUCTED",
+    "total_seconds": 88.75266348500736
+  },
+  "verification": {
+    "crash_recovery": "crash before immutable checkpoint pointer publication, exact control replay",
+    "distributed": "UNVERIFIED: Gloo socket creation blocked by runtime",
+    "forge_checks": 68,
+    "gpu": "UNVERIFIED: CPU-only runtime",
+    "http_smoke": {
+      "malformed_json": 400,
+      "page_get": 200,
+      "stream_completed": true,
+      "stream_post": 200,
+      "tool_execution": "disabled",
+      "wrong_token": 403
+    },
+    "independent_development_review": "13 tests rerun independently, no critical findings remain",
+    "installed_wheel_smoke": [
+      {
+        "backend": "transformer",
+        "installed_paths_verified": true,
+        "response": "1"
+      },
+      {
+        "backend": "tac098",
+        "installed_paths_verified": true,
+        "response": "1"
+      }
+    ],
+    "manual_workflow": "ADDED_NOT_DISPATCHED",
+    "new_checks": 13,
+    "resume": "CLI pause at SFT, resume through remaining stages, artifact verification passed",
+    "total_checks": 158,
+    "training_qualification_checks": 39,
+    "trainlab_checks": 38
+  }
+}
