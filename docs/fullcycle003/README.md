@@ -42,6 +42,18 @@ fingerprint automaton and the tokenizer fitting sample are bounded by the pinned
 input plan. This is not a constant-memory guarantee for arbitrary-sized prompt
 catalogs or tokenizer vocabularies.
 
+The downloadable prepared-data archive also contains `resolved-full-cuda.json`,
+the fitted tokenizer and the complete selected Forge release. It can run without
+the raw Hugging Face cache or an Internet connection after dependencies and the
+source installation are available:
+
+```bash
+unzip FULLCYCLE-003-prepared-data.zip -d /data/fullcycle003
+python integrations/trainlab/examples/fullcycle/gpu_run.py \
+  /data/fullcycle003/resolved-full-cuda.json \
+  --output /runs/fullcycle003-full --gpus 1
+```
+
 | Stage | Public source | Preparation |
 | --- | --- | --- |
 | Pretraining | FineWeb-Edu, first pinned 10BT sample shard | At least 200.1M TRAIN BPE tokens; independent text splits by normalized URL |
@@ -101,6 +113,8 @@ python -m trainlab pipeline run \
   integrations/trainlab/examples/fullcycle003/tac-10m-cpu-pilot.json \
   --output .trainlab/fullcycle003-pilot \
   --stop-stage pretrain --stop-after 32
+python integrations/trainlab/examples/fullcycle003/check_recovery.py \
+  .trainlab/fullcycle003-pilot --output .trainlab/fullcycle003-recovery
 python -m trainlab pipeline resume .trainlab/fullcycle003-pilot
 python -m trainlab pipeline verify .trainlab/fullcycle003-pilot
 python -m trainlab model chat .trainlab/fullcycle003-pilot/model
@@ -112,6 +126,11 @@ The pilot is 256 pretraining updates (32,768 token positions), 4 mid-training,
 assistant behavior. Its small public panels are explicitly bounded and frozen
 by group hash. Public evaluator execution occurs in a separate process loading
 the checkpoint bytes; training metrics do not confer Veritas qualification.
+
+The recovery driver runs a separate uninterrupted control through update 33,
+resumes the primary checkpoint from 32 to 33 and compares all weights, optimizer
+state, losses and RNG byte-for-byte. Those 33 control updates are reported
+separately from primary training work.
 
 Immutable checkpoint blobs include optimizer, sampler, RNG, reference policy and
 learning-rate progress. An atomic selecting index governs recovery; stage receipts
