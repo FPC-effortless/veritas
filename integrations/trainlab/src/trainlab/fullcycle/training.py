@@ -175,6 +175,7 @@ def train_stage(
         dist.barrier()
     torch.manual_seed(seed)
     model = create_model(model_config).to(device)
+    model_config = configuration(model)
     if previous:
         model.load_state_dict(checkpoint_load(previous)["model"])
     reference = copy.deepcopy(model).eval() if stage_name in ("dpo", "rl") else None

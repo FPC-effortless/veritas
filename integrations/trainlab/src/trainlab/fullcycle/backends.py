@@ -12,6 +12,18 @@ from torch.utils.checkpoint import checkpoint
 
 from trainlab.runner import LabError
 
+TAC104_GEOMETRY = dict(
+    key_dim=16,
+    value_dim=16,
+    write_rank=2,
+    ffn_dim=224,
+    window=128,
+    chunk_size=32,
+    rotary=True,
+    local_rope=True,
+    tied_embedding=True,
+)
+
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -23,6 +35,14 @@ class ModelConfig:
     context: int = 128
     activation_checkpointing: bool = False
     native: dict | None = None
+
+    def __post_init__(self):
+        if self.backend == "tac104":
+            if self.native is not None and (
+                not isinstance(self.native, dict) or set(self.native) - set(TAC104_GEOMETRY)
+            ):
+                raise LabError("unknown native TAC geometry field")
+            object.__setattr__(self, "native", {**TAC104_GEOMETRY, **(self.native or {})})
 
     def validate(self):
         if (
@@ -131,21 +151,6 @@ class TAC104(nn.Module):
         super().__init__()
         from ._tac104 import Config104, DeepCacheTAC104
 
-        geometry = dict(
-            key_dim=16,
-            value_dim=16,
-            write_rank=2,
-            ffn_dim=224,
-            window=128,
-            chunk_size=32,
-            rotary=True,
-            local_rope=True,
-            tied_embedding=True,
-        )
-        if config.native:
-            if set(config.native) - set(geometry):
-                raise LabError("unknown native TAC geometry field")
-            geometry.update(config.native)
         self.native = DeepCacheTAC104(
             Config104(
                 d_model=config.width,
@@ -153,7 +158,7 @@ class TAC104(nn.Module):
                 n_heads=config.heads,
                 vocab_size=config.vocab_size,
                 activation_checkpointing=config.activation_checkpointing,
-                **geometry,
+                **config.native,
             )
         )
         self.config = config

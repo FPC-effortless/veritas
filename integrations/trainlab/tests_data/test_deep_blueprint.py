@@ -5,7 +5,7 @@ import unittest
 
 class DeepBlueprintContract(unittest.TestCase):
     def test_deep_tac_bpe_backend_exists(self):
-        from trainlab.fullcycle.backends import ModelConfig, create_model
+        from trainlab.fullcycle.backends import ModelConfig, configuration, create_model
 
         model = create_model(
             ModelConfig(
@@ -16,6 +16,9 @@ class DeepBlueprintContract(unittest.TestCase):
         self.assertTrue(9_900_000 <= parameters <= 10_100_000, parameters)
         self.assertEqual(len(model.native.blocks), 40)
         self.assertEqual(model.native.embedding.embedding_dim, 120)
+        self.assertEqual(configuration(model)["native"]["ffn_dim"], 224)
+        self.assertEqual(configuration(model)["native"]["window"], 128)
+        self.assertEqual(configuration(model)["native"]["local_rope"], True)
 
 
 class DeepMathAndState(unittest.TestCase):
