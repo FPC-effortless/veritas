@@ -12,7 +12,7 @@ COPY integrations/trainlab/pyproject.toml integrations/trainlab/README.md integr
 COPY integrations/trainlab/requirements-server.txt integrations/trainlab/requirements-pytorch-cpu.txt ./
 COPY integrations/trainlab/src ./src
 COPY integrations/trainlab/examples ./examples
-COPY integrations/forge/pyproject.toml integrations/forge/WORKBENCH.md /opt/forge/
+COPY integrations/forge/pyproject.toml integrations/forge/WORKBENCH.md integrations/forge/LICENSE /opt/forge/
 COPY integrations/forge/src /opt/forge/src
 COPY integrations/forge/examples/dataset_quickstart.py integrations/forge/examples/torch_workflow.py /opt/forge/examples/
 RUN --mount=type=secret,id=proxy_ca \

@@ -4,6 +4,14 @@ Research Lab OS connects the existing TrainLab runner, Forge dataset reader and
 Veritas evidence boundaries to a durable program queue. It is an incubated package,
 not a Veritas release or a demonstrated autonomous scientist.
 
+## Account-free ecosystem comparison
+
+The installed `veritas-ecosystem` command runs a public constructed comparison
+through Forge, TrainLab and Veritas, then indexes its evidence here. See the
+[ecosystem guide](../../docs/ecosystem/README.md) for the four-package installation,
+reverification and limits. This path launches no autonomous workers and never
+confers scientific promotion.
+
 ## Bounded autonomous dispatch
 
 The [autonomous execution guide](AUTONOMY.md) documents frozen recipe profiles,
