@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+# Optional CPU framework runtime: CPython 3.12 / Linux x86_64 / glibc.
+FROM python:3.12-slim-trixie@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.title="TrainLab PyTorch CPU" \
+      org.opencontainers.image.source="https://github.com/FPC-effortless/veritas" \
+      org.opencontainers.image.revision=$VCS_REF
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp \
+    TORCH_HOME=/tmp/torch OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+WORKDIR /opt/trainlab
+COPY integrations/trainlab/pyproject.toml integrations/trainlab/README.md integrations/trainlab/LICENSE ./
+COPY integrations/trainlab/requirements-server.txt integrations/trainlab/requirements-pytorch-cpu.txt ./
+COPY integrations/trainlab/src ./src
+COPY integrations/trainlab/examples ./examples
+COPY integrations/forge/pyproject.toml integrations/forge/WORKBENCH.md /opt/forge/
+COPY integrations/forge/src /opt/forge/src
+COPY integrations/forge/examples/dataset_quickstart.py integrations/forge/examples/torch_workflow.py /opt/forge/examples/
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca; fi; \
+    python -m pip install --no-cache-dir --require-hashes -r requirements-server.txt -r requirements-pytorch-cpu.txt && \
+    python -m pip install --no-cache-dir --no-deps --no-build-isolation . /opt/forge && \
+    python -m pip check && \
+    python -m pip uninstall -y pip && \
+    rm -rf /usr/local/lib/python3.12/ensurepip && \
+    chmod -R a+rX /opt/trainlab /opt/forge && \
+    mkdir -p /data && chown 10001:10001 /data
+USER 10001:10001
+EXPOSE 8765
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=3).read()"]
+ENTRYPOINT ["trainlab"]
+CMD ["serve", "--production", "--runs", "/data/runs", "--auth-file", "/run/secrets/trainlab-auth.json", "--forge-workspace", "/data/forge"]

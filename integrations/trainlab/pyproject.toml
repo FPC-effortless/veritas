@@ -13,6 +13,7 @@ dependencies = []
 
 [project.optional-dependencies]
 server = ["waitress>=3.0.2,<4"]
+pytorch = ["torch>=2.15,<2.16"]
 
 [project.scripts]
 trainlab = "trainlab.__main__:main"
