@@ -26,6 +26,7 @@ from pathlib import Path
 
 MAX_ACTIVE_RUNS = 1000
 MAX_ACTIVE_RECORD_BYTES = 8 * 1024 * 1024
+_ACCEPTANCE_FAILURE = "Metric acceptance checks failed: "
 
 
 class LabError(ValueError):
@@ -130,10 +131,13 @@ def load_config(path: Path) -> dict:
         "metrics",
         "budget",
     }
+    version = config.get("schema") if isinstance(config, dict) else None
+    if version == "trainlab.experiment.v2":
+        fields |= {"workload", "checks"}
     if (
         not isinstance(config, dict)
         or set(config) != fields
-        or config["schema"] != "trainlab.experiment.v1"
+        or version not in ("trainlab.experiment.v1", "trainlab.experiment.v2")
     ):
         raise LabError("unsupported experiment schema or fields")
     for key in ("name", "description", "split_identity"):
@@ -188,7 +192,52 @@ def load_config(path: Path) -> dict:
         )
     ):
         raise LabError("budget must map names to nonnegative integer declarations")
+    if version == "trainlab.experiment.v2":
+        validate_workload(config["workload"])
+        validate_checks(config["checks"], config["metrics"])
     return config
+
+
+def validate_workload(workload: object) -> None:
+    if not isinstance(workload, dict) or set(workload) != {
+        "kind", "training_method", "execution"
+    }:
+        raise LabError("workload must declare kind, training_method and execution")
+    if workload["kind"] not in (
+        "train", "debug", "profile", "test", "export", "deployment_check"
+    ) or workload["execution"] not in ("single_process", "distributed", "external"):
+        raise LabError("unsupported workload kind or execution")
+    method = workload["training_method"]
+    if workload["kind"] == "train":
+        if method not in (
+            "supervised", "self_supervised", "fine_tuning", "distillation",
+            "reinforcement", "continual", "custom"
+        ):
+            raise LabError("training workload requires a supported training_method")
+    elif method is not None:
+        raise LabError("training_method must be null for non-training workloads")
+
+
+def validate_checks(checks: object, metrics: dict) -> None:
+    if not isinstance(checks, dict) or set(checks) - set(metrics):
+        raise LabError("checks must reference declared metrics")
+    for bounds in checks.values():
+        if (
+            not isinstance(bounds, dict)
+            or not bounds
+            or set(bounds) - {"min", "max"}
+            or any(not _finite(value) for value in bounds.values())
+            or ("min" in bounds and "max" in bounds and bounds["min"] > bounds["max"])
+        ):
+            raise LabError("checks require finite inclusive min/max bounds in order")
+
+
+def failed_checks(checks: dict, metrics: dict) -> list[str]:
+    return [
+        name for name, bounds in checks.items()
+        if ("min" in bounds and metrics[name] < bounds["min"])
+        or ("max" in bounds and metrics[name] > bounds["max"])
+    ]
 
 
 def _git_identity(root: Path) -> dict:
@@ -279,6 +328,10 @@ def run_experiment(
         "source_rights": "NOT_INDEPENDENTLY_VERIFIED",
         "execution_limits": {"log_bytes_per_stream": log_limit},
     }
+    if config["schema"] == "trainlab.experiment.v2":
+        record.update(
+            schema="trainlab.run.v2", workload=config["workload"], checks=config["checks"]
+        )
     write_json(directory / "run.json", record)
     env = {
         **os.environ,
@@ -393,6 +446,9 @@ def run_experiment(
                 if any(digest(contained_file(cwd, name)) != sha for name, sha in inputs.items()):
                     raise LabError("Declared inputs changed during the experiment")
                 record.update(status="succeeded", metrics=metrics, artifacts=artifacts)
+                failures = failed_checks(config.get("checks", {}), metrics)
+                if failures:
+                    raise LabError(_ACCEPTANCE_FAILURE + ", ".join(failures))
     except KeyboardInterrupt:
         if process is not None:
             _stop(process)
@@ -441,8 +497,13 @@ def list_runs(root: Path) -> list[dict]:
 def validate_record(run: object) -> None:
     """Treat stored metadata as untrusted before sending it to a browser."""
     try:
-        if not isinstance(run, dict) or run["schema"] != "trainlab.run.v1":
+        if not isinstance(run, dict) or run["schema"] not in ("trainlab.run.v1", "trainlab.run.v2"):
             raise LabError("unsupported run record")
+        if run["schema"] == "trainlab.run.v2":
+            validate_workload(run["workload"])
+            validate_checks(run["checks"], run["metric_directions"])
+        elif "workload" in run or "checks" in run:
+            raise LabError("v1 records cannot declare v2 workload fields")
         if not isinstance(run["id"], str) or not re.fullmatch(
             r"\d{8}T\d{6}-[a-f0-9]{12}", run["id"]
         ):
@@ -475,6 +536,8 @@ def validate_record(run: object) -> None:
             raise LabError("unexpected run metrics")
         if run["status"] == "succeeded" and set(run["metrics"]) != set(run["metric_directions"]):
             raise LabError("missing successful run metrics")
+        if run["status"] == "succeeded" and failed_checks(run.get("checks", {}), run["metrics"]):
+            raise LabError("successful run has failing acceptance checks")
         for key in ("inputs", "files", "artifacts"):
             if not isinstance(run[key], dict):
                 raise LabError("invalid file identities")
@@ -531,9 +594,32 @@ def verify_run(directory: Path) -> dict:
             mismatches.append(name)
     if "experiment.json" not in hashes:
         mismatches.append("experiment.json")
-    if record.get("status") == "succeeded" and "output/metrics.json" not in hashes:
+    try:
+        config = load_config(contained_file(directory, "experiment.json"))
+        expected_schema = config["schema"].replace("experiment", "run")
+        if record["schema"] != expected_schema:
+            mismatches.append("run.json schema")
+        for key in ("workload", "checks"):
+            if record.get(key) != config.get(key):
+                mismatches.append("run.json " + key)
+    except (LabError, OSError):
+        mismatches.append("saved experiment")
+    # This failure is emitted only after complete result collection. Its phase
+    # must still require output checks when BOTH result maps have been erased.
+    # Earlier process/output failures can legitimately have no collected results.
+    acceptance_failed = (
+        record["schema"] == "trainlab.run.v2"
+        and record["status"] == "failed"
+        and (record["error"] or "").startswith(_ACCEPTANCE_FAILURE)
+    )
+    collected = (
+        record["status"] == "succeeded"
+        or acceptance_failed
+        or bool(record["metrics"] or record["artifacts"])
+    )
+    if collected and "output/metrics.json" not in hashes:
         mismatches.append("output/metrics.json")
-    if record["status"] == "succeeded":
+    if collected:
         try:
             if read_json(contained_file(directory, "output/metrics.json")) != record["metrics"]:
                 mismatches.append("run.json metrics")
@@ -556,6 +642,10 @@ def compare_runs(runs: list[dict]) -> dict:
         raise LabError("select at least two runs")
     fields = ("inputs", "source_kind", "split_identity", "metric_directions", "budget", "seed")
     mismatches = [key for key in fields if any(run[key] != runs[0][key] for run in runs[1:])]
+    mismatches.extend(
+        key for key in ("workload", "checks")
+        if any(run.get(key) != runs[0].get(key) for run in runs[1:])
+    )
     if any(run["status"] != "succeeded" for run in runs):
         mismatches.append("status")
     return {

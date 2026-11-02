@@ -46,6 +46,15 @@ PowerShell: set `$env:PYTHONPATH = 'src'` once, then use `python -m trainlab`.
 
 **The two examples use a tiny constructed regression fixture.** They exercise actual local training, fixed train/validation partitions, checkpoints, predictions, metrics, replay, failure handling, and reporting. Their parameter counts differ (two learned parameters versus one), so they are not a matched scientific model comparison. Neither example accesses protected TEST or establishes authentic-data capability, source rights, device performance, or independent Veritas qualification.
 
+## Training, debugging, profiling and testing
+
+[Model workflows](MODEL_WORKFLOWS.md) adds opt-in v2 recipes for training methods,
+debugging, named-module profiling, validation tests, export and deployment checks.
+Declared metric thresholds fail runs when acceptance bounds are missed. The
+constructed Forge-to-model example exercises supervised training, checkpoint-based
+fine-tuning and local export parity while retaining `NOT_QUALIFIED`. Existing v1
+recipes continue to work.
+
 ## Your first real experiment
 
 Copy an example JSON recipe next to your code and input files. Its schema is `trainlab.experiment.v1`:
