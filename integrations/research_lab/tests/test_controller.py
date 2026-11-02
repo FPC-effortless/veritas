@@ -202,6 +202,72 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(packet["external_replication"], "NOT_PERFORMED")
         self.assertTrue((self.root / "packet" / "MANUSCRIPT.md").is_file())
 
+    def test_replay_cells_and_recovered_attempt_have_clean_workspaces(self):
+        from research_lab.execution import _run, run_worker
+
+        self.protocol["max_attempts"] = 2
+        (self.recipes / "worker.py").write_text(
+            "import os,json\nfrom pathlib import Path\n"
+            "counter=Path('invocations.txt')\n"
+            "n=int(counter.read_text())+1 if counter.exists() else 1\n"
+            "counter.write_text(str(n))\n"
+            "out=Path(os.environ['TRAINLAB_OUTPUT_DIR'])\n"
+            "(out/'metrics.json').write_text(json.dumps({'accuracy':n}))\n"
+            "(out/'predictions.json').write_text(str(n))\n"
+        )
+        self.complete_primaries()
+        self.lab.worker("replicator", "replication", "local")
+        abandoned = self.lab.claim("replicator")
+        old_work = self.lab.root / "replay_workspaces" / "exp.replication-1"
+        old_work.mkdir(parents=True)
+        (old_work / "invocations.txt").write_text("99")
+        self.lab.expire(now=abandoned["lease_until"] + 1)
+        self.lab.recover(abandoned["id"], confirmed_stopped=True)
+        self.assertEqual(run_worker(self.lab, "replicator"), 1)
+        task = self.lab.task("exp.replication")
+        self.assertEqual(task["status"], "succeeded")
+        self.assertEqual(task["attempt"], 2)
+        replays = task["result"]["replays"]
+        self.assertEqual(len(replays), 6)
+        self.assertEqual(
+            [_run(self.lab, r["run_id"])["metrics"]["accuracy"] for r in replays.values()],
+            [1] * 6,
+        )
+        self.assertTrue(task["result"]["all_match"])
+        self.assertEqual((old_work / "invocations.txt").read_text(), "99")
+        self.assertEqual(self.lab.status()["programs"][0]["reserved_seconds"], 0)
+
+    def test_synthesis_arm_is_not_inferred_from_protocol_name(self):
+        from research_lab.execution import run_worker
+
+        self.protocol["id"] = "study.candidate.v1"
+        control = self.recipes / "control.json"
+        recipe = json.loads(control.read_text())
+        recipe["command"] = [sys.executable, "worker.py", "control"]
+        control.write_text(json.dumps(recipe))
+        (self.recipes / "worker.py").write_text(
+            "import os,json,sys\nfrom pathlib import Path\n"
+            "out=Path(os.environ['TRAINLAB_OUTPUT_DIR'])\n"
+            "score=0.25 if 'control' in sys.argv else 0.75\n"
+            "(out/'metrics.json').write_text(json.dumps({'accuracy':score}))\n"
+            "(out/'predictions.json').write_text(str(score))\n"
+        )
+        self.complete_primaries()
+        self.lab.worker("replicator", "replication", "local")
+        self.assertEqual(run_worker(self.lab, "replicator"), 1)
+        summary = self.lab.synthesize(self.protocol["id"])
+        self.assertEqual(summary["conclusion"], "INDEPENDENT_REVIEW_PENDING_OR_BLOCKING")
+        self.assertEqual(
+            summary["seed_effects"],
+            [
+                {"seed": seed, "candidate": 0.75, "control": 0.25, "effect": 0.5}
+                for seed in self.protocol["seeds"]
+            ],
+        )
+        self.assertTrue(summary["replicated"])
+        self.assertFalse(summary["reviewed"])
+        self.assertEqual(summary["scientific_qualification"], "NOT_QUALIFIED")
+
     def test_aliases_cannot_self_replicate_or_review(self):
         from research_lab.execution import run_worker
 

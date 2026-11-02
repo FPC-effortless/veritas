@@ -202,7 +202,9 @@ def synthesize(lab, protocol_id):
         try:
             validate_completion(lab, task, task["result"])
             run = _run(lab, task["result"]["run_id"])
-            arm = "candidate" if ".candidate." in task["id"] else "control"
+            arm = (
+                "candidate" if task["id"] == f"{protocol_id}.candidate.{run['seed']}" else "control"
+            )
             by_seed.setdefault(run["seed"], {})[arm] = run["metrics"][p["metric"]]
         except (LabError, OSError, ValueError) as exc:
             errors.append(str(exc))
