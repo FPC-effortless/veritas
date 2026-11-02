@@ -139,3 +139,12 @@ This incubated module does not claim a separate TrainLab repository, a
 shipping SDK, or commercial adoption. Business model: open models, fully
 offline local SDKs and paid integration, optimization, verification tools and
 support; never hosted per-inference customer model services.
+
+## Streaming language releases
+
+`python -m forge_data language-release --input corpus.jsonl --spec source.json --output release`
+creates the separate pinned language-corpus format. Text, conversations, preferences
+and public RL tasks use deterministic source-group splits, disk-backed deduplication
+and hash-verified streaming shards. `language-verify --release release --manifest-sha256 HASH`
+checks the result. The [fullcycle guide](../../docs/fullcycle/README.md) records the
+multi-GiB memory test, BPE training boundary and contamination limitations.

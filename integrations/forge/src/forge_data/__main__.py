@@ -1,4 +1,5 @@
 """CLI: python -m forge_data {release,verify,validate-evidence}."""
+
 from __future__ import annotations
 
 import argparse
@@ -24,12 +25,31 @@ def main() -> int:
         "validate-evidence", help="Validate untrusted TrainLab receipt (never qualify)"
     )
     evidence.add_argument("--input", required=True, type=Path)
+    language = commands.add_parser("language-release", help="Freeze a streaming language corpus")
+    language.add_argument("--input", required=True, type=Path)
+    language.add_argument("--spec", required=True, type=Path)
+    language.add_argument("--output", required=True, type=Path)
+    language_check = commands.add_parser("language-verify", help="Verify a pinned language release")
+    language_check.add_argument("--release", required=True, type=Path)
+    language_check.add_argument("--manifest-sha256", required=True)
     args = parser.parse_args()
     try:
         if args.command == "release":
             result = release(args.input, args.spec, args.output)
         elif args.command == "verify":
             result = verify_release(args.release)
+        elif args.command == "language-release":
+            from .language import build_release
+
+            result = {
+                "manifest_sha256": build_release(
+                    args.input, json.loads(args.spec.read_bytes()), args.output
+                )
+            }
+        elif args.command == "language-verify":
+            from .language import LanguageRelease
+
+            result = {"valid": LanguageRelease(args.release, args.manifest_sha256).verify()}
         else:
             result = validate_evidence_file(args.input)
     except (ForgeError, OSError, ValueError) as exc:

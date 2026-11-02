@@ -119,3 +119,12 @@ Run recipes only if you trust their code. The runner is **not a sandbox**: a rec
 POSIX timeouts terminate the process group; on Windows only the immediate process can be terminated with the standard library. Experiments must not detach workers. Each stdout/stderr stream is capped at 16 MiB; exceeding it fails the run. Artifact/dataset space still requires a host filesystem quota. Active stores support 1,000 runs and 8 MiB of aggregate metadata; archive/rotate stores before that limit. Input/record files have bounded JSON sizes. Artifact checksums prove byte identity against the saved record, not signed authenticity; editing both a file and its local record is outside this integrity check.
 
 The initial commercial hypothesis remains open models/local SDKs with paid integration, optimization, evidence tooling, and support. No customer adoption, revenue, hardware qualification, or commercial release is claimed.
+
+## Optional model-training lifecycle
+
+The [fullcycle guide](../../docs/fullcycle/README.md) covers the Forge language
+release, real PyTorch Transformer/native TAC098 training, mid-training, SFT, DPO,
+bounded GRPO, resumable checkpoints, public Veritas evaluator and exported-model
+chat. This optional Python 3.12+ stack is separate from the lightweight experiment
+workbench. See the guide's evidence and GPU/distributed limitations before using
+its developer measurements as capability claims.
