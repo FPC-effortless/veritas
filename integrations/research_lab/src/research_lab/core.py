@@ -148,6 +148,11 @@ class Controller:
                     resource TEXT NOT NULL REFERENCES resources(id),
                     principal TEXT NOT NULL DEFAULT ''
                 );
+                CREATE TABLE IF NOT EXISTS worker_activity (
+                    id TEXT PRIMARY KEY REFERENCES workers(id), session TEXT NOT NULL,
+                    host TEXT NOT NULL, pid INTEGER NOT NULL, last_seen REAL NOT NULL,
+                    state TEXT NOT NULL, task TEXT
+                );
                 CREATE TABLE IF NOT EXISTS protocols (
                     id TEXT PRIMARY KEY, program TEXT NOT NULL REFERENCES programs(id),
                     spec TEXT NOT NULL, pin TEXT NOT NULL, snapshot_pin TEXT NOT NULL
@@ -685,6 +690,36 @@ class Controller:
         for row in data["attempts"]:
             for key in ("checkpoint", "result"):
                 row[key] = json.loads(row[key])
+        with self.connect() as db:
+            activity = {r["id"]: dict(r) for r in db.execute("SELECT * FROM worker_activity")}
+            tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            data["autonomous_lanes"] = (
+                [dict(r) for r in db.execute("SELECT id,pin,phase,reason FROM autonomous_lanes")]
+                if "autonomous_lanes" in tables
+                else []
+            )
+            data["autonomous_rounds"] = (
+                [
+                    dict(r)
+                    for r in db.execute(
+                        "SELECT lane,n,profile,protocol,decision FROM autonomous_rounds"
+                    )
+                ]
+                if "autonomous_rounds" in tables
+                else []
+            )
+        for worker in data["workers"]:
+            live = activity.get(worker["id"])
+            worker["activity"] = live
+            worker["liveness"] = (
+                "REGISTERED_ONLY"
+                if live is None
+                else "STOPPED"
+                if live["state"] == "stopped"
+                else "HEARTBEAT_RECENT"
+                if time.time() - live["last_seen"] <= 15
+                else "STALE"
+            )
         data["scientific_qualification"] = "NOT_QUALIFIED"
         data["metering_scope"] = "LOCAL_RESERVED_SLOT_WALL_SECONDS_AND_DECLARED_RATES"
         return data

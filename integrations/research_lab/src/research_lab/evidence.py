@@ -37,6 +37,8 @@ def put_node(lab, node_id, kind, body, *, db=None):
     prior = db.execute("SELECT pin FROM nodes WHERE id=?", (node_id,)).fetchone()
     if prior and prior[0] != pin:
         raise LabError("research nodes are immutable; create a revision and supersedes link")
+    if prior:
+        return pin
     db.execute("INSERT OR IGNORE INTO nodes VALUES (?,?,?,?)", (node_id, kind, payload, pin))
     lab._event(db, "knowledge_recorded", {"id": node_id, "kind": kind, "pin": pin})
     return pin
@@ -109,10 +111,15 @@ def validate_proposal(proposal):
     }
     if (
         not isinstance(proposal, dict)
-        or set(proposal) != fields
+        or set(proposal) not in (fields, fields | {"execution"})
         or proposal["schema"] != "research_lab.proposal.v1"
     ):
         raise LabError("unsupported proposal schema")
+    if "execution" in proposal:
+        execution = proposal["execution"]
+        if not isinstance(execution, dict) or set(execution) != {"profile"}:
+            raise LabError("proposal execution may select only an admitted profile")
+        name(execution["profile"])
     for key in ("controls", "ablations", "limitations", "competing_explanations", "predictions"):
         text_list(
             proposal[key], minimum=2 if key in ("predictions", "competing_explanations") else 1

@@ -39,6 +39,12 @@ def parser():
     sub.add_parser("status")
     sub.add_parser("direct")
     sub.add_parser("expire")
+    lane = sub.add_parser("activate")
+    lane.add_argument("path", type=Path)
+    lane.add_argument("--recipes", type=Path)
+    sub.add_parser("dispatch")
+    supervisor = sub.add_parser("supervise")
+    supervisor.add_argument("workers", type=Path)
     recover = sub.add_parser("recover")
     recover.add_argument("task")
     recover.add_argument("--confirmed-stopped", action="store_true")
@@ -98,7 +104,24 @@ def main(argv=None):
             result = {"pin": action(read_json(args.path), args.recipes or args.path.parent)}
         elif args.command == "worker":
             lab.worker(args.id, args.role, args.resource, principal=args.principal)
-            result = {"completed": run_worker(lab, args.id, watch=args.watch)}
+            from .supervisor import signal_stop
+
+            result = {"completed": run_worker(lab, args.id, watch=args.watch, stop=signal_stop())}
+        elif args.command == "activate":
+            from .autonomy import register_lane
+
+            result = {
+                "pin": register_lane(lab, read_json(args.path), args.recipes or args.path.parent)
+            }
+        elif args.command == "dispatch":
+            from .autonomy import tick
+
+            result = tick(lab)
+        elif args.command == "supervise":
+            from .supervisor import signal_stop, supervise
+
+            supervise(lab, read_json(args.workers), stop=signal_stop())
+            result = {"supervisor": "stopped"}
         elif args.command == "status":
             result = lab.status()
         elif args.command == "expire":
