@@ -107,7 +107,9 @@ def bootstrap(root, manifest, *, seconds=3600, cpu_slots=2):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Validate/bootstrap the nonexecuting frontier lane register")
+    ap = argparse.ArgumentParser(
+        description="Validate/bootstrap the nonexecuting frontier lane register"
+    )
     ap.add_argument("--manifest", type=Path, default=MANIFEST)
     ap.add_argument("--root", type=Path)
     ap.add_argument("--check", action="store_true")
