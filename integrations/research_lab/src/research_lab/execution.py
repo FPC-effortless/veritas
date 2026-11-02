@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import socket
 import sqlite3
 import threading
 import time
+import uuid
 
 from trainlab.runner import contained_file, load_config, read_json, run_experiment, verify_run
 
@@ -136,12 +139,12 @@ def validate_completion(lab, task, result):
     raise LabError("unknown completion role")
 
 
-def execute_claim(lab: Controller, task):
+def execute_claim(lab: Controller, task, *, cancel=None):
     """Execute a claimed experiment or replay; reviewers supply their own analysis."""
     if task["role"] == "review":
         raise LabError("review needs a separately authored review receipt")
     stop = threading.Event()
-    cancel = threading.Event()
+    cancel = cancel if cancel is not None else threading.Event()
 
     def pulse():
         while not stop.wait(5):
@@ -225,19 +228,69 @@ def execute_claim(lab: Controller, task):
 
 
 def run_worker(lab, worker_id, *, watch=False, stop=None):
+    import fcntl
+
     stop = stop or threading.Event()
-    completed = 0
-    while not stop.is_set():
-        lab.expire()
-        task = lab.claim(worker_id)
-        if task is None:
-            if not watch:
-                break
-            stop.wait(1)
-            continue
-        execute_claim(lab, task)
-        completed += 1
-    return completed
+    locks = lab.root / "worker_locks"
+    locks.mkdir(exist_ok=True)
+    with (locks / name(worker_id)).open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise LabError("worker process is already active on this host") from exc
+        session = uuid.uuid4().hex
+        current = {"task": None}
+        pulse_stop = threading.Event()
+
+        def activity(state):
+            with lab.transaction() as db:
+                db.execute(
+                    "INSERT INTO worker_activity VALUES (?,?,?,?,?,?,?) "
+                    "ON CONFLICT(id) DO UPDATE SET session=excluded.session,host=excluded.host,"
+                    "pid=excluded.pid,last_seen=excluded.last_seen,state=excluded.state,task=excluded.task",
+                    (
+                        worker_id,
+                        session,
+                        socket.gethostname(),
+                        os.getpid(),
+                        time.time(),
+                        state,
+                        current["task"],
+                    ),
+                )
+
+        def pulse():
+            while not pulse_stop.wait(2):
+                try:
+                    activity("active")
+                except (LabError, OSError, sqlite3.Error):
+                    stop.set()
+                    return
+
+        activity("active")
+        thread = threading.Thread(target=pulse, daemon=True)
+        thread.start()
+        completed = 0
+        try:
+            while not stop.is_set():
+                lab.expire()
+                task = lab.claim(worker_id)
+                if task is None:
+                    if not watch:
+                        break
+                    stop.wait(1)
+                    continue
+                current["task"] = task["id"]
+                activity("active")
+                execute_claim(lab, task, cancel=stop)
+                completed += 1
+                current["task"] = None
+            return completed
+        finally:
+            pulse_stop.set()
+            thread.join(timeout=6)
+            activity("stopped")
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def submit_review(lab, protocol_id, worker_id, receipt):

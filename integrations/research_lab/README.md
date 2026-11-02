@@ -4,11 +4,21 @@ Research Lab OS connects the existing TrainLab runner, Forge dataset reader and
 Veritas evidence boundaries to a durable program queue. It is an incubated package,
 not a Veritas release or a demonstrated autonomous scientist.
 
+## Bounded autonomous dispatch
+
+The [autonomous execution guide](AUTONOMY.md) documents frozen recipe profiles,
+reviewed-evidence branching, the model-director proposal bridge, actual worker
+heartbeats, a process supervisor and a systemd deployment unit. `activate` admits
+a lane; `supervise` starts the declared worker processes and advances decisions.
+An explicit neural acceptance driver trains standard GRUs and exercises the
+feedback loop. These capabilities do not activate the 18-lane frontier backlog
+or establish a live LLM scientist or permanent host.
+
 ## What is implemented
 
 | Requested capability | Executable implementation | Qualification boundary |
 | --- | --- | --- |
-| Research director | Objective/program records; transparent proposal prioritization; bounded director-provider work orders | Default ranking measures design completeness, not autonomous scientific insight |
+| Research director | Objective/program records; transparent proposal prioritization; bounded director-provider work orders | Default ranking measures design completeness; bounded dispatch selects admitted recipes, not unrestricted scientific invention |
 | Persistent specialists | Role-specific work orders for director, literature, theory, design, engineering and synthesis; dependency queue; isolated attempt directories | An operator must supply an actual trusted agent command; the package invents no provider or credentials |
 | Literature intelligence | Versioned source catalog, retrieval provenance, immutable paper nodes and research links | Catalog import and provider work orders are implemented; continuous live discovery is not demonstrated |
 | Experimental design | Falsifiable hypotheses, alternatives, predictions, controls, ablations, fixed seeds, stopping rules and immutable protocol/source snapshots | Structural completeness does not establish good scientific design |
