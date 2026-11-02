@@ -122,3 +122,34 @@ class WorkflowTests(unittest.TestCase):
                 changed = {**run, key: value}
                 write_json(directory / "run.json", changed)
                 self.assertFalse(verify_run(directory)["valid"])
+
+    def test_failed_acceptance_cannot_erase_all_result_identities(self):
+        from trainlab.operations import backup_runs
+
+        self.config["checks"]["loss"]["max"] = 0.2
+        self.save()
+        run = self.run_one()
+        directory = self.root / "runs" / run["id"]
+        run.update(metrics={}, artifacts={})
+        write_json(directory / "run.json", run)
+        self.assertFalse(verify_run(directory)["valid"])
+        (directory / "output/model.json").unlink()
+        self.assertFalse(verify_run(directory)["valid"])
+        with self.assertRaisesRegex(LabError, "integrity"):
+            backup_runs(self.root / "runs", self.root / "erased.zip")
+
+    def test_failure_before_result_collection_still_verifies(self):
+        # A command may write valid metrics but fail before all artifacts exist.
+        # Such an explicitly failed execution is a valid diagnostic record.
+        (self.root / "train.py").write_text(
+            "import json,os; from pathlib import Path; "
+            "p=Path(os.environ['TRAINLAB_OUTPUT_DIR']); "
+            "(p/'metrics.json').write_text(json.dumps({'loss':0.25}))"
+        )
+        self.config["checks"]["loss"]["max"] = 0.2
+        self.save()
+        run = self.run_one()
+        self.assertEqual(run["status"], "failed")
+        self.assertEqual(run["metrics"], {})
+        self.assertEqual(run["artifacts"], {})
+        self.assertTrue(verify_run(self.root / "runs" / run["id"])["valid"])

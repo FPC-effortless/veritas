@@ -87,6 +87,12 @@ search matches kind, training method and execution. File verification binds the
 v2 declarations to `experiment.json`; local hashes are not signatures and cannot
 prevent an operator rewriting both record and recipe.
 
+Acceptance failures are recorded after complete result collection. Verification
+still requires their metrics and all declared artifact identities when both
+result maps are empty; erasing the maps cannot hide a deleted output or make an
+incomplete record eligible for backup. Failures before collection may retain
+empty maps and remain valid diagnostic records.
+
 ## Debugging values and profiling modules
 
 Instrument the existing model code explicitly:
