@@ -8,11 +8,16 @@ import json
 from investigation_world.experience import MachineExperience, machine_experience_from_trajectory
 from investigation_world.experience_foundry.admission import (
     COMPANION_SOURCE,
-    RECORDER_VERSION,
     RecordedExperience,
     authorized_registry,
-    public_training_fixture,
     runtime_source_digest,
+)
+from investigation_world.experience_foundry.public_profiles import (
+    profile_fixture,
+    profile_id_from_trace,
+    recorder_metadata,
+    recorder_version,
+    validate_profile_action_events,
 )
 from investigation_world.foundry.models import (
     DistributionSplit,
@@ -66,7 +71,9 @@ def verify_recorded(source: RecordedExperience):
     if experience != machine_experience_from_trajectory(trajectory):
         raise ValueError("RECORDER_EXPERIENCE_PROFILE_MISMATCH")
     trace = RolloutTrace.model_validate(source.companion.model_dump(mode="python"))
-    case, capability = public_training_fixture()
+    profile_id = profile_id_from_trace(trace)
+    version_recorder = recorder_version(profile_id)
+    case, capability = profile_fixture(profile_id)
     expected_episode = case.episode
     if source.capability.model_dump(mode="json") != capability.model_dump(mode="json"):
         raise ValueError("CAPABILITY_IDENTITY_MISMATCH")
@@ -103,7 +110,7 @@ def verify_recorded(source: RecordedExperience):
     companions = [p for p in trajectory.provenance if p.source_kind == COMPANION_SOURCE]
     if len(companions) != 1 or (
         companions[0].source_id != trace.trace_id
-        or companions[0].source_version != RECORDER_VERSION
+        or companions[0].source_version != version_recorder
         or companions[0].source_digest != canonical_hash(trace.model_dump(mode="json"))
     ):
         raise ValueError("COMPANION_BINDING_MISMATCH")
@@ -111,6 +118,7 @@ def verify_recorded(source: RecordedExperience):
     if raw is None:
         raise ValueError("REPLAY_REQUIRED")
     evidence = OperationalReplayEvidence.model_validate(raw)
+    validate_profile_action_events(profile_id, trace, evidence.action_events)
     receipt = evidence.native_submission
     if receipt is None:
         raise ValueError("NATIVE_RECEIPT_REQUIRED")
@@ -172,12 +180,11 @@ def verify_recorded(source: RecordedExperience):
         "task_seed": case.seed,
         "environment_version": version,
         "taskset_version": version,
-        "harness_version": RECORDER_VERSION,
+        "harness_version": version_recorder,
         "runtime_version": runtime_source_digest(),
-        "metadata": {
-            "recorder": RECORDER_VERSION,
-            "source_digest": canonical_hash(expected_episode.model_dump(mode="json")),
-        },
+        "metadata": recorder_metadata(
+            profile_id, canonical_hash(expected_episode.model_dump(mode="json"))
+        ),
         "initial_state_hash": evidence.initial_state_digest,
         "final_state_hash": evidence.final_state_digest,
         "total_cost": float(evidence.cost_spent),
