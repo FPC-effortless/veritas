@@ -26,6 +26,7 @@ from pathlib import Path
 
 MAX_ACTIVE_RUNS = 1000
 MAX_ACTIVE_RECORD_BYTES = 8 * 1024 * 1024
+_ACCEPTANCE_FAILURE = "Metric acceptance checks failed: "
 
 
 class LabError(ValueError):
@@ -447,7 +448,7 @@ def run_experiment(
                 record.update(status="succeeded", metrics=metrics, artifacts=artifacts)
                 failures = failed_checks(config.get("checks", {}), metrics)
                 if failures:
-                    raise LabError("Metric acceptance checks failed: " + ", ".join(failures))
+                    raise LabError(_ACCEPTANCE_FAILURE + ", ".join(failures))
     except KeyboardInterrupt:
         if process is not None:
             _stop(process)
@@ -603,10 +604,19 @@ def verify_run(directory: Path) -> dict:
                 mismatches.append("run.json " + key)
     except (LabError, OSError):
         mismatches.append("saved experiment")
-    # Acceptance failure retains collected results, which must receive the same
-    # integrity checks as a successful run. Earlier process/output failures can
-    # legitimately have no collected metrics/artifacts.
-    collected = record["status"] == "succeeded" or bool(record["metrics"] or record["artifacts"])
+    # This failure is emitted only after complete result collection. Its phase
+    # must still require output checks when BOTH result maps have been erased.
+    # Earlier process/output failures can legitimately have no collected results.
+    acceptance_failed = (
+        record["schema"] == "trainlab.run.v2"
+        and record["status"] == "failed"
+        and (record["error"] or "").startswith(_ACCEPTANCE_FAILURE)
+    )
+    collected = (
+        record["status"] == "succeeded"
+        or acceptance_failed
+        or bool(record["metrics"] or record["artifacts"])
+    )
     if collected and "output/metrics.json" not in hashes:
         mismatches.append("output/metrics.json")
     if collected:
