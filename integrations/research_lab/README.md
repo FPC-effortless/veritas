@@ -23,6 +23,23 @@ The seven ARCHPAR architecture groups are imported as a **report-grounded backlo
 They are not seven newly trained models. The current reports identify specific
 unresolved capability gates; those questions remain visible in the dashboard.
 
+## Unified Frontier Architecture Research Program
+
+A separate, non-executing research program now coordinates 18 parallel research lanes,
+including the seven ARCHPAR families, TAC-OSM, FLOCK/COLLECT, SSA/PRS, geometric
+learning, verification, kernels and OCR transfer. Its frozen design and criteria
+are documented in [the frontier program](../../docs/frontier-program/README.md).
+
+Validate the machine-readable plan without mutating the lab:
+
+```bash
+python integrations/research_lab/examples/frontier_bootstrap.py --check
+```
+
+To register its research nodes in a standalone lab database, use `--root PATH`.
+This import intentionally schedules no workers or neural fits, authorizes no paid
+compute, and makes no claim that research lanes are already executing.
+
 ## Install and run
 
 From the repository root:
