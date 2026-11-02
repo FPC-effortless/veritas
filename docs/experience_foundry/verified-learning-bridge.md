@@ -9,8 +9,8 @@ successful-TRAIN admission or public trainer projection.
 
 ## Supported source, not a generic inverse
 
-Only the **first financial_spreadsheet / dcf_formula_repair TRAIN case** from the
-existing public procedural generator is supported. `public_training_fixture()` pins the
+The original v1 profile is the **first financial_spreadsheet / dcf_formula_repair TRAIN case**
+from the existing public procedural generator. `public_training_fixture()` pins the
 small config (seed 73, one case per domain/split) and takes only the first iterator yield;
 it never generates held-out cases. The exact regenerated source, capability binding and
 portable contract must match, not merely a caller-provided TRAIN label. This is a public
@@ -34,7 +34,9 @@ canonical test summaries.
 
 Canonical unknown seed, split, taskset/harness/runtime versions remain **unknown**. The
 private companion enriches provenance without rewriting canonical facts or inventing
-observations, seeds, timestamps, state hashes or success flags. Other profiles reject.
+observations, seeds, timestamps, state hashes or success flags. The separately versioned
+[#464 structural profiles](public-profiles.md) add two finite public TRAIN derivatives
+through independent regeneration; arbitrary other profiles still reject.
 
 ## Admission and export
 
@@ -56,7 +58,8 @@ semantics are retained. No maturity/readiness/qualification value is promoted.
 * `bundle` and `provenance` are evaluator-side interchange/provenance. They are **not** a
   trainer-safe serialization and must remain in the source's authorized boundary.
 * `trainer_bytes` is deterministic JSONL containing only an allowlisted public objective,
-  public record fields/action schema and actual action/parameter sequence. It has no
+  public record fields/action schema and actual action/parameter sequence. V2 also
+  carries public constraints and record relationships; v1 bytes are unchanged. It has no
   oracle, private replay/native receipt, private seed, hidden source identity or arbitrary
   annotation. No fabricated observations or model-specific result schema are supplied.
 

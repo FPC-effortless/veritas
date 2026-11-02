@@ -1,7 +1,7 @@
 """Execute one public financial repair intervention using the canonical Foundry executor.
 
-ponytail: only the merged public financial recorder profile is supported. New profiles
-need equivalent public-at-cut and replay evidence, not a generic executor/plugin interface.
+ponytail: only the fixed v1 and two closed v2 public financial profiles are supported.
+New profiles require public-at-cut and replay proof, not a generic executor/plugin interface.
 """
 
 from __future__ import annotations
@@ -17,8 +17,11 @@ from investigation_world.experience import ExperienceReference, MachineExperienc
 from investigation_world.experience_foundry.admission import (
     PublicTrainingRecorder,
     RecordedExperience,
-    public_training_fixture,
     runtime_source_digest,
+)
+from investigation_world.experience_foundry.public_profiles import (
+    profile_fixture,
+    profile_id_from_trace,
 )
 from investigation_world.foundry.models import (
     CapabilityContract,
@@ -72,6 +75,10 @@ def _snapshot(source: RecordedExperience) -> VerifiedExecution:
         "cost": evidence.cost_spent,
         "breakdown": breakdown,
     }
+    if profile_id_from_trace(source.companion) is not None:
+        # v1 had exactly one task. New structures must not become semantic aliases
+        # merely because one action sequence has the same state/outcome on both.
+        semantic["profile_contract"] = canonical_hash(evidence.portable_contract)
     return VerifiedExecution(
         experience=source.experience,
         companion=source.companion,
@@ -104,6 +111,7 @@ def _call_arguments(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _protocol(source: VerifiedExecution, step: int, replacement: dict[str, Any]):
+    profile_id = profile_id_from_trace(source.companion)
     events = source.companion.events
     acts = [e for e in events if e.event_type == "act"]
     if [e.step for e in events] != list(range(len(events))):
@@ -123,11 +131,11 @@ def _protocol(source: VerifiedExecution, step: int, replacement: dict[str, Any])
             raise ValueError("REPLAY_EVENT_UNSUPPORTED")
         # The divergence is explicitly executed, even if it failed. Foundry skips failed
         # replay events, so no failed untouched prefix/suffix may enter that helper.
-        if i != step and p["success"] is not True:
+        if profile_id is None and i != step and p["success"] is not True:
             raise ValueError("FAILED_UNTOUCHED_REPLAY_UNSUPPORTED")
     if acts[step].payload["args"] != ["repair_formula"]:
         raise ValueError("INTERVENTION_ACTION_UNSUPPORTED")
-    case, _ = public_training_fixture()
+    case, _ = profile_fixture(profile_id)
     # This profile's records are immutable and exposed in public_payload before any act.
     # No oracle, future receipt, hidden target or suffix outcome selects the replacement.
     public = case.episode.public_payload()
@@ -149,7 +157,7 @@ def _protocol(source: VerifiedExecution, step: int, replacement: dict[str, Any])
     for action_event in evidence.action_events[:step]:
         state.update(copy.deepcopy(action_event.state_changes))
     visibility = {
-        "policy": POLICY,
+        "policy": POLICY if profile_id is None else "public-financial-formula-at-cut.v2",
         "available_at_step": step,
         "public_payload_digest": canonical_hash(public),
         "record": audit,
@@ -172,7 +180,9 @@ class CounterfactualReceipt(BaseModel):
     """Private material evidence; model parsing alone does NOT validate execution."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal["veritas.counterfactual-experience.v1"] = (
+    schema_version: Literal[
+        "veritas.counterfactual-experience.v1", "veritas.counterfactual-experience.v2"
+    ] = (
         "veritas.counterfactual-experience.v1"
     )
     receipt_id: str
@@ -181,7 +191,10 @@ class CounterfactualReceipt(BaseModel):
     causal_status: Literal["UNKNOWN"] = "UNKNOWN"
     training_usefulness: Literal["UNKNOWN"] = "UNKNOWN"
     source_digest: str
-    recorder_version: Literal["veritas.public-financial-training-recorder.v1"] = (
+    recorder_version: Literal[
+        "veritas.public-financial-training-recorder.v1",
+        "veritas.public-financial-training-recorder.v2",
+    ] = (
         "veritas.public-financial-training-recorder.v1"
     )
     runtime_source_digest: str
@@ -200,7 +213,7 @@ class CounterfactualReceipt(BaseModel):
     def public_payload(self) -> dict[str, Any]:
         # No source/receipt hashes, paths, branch values or evaluator fields are public.
         return {
-            "schema_version": SCHEMA,
+            "schema_version": self.schema_version,
             "details": "evaluator_private",
             "causal_status": "UNKNOWN",
             "training_usefulness": "UNKNOWN",
@@ -221,7 +234,7 @@ class CounterfactualReceipt(BaseModel):
                     ),
                     ExperienceReference(
                         reference_id=self.receipt_id,
-                        reference_type=SCHEMA,
+                        reference_type=self.schema_version,
                         digest=canonical_hash(self.model_dump(mode="json")),
                         visibility=VisibilityClass.EVALUATOR_PRIVATE,
                     ),
@@ -262,7 +275,7 @@ def _assemble(source, baseline, alternative, repeated, step, replacement):
         "branch_step": step,
         "snapshot_hash": stable_hash(state),
         "alternate_action": alternate_calls[step],
-        "metadata": {"policy": POLICY},
+        "metadata": {"policy": visibility["policy"]},
     }
     branch = CounterfactualBranch(
         branch_id="CF-BRANCH-" + canonical_hash(branch_data), **branch_data
@@ -301,6 +314,11 @@ def _assemble(source, baseline, alternative, repeated, step, replacement):
     elif before["outcome"] > after["outcome"] and all(before[k] == [] for k in violation_keys):
         preferred = "BASELINE"
     payload = dict(
+        schema_version=(
+            SCHEMA if profile_id_from_trace(source.companion) is None
+            else "veritas.counterfactual-experience.v2"
+        ),
+        recorder_version=source.companion.harness_version,
         source_digest=canonical_hash(source.experience.model_dump(mode="json")),
         runtime_source_digest=runtime_source_digest(),
         branch=branch,
@@ -394,6 +412,7 @@ def execute_counterfactual_experience(
 ) -> CounterfactualReceipt:
     """Actual baseline, alternative and independent repeat; never synthesize an outcome."""
     original = _snapshot(source)
+    profile_id = profile_id_from_trace(original.companion)
     cut_state, public_at_cut = _protocol(original, branch_step, replacement)
 
     class CutRecorder(PublicTrainingRecorder):
@@ -425,9 +444,22 @@ def execute_counterfactual_experience(
         ("alternative", replacement),
         ("repeated", replacement),
     ]:
+        def factory():
+            recorder = CutRecorder(root / label, profile_id=profile_id)
+            if profile_id is not None:
+                # Only verified deterministic native act events are admitted above.
+                # Unlike legacy replay, execute blocked calls too: they consume budget,
+                # retain violations and can affect whether later calls are permissible.
+                for event in trace.events[:branch_step]:
+                    recorder.act(
+                        event.payload["action_name"], **copy.deepcopy(event.payload["kwargs"])
+                    )
+            return recorder
+
+        replay_input = trace if profile_id is None else trace.model_copy(update={"events": []})
         recorder = execute_counterfactual(
-            lambda: CutRecorder(root / label),
-            trace,
+            factory,
+            replay_input,
             branch_step=branch_step,
             alternate_method="act",
             alternate_args=["repair_formula"],
@@ -439,7 +471,11 @@ def execute_counterfactual_experience(
             or recorder.runtime_digest != trace.runtime_version
         ):
             raise ValueError("RUNTIME_INITIAL_CONTRACT_MISMATCH")
-        replay_trace_prefix(recorder, suffix)
+        if profile_id is None:
+            replay_trace_prefix(recorder, suffix)
+        else:
+            for event in suffix.events:
+                recorder.act(event.payload["action_name"], **copy.deepcopy(event.payload["kwargs"]))
         results.append(_snapshot(recorder.submit(evidence.submission.model_copy(deep=True))))
     return _assemble(
         original, results[0], results[1], results[2], branch_step, copy.deepcopy(replacement)
