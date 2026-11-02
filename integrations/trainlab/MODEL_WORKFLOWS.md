@@ -23,6 +23,14 @@ point-in-time dataset reader, and standard library. No framework dependency,
 cloud provisioning, paid compute, protected TEST evaluation, model serving or
 scientific promotion is in scope.
 
+## Optional real framework execution
+
+The [PyTorch backend](PYTORCH.md) supplies tensor/gradient/activation checks,
+automatic module instrumentation and a separate real-framework acceptance path.
+Its CPU example exercises supervised/fine-tuning, two-rank Gloo training, exact
+optimizer/RNG replay and version-bound model export in offline containers. The
+base workflows below continue to require no framework installation.
+
 ## Recipe v2
 
 Use the existing recipe fields with `schema: trainlab.experiment.v2`, plus:

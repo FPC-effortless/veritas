@@ -55,6 +55,11 @@ constructed Forge-to-model example exercises supervised training, checkpoint-bas
 fine-tuning and local export parity while retaining `NOT_QUALIFIED`. Existing v1
 recipes continue to work.
 
+The optional [PyTorch backend](PYTORCH.md) adds real tensor/module diagnostics,
+two-rank CPU training, optimizer/RNG checkpoint replay, framework traces,
+`torch.export` parity and an offline CPU container. CUDA support requires separate
+hardware validation. The base runner keeps its dependency-free installation.
+
 ## Your first real experiment
 
 Copy an example JSON recipe next to your code and input files. Its schema is `trainlab.experiment.v1`:
