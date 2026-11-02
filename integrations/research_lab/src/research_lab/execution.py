@@ -169,11 +169,13 @@ def execute_claim(lab: Controller, task):
             result = {"run_id": run["id"], "record_pin": identity(run)}
         else:
             p = lab.protocol(task["protocol"])
-            work = lab.root / "replay_workspaces" / f"{task['id']}-{task['attempt']}"
-            work.parent.mkdir(exist_ok=True)
-            shutil.copytree(snapshot, work)
+            attempt_work = lab.root / "replay_workspaces" / f"{task['id']}-{task['attempt']}"
+            attempt_work.mkdir(parents=True)
             replays: dict[str, dict] = {}
             for key in task["dependencies"]:
+                # Each seed/arm starts from declared inputs, never another replay's cwd.
+                work = attempt_work / key
+                shutil.copytree(snapshot, work)
                 original_task = lab.task(key)
                 original = _run(lab, original_task["result"]["run_id"])
                 run = run_experiment(
