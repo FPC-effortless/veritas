@@ -6,6 +6,8 @@ Only constructed fixtures and a temporary run store are used.
 
 from __future__ import annotations
 
+import json
+import shutil
 import tempfile
 import threading
 from pathlib import Path
@@ -77,6 +79,35 @@ def main():
                     expect(page.locator("#guide-dialog")).to_be_visible()
                     page.keyboard.press("Escape")
                     expect(page.locator("#guide-dialog")).not_to_be_visible()
+                    # V2 workload declarations remain visible/searchable beside v1 runs.
+                    recipe_root = Path(temp) / "v2-recipe"
+                    shutil.copytree(examples, recipe_root)
+                    recipe = json.loads((recipe_root / "linear.json").read_text())
+                    recipe.update(
+                        schema="trainlab.experiment.v2",
+                        name="Workflow training",
+                        workload={
+                            "kind": "train",
+                            "training_method": "supervised",
+                            "execution": "single_process",
+                        },
+                        checks={"validation_mse": {"max": 100}},
+                    )
+                    (recipe_root / "linear.json").write_text(json.dumps(recipe))
+                    assert (
+                        run_experiment(recipe_root / "linear.json", root)["status"] == "succeeded"
+                    )
+                    page.locator('[data-view="runs"]').click()
+                    expect(page.locator("#runs-body tr")).to_have_count(5, timeout=10000)
+                    page.get_by_label("Search runs", exact=True).fill("supervised")
+                    expect(page.locator("#runs-body tr")).to_have_count(1)
+                    page.get_by_role("button", name="Workflow training", exact=True).click()
+                    expect(page.locator("#detail-content")).to_contain_text("single_process")
+                    expect(page.locator("#detail-content")).to_contain_text('"max":100')
+                    page.get_by_role("button", name="Verify saved files").click()
+                    expect(page.locator("#verification")).to_contain_text("match")
+                    page.get_by_role("button", name="Close run details").click()
+                    page.get_by_label("Search runs", exact=True).fill("")
                     screenshot_root = Path("/tmp/trainlab-browser-qa")
                     screenshot_root.mkdir(exist_ok=True)
                     page.screenshot(path=str(screenshot_root / "desktop.png"), full_page=True)

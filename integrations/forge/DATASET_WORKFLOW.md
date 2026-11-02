@@ -41,6 +41,14 @@ python -m pip install ./integrations/forge ./integrations/trainlab
 trainlab serve --runs /tmp/forge-workbench/runs --experiments /tmp/forge-workbench
 ```
 
+## Model lifecycle extension
+
+The [model workflow guide](../trainlab/MODEL_WORKFLOWS.md) extends the pinned
+dataset handoff through supervised training, checkpoint-based fine-tuning,
+debugging, module profiling, validation tests, export and local inference checks.
+Run `examples/model_workflow.py` with `--output` pointing to a new directory.
+The example uses constructed data and confers no independent qualification.
+
 ## Reading an existing release
 
 Record the manifest SHA256 in the frozen experiment protocol when releasing the
