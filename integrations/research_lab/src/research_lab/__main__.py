@@ -43,8 +43,9 @@ def parser():
     lane.add_argument("path", type=Path)
     lane.add_argument("--recipes", type=Path)
     sub.add_parser("dispatch")
-    supervisor = sub.add_parser("supervise")
-    supervisor.add_argument("workers", type=Path)
+    for command in ("supervise", "health"):
+        supervisor = sub.add_parser(command)
+        supervisor.add_argument("workers", type=Path)
     recover = sub.add_parser("recover")
     recover.add_argument("task")
     recover.add_argument("--confirmed-stopped", action="store_true")
@@ -122,6 +123,10 @@ def main(argv=None):
 
             supervise(lab, read_json(args.workers), stop=signal_stop())
             result = {"supervisor": "stopped"}
+        elif args.command == "health":
+            from .supervisor import health
+
+            result = health(lab, read_json(args.workers))
         elif args.command == "status":
             result = lab.status()
         elif args.command == "expire":
@@ -178,7 +183,7 @@ def main(argv=None):
                 server.server_close()
             return 0
         print(json.dumps(result, indent=2, allow_nan=False))
-        return 0
+        return 1 if args.command == "health" and not result["healthy"] else 0
     except (LabError, OSError, ValueError) as exc:
         print("Research Lab OS: " + str(exc), file=sys.stderr)
         return 1

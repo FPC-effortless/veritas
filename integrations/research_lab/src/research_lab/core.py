@@ -153,6 +153,11 @@ class Controller:
                     host TEXT NOT NULL, pid INTEGER NOT NULL, last_seen REAL NOT NULL,
                     state TEXT NOT NULL, task TEXT
                 );
+                CREATE TABLE IF NOT EXISTS supervisor_activity (
+                    id INTEGER PRIMARY KEY CHECK(id=1), session TEXT NOT NULL,
+                    host TEXT NOT NULL, pid INTEGER NOT NULL, last_seen REAL NOT NULL,
+                    state TEXT NOT NULL, workers TEXT NOT NULL, children TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS protocols (
                     id TEXT PRIMARY KEY, program TEXT NOT NULL REFERENCES programs(id),
                     spec TEXT NOT NULL, pin TEXT NOT NULL, snapshot_pin TEXT NOT NULL
