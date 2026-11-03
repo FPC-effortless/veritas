@@ -1,0 +1,154 @@
+{
+  "schema": "research_lab.source_catalog.v1",
+  "lanes": [
+    {
+      "id": "TAC_CORE",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "PSN",
+      "archive": "ARCHPAR002_Scientific_Master.zip",
+      "archive_sha256": "c2ba36f9558f5629f6f90eaea511a54f5b7cd7d2a21aeccf614bd4335adbc039",
+      "library_file_id": "libfile_1a76323fd44c819188eb4fd69bc9887c",
+      "prefix": "ARCHPAR002/psn/",
+      "required": [
+        "model.py",
+        "run_study.py",
+        "PROTOCOL.json"
+      ],
+      "next_test": "Fix fresh append-adapter value retrieval on held-out histories before integration"
+    },
+    {
+      "id": "PSN2",
+      "archive": "ARCHPAR001_Code_Results_and_Audits.zip",
+      "archive_sha256": "a1e25d23720a635944ee5d6a5e147195e1d4fb68778578198ff826033888b4bf",
+      "library_file_id": "libfile_05c8b6dc2e1c8191be03c435c48ed46b",
+      "prefix": "ARCHPAR001/psn2/",
+      "required": [
+        "launch.py",
+        "PROTOCOL.json"
+      ],
+      "next_test": "Remove pulse path under frozen seeds and matched decoder"
+    },
+    {
+      "id": "DPSL",
+      "archive": "ARCHPAR002_Scientific_Master.zip",
+      "archive_sha256": "c2ba36f9558f5629f6f90eaea511a54f5b7cd7d2a21aeccf614bd4335adbc039",
+      "library_file_id": "libfile_1a76323fd44c819188eb4fd69bc9887c",
+      "prefix": "ARCHPAR002/dpsl/",
+      "required": [
+        "adapter.py",
+        "study.py",
+        "PROTOCOL.json"
+      ],
+      "next_test": "Compare graph association update versus explicit replacement after unrelated-key edits"
+    },
+    {
+      "id": "BOUNDED_FIELD",
+      "archive": "ARCHPAR002_Scientific_Master.zip",
+      "archive_sha256": "c2ba36f9558f5629f6f90eaea511a54f5b7cd7d2a21aeccf614bd4335adbc039",
+      "library_file_id": "libfile_1a76323fd44c819188eb4fd69bc9887c",
+      "prefix": "ARCHPAR002/gating/",
+      "required": [
+        "model.py",
+        "train.py",
+        "PROTOCOL.json"
+      ],
+      "next_test": "Factor relevance gating from query addressing and audit retrieval at fixed context"
+    },
+    {
+      "id": "ATLAS_CASSA",
+      "archive": "ARCHPAR001_Code_Results_and_Audits.zip",
+      "archive_sha256": "a1e25d23720a635944ee5d6a5e147195e1d4fb68778578198ff826033888b4bf",
+      "library_file_id": "libfile_05c8b6dc2e1c8191be03c435c48ed46b",
+      "prefix": "ARCHPAR001/atlas/",
+      "required": [
+        "study.py",
+        "PROTOCOL.json"
+      ],
+      "next_test": "Specify a geometry-requiring task and ablate transport"
+    },
+    {
+      "id": "USEF_X",
+      "archive": "ARCHPAR001_Code_Results_and_Audits.zip",
+      "archive_sha256": "a1e25d23720a635944ee5d6a5e147195e1d4fb68778578198ff826033888b4bf",
+      "library_file_id": "libfile_05c8b6dc2e1c8191be03c435c48ed46b",
+      "prefix": "ARCHPAR001/usef/",
+      "required": [
+        "experiment.py",
+        "PROTOCOL.json"
+      ],
+      "next_test": "Qualify fresh-factor learning before measuring retention"
+    },
+    {
+      "id": "NSF_V8_NFD",
+      "archive": "ARCHPAR002_Scientific_Master.zip",
+      "archive_sha256": "c2ba36f9558f5629f6f90eaea511a54f5b7cd7d2a21aeccf614bd4335adbc039",
+      "library_file_id": "libfile_1a76323fd44c819188eb4fd69bc9887c",
+      "prefix": "ARCHPAR002/nfd/",
+      "required": [
+        "run_study.py",
+        "PROTOCOL.json"
+      ],
+      "next_test": "Freeze compact features and test fresh seeds and longer delays"
+    },
+    {
+      "id": "FLOCK_COLLECT",
+      "archive": "FLOCK008_Code_Data_and_Evidence.zip",
+      "archive_sha256": "547c874943652a22ce0ba5d5aaa5bcc3333da3221d18281543929ec631197246",
+      "library_file_id": "libfile_89fa495b9ca88191bf15c49c6e21b942",
+      "prefix": "",
+      "required": [
+        "models008.py",
+        "train008.py"
+      ],
+      "next_test": "Hold load and sequence length independently; compare split-address and matrix state; stress multiple writes"
+    },
+    {
+      "id": "SSA",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "PRS",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "SCM_SIE",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "GEOMETRIC_KAKEYA",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "TOKENIZATION",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "LEARNING_OBJECTIVES",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "GPU_KERNELS",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "MEMORY_GOVERNANCE",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    },
+    {
+      "id": "TAC_OCR",
+      "archive": null,
+      "reason": "Exact lane source is being recovered separately; no training recipe admitted by this catalog."
+    }
+  ]
+}

@@ -120,3 +120,27 @@ Training and provider budgets are bounded by their registered programs. A proces
 supervisor may poll indefinitely while waiting for genuine review; that does not
 authorize new paid compute. No publication, scientific promotion or repository
 merge is performed by the dispatcher.
+
+## Recover real lane source before admission
+
+`examples/frontier_source_catalog.json` pins available original archives, required
+entrypoints and their Library identities. A null archive means that this catalog
+has not yet bound that lane's source; it does not establish that no source exists.
+The current catalog includes eight archived source closures. Later lane research
+can supersede these references only with explicit new identities.
+
+```bash
+python -m research_lab.source_recovery \
+  integrations/research_lab/examples/frontier_source_catalog.json \
+  /private/downloaded-archives /private/recovered-source \
+  --report /private/source-recovery.json
+```
+
+The checker verifies archive hashes and required files, rejects ambiguous names,
+traversal, symlinks and oversized archives, recovers source into an immutable
+per-lane directory, and parses Python syntax without importing the programs.
+Binary checkpoints/datasets are not extracted. JavaScript syntax, dependency
+completeness, source rights, trained behavior and scientific admission remain
+explicitly unverified by this operation. It performs zero optimizer updates and
+starts no workers. Preserve the report and source manifests alongside subsequent
+protocols; do not relabel successful recovery as a running architecture campaign.
