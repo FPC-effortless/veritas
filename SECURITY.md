@@ -36,10 +36,19 @@ Private evaluator state, sealed assets and source-rights controls remain distinc
 from local file-integrity checks. See [LICENSING.md](LICENSING.md) and
 [private benchmark handling](docs/commercial/private-benchmark-handling.md).
 
-## Current known deployment limit
+## Validation and deployment limits
 
-The optional PyTorch CPU image passed local operation checks but its image-security
-gate remains blocked by HIGH system-package findings. The dated evidence is in
-[the PyTorch guide](integrations/trainlab/PYTORCH.md). Do not treat that candidate
-as a production release. Security scans and release gates remain fail-closed;
-there is no exception merely because a vulnerability has no vendor fix listed.
+The Node dependency audit rejects every reported severity, including development
+dependencies. The API and optional PyTorch image workflows reject HIGH/CRITICAL
+findings, including unfixed vulnerabilities, and retain complete package
+inventories. The API build context allows public package inputs only; local run
+stores, credentials and Git data are excluded.
+
+The remediated PyTorch CPU image passed its recorded security and functional
+checks; dated evidence and limits are in [the PyTorch guide](integrations/trainlab/PYTORCH.md).
+CUDA/NCCL and multi-node qualification still require their own hardware evidence.
+These checks do not authorize production deployment or scientific promotion.
+Existing release artifacts and running deployments are not replaced by a source
+merge: validate each exact image identity. Security and release gates remain
+fail-closed; there is no exception merely because a vulnerability has no vendor
+fix listed.
