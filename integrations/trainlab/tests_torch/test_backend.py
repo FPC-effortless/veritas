@@ -56,6 +56,15 @@ class BackendTests(unittest.TestCase):
         self.model(self.inputs).sum().backward()
         self.assertGreater(check_model(self.model, gradients=True)["gradient_values"], 0)
 
+    def test_numpy_tensor_interoperability(self):
+        import numpy as np
+
+        source = np.array([[1.0, 2.0]], dtype=np.float32)
+        tensor = torch.from_numpy(source)
+        tensor.add_(1)
+        np.testing.assert_array_equal(source, [[2.0, 3.0]])
+        np.testing.assert_array_equal(tensor.numpy(), source)
+
     def test_nonfinite_activation_and_empty_tensor_fail_and_cleanup(self):
         with torch.no_grad():
             self.model[0].weight[0, 0] = float("inf")

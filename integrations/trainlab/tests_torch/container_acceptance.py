@@ -72,11 +72,15 @@ raise SystemExit(result.returncode)
         # Fresh container: no recipe code or eager checkpoint is needed to load
         # the exported graph and check its previously pinned reference outputs.
         load = """
-import importlib.util,json,os,torch
+import importlib.metadata,importlib.util,json,os,torch
 from pathlib import Path
 from trainlab.runner import list_runs,read_json,verify_run
 assert os.getuid()==10001
 assert importlib.util.find_spec('pip') is None
+assert importlib.util.find_spec('ensurepip') is None
+assert importlib.metadata.version('torch')==str(torch.__version__)
+inventory=Path('/lib/apk/db/installed').read_text().splitlines()
+assert 'P:python-3.12-base' in inventory and any(p.startswith('P:glibc') for p in inventory)
 assert torch.version.cuda is None
 root=Path('/data/acceptance/runs')
 runs=list_runs(root)

@@ -33,7 +33,8 @@ both agent results. Passing these is implementation evidence only.
 | Independent external user replication | NOT_PERFORMED; code tests and same-host replay do not substitute for another developer |
 | Head-to-head competitive/productivity proof | NOT_PERFORMED; no claim to outperform HUD, Harbor, MLflow, DVC or Ray |
 | Useful trained-model improvement surviving independent held-out scoring | NOT_DEMONSTRATED by this scripted fixture; requires authorized models/data and separate reviewed experiment |
-| Package publication / public launch / production rollout | NOT_AUTHORIZED by these changes; existing release gates and the PyTorch image-security blocker remain binding |
+| CPU image vulnerability remediation | The [current PyTorch runtime](../../integrations/trainlab/PYTORCH.md) passed its recorded scan and CPU checks; CUDA remains unverified |
+| Package publication / public launch / production rollout | NOT_AUTHORIZED by these changes; existing release, fresh image-security and operator-acceptance gates remain binding |
 | Design-partner conversations / paid pilots / repeat purchase | NOT_VALIDATED; use the existing commercial inquiry and pilot material |
 
 Do not reset the existing [paid-pilot launch checklist](../commercial/launch-checklist.md)
@@ -95,5 +96,6 @@ Python-file checksums in historical evidence manifests, and one receipt-fixture
 source-kind enum. No credential was tested, no history rewritten and no ignore
 rule added. This bounded scan is not a guarantee that every secret format,
 private benchmark disclosure, historical Actions artifact, third-party right or
-copyright chain has been audited. The full legal/private-data review and the
-existing production image-security gate remain open.
+copyright chain has been audited. The full legal/private-data review and
+production operator acceptance remain open; every proposed image still needs a
+fresh security scan.
