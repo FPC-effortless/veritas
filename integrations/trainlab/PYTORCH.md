@@ -53,7 +53,8 @@ resumption is not promised by this example.
 
 ## Install the validated CPU runtime
 
-The CPU lock targets **CPython 3.12, Linux x86_64**, with PyTorch 2.15.0+cpu.
+The CPU lock targets **CPython 3.12, Linux x86_64**, with PyTorch 2.15.0+cpu
+and NumPy 2.5.4 for tensor/array interoperability.
 Its transitive dependency versions and wheel hashes are frozen. Other Python
 versions, architectures and accelerator runtimes need a separately reviewed lock.
 
@@ -127,7 +128,10 @@ trace independently of numerical checks.
 ## Offline CPU container
 
 The existing Alpine image remains the small dependency-free workbench. The
-separate `Dockerfile.torch` pins a glibc Python base and hash-locked CPU wheels.
+separate `Dockerfile.torch` pins a Wolfi glibc base, versioned CPython 3.12 system
+packages and hash-locked CPU wheels. Python dependencies live in a private virtual
+environment. The build-only system pip packages are uninstalled through APK;
+the runtime retains the APK database and Python distribution metadata for scanning.
 It runs as UID/GID 10001, includes Forge and the neural example, and removes pip
 and ensurepip. It is not a CUDA image. Build from the repository root:
 
@@ -137,8 +141,10 @@ docker build --build-arg VCS_REF="$(git rev-parse HEAD)" \
 python integrations/trainlab/tests_torch/container_acceptance.py --image trainlab-pytorch:reviewed
 ```
 
-The Dockerfile has the same optional BuildKit `proxy_ca` secret as the default
-image; session trust material stays out of image layers. A dedicated context
+The Dockerfile accepts the optional BuildKit `proxy_ca` secret. When a build proxy
+needs additional trust, pass a combined CA bundle containing the normal roots and
+the proxy root. It replaces the CA bundle only during the networked build step;
+session trust material stays out of image layers. A dedicated context
 allowlist excludes credentials, run stores, private Veritas assets and Git data.
 Only trusted public package sources/examples enter the image.
 
@@ -187,15 +193,54 @@ container checks completed all eight stages and the fresh exported graph matched
 its reference with maximum error 0. The existing authenticated container,
 restart and backup/restore acceptance also passed on the optional image.
 
-**Production image security is blocked.** Trivy 0.76.1 scanned the pinned Debian
-13.7/glibc image, including its installed PyTorch 2.15.0+cpu metadata. It reported
+**The original Debian candidate failed image security.** Trivy 0.76.1 scanned its
+pinned Debian 13.7/glibc image, including its installed PyTorch 2.15.0+cpu metadata.
+It reported
 45 HIGH entries across nine unique advisories and zero CRITICAL entries, with no
 vendor fixed versions listed. The findings cover system packages including
 util-linux, ACL, ncurses, SQLite, systemd and Perl. The previous Debian 12 base
 also had critical findings and was replaced. No finding was suppressed, no package
 inventory was removed, and the manual workflow continues to fail on any HIGH or
-CRITICAL result, including unfixed findings. This is verified local software
-operation, not production readiness or deployment authorization. The image must
-pass a fresh scan after upstream fixes or a separately validated runtime change
-before a production release. CUDA, NCCL/multi-GPU, multi-node execution and
-physical-device qualification remain unrun.
+CRITICAL result, including unfixed findings. The remediated runtime requires its
+own fresh scan and functional acceptance; passing those checks does not confer
+production deployment authorization. CUDA, NCCL/multi-GPU, multi-node execution
+and physical-device qualification remain unrun.
+
+## Image security remediation — 2026-11-03
+
+The runtime change must clear the image scan without ignoring unfixed findings,
+retain OS and Python package inventories, preserve the offline CPU workflow and
+authenticated recovery checks, and leave the base package dependency-free. The
+falsifiers are the failing Debian scan, tensor/NumPy interoperability, the real
+framework suite and the two existing container acceptance commands.
+
+The replacement pins a maintained Wolfi base by digest, CPython 3.12.16 system
+packages and the original PyTorch CPU wheel. NumPy 2.5.4 is now hash-locked and
+included in the optional `pytorch` extra: the previous image warned that NumPy
+could not initialize and failed actual tensor/array interchange. The added check
+failed before this dependency was supplied and passes in the rebuilt image.
+Build-only pip is removed using the package manager; the APK database and
+installed Python distribution metadata remain available to Trivy. Container
+acceptance checks their presence and verifies that pip and ensurepip are absent.
+
+Local checks used Trivy 0.76.1 with a newly downloaded database updated at
+2026-11-03T01:30:30Z. The Debian baseline still failed with 45 HIGH entries across
+nine advisories. The replacement reported **zero vulnerabilities at every
+severity**, with 35 OS and 28 Python package records, including PyTorch and NumPy.
+The manual workflow still rejects every HIGH/CRITICAL result, including unfixed
+findings, and now retains the complete package inventory in its JSON artifact.
+No ignore rule, severity override or inventory deletion was added.
+
+Inside the actual non-root/read-only image, 14 optional framework checks ran:
+13 passed, including exact optimizer/RNG replay and NumPy interoperability; the
+CUDA check skipped. The two offline containers completed eight stages and the
+independent graph load had maximum error 0. Authenticated workbench, Forge
+handoff, restart and backup/restore checks passed. A parallel local run exhausted
+workspace storage; recovery passed when rerun alone after discarded trial images
+were removed. Existing TrainLab (51) and Forge (68) tests also passed.
+
+These are recorded CPU software and image-security checks, not a timeless clean
+bill of health or production deployment authorization. Each proposed image needs
+a fresh scan and the operator gates in [PRODUCTION.md](PRODUCTION.md). CUDA/NCCL,
+multi-node and physical-device qualification still require an available GPU
+runtime and their own evidence; no GPU was attached for these checks.

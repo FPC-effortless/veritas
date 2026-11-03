@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1
 # Optional CPU framework runtime: CPython 3.12 / Linux x86_64 / glibc.
-FROM python:3.12-slim-trixie@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30
+FROM cgr.dev/chainguard/wolfi-base@sha256:fd50bd0cdeb808cf4f45c9c9189e0cc7f7fcc27195d69abd6622c80527e7e021
 ARG VCS_REF=unknown
 LABEL org.opencontainers.image.title="TrainLab PyTorch CPU" \
       org.opencontainers.image.source="https://github.com/FPC-effortless/veritas" \
       org.opencontainers.image.revision=$VCS_REF
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/tmp \
-    TORCH_HOME=/tmp/torch OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+    TORCH_HOME=/tmp/torch OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+    VIRTUAL_ENV=/opt/venv PATH=/opt/venv/bin:$PATH
 WORKDIR /opt/trainlab
 COPY integrations/trainlab/pyproject.toml integrations/trainlab/README.md integrations/trainlab/LICENSE ./
 COPY integrations/trainlab/requirements-server.txt integrations/trainlab/requirements-pytorch-cpu.txt ./
@@ -15,13 +16,17 @@ COPY integrations/trainlab/examples ./examples
 COPY integrations/forge/pyproject.toml integrations/forge/WORKBENCH.md integrations/forge/LICENSE /opt/forge/
 COPY integrations/forge/src /opt/forge/src
 COPY integrations/forge/examples/dataset_quickstart.py integrations/forge/examples/torch_workflow.py /opt/forge/examples/
-RUN --mount=type=secret,id=proxy_ca \
-    if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca; fi; \
-    python -m pip install --no-cache-dir --require-hashes -r requirements-server.txt -r requirements-pytorch-cpu.txt && \
-    python -m pip install --no-cache-dir --no-deps --no-build-isolation . /opt/forge && \
-    python -m pip check && \
-    python -m pip uninstall -y pip && \
-    rm -rf /usr/local/lib/python3.12/ensurepip && \
+RUN --mount=type=secret,id=proxy_ca,target=/etc/ssl/certs/ca-certificates.crt \
+    export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; \
+    apk add --no-cache python-3.12=3.12.16-r3 py3.12-pip=26.2.2-r2 \
+        libstdc++=16.2.0-r2 libgomp=16.2.0-r2 && \
+    /usr/bin/python3.12 -m venv --without-pip /opt/venv && \
+    /usr/bin/python3.12 -m pip --python /opt/venv/bin/python install --no-cache-dir --require-hashes \
+        -r requirements-server.txt -r requirements-pytorch-cpu.txt && \
+    /usr/bin/python3.12 -m pip --python /opt/venv/bin/python install --no-cache-dir --no-deps --no-build-isolation . /opt/forge && \
+    /usr/bin/python3.12 -m pip --python /opt/venv/bin/python check && \
+    apk del py3.12-pip && \
+    python -c 'import pathlib,shutil,sysconfig; shutil.rmtree(pathlib.Path(sysconfig.get_path("stdlib")) / "ensurepip")' && \
     chmod -R a+rX /opt/trainlab /opt/forge && \
     mkdir -p /data && chown 10001:10001 /data
 USER 10001:10001

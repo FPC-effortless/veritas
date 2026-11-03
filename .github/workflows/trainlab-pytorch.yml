@@ -37,6 +37,7 @@ jobs:
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: false
+          list-all-pkgs: true
           exit-code: '1'
           format: json
           output: ${{ runner.temp }}/trainlab-pytorch-image-audit.json
