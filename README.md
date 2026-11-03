@@ -19,6 +19,17 @@ See:
 - [`docs/portability/README.md`](docs/portability/README.md) — 0.11 vendor-neutral HUD/Prime portability contract;
 - [`LICENSING.md`](LICENSING.md) — public, private-benchmark, customer-output, and generated-data licensing policy.
 
+## Ecosystem and local quickstart
+
+Woyengi Intelligence Labs connects Forge's pinned datasets, TrainLab's execution
+records, Veritas verification and an experimental Research Lab coordination layer.
+The [ecosystem guide](docs/ecosystem/README.md) provides an account-free installed
+comparison of two public scripted agents, the [compatibility matrix](docs/ecosystem/compatibility.md),
+and an evidence-based [open-source launch worklist](docs/ecosystem/open-source-launch.md).
+Public software remains Apache-2.0; private benchmarks and customer assets retain
+their separate terms. See [contributing](CONTRIBUTING.md), [governance](GOVERNANCE.md)
+and [security reporting](SECURITY.md).
+
 ## Current release — 0.11.0
 
 The canonical software release is **Veritas 0.11.0** / tag **`v0.11.0`**. Buyer-facing release artifacts pin the Python distribution hashes, container digest, SRE qualification identities, portable manifest identity, HUD package identity, Prime package identity, SBOM, and provenance record. The release process is defined in [`.github/workflows/release.yml`](.github/workflows/release.yml).
