@@ -164,6 +164,33 @@ class ServiceHealthTests(unittest.TestCase):
         child.terminate.assert_called_once()
         child.wait.assert_called_once()
 
+    def test_shutdown_grace_is_shared_by_all_stuck_workers(self):
+        elapsed = [0.0]
+        children = [Mock(pid=os.getpid() + i) for i in range(len(self.workers))]
+
+        def wait(timeout=None):
+            if timeout is not None:
+                elapsed[0] += timeout
+                raise subprocess.TimeoutExpired("constructed-stuck-worker", timeout)
+            return -9
+
+        for child in children:
+            child.poll.return_value = None
+            child.wait.side_effect = wait
+        stop = Mock()
+        stop.is_set.side_effect = [False, True]
+        with (
+            patch("research_lab.supervisor.subprocess.Popen", side_effect=children),
+            patch("research_lab.supervisor.tick"),
+            patch("research_lab.supervisor.time.monotonic", side_effect=lambda: elapsed[0]),
+        ):
+            supervise(self.lab, self.workers, stop=stop)
+        self.assertEqual(elapsed[0], 15)
+        for child in children:
+            child.terminate.assert_called_once()
+            child.kill.assert_called_once()
+            self.assertEqual(child.wait.call_count, 2)
+
     def test_health_cli_fails_closed_without_service(self):
         result = subprocess.run(
             [

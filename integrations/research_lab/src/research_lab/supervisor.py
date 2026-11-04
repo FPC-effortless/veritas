@@ -232,9 +232,11 @@ def supervise(lab, workers, *, stop=None, interval=1):
                 for child in children.values():
                     if child.poll() is None:
                         child.terminate()
+                # One grace period for the service, not 15 seconds per worker.
+                deadline = time.monotonic() + 15
                 for child in children.values():
                     try:
-                        child.wait(timeout=15)
+                        child.wait(timeout=max(0, deadline - time.monotonic()))
                     except subprocess.TimeoutExpired:
                         child.kill()
                         child.wait()
