@@ -7,10 +7,10 @@ to spend, a completed experiment, or independently accepted science.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import re
 import time
+from datetime import datetime, timezone
 
 from .core import LabError, canonical, identity, name
 
@@ -101,7 +101,11 @@ def validate_note(note):
         raise LabError("invalid negative results")
     for item in note["negative_results"]:
         _bounded(item, "negative result")
-    _items(note["help_requests"], {"id", "target", "question", "expected_artifact", "evidence_ref"}, "requests")
+    _items(
+        note["help_requests"],
+        {"id", "target", "question", "expected_artifact", "evidence_ref"},
+        "requests",
+    )
     request_ids = set()
     for request in note["help_requests"]:
         name(request["id"])
@@ -169,7 +173,9 @@ def post_note(lab, note):
 
 def _latest_notes(db):
     notes = {}
-    for row in db.execute("SELECT department,id,pin,body,recorded_at FROM department_notes ORDER BY rowid"):
+    for row in db.execute(
+        "SELECT department,id,pin,body,recorded_at FROM department_notes ORDER BY rowid"
+    ):
         notes[row["department"]] = {
             "id": row["id"], "pin": row["pin"], "body": json.loads(row["body"]),
             "recorded_at": row["recorded_at"],
