@@ -7,6 +7,7 @@ to spend, a completed experiment, or independently accepted science.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import re
 import time
@@ -130,7 +131,7 @@ def validate_note(note):
 
 
 def initialize(lab):
-    with lab.transaction() as db:
+    with lab.connect() as db:
         db.executescript("""
             CREATE TABLE IF NOT EXISTS department_notes (
                 id TEXT PRIMARY KEY, department TEXT NOT NULL,
@@ -241,6 +242,7 @@ def convene(lab, meeting_id):
         if prior:
             return json.loads(prior["body"])
         minutes = _build_minutes(meeting_id, _latest_notes(db))
+        minutes["assembled_at_utc"] = datetime.now(timezone.utc).isoformat()
         pin = identity(minutes)
         minutes["pin"] = pin
         db.execute(
