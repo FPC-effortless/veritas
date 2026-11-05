@@ -169,23 +169,30 @@ def post_note(lab, note):
 
 def _latest_notes(db):
     notes = {}
-    for row in db.execute("SELECT department,id,pin,body FROM department_notes ORDER BY rowid"):
+    for row in db.execute("SELECT department,id,pin,body,recorded_at FROM department_notes ORDER BY rowid"):
         notes[row["department"]] = {
             "id": row["id"], "pin": row["pin"], "body": json.loads(row["body"]),
+            "recorded_at": row["recorded_at"],
         }
     return notes
 
 
-def _build_minutes(meeting_id, latest):
+def _build_minutes(meeting_id, latest, *, as_of):
     requests = {}
     responses = []
     shares = []
     departments = []
+    fresh_count = 0
     for department, title in DEPARTMENTS.items():
         record = latest.get(department)
+        is_fresh = bool(record and 0 <= as_of - record["recorded_at"] <= 7 * 86400)
+        fresh_count += int(is_fresh)
         departments.append({
             "id": department, "title": title, "head_role": "head." + department,
-            "report": "AUTHOR_REPORTED_UNVERIFIED" if record else "NO_SUBMISSION",
+            "report": (
+                "AUTHOR_REPORTED_UNVERIFIED" if is_fresh
+                else "STALE_NOTE_NOT_CURRENT_SUBMISSION" if record else "NO_SUBMISSION"
+            ),
             "note_id": record["id"] if record else None,
             "note_pin": record["pin"] if record else None,
             "stage": record["body"]["stage"] if record else None,
@@ -225,6 +232,7 @@ def _build_minutes(meeting_id, latest):
         "qualification": "AUTHOR_NOTES_UNVERIFIED",
         "departments": departments,
         "reported_departments": sum(bool(latest.get(dep)) for dep in DEPARTMENTS),
+        "freshly_reporting_departments": fresh_count,
         "expected_departments": len(DEPARTMENTS),
         "help_exchanges": exchanges,
         "shared_findings": shares,
@@ -241,8 +249,9 @@ def convene(lab, meeting_id):
         prior = db.execute("SELECT body FROM council_meetings WHERE id=?", (meeting_id,)).fetchone()
         if prior:
             return json.loads(prior["body"])
-        minutes = _build_minutes(meeting_id, _latest_notes(db))
-        minutes["assembled_at_utc"] = datetime.now(timezone.utc).isoformat()
+        now = time.time()
+        minutes = _build_minutes(meeting_id, _latest_notes(db), as_of=now)
+        minutes["assembled_at_utc"] = datetime.fromtimestamp(now, timezone.utc).isoformat()
         pin = identity(minutes)
         minutes["pin"] = pin
         db.execute(
