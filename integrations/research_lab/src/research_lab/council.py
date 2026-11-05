@@ -90,7 +90,7 @@ def validate_note(note):
         not isinstance(pin, str) or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", pin) is None
     ):
         raise LabError("source pin must be exact SHA or UNKNOWN")
-    if note["stage"] not in STAGES:
+    if not isinstance(note["stage"], str) or note["stage"] not in STAGES:
         raise LabError("unknown research department stage")
     for key in ("summary", "next_action"):
         _bounded(note[key], key)
@@ -112,7 +112,11 @@ def validate_note(note):
         if not request["id"].startswith(department + ".") or request["id"] in request_ids:
             raise LabError("request IDs must be unique and department-qualified")
         request_ids.add(request["id"])
-        if request["target"] not in DEPARTMENTS or request["target"] == department:
+        if (
+            not isinstance(request["target"], str)
+            or request["target"] not in DEPARTMENTS
+            or request["target"] == department
+        ):
             raise LabError("help request needs a different registered department")
         for key in ("question", "expected_artifact", "evidence_ref"):
             _bounded(request[key], key)
@@ -203,6 +207,13 @@ def _build_minutes(meeting_id, latest, *, as_of):
             "note_pin": record["pin"] if record else None,
             "stage": record["body"]["stage"] if record else None,
             "source_pin": record["body"]["source_pin"] if record else None,
+            "summary": record["body"]["summary"] if record else None,
+            "negative_results": record["body"]["negative_results"] if record else [],
+            "blocker": record["body"]["blocker"] if record else None,
+            "next_action": record["body"]["next_action"] if record else None,
+            "observed_execution_id": record["body"]["observed_execution_id"] if record else None,
+            "review_receipt": record["body"]["review_receipt"] if record else None,
+            "all_report_content_unverified": True,
         })
         if record:
             for item in record["body"]["help_requests"]:
