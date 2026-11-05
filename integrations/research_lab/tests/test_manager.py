@@ -72,5 +72,25 @@ class ManagerBriefTests(unittest.TestCase):
         self.assertIn("STOP", out["lanes"][0]["next_action"])
 
 
+    def test_installed_cli_projects_real_controller_without_admitting_jobs(self):
+        import io
+        import json
+        import tempfile
+        from contextlib import redirect_stdout
+        from pathlib import Path
+
+        from research_lab.__main__ import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                code = main(["--root", str(Path(directory) / "lab"), "manager"])
+            self.assertEqual(code, 0)
+            projected = json.loads(buffer.getvalue())
+            self.assertEqual(projected["schema"], "research_lab.manager_brief.v1")
+            self.assertEqual(projected["lanes"], [])
+            self.assertEqual(projected["task_counts"], {})
+            self.assertEqual(projected["hosting"], "UNVERIFIED_FROM_CONTROLLER_STATE")
+
 if __name__ == "__main__":
     unittest.main()
