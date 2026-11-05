@@ -86,6 +86,10 @@ class ResearchCouncilTests(unittest.TestCase):
         self.assertTrue(council.post_note(self.lab, b)["created"])
         minutes = council.convene(self.lab, "20261105.evening")
         self.assertEqual(minutes["reported_departments"], 2)
+        flock = next(x for x in minutes["departments"] if x["id"] == "FLOCK_COLLECT")
+        self.assertIn("No native execution", flock["negative_results"][0])
+        self.assertEqual(flock["next_action"], "Review frozen source closure.")
+        self.assertTrue(flock["all_report_content_unverified"])
         self.assertEqual(len(minutes["help_exchanges"]), 1)
         request = minutes["help_exchanges"][0]
         self.assertEqual(request["origin"], "FLOCK_COLLECT")
@@ -136,6 +140,7 @@ class ResearchCouncilTests(unittest.TestCase):
             {"head_role": "head.TAC_CORE"},
             {"source_pin": "not-hash"},
             {"stage": "PUBLISHED_FRONTIER"},
+            {"stage": ["REVIEWED_REPORTED"]},
             {"reporter_principal": "not a safe id"},
         ]
         for change in variants:
