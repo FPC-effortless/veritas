@@ -72,7 +72,9 @@ not treat the meeting digest as a live multi-agent conversation.
 
 The post operation is append-only: mutated IDs fail. Each meet freezes the
 latest submitted note per department; repeated meeting IDs return the original
-snapshot, even if newer notes arrive. It writes SQLite and event-chain entries
+snapshot, even if newer notes arrive. Reports older than seven days are
+marked STALE_NOTE_NOT_CURRENT_SUBMISSION rather than current head activity.
+It writes SQLite and event-chain entries
 but creates no jobs, workers, paid reservations, or approved scientific claims.
 The local event chain is not an external tamper-proof receipt. Do not publish
 the raw DB or unsanitized council notes.
