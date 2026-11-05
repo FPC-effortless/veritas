@@ -4,6 +4,7 @@ import copy
 import io
 import json
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -149,6 +150,20 @@ class ResearchCouncilTests(unittest.TestCase):
         for change in ({"id": "unscoped", "target": "SSA"}, sample):
             with self.subTest(change=change), self.assertRaises(LabError):
                 council.post_note(self.lab, {**base, "help_requests": [change]})
+
+    def test_stale_note_is_not_current_head_participation(self):
+        council.post_note(self.lab, note("GPU_KERNELS", "kernels.old"))
+        with self.lab.transaction() as db:
+            db.execute(
+                "UPDATE department_notes SET recorded_at=? WHERE id=?",
+                (time.time() - 8 * 86400, "kernels.old"),
+            )
+        minutes = council.convene(self.lab, "20261105.stale")
+        self.assertEqual(minutes["reported_departments"], 1)
+        self.assertEqual(minutes["freshly_reporting_departments"], 0)
+        department = next(x for x in minutes["departments"] if x["id"] == "GPU_KERNELS")
+        self.assertEqual(department["report"], "STALE_NOTE_NOT_CURRENT_SUBMISSION")
+        self.assertIn("NO_INDEPENDENT_HEAD", minutes["attendance"])
 
     def test_cli_roster_post_meet_latest_is_durable(self):
         root = str(self.tmp / "cli")
