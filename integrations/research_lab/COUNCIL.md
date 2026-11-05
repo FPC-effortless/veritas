@@ -74,6 +74,13 @@ The post operation is append-only: mutated IDs fail. Each meet freezes the
 latest submitted note per department; repeated meeting IDs return the original
 snapshot, even if newer notes arrive. Reports older than seven days are
 marked STALE_NOTE_NOT_CURRENT_SUBMISSION rather than current head activity.
+Help request IDs also keep their original target, question, expected artifact
+and evidence reference across all notes, even after an intervening omission.
+Carry unchanged requests forward as needed; use a new request ID for changed
+work so responses to the old request are not reassigned. If an older database
+contains conflicting definitions of an active request, new meeting assembly
+fails until the department posts a new note using a new request ID. Existing
+notes and frozen minutes are retained unchanged.
 It writes SQLite and event-chain entries
 but creates no jobs, workers, paid reservations, or approved scientific claims.
 The local event chain is not an external tamper-proof receipt. Do not publish

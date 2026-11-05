@@ -82,7 +82,11 @@ def validate_note(note):
         raise LabError("unsupported department note")
     name(note["id"])
     department = note["department"]
-    if department not in DEPARTMENTS or note["head_role"] != "head." + department:
+    if (
+        not isinstance(department, str)
+        or department not in DEPARTMENTS
+        or note["head_role"] != "head." + department
+    ):
         raise LabError("unknown department or mismatched head role")
     name(note["reporter_principal"])  # asserted, not an authenticated agent session
     pin = note["source_pin"]
@@ -152,6 +156,19 @@ def initialize(lab):
         """)
 
 
+def _check_request_identity(db, note):
+    """A carried request ID must keep its original content, even after omission."""
+    requests = {item["id"]: item for item in note["help_requests"]}
+    if not requests:
+        return
+    for row in db.execute(
+        "SELECT body FROM department_notes WHERE department=?", (note["department"],)
+    ):
+        for prior in json.loads(row["body"])["help_requests"]:
+            if prior["id"] in requests and prior != requests[prior["id"]]:
+                raise LabError("help request is immutable; use a new request ID")
+
+
 def post_note(lab, note):
     """Append-only. Reusing an ID with changed source/content fails closed."""
     validate_note(note)
@@ -164,6 +181,7 @@ def post_note(lab, note):
                 raise LabError("department note is immutable; use a new ID")
             return {"id": note["id"], "pin": pin, "created": False,
                     "qualification": "AUTHOR_REPORTED_UNVERIFIED"}
+        _check_request_identity(db, note)
         db.execute(
             "INSERT INTO department_notes VALUES (?,?,?,?,?)",
             (note["id"], note["department"], pin, canonical(note), time.time()),
@@ -184,6 +202,10 @@ def _latest_notes(db):
             "id": row["id"], "pin": row["pin"], "body": json.loads(row["body"]),
             "recorded_at": row["recorded_at"],
         }
+    # Old versions allowed conflicting request reuse. Preserve old minutes, but
+    # require new identities before assembling another misleading snapshot.
+    for record in notes.values():
+        _check_request_identity(db, record["body"])
     return notes
 
 

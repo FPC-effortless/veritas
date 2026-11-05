@@ -6,7 +6,7 @@ import json
 import tempfile
 import time
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from research_lab import council
@@ -189,6 +189,100 @@ class ResearchCouncilTests(unittest.TestCase):
                 if expected_schema:
                     self.assertEqual(result["schema"], expected_schema)
         self.assertEqual(result["reported_departments"], 1)
+
+    def request_note(self, note_id="psn.request1"):
+        result = note("PSN", note_id)
+        result["help_requests"] = [{
+            "id": "PSN.revision_a", "target": "DPSL",
+            "question": "Review revision A", "expected_artifact": "Source review",
+            "evidence_ref": "revision-A",
+        }]
+        return result
+
+    def test_request_identity_is_immutable_across_note_history(self):
+        original = self.request_note()
+        council.post_note(self.lab, original)
+        # A later note omitting the request must not erase its identity.
+        council.post_note(self.lab, note("PSN", "psn.intervening"))
+        for field, value in (
+            ("question", "Review revision B"),
+            ("expected_artifact", "Different artifact"),
+            ("evidence_ref", "revision-B"),
+            ("target", "SSA"),
+        ):
+            changed = copy.deepcopy(original)
+            changed["id"] = "psn.changed." + field
+            changed["help_requests"][0][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(LabError, "request.*immutable"):
+                council.post_note(self.lab, changed)
+        with self.lab.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM department_notes").fetchone()[0], 2)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM events").fetchone()[0], 2)
+
+    def test_unchanged_request_can_be_carried_forward_without_rebinding_response(self):
+        original = self.request_note()
+        council.post_note(self.lab, original)
+        response = note("DPSL", "dpsl.response")
+        response["responses"] = [{
+            "request_id": "PSN.revision_a", "response": "Reviewed revision A",
+            "evidence_ref": "revision-A",
+        }]
+        council.post_note(self.lab, response)
+        first = council.convene(self.lab, "meeting.original")
+        carried = copy.deepcopy(original)
+        carried.update(id="psn.request2", summary="A new unrelated department update")
+        council.post_note(self.lab, carried)
+        self.assertEqual(council.convene(self.lab, "meeting.carried")["help_exchanges"], first["help_exchanges"])
+        changed = copy.deepcopy(carried)
+        changed["id"] = "psn.request3"
+        changed["help_requests"][0].update(id="PSN.revision_b", question="Review revision B", evidence_ref="revision-B")
+        council.post_note(self.lab, changed)
+        latest = council.convene(self.lab, "meeting.changed")
+        self.assertEqual(latest["help_exchanges"][0]["status"], "AWAITING_TARGET_REPORT")
+        self.assertEqual(len(latest["unmatched_responses"]), 1)
+        self.assertEqual(council.convene(self.lab, "meeting.original"), first)
+
+    def test_legacy_ambiguous_request_blocks_new_minutes_until_new_id(self):
+        original = self.request_note()
+        council.post_note(self.lab, original)
+        frozen = council.convene(self.lab, "meeting.historical")
+        changed = copy.deepcopy(original)
+        changed["id"] = "psn.legacy"
+        changed["help_requests"][0]["question"] = "Review revision B"
+        # Simulate a note accepted by the old implementation without rewriting history.
+        from research_lab.core import canonical, identity
+        with self.lab.transaction() as db:
+            db.execute("INSERT INTO department_notes VALUES (?,?,?,?,?)", (
+                changed["id"], changed["department"], identity(changed), canonical(changed), time.time(),
+            ))
+        with self.assertRaisesRegex(LabError, "request.*immutable"):
+            council.convene(self.lab, "meeting.ambiguous")
+        with self.lab.connect() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM council_meetings").fetchone()[0], 1)
+        self.assertEqual(council.convene(self.lab, "meeting.historical"), frozen)
+        repaired = copy.deepcopy(changed)
+        repaired["id"] = "psn.repaired"
+        repaired["help_requests"][0]["id"] = "PSN.revision_b"
+        council.post_note(self.lab, repaired)
+        self.assertEqual(council.convene(self.lab, "meeting.repaired")["help_exchanges"][0]["status"], "AWAITING_TARGET_REPORT")
+
+    def test_malformed_department_types_fail_with_domain_error(self):
+        for department in ([], {}, None, True, 123):
+            malformed = note("PSN", "psn.invalid")
+            malformed["department"] = department
+            with self.subTest(department=department), self.assertRaises(LabError):
+                council.post_note(self.lab, malformed)
+
+    def test_cli_malformed_department_is_handled_without_traceback(self):
+        path = self.tmp / "malformed.json"
+        malformed = note("PSN", "psn.invalid")
+        malformed["department"] = []
+        path.write_text(json.dumps(malformed))
+        error = io.StringIO()
+        with redirect_stderr(error):
+            self.assertEqual(main(["--root", str(self.tmp / "cli-invalid"), "council", "post", str(path)]), 1)
+        self.assertIn("Research Lab OS:", error.getvalue())
+        self.assertNotIn("Traceback", error.getvalue())
 
 
 if __name__ == "__main__":
