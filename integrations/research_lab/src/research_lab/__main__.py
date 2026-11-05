@@ -38,6 +38,7 @@ def parser():
     worker.add_argument("--watch", action="store_true")
     sub.add_parser("status")
     sub.add_parser("direct")
+    sub.add_parser("manager")
     sub.add_parser("expire")
     lane = sub.add_parser("activate")
     lane.add_argument("path", type=Path)
@@ -129,6 +130,10 @@ def main(argv=None):
             result = health(lab, read_json(args.workers))
         elif args.command == "status":
             result = lab.status()
+        elif args.command == "manager":
+            from .manager import manager_brief
+
+            result = manager_brief(lab.status())
         elif args.command == "expire":
             result = {"quarantined": lab.expire()}
         elif args.command == "recover":
