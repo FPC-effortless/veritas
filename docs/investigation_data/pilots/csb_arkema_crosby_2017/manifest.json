@@ -1,0 +1,140 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2017-08-I-TX-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2017-08-I-TX"
+  ],
+  "simulation_start": "2017-08-29T00:00:00Z",
+  "simulation_as_of": "2017-09-01T12:00:00Z",
+  "initial_public_state": {
+    "incident": "Hurricane Harvey flooding and subsequent organic-peroxide fires at the Arkema facility in Crosby, Texas",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct how an extreme-weather event degraded safety infrastructure, track changes in available safeguards and evacuation state, and revise causal hypotheses as CSB analysis becomes available.",
+    "epistemic_rule": "Early agency statements, preliminary reconstructions, and final institutional findings must remain temporally and epistemically distinct."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "arkema-crosby",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "Arkema Crosby Facility"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "review_video",
+    "request_document",
+    "build_timeline",
+    "map_dependency_failure",
+    "assess_safeguards",
+    "assess_evacuation_state",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "distinguish_early_statement_from_reconstruction": true,
+    "source_event_dates_are_date_precision_only": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-arkema-investigation-statement-2017-08-31",
+      "source_id": "uscsb",
+      "source_artifact_id": "arkema-investigation-statement-2017-08-31",
+      "case_ids": [
+        "CSB-2017-08-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/statement-from-csb-chairperson-vanessa-allen-sutherland-on-arkema-inc-incident/",
+      "content_ref": "external-document://uscsb/2017-08-I-TX/investigation-statement-2017-08-31",
+      "available_from": "2017-09-01T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-arkema-crosby-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-arkema-preliminary-animation-2017-11-15",
+      "source_id": "uscsb",
+      "source_artifact_id": "arkema-preliminary-animation-2017-11-15",
+      "case_ids": [
+        "CSB-2017-08-I-TX"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/preliminary-2d-animation-of-events-leading-to-2017-fire-at-arkema-chemical-plant-in-crosby-texas/",
+      "content_ref": "external-page://uscsb/2017-08-I-TX/preliminary-animation-2017-11-15",
+      "available_from": "2017-11-16T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-arkema-crosby-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-arkema-final-release-2018-05-24",
+      "source_id": "uscsb",
+      "source_artifact_id": "arkema-final-release-2018-05-24",
+      "case_ids": [
+        "CSB-2017-08-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-releases-arkema-final-report/",
+      "content_ref": "external-document://uscsb/2017-08-I-TX/final-release-2018-05-24",
+      "available_from": "2018-05-25T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-arkema-crosby-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "arkema-animation-to-initial-statement",
+      "source_fragment_id": "csb-arkema-preliminary-animation-2017-11-15",
+      "target_fragment_id": "csb-arkema-investigation-statement-2017-08-31",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "arkema-final-to-animation",
+      "source_fragment_id": "csb-arkema-final-release-2018-05-24",
+      "target_fragment_id": "csb-arkema-preliminary-animation-2017-11-15",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-arkema-final-institutional-findings-2018",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation concluded that Hurricane Harvey flooding disabled equipment and safeguards needed to keep organic peroxides refrigerated and identified a significant lack of industry guidance for planning against flooding and other severe weather hazards.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-arkema-final-release-2018-05-24"
+      ]
+    }
+  ],
+  "actual_timeline": [],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_dependency_failure_reasoning": true,
+    "require_extreme_weather_and_resilience_reasoning": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}

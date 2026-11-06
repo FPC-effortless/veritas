@@ -63,6 +63,17 @@ def _numeric_components(verification: Any) -> dict[str, float]:
     return result
 
 
+def _overall_reward(verification: Any) -> float:
+    payload = _dump(verification)
+    if isinstance(payload, dict):
+        for key in ("overall_reward", "outcome", "reward"):
+            value = payload.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                return float(value)
+    value = getattr(verification, "overall_reward", 0.0)
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.0
+
+
 class TracingRuntimeProxy:
     """Record public runtime operations without changing wrapped runtime semantics."""
 
@@ -89,23 +100,66 @@ class TracingRuntimeProxy:
         function = getattr(self.runtime, method)
         before = stable_hash(_state_payload(self.runtime))
         spent_before = _budget_spent(self.runtime)
-        result = function(*args, **kwargs)
+        try:
+            result = function(*args, **kwargs)
+        except Exception as exc:
+            after = stable_hash(_state_payload(self.runtime))
+            spent_after = _budget_spent(self.runtime)
+            self.events.append(
+                TraceEvent(
+                    step=len(self.events),
+                    event_type=f"{method}_error",
+                    payload={
+                        "method": method,
+                        "args": _dump(list(args)),
+                        "kwargs": _dump(kwargs),
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                        "success": False,
+                    },
+                    state_hash_before=before,
+                    state_hash_after=after,
+                    cost=max(0.0, spent_after - spent_before),
+                )
+            )
+            raise
         after = stable_hash(_state_payload(self.runtime))
         spent_after = _budget_spent(self.runtime)
-        self.events.append(TraceEvent(
-            step=len(self.events),
-            event_type=method,
-            payload={
-                "method": method,
-                "args": _dump(list(args)),
-                "kwargs": _dump(kwargs),
-                "result": _dump(result),
-            },
-            state_hash_before=before,
-            state_hash_after=after,
-            cost=max(0.0, spent_after - spent_before),
-        ))
+        self.events.append(
+            TraceEvent(
+                step=len(self.events),
+                event_type=method,
+                payload={
+                    "method": method,
+                    "args": _dump(list(args)),
+                    "kwargs": _dump(kwargs),
+                    "result": _dump(result),
+                    "success": True,
+                },
+                state_hash_before=before,
+                state_hash_after=after,
+                cost=max(0.0, spent_after - spent_before),
+            )
+        )
         return result
+
+    def web_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("web_search", *args, **kwargs)
+
+    def document_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("document_search", *args, **kwargs)
+
+    def registry_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("registry_search", *args, **kwargs)
+
+    def filing_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("filing_search", *args, **kwargs)
+
+    def archive_search(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("archive_search", *args, **kwargs)
+
+    def open_document(self, *args: Any, **kwargs: Any) -> Any:
+        return self._record_call("open_document", *args, **kwargs)
 
     def search_system(self, *args: Any, **kwargs: Any) -> Any:
         return self._record_call("search_system", *args, **kwargs)
@@ -138,7 +192,7 @@ class TracingRuntimeProxy:
 
     def trace(self, *, termination_reason: str = "submitted") -> RolloutTrace:
         final_payload = _state_payload(self.runtime)
-        reward = float(getattr(self.verification, "overall_reward", 0.0)) if self.verification is not None else 0.0
+        reward = _overall_reward(self.verification) if self.verification is not None else 0.0
         return RolloutTrace(
             trace_id=self.trace_id,
             environment_version=self.environment_version,
@@ -174,7 +228,6 @@ def _decode_replay_arg(method: str, position: int, value: Any) -> Any:
         from investigation_world.companyworld.interactive_models import OperationalAction
         return OperationalAction.model_validate(value)
     if method == "search_system":
-        # Interactive/sequential: system is arg 0. Dynamic: case id is arg 0, system arg 1.
         if position in {0, 1}:
             return _company_system(value)
     return value
@@ -188,8 +241,10 @@ def _decode_replay_kwargs(method: str, kwargs: dict[str, Any]) -> dict[str, Any]
 
 
 def replay_trace_prefix(runtime: Any, trace: RolloutTrace, *, through_step: int | None = None) -> Any:
-    """Replay recorded operations on a fresh runtime, excluding submission.
+    """Replay recorded successful operations on a fresh runtime, excluding submission.
 
+    Failed trace events are skipped because replaying them is not guaranteed to reproduce an
+    external/intervention failure unless the fresh runtime carries the same failure schedule.
     `through_step` is inclusive. Replay starts from reset rather than restoring private runtime
     state, so it stays inside public runtime APIs and deterministic episode semantics.
     """
@@ -197,7 +252,11 @@ def replay_trace_prefix(runtime: Any, trace: RolloutTrace, *, through_step: int 
         if through_step is not None and event.step > through_step:
             break
         method = event.payload.get("method")
-        if method == "submit" or not isinstance(method, str):
+        if (
+            method == "submit"
+            or not isinstance(method, str)
+            or event.payload.get("success") is False
+        ):
             continue
         function = getattr(runtime, method)
         raw_args = event.payload.get("args", [])
@@ -220,7 +279,7 @@ def execute_counterfactual(
     alternate_args: list[Any],
     alternate_kwargs: dict[str, Any] | None = None,
 ) -> Any:
-    """Replay the prefix before `branch_step`, then execute an alternate operation."""
+    """Replay the successful prefix before `branch_step`, then execute an alternate operation."""
     runtime = runtime_factory()
     replay_trace_prefix(runtime, trace, through_step=branch_step - 1)
     decoded = [

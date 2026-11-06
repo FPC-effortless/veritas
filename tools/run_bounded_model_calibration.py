@@ -8,7 +8,9 @@ from pathlib import Path
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a bounded real-LLM CompanyWorld calibration screen")
+    parser = argparse.ArgumentParser(
+        description="Run a bounded real-LLM CompanyWorld calibration screen"
+    )
     parser.add_argument("--model", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-new-tokens", type=int, default=128)
@@ -22,7 +24,6 @@ def main() -> None:
 
     import torch
     import transformers
-    from packaging.version import Version
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     from investigation_world.calibration.bounded import run_bounded_calibration
@@ -31,12 +32,10 @@ def main() -> None:
     started = time.time()
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=args.trust_remote_code)
 
-    # Transformers introduced the generic `dtype=` loading keyword after the
-    # Phi-compatible 4.43 release. Preserve compatibility with both API eras
-    # without changing benchmark prompts or scoring semantics.
-    dtype_kwarg = "torch_dtype" if Version(transformers.__version__) < Version("4.45.0") else "dtype"
+    # The supported Transformers 4.x range accepts torch_dtype throughout;
+    # older releases forward an unknown dtype keyword to the model constructor.
     model_kwargs = {
-        dtype_kwarg: dtype,
+        "torch_dtype": dtype,
         "low_cpu_mem_usage": True,
         "trust_remote_code": args.trust_remote_code,
     }
@@ -49,14 +48,21 @@ def main() -> None:
     def generate(prompt: str) -> str:
         nonlocal generation_seconds, calls
         messages = [
-            {"role": "system", "content": "Follow the requested JSON schema exactly. Return JSON only."},
+            {
+                "role": "system",
+                "content": "Follow the requested JSON schema exactly. Return JSON only.",
+            },
             {"role": "user", "content": prompt},
         ]
         if getattr(tokenizer, "chat_template", None):
-            rendered = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            rendered = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
         else:
             rendered = messages[0]["content"] + "\n\n" + messages[1]["content"]
-        encoded = tokenizer(rendered, return_tensors="pt", truncation=True, max_length=args.max_input_tokens)
+        encoded = tokenizer(
+            rendered, return_tensors="pt", truncation=True, max_length=args.max_input_tokens
+        )
         tick = time.time()
         with torch.inference_mode():
             output = model.generate(
@@ -67,7 +73,7 @@ def main() -> None:
             )
         generation_seconds += time.time() - tick
         calls += 1
-        generated = output[0][encoded["input_ids"].shape[-1]:]
+        generated = output[0][encoded["input_ids"].shape[-1] :]
         return tokenizer.decode(generated, skip_special_tokens=True)
 
     report = run_bounded_calibration(

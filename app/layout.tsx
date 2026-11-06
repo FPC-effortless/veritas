@@ -3,9 +3,11 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: 'Veritas — Enterprise Agent Evaluation',
+  description:
+    'Independent evaluation and capability-development environments for enterprise AI agents.',
+  applicationName: 'Veritas',
+  generator: 'Next.js',
   icons: {
     icon: [
       {
@@ -26,11 +28,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
-  ],
+  colorScheme: 'light',
+  themeColor: '#fafafa',
 }
 
 export default function RootLayout({

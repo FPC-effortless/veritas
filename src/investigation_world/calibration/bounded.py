@@ -16,11 +16,12 @@ from investigation_world.calibration.full_context import (
 from investigation_world.companyworld.interactive_runtime import InteractiveCompanyWorldRuntime
 from investigation_world.companyworld.verifier import verify_companyworld
 
-
 SUPPORTED_LEVELS = ("diagnostic", "interactive")
 
 
-def _score_diagnostic_bounded(generate: GenerateFn, *, episode_limit: int) -> tuple[list[float], int]:
+def _score_diagnostic_bounded(
+    generate: GenerateFn, *, episode_limit: int
+) -> tuple[list[float], int]:
     scores: list[float] = []
     failures = 0
     for episode in diagnostic_fixture()[:episode_limit]:
@@ -32,7 +33,9 @@ def _score_diagnostic_bounded(generate: GenerateFn, *, episode_limit: int) -> tu
     return scores, failures
 
 
-def _score_interactive_bounded(generate: GenerateFn, *, episode_limit: int) -> tuple[list[float], int]:
+def _score_interactive_bounded(
+    generate: GenerateFn, *, episode_limit: int
+) -> tuple[list[float], int]:
     scores: list[float] = []
     failures = 0
     for episode in interactive_fixture()[:episode_limit]:
@@ -88,5 +91,8 @@ def run_bounded_calibration(
         "reference_anchors": {level: refs[level] for level in levels},
         "empty_anchors": {level: empties[level] for level in levels},
         "parse_failures": parse_failures,
-        "purpose": "strong-model capability emergence screen; not a procurement-grade comparative benchmark",
+        "purpose": (
+            "strong-model capability emergence screen; "
+            "not a procurement-grade comparative benchmark"
+        ),
     }

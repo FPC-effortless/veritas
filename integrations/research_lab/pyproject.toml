@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "research-lab-os"
+version = "0.1.0"
+description = "Persistent research operations around TrainLab evidence"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = ["trainlab-local>=0.3.0,<0.4"]
+
+[project.scripts]
+research-lab = "research_lab.__main__:main"
+veritas-ecosystem = "research_lab.ecosystem:main"
+
+[project.urls]
+Source = "https://github.com/FPC-effortless/veritas/tree/main/integrations/research_lab"
+Issues = "https://github.com/FPC-effortless/veritas/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+research_lab = ["static/*"]

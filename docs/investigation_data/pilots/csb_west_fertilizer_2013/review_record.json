@@ -1,0 +1,23 @@
+{
+  "review_id": "review-csb-west-fertilizer-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2013-02-I-TX",
+  "scope": [
+    "Reference CSB-authored public news, investigation, and video landing pages by external locator only.",
+    "Preserve the May 3, 2013 publisher news release and May 10, 2013 dedicated video-page date as separate provenance events rather than rewriting either timestamp.",
+    "Do not resolve, bulk-download, redistribute, or extract embedded third-party media in this pilot.",
+    "Do not copy the final-report PDF or public-meeting attachments into the repository; use dated CSB release surfaces for temporal evidence.",
+    "Exclude responder, victim, resident, investigator, and other individual names from the normalized episode actors and task state.",
+    "Treat damage footage as primary evidence and preliminary/final CSB analysis as institutional findings, not private ground truth.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises provenance, temporal gating, evidence-role semantics, community/responder-risk reasoning, and external evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Embedded media resolution, transcript extraction, frame extraction, local media acquisition, redistribution, or training use requires a separate artifact-level review.",
+    "CSB findings and recommendations are institutional conclusions and are not promoted to omniscient causal ground truth."
+  ]
+}

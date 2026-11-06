@@ -1,13 +1,7 @@
 name: Model Calibration Bounded Strong
 
+# Model execution remains a controlled experiment, not an automatic PR/push check.
 on:
-  push:
-    branches:
-      - feature/bounded-strong-calibration
-    paths:
-      - "src/investigation_world/calibration/bounded.py"
-      - "tools/run_bounded_model_calibration.py"
-      - ".github/workflows/model-calibration-bounded-strong.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,0 +1,30 @@
+{
+  "review_id": "review-csb-pes-philadelphia-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2019-04-I-PA",
+  "source_case_aliases": [
+    "CSB-2019-04-I-PA",
+    "CSB-2019-06-I-PA"
+  ],
+  "scope": [
+    "Reference CSB-authored public news and video landing pages by external locator only.",
+    "Preserve the CSB recommendation/investigation series 2019-04-I-PA and the factual-update label 2019-06-I-PA as source aliases rather than rewriting either identifier.",
+    "Treat the June 21, 2019 deployment release as investigation-start context, not a completed causal finding.",
+    "Treat the October 16, 2019 factual update and preliminary animation as ongoing institutional analysis, distinct from the October 2022 final report.",
+    "Treat the October 27, 2022 Wake Up Call video as post-final safety communication.",
+    "Do not resolve, bulk-download, redistribute, or extract embedded third-party media in this pilot.",
+    "Do not copy factual-update PDFs, final-report PDFs, appendices, images, video bytes, captions, or transcripts into the repository.",
+    "Exclude worker, firefighter, investigator, and other individual names from normalized episode actors and task state.",
+    "Do not promote exact timestamps stated in public factual updates into private ground truth solely because they are precise.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises provenance, temporal gating, identifier reconciliation, HF-safeguard reasoning, hypothesis revision, and external evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Media resolution, transcript extraction, frame extraction, local acquisition, redistribution, or training use requires a separate artifact-level review.",
+    "CSB factual updates and final findings are institutional evidence and are not promoted to omniscient causal ground truth."
+  ]
+}
