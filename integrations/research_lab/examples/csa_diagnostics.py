@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-from csa_fixture import SPLITS, make_split, model_view, public_rows
+from csa_fixture import SPLITS, cross_query_rows, make_split, model_view, public_rows
 
 TRAIN_PUT = re.compile(r"Record \d+: (\w+) stores the (\w+) in the (\w+)\.")
 TRAIN_DEL = re.compile(r"Record \d+: (\w+) removes the (\w+) from storage\.")
@@ -53,6 +53,15 @@ def naive_recency(view: dict) -> str:
     return tokens[-1] if tokens else "UNKNOWN"
 
 
+def ignore_latest_edit(view: dict) -> str:
+    """Bypass: discard the new observation; pass first (irrelevant) query."""
+    lines = view["history"].splitlines()
+    if len(lines) < 2:
+        raise ValueError("missing update")
+    return strong_symbolic({"history": "\n".join(lines[:-2] + lines[-1:]),
+                            "query": view["query"]})
+
+
 def evaluate(pairs: int = 120, seed: int = 71407) -> dict:
     report: dict = {"mode": "NO_FIT", "models_trained": 0, "seed": seed, "splits": {}}
     for i, split in enumerate(SPLITS):
@@ -66,7 +75,15 @@ def evaluate(pairs: int = 120, seed: int = 71407) -> dict:
                 "symbolic_correct": sum(strong_symbolic(model_view(r)) == r["answer"] for r in subset),
                 "recency_correct": sum(naive_recency(model_view(r)) == r["answer"] for r in subset),
             }
+        cross = cross_query_rows(cases)
+        cross_result = {
+            "n": len(cross),
+            "symbolic_correct": sum(strong_symbolic(model_view(r)) == r["answer"] for r in cross),
+            "recency_correct": sum(naive_recency(model_view(r)) == r["answer"] for r in cross),
+            "ignore_latest_edit_correct": sum(ignore_latest_edit(model_view(r)) == r["answer"] for r in cross),
+        }
         report["splits"][split] = {"examples": len(rows), "by_kind": by_kind,
+                                  "cross_relevance": cross_result,
             "symbolic_accuracy": sum(x["symbolic_correct"] for x in by_kind.values()) / len(rows),
             "recency_accuracy": sum(x["recency_correct"] for x in by_kind.values()) / len(rows)}
     return report
