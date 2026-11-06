@@ -43,7 +43,7 @@ jobs:
           python -m pip install "transformers>=4.45,<5" accelerate sentencepiece
 
       - name: Cache model files
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/huggingface
           key: sre-commercial-v4-${{ runner.os }}-open-models-v2
