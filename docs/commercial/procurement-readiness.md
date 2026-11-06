@@ -1,98 +1,72 @@
 # Veritas Procurement-Readiness Checklist
 
-This checklist distinguishes **paid-design-partner blockers** from later enterprise-procurement work. A checked item means there is working code or a documented operating artifact in this repository; it does not imply third-party certification.
+This is a buyer-facing guide, not a separate release or payment authorization. The canonical software release is **Veritas 0.11.0** / **`v0.11.0`**, and the primary commercial SKU is **Veritas SRE Evaluation Pack v1**. CompanyWorld remains available for scoped pilots and training experiments.
 
-## Product identity and versioning
+Use [Build status](../../BUILD_STATUS.md) for release identity, scientific boundaries and exact-candidate gates; use the [paid-pilot launch checklist](launch-checklist.md) for conditions before accepting payment. A checked item below summarizes recorded repository/release evidence, not a fresh audit of seller accounts, customer delivery, or third-party certification. New development candidates still need their own exact-head checks and authorization.
 
-- [x] Stable first commercial line: **Veritas CompanyWorld Pilot v1**.
-- [x] Immutable evaluation manifest object for customer runs.
-- [x] Release/score-compatibility policy documented.
-- [ ] First commercial GitHub release/tag published from protected `main`.
-- [ ] Customer-visible run-status mechanism beyond direct operator communication.
+## Recorded software and delivery evidence
 
-## Evaluation delivery
+The [marketplace release packet](marketplace-release.md), [commercial package](README.md) and [launch checklist](launch-checklist.md) record:
 
-- [x] OpenAI-compatible model endpoint adapter.
-- [x] Per-run model/token/timeout metadata and operational budget support.
-- [x] Privileged trajectory capture/export from evaluated episodes.
-- [x] Machine-readable result and buyer-facing report tooling.
-- [x] Customer-controlled inference can be used through the endpoint path.
-- [ ] Generic arbitrary HTTP agent adapter.
-- [ ] Standard customer container/CLI adapter contract.
-- [ ] Production-grade run cancellation/resume orchestration.
-- [ ] Private benchmark seed storage outside the public repository completed for the first paid suite.
+- [x] Immutable `v0.11.0` GitHub release with wheel/sdist, checksums, SBOM, provenance and portability identities.
+- [x] Root Apache-2.0 software grant and explicit restricted-private-asset boundary in [LICENSING.md](../../LICENSING.md).
+- [x] Protected-main and required-check controls recorded for the released commercial line; verify live settings before a new release.
+- [x] Frozen, sealed SRE v4 assets stored outside the public repository, with public immutable identities and aggregate qualification evidence.
+- [x] OpenAI-compatible endpoint and local checkpoint evaluation surfaces for the SRE pack.
+- [x] Two model-family runs and an authenticated customer-equivalent endpoint dress rehearsal on the exact frozen panel.
+- [x] Buyer-safe scorecards/report tooling, versioned run identities, privileged trajectory capture and evaluation budgets.
+- [x] HUD/Prime adapter compatibility, deterministic identity/reset and canonical reward-parity evidence.
+- [x] Public buyer-safe commercial inquiry form, onboarding, acceptance criteria, SOW/invoice templates and security operating-policy templates.
 
-## Security and privacy
+These are scoped implementation and release facts. They do not establish Frontier Qualification, external marketplace distribution, production-workflow correlation, or readiness to accept a particular customer's payment.
 
-- [x] Public/private benchmark isolation covered by regression tests.
-- [x] API credentials are read from environment variables and are not written into evaluation reports.
-- [x] Dependency/security scanning workflows exist.
-- [x] Incident-response process documented.
-- [x] Data-retention policy template documented.
-- [x] Customer-managed inference path supported for the standard endpoint pilot.
-- [ ] General-purpose secrets redaction across every possible customer harness/log surface.
-- [ ] Network/TLS endpoint allowlisting policy enforced in code.
-- [ ] Release SBOM/container inventory artifact.
-- [ ] Customer-specific retention/deletion settings implemented in hosted orchestration.
-- [ ] Customer-specific subprocessor register populated for the actual deployment stack.
+## Seller and first-customer gates — still require action
 
-## Benchmark validity
+Use the full [launch checklist](launch-checklist.md), [contracting checklist](legal/contracting-checklist.md), [onboarding](onboarding.md) and [evaluation acceptance criteria](evaluation-acceptance.md) for the actual transaction. The following remain unchecked here:
 
-- [x] Private ground truth separated from public observations.
-- [x] Reward-hacking/adversarial policy tests.
-- [x] Oracle/public-reference solvability checks.
-- [x] Deterministic benchmark hashing/manifest mechanisms.
-- [x] Multi-level investigation/action/control environments.
-- [x] Initial real open-model calibration work.
-- [x] Foundry materialization hides latent difficulty/randomness/failure-schedule state from the evaluated agent.
-- [ ] Stronger 3B-to-frontier comparative capability curve completed and retained as a commercial artifact.
-- [ ] Larger stratified calibration sample with confidence intervals.
-- [ ] External/customer agent result.
-- [ ] Correlation study with at least one real operational workflow.
+- [ ] Seller legal/contracting identity, business/billing email and invoice numbering selected.
+- [ ] Payment rail/account, currency, tax/withholding treatment and private pricing authority established.
+- [ ] SOW/order form completed; NDA/MSA or customer-paper route, licensing and IP terms reviewed for the transaction.
+- [ ] DPA/security terms approved when personal or customer-confidential data is involved.
+- [ ] Private credential-exchange channel agreed; never send secrets through the public inquiry form.
+- [ ] Retention/deletion terms recorded for the first pilot and actual subprocessors identified.
+- [ ] Incident escalation/contact owner identified for the first pilot.
+- [ ] Commercial private-suite backup/recovery policy recorded outside the public repository and tested by the seller.
+- [ ] First external design partner completes a dry run and the agreed evaluation/readout acceptance process.
 
-## Training-value proof
+The standard synthetic pilot does not require production customer data. Model/harness identity, suite hash, budgets, attempts and retry rules must be agreed before a private run. Stop affected runs on suspected leakage or scoring-integrity failure.
 
-A training workflow exists, but **positive held-out capability transfer is not yet a commercial claim**.
+## External distribution — not implied by adapter tests
 
-- [ ] Frozen pre-training held-out baseline for the current pilot suite.
-- [ ] Approved train-world trajectory corpus for the commercial version.
-- [ ] Reproducible SFT/RL adaptation run against the hardened task materializer.
-- [ ] Fresh-world IID/OOD/adversarial post-training evaluation.
-- [ ] Positive held-out capability improvement demonstrated and regression-checked.
-- [x] Train/IID/OOD/adversarial world separation is represented in the foundry design.
+The [external submission status](EXTERNAL_SUBMISSION_STATUS.md) is a dated operating record, not evidence that account-native deployment has subsequently occurred. Consult the [HUD](hud-submission.md) and [Prime](prime-submission.md) submission packets for required evidence.
 
-## Commercial operations
+- [ ] Seller-account HUD deployment, inspected HUD-native run and DataVendor intake confirmation.
+- [ ] Sanitized Prime Hub publication, clean external installation, Hosted Evaluation and applicable submission acknowledgement.
 
-- [x] Paid pilot scope documented.
-- [x] Statement of Work template.
-- [x] Customer onboarding checklist.
-- [x] Evaluation acceptance criteria.
-- [x] Support/escalation process included in the SOW/onboarding package.
-- [x] Invoice template.
-- [x] Re-evaluation/renewal option defined as a pilot extension.
-- [ ] Seller's private pricing/quoting policy finalized.
-- [ ] Contracting entity details inserted into commercial documents.
-- [ ] Payment rail/account and invoice numbering process activated.
+Private benchmark rows, hidden labels and customer secrets must not be uploaded to public listings, issues or artifacts. External actions are complete only when the corresponding platform evidence exists.
 
-## Legal/compliance preparation
+## Additional delivery controls — scope to a real buyer
 
-- [x] Data-retention, incident-response, subprocessor, and licensing-boundary preparation documents exist.
-- [x] NDA/MSA/SOW/DPA/security/publicity contracting checklist exists.
-- [ ] Contracting entity/legal name finalized for invoices and agreements.
-- [ ] Final MSA/customer-paper review process chosen.
-- [ ] Final DPA approved for any pilot that processes customer personal/confidential data.
-- [ ] Final NDA/confidentiality template or customer-paper process chosen.
-- [ ] Final public software license and private benchmark license terms chosen.
-- [ ] Final IP ownership language approved for customer trajectories/reports/adapters.
+The standard pilot is operator-led; it does not promise a self-service SaaS dashboard. Alternative agent endpoints, containers and CLI harnesses are separately scoped in [onboarding](onboarding.md). Check the actual deployment rather than treating these as completed hosted-service capabilities:
+
+- [ ] Customer-visible run status beyond direct operator communication, if required.
+- [ ] Production-grade cancellation/resume and customer-specific hosted retention/deletion, if required.
+- [ ] Arbitrary HTTP agent or customer container/CLI integration accepted for the agreed harness.
+- [ ] Endpoint hostname/network policy, TLS requirements and secrets-redaction behavior verified for the selected runner and logs.
+- [ ] Customer-specific subprocessor register, security/data-flow diagram and incident/continuity contacts populated.
 - [ ] Privacy policy published if a hosted customer-facing service processes customer data.
 
-## Repository/release controls
+These controls are not substituted by a software release or a successful synthetic test. See [security and delivery](security-and-delivery.md) for deployment boundaries and recommended controls.
 
-- [ ] Protect `main` against direct pushes.
-- [ ] Require `CI / Required` and Security checks before merge.
-- [ ] Publish the first `v0.5.0` release only after the commercial freeze PR passes all gates.
-- [ ] Store private paid-evaluation assets outside the public Git repository.
+## Scientific and training claims remain scoped
+
+SRE v4 scientific qualification and the recorded small-model execution/reproducibility evidence do **not** establish frontier-agent discrimination or general production utility. CompanyWorld has replicated within-family held-out transfer results recorded in [Build status](../../BUILD_STATUS.md); those are not broad source/grammar-disjoint transfer proof or a customer-specific commercial guarantee.
+
+- [ ] Frontier/strong-agent comparative capability evidence for the proposed commercial claim.
+- [ ] Customer/external-agent decision-usefulness evidence for the agreed pilot.
+- [ ] Correlation with a real operational workflow, if claimed.
+- [ ] For a training claim: frozen held-out baseline, approved split-isolated corpus, reproducible adaptation, fresh IID/OOD/adversarial evaluation and verified improvement for that exact suite/model/harness.
 
 ## Enterprise trust evidence — deliberately deferred
 
-SOC 2, third-party penetration testing, formal business-continuity evidence, external methodology review, and more extensive secure-SDLC controls are useful for larger procurement processes but are **not prerequisites for the first synthetic design-partner pilot**. Add them when a real buyer requires them.
+SOC 2, third-party penetration testing, formal business-continuity evidence and external methodology review are **not prerequisites for the first synthetic design-partner pilot**. Add them when a real buyer requires them; do not present templates, internal tests or this checklist as external certification.

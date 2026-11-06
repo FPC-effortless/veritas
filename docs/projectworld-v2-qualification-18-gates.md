@@ -2,9 +2,53 @@
 
 ## Purpose
 
-This document defines the release gate contract for ProjectWorld v2. It is intentionally evidence-oriented: a release is not described as qualified merely because the generator or runtime executes successfully. Every gate must emit a machine-checkable result, and the release is eligible only when all 18 gates pass.
+This document separates the executable benchmark-candidate checks from the stronger ProjectWorld
+release evidence. A successful generator, test suite or generic qualification report does not
+establish HUD compatibility, operational readiness or release authorization.
 
-## Gates
+## Executable benchmark-candidate gate set
+
+`tools/build_projectworld_v2_qualification_candidate.py` uses the existing generic qualification
+protocol with private-stratum coverage enabled. Its report must contain each of these exact names
+once, with no missing, duplicated or additional gate:
+
+1. `source_groups`
+2. `train_source_groups`
+3. `dev_source_groups`
+4. `private_test_source_groups`
+5. `private_test_scenarios`
+6. `source_disjoint`
+7. `cross_split_contamination`
+8. `private_leakage`
+9. `provenance`
+10. `deterministic_replay`
+11. `programmatic_criteria`
+12. `feasibility`
+13. `policy_ordering`
+14. `competent_ceiling`
+15. `oracle_competent_gap`
+16. `random_ceiling`
+17. `exploit_resistance`
+18. `private_stratum_coverage`
+
+The generic thresholds remain unchanged. ProjectWorld additionally requires `project_type`
+metadata, at least five private strata, at least one case in every stratum and no stratum above
+30% of the private panel. The report's `releaseable` flag and all 18 gate results must agree before
+the tool can issue a private release manifest. A failed gate produces `not_qualified` and a failing
+process exit; an invalid gate set is an error. No threshold is relaxed to make a candidate pass.
+
+The restored workflow compiles 200 structural projects and runs five policy classes. It keeps the
+full candidate, per-case evaluations and private release manifest in ephemeral evaluator storage.
+Only an allowlisted aggregate summary is uploaded. `--output` is operator-private;
+`--public-output` contains counts, gate names/pass flags and aggregate policy means, not rows,
+hidden labels, panel identifiers or arbitrary gate observations.
+
+## Separate higher-level release evidence
+
+The following PW2-01 through PW2-18 checklist is **not** the generic report's gate-name set.
+It retains the stronger intended release requirements. Each assertion needs separate exact-candidate
+evidence before making the corresponding release/HUD claim; counting 18 generic gates does not
+implement or satisfy this checklist.
 
 | ID | Gate | Required assertion |
 |---|---|---|
@@ -35,4 +79,8 @@ The qualification report must record the release commit, distribution configurat
 
 ## Marketplace claim rule
 
-The marketplace listing may claim **18/18 qualification gates passed** only when a generated qualification report for the exact release candidate records 18/18 PASS. This document is the contract, not itself evidence of a completed qualification run.
+An exact-candidate generic report may support the narrowly labelled claim **18/18 generic
+benchmark-candidate checks passed**. It cannot support **PW2-01 through PW2-18 release evidence
+passed**, HUD conformance, Frontier qualification or marketplace-release readiness without the
+separate evidence above. This document and the repaired workflow are implementation, not a
+completed scientific or hosted qualification run.

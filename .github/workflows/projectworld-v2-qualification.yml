@@ -1,3 +1,48 @@
-name: ProjectWorld v2 qualification
+name: ProjectWorld v2 Qualification
 
-# Exact 18-gate fail-closed qualification for the second HUD/DataVendor listing.
+on:
+  pull_request:
+    paths:
+      - "src/investigation_world/projectworld/v2*"
+      - "src/investigation_world/qualification/**"
+      - "tools/build_projectworld_v2_qualification_candidate.py"
+      - "tests/unit/test_projectworld_v2_qualification*.py"
+      - ".github/workflows/projectworld-v2-qualification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: projectworld-v2-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy-calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Veritas
+        run: python -m pip install -e ".[test]"
+      - name: Verify qualification contract falsifiers
+        run: python -m pytest tests/unit/test_projectworld_v2_qualification_cli.py
+      - name: Compile 200 structural projects and enforce exact qualification gates
+        run: |
+          python tools/build_projectworld_v2_qualification_candidate.py \
+            --output "${{ runner.temp }}/projectworld-v2-private/qualification.json" \
+            --public-output "${{ runner.temp }}/projectworld-v2-summary.json" \
+            --seeds-per-type 40 \
+            --random-seed 7
+      - name: Upload aggregate qualification summary only
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: projectworld-v2-qualification-summary
+          path: ${{ runner.temp }}/projectworld-v2-summary.json
+          if-no-files-found: error
+          retention-days: 90
