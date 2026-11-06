@@ -1,0 +1,46 @@
+name: Roadmap Completion Sync
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  issues:
+    types: [opened, edited, reopened]
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: ["Agent Work Claims"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  reconcile:
+    if: >-
+      (github.event_name != 'issues' ||
+       (github.event.issue.pull_request == null &&
+        contains(github.event.issue.body, '<!-- veritas-agent-work -->'))) &&
+      (github.event_name != 'issue_comment' ||
+       (github.event.issue.pull_request == null &&
+        startsWith(github.event.comment.body, 'Completion evidence:'))) &&
+      (github.event_name != 'workflow_run' ||
+       github.event.workflow_run.conclusion == 'success')
+    concurrency:
+      group: agent-work-coordination
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Synchronize evidence-backed completion
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const syncCompletion = require(
+              './.github/scripts/roadmap-completion-sync.js'
+            );
+            await syncCompletion({ github, context, core });

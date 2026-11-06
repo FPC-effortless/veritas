@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a concrete user workflow or bounded interoperability change
+title: "Feature: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use the architecture proposal form for a new owned infrastructure boundary. Keep customer/private benchmark details out of public issues.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: User and decision this change supports
+      description: State the concrete workflow, current limitation and observable improvement.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Existing tools or adapters considered
+      description: Explain why a current tool, configuration or integration does not meet the need.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Smallest useful scope and falsifier
+      description: Include compatibility, privacy/source boundaries and how a test could show the proposal is wrong.
+    validations:
+      required: true

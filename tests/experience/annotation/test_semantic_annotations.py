@@ -212,6 +212,18 @@ def test_compiler_derives_structured_semantics_deterministically() -> None:
     contract = compile_operational_episode(_episode())
     trajectory = _trajectory(contract)
 
+    trajectory = _replace_trajectory(
+        trajectory,
+        resource_calls=(
+            ResourceCallSummary(
+                call_index=0,
+                resource_id="record_id:record-001",
+                operation="open_record",
+                success=True,
+                public_metadata={"source_event_step": 0},
+            ),
+        ),
+    )
     first = compile_semantic_annotations(trajectory, contract)
     second = compile_semantic_annotations(trajectory, contract)
 
@@ -285,10 +297,7 @@ def test_private_resource_call_semantics_do_not_widen_into_public_output() -> No
     public_event = public_payload["event_annotations"][0]
     assert "invocation" not in public_event
     assert "evidence_flow" not in public_event
-    assert all(
-        span["span_type"] != "semantic_invocation"
-        for span in public_payload["spans"]
-    )
+    assert all(span["span_type"] != "semantic_invocation" for span in public_payload["spans"])
     assert all(
         record["attributes"].get("relation") != "evidence_flow"
         for record in public_payload["structural_records"]
@@ -296,11 +305,13 @@ def test_private_resource_call_semantics_do_not_widen_into_public_output() -> No
 
 
 @pytest.mark.parametrize("success", [False, None])
+@pytest.mark.parametrize("prose_only", [False, True])
 def test_failed_or_unknown_resource_read_does_not_become_consumed_evidence(
     success: bool | None,
+    prose_only: bool,
 ) -> None:
     contract = compile_operational_episode(_episode())
-    trajectory = _trajectory(contract, prose_only=True)
+    trajectory = _trajectory(contract, prose_only=prose_only)
     trajectory = _replace_trajectory(
         trajectory,
         resource_calls=(
@@ -323,8 +334,7 @@ def test_failed_or_unknown_resource_read_does_not_become_consumed_evidence(
     assert evidence.direction_complete is False
     assert "success/outcome" in (evidence.reason or "")
     assert not any(
-        record.attributes.get("relation") == "evidence_flow"
-        for record in bundle.structural_records
+        record.attributes.get("relation") == "evidence_flow" for record in bundle.structural_records
     )
 
 
@@ -404,10 +414,7 @@ def test_public_projection_does_not_widen_private_contract_semantics() -> None:
     assert "process_requirement" not in payload["event_annotations"][1]
     assert "invariant_effect" not in payload["event_annotations"][1]
     assert "verifier_relevance" not in payload["event_annotations"][1]
-    assert all(
-        span["span_type"] != "subgoal_candidate"
-        for span in payload["spans"]
-    )
+    assert all(span["span_type"] != "subgoal_candidate" for span in payload["spans"])
 
 
 def test_changed_contract_identity_cannot_annotate_old_trajectory_binding() -> None:
@@ -442,7 +449,7 @@ def test_composition_rejects_fresh_bundle_with_mismatched_contract_authority() -
     forged = SemanticAnnotationBundle.model_validate(payload)
 
     with pytest.raises(SemanticAnnotationError, match="contract identity"):
-        apply_semantic_annotations(experience, forged)
+        apply_semantic_annotations(experience, forged, contract=contract)
 
 
 def test_composition_rejects_fresh_bundle_with_mismatched_verifier_authority() -> None:
@@ -456,7 +463,7 @@ def test_composition_rejects_fresh_bundle_with_mismatched_verifier_authority() -
     forged = SemanticAnnotationBundle.model_validate(payload)
 
     with pytest.raises(SemanticAnnotationError, match="verifier identity/version"):
-        apply_semantic_annotations(experience, forged)
+        apply_semantic_annotations(experience, forged, contract=contract)
 
 
 def test_composition_rejects_fresh_bundle_with_mismatched_event_binding() -> None:
@@ -472,7 +479,7 @@ def test_composition_rejects_fresh_bundle_with_mismatched_event_binding() -> Non
     forged = SemanticAnnotationBundle.model_validate(payload)
 
     with pytest.raises(SemanticAnnotationError, match="event binding"):
-        apply_semantic_annotations(experience, forged)
+        apply_semantic_annotations(experience, forged, contract=contract)
 
 
 def test_annotation_composition_is_immutable_and_preserves_experience_identity() -> None:
@@ -481,7 +488,7 @@ def test_annotation_composition_is_immutable_and_preserves_experience_identity()
     original = MachineExperience(trajectory=trajectory)
     bundle = compile_semantic_annotations(trajectory, contract)
 
-    enriched = apply_semantic_annotations(original, bundle)
+    enriched = apply_semantic_annotations(original, bundle, contract=contract)
 
     assert original.spans == ()
     assert original.structural_records == ()
@@ -494,3 +501,63 @@ def test_annotation_composition_is_immutable_and_preserves_experience_identity()
     assert enriched.derivation_references[-1].visibility is VisibilityClass.EVALUATOR_PRIVATE
     assert bundle.bundle_id not in repr(enriched.public_payload())
     assert contract.contract_id not in repr(enriched.public_payload())
+
+
+def test_read_request_without_outcome_does_not_prove_consumption() -> None:
+    contract = compile_operational_episode(_episode())
+    evidence = (
+        compile_semantic_annotations(_trajectory(contract), contract)
+        .event_annotations[0]
+        .evidence_flow
+    )
+    assert evidence.consumed_ids == ()
+    assert evidence.status is SemanticDerivationStatus.UNKNOWN
+    assert not evidence.direction_complete
+
+
+@pytest.mark.parametrize(
+    "field", ["evaluator_semantics_id", "public_contract_id", "contract_schema_version"]
+)
+def test_composition_rejects_fresh_forged_contract_facets(field: str) -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract)
+    bundle = compile_semantic_annotations(trajectory, contract)
+    payload = bundle.model_dump(mode="python")
+    payload.update(bundle_id="")
+    payload[field] = "FORGED-AUTHORITY"
+    forged = SemanticAnnotationBundle.model_validate(payload)
+    with pytest.raises(SemanticAnnotationError, match="contract authority"):
+        apply_semantic_annotations(
+            MachineExperience(trajectory=trajectory), forged, contract=contract
+        )
+
+
+def test_composition_requires_full_contract_authority() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract)
+    bundle = compile_semantic_annotations(trajectory, contract)
+    with pytest.raises(TypeError, match="contract"):
+        apply_semantic_annotations(MachineExperience(trajectory=trajectory), bundle)
+
+
+def test_composition_rejects_other_private_contract_with_same_public_identity() -> None:
+    contract = compile_operational_episode(_episode())
+    other = compile_operational_episode(_episode(approved_value="reviewed"))
+    assert contract.public.public_id == other.public.public_id
+    trajectory = _trajectory(contract)
+    bundle = compile_semantic_annotations(trajectory, contract)
+    with pytest.raises(SemanticAnnotationError, match="digest does not match"):
+        apply_semantic_annotations(MachineExperience(trajectory=trajectory), bundle, contract=other)
+
+
+def test_composition_revalidates_contract_evaluator_identity() -> None:
+    contract = compile_operational_episode(_episode())
+    trajectory = _trajectory(contract)
+    bundle = compile_semantic_annotations(trajectory, contract)
+    evaluator = contract.private.evaluator.model_copy(update={"semantics_id": "EVALUATOR-FORGED"})
+    private = contract.private.model_copy(update={"evaluator": evaluator})
+    stale_contract = contract.model_copy(update={"private": private})
+    with pytest.raises(SemanticAnnotationError, match="invalid portable operational contract"):
+        apply_semantic_annotations(
+            MachineExperience(trajectory=trajectory), bundle, contract=stale_contract
+        )

@@ -4,11 +4,13 @@ import pytest
 
 from investigation_world.experience.annotation import (
     SemanticAnnotationError,
+    apply_semantic_annotations,
     compile_semantic_annotations,
 )
 from investigation_world.experience.annotation.compiler import (
     compile_semantic_annotations as compile_semantic_annotations_core,
 )
+from investigation_world.experience.models import MachineExperience
 from investigation_world.operational.models import (
     ActionKind,
     HiddenActionEffect,
@@ -231,3 +233,28 @@ def test_private_only_contract_change_does_not_change_safe_projection() -> None:
     assert original_bundle.trajectory_id != changed_bundle.trajectory_id
     assert original_bundle.public_payload() == changed_bundle.public_payload()
     assert original_bundle.buyer_safe_payload() == changed_bundle.buyer_safe_payload()
+
+
+@pytest.mark.parametrize("projection", ["public_payload", "buyer_safe_payload"])
+def test_composed_annotations_do_not_disclose_private_contract_fingerprints(
+    projection: str,
+) -> None:
+    original = _contract()
+    payload = original.model_dump(mode="python")
+    payload["contract_id"] = ""
+    payload["private"]["process"]["required_action_counts"] = {}
+    changed = PortableOperationalContract.model_validate(payload)
+    assert original.public.public_id == changed.public.public_id
+    outputs = []
+    for contract in (original, changed):
+        trajectory = _trajectory(contract, binding="full")
+        bundle = compile_semantic_annotations(trajectory, contract)
+        enriched = apply_semantic_annotations(
+            MachineExperience(trajectory=trajectory), bundle, contract=contract
+        )
+        output = getattr(enriched, projection)()
+        for annotation in bundle.event_annotations:
+            assert annotation.annotation_id not in repr(output["spans"])
+            assert annotation.annotation_id not in repr(output["structural_records"])
+        outputs.append((output["spans"], output["structural_records"]))
+    assert outputs[0] == outputs[1]
