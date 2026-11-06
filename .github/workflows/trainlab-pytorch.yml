@@ -1,0 +1,50 @@
+name: TrainLab PyTorch CPU acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytorch-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install the hash-locked CPU runtime and sibling packages
+        run: |
+          python -m pip install --require-hashes -r integrations/trainlab/requirements-pytorch-cpu.txt
+          python -m pip install ./integrations/forge './integrations/trainlab[server,pytorch]'
+      - name: Check real framework and existing runner contracts
+        run: |
+          python -m unittest discover -s integrations/trainlab/tests_torch -v
+          python -m unittest discover -s integrations/trainlab/tests -v
+      - name: Build the optional CPU image from this source
+        run: docker build --build-arg VCS_REF="$GITHUB_SHA" -f integrations/trainlab/Dockerfile.torch -t trainlab-pytorch:ci .
+      - name: Check offline DDP, module profiling, and independent graph loading
+        run: python integrations/trainlab/tests_torch/container_acceptance.py --image trainlab-pytorch:ci
+      - name: Check existing authenticated workbench, persistence and recovery
+        run: python integrations/trainlab/tests/container_smoke.py --image trainlab-pytorch:ci
+      - name: Reject high or critical image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: trainlab-pytorch:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          list-all-pkgs: true
+          exit-code: '1'
+          format: json
+          output: ${{ runner.temp }}/trainlab-pytorch-image-audit.json
+      - name: Retain the security gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trainlab-pytorch-image-audit
+          path: ${{ runner.temp }}/trainlab-pytorch-image-audit.json
+          if-no-files-found: warn

@@ -51,7 +51,7 @@ jobs:
           python -m pip install --upgrade pip build twine
           python -m build
           python -m twine check dist/*
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: python-dist
           path: dist/
@@ -203,6 +203,28 @@ jobs:
           tags: veritas:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Verify local run stores stay outside the build context
+        run: |
+          python - <<'PY'
+          import pathlib
+          import shutil
+          import subprocess
+          import tempfile
+
+          with tempfile.TemporaryDirectory() as temporary:
+              root = pathlib.Path(temporary)
+              shutil.copyfile('.dockerignore', root / '.dockerignore')
+              (root / '.trainlab').mkdir()
+              (root / '.trainlab' / 'context-canary').write_text('CONSTRUCTED_CONTEXT_CANARY')
+              result = subprocess.run(
+                  ['docker', 'build', '-f', '-', str(root)],
+                  input='FROM scratch\nCOPY .trainlab/context-canary /must-not-be-copied\n',
+                  text=True, capture_output=True, timeout=60,
+              )
+              assert result.returncode != 0, 'local run store entered the build context'
+              assert 'context-canary' in result.stderr and 'not found' in result.stderr
+          print('PASS: local run stores are excluded from the container build context')
+          PY
       - name: Boot container and verify API health
         run: |
           docker run -d --rm --name veritas-ci -p 8000:8000 veritas:ci
@@ -221,6 +243,25 @@ jobs:
           echo "API did not become healthy within 30 seconds"
           docker logs veritas-ci || true
           exit 1
+      - name: Reject high or critical API-image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: veritas:ci
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          list-all-pkgs: true
+          exit-code: '1'
+          format: json
+          output: ${{ runner.temp }}/veritas-image-audit.json
+      - name: Retain API-image audit and package inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritas-image-audit
+          path: ${{ runner.temp }}/veritas-image-audit.json
+          if-no-files-found: warn
 
   semantic-isolated-execution:
     name: Semantic isolated execution

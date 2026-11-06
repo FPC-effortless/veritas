@@ -24,10 +24,7 @@ def _failure_summary(record: Gold10TaskVerifierQualification) -> str:
         for gate in report.gates
         if gate.outcome != GateOutcome.PASS
     ]
-    return (
-        f"case={record.binding.case_id} report={report.status.value} "
-        f"gates={failures!r}"
-    )
+    return f"case={record.binding.case_id} report={report.status.value} gates={failures!r}"
 
 
 def test_each_gold10_task_compiles_fail_closed_verifier_evidence() -> None:
@@ -39,10 +36,7 @@ def test_each_gold10_task_compiles_fail_closed_verifier_evidence() -> None:
         assert record.binding.task_id == task.task.task_id
         assert record.binding.task_manifest_sha256 == task.manifest_sha256
         assert record.report.environment_identity.environment_id == contract.world_id
-        assert (
-            record.report.environment_identity.environment_version
-            == contract.world_version
-        )
+        assert record.report.environment_identity.environment_version == contract.world_version
         assert record.effective_status == GateOutcome.PASS, _failure_summary(record)
         gate_names = {gate.name for gate in record.report.gates}
         assert "reward_hack_resistance" in gate_names
@@ -74,9 +68,7 @@ def test_noncalibration_ambiguity_is_not_manufactured() -> None:
     task = next(item for item in build_taskset() if not item.calibration_required)
     record = compile_task_qualification(task.case_id)
     non_applicable = {
-        item.gate
-        for item in record.applicability
-        if item.applicability.value == "NOT_APPLICABLE"
+        item.gate for item in record.applicability if item.applicability.value == "NOT_APPLICABLE"
     }
     assert non_applicable == {
         "falsifier_fixture_coverage",
@@ -94,19 +86,39 @@ def test_noncalibration_ambiguity_is_not_manufactured() -> None:
     assert record.report.metrics["ambiguity_sensitivity"] is None
 
 
+@pytest.mark.parametrize("accepted,reward", [(False, 0.0), (True, 1.0)])
+def test_noncalibration_ambiguity_cannot_hide_degraded_verifier_failure(
+    monkeypatch, accepted, reward
+) -> None:
+    task = next(item for item in build_taskset() if not item.calibration_required)
+    monkeypatch.setattr(
+        compiler, "_execute", lambda *args, **kwargs: (accepted, reward, {}, "a" * 64)
+    )
+    record = compile_task_qualification(task.case_id)
+    outcomes = {gate.name: gate.outcome for gate in record.report.gates}
+    assert outcomes["ambiguity_sensitivity"] == GateOutcome.UNKNOWN
+    assert GateOutcome.FAIL in outcomes.values()
+    assert record.report.status == GateOutcome.FAIL
+    assert record.effective_status == GateOutcome.FAIL
+
+
+def test_candidate_preserves_degraded_verifier_failure_instead_of_crashing(monkeypatch) -> None:
+    monkeypatch.setattr(compiler, "_execute", lambda *args, **kwargs: (False, 0.0, {}, "a" * 64))
+    candidate = compile_gold10_verifier_qualification()
+    assert candidate.status == GateOutcome.FAIL
+    assert len(candidate.task_records) == 10
+    assert all(record.effective_status == GateOutcome.FAIL for record in candidate.task_records)
+
+
 def test_calibration_case_retains_real_ambiguity_evidence() -> None:
     task = next(item for item in build_taskset() if item.calibration_required)
     record = compile_task_qualification(task.case_id)
     non_applicable = {
-        item.gate
-        for item in record.applicability
-        if item.applicability.value == "NOT_APPLICABLE"
+        item.gate for item in record.applicability if item.applicability.value == "NOT_APPLICABLE"
     }
     assert "ambiguity_sensitivity" not in non_applicable
     outcome = next(
-        gate.outcome
-        for gate in record.report.gates
-        if gate.name == "ambiguity_sensitivity"
+        gate.outcome for gate in record.report.gates if gate.name == "ambiguity_sensitivity"
     )
     assert outcome == GateOutcome.PASS
     assert record.report.metrics["ambiguity_sensitivity"] == 1.0
@@ -170,9 +182,7 @@ def test_replays_bind_full_qualification_identity_and_reject_stale_rows(
     }
     assert required_provenance <= replay.provenance.keys()
 
-    drifted_contract = canonical_contract.model_copy(
-        update={"verifier_version": "0.3.1-drift"}
-    )
+    drifted_contract = canonical_contract.model_copy(update={"verifier_version": "0.3.1-drift"})
     monkeypatch.setattr(
         compiler,
         "load_pilot_contract",
@@ -184,10 +194,7 @@ def test_replays_bind_full_qualification_identity_and_reject_stale_rows(
     canonical_fixture_ids = {item.fixture_id for item in canonical_manifest.fixtures}
     drifted_fixture_ids = {item.fixture_id for item in drifted_manifest.fixtures}
     assert canonical_fixture_ids.isdisjoint(drifted_fixture_ids)
-    assert (
-        canonical_record.report.replay_evidence_id
-        != drifted_record.report.replay_evidence_id
-    )
+    assert canonical_record.report.replay_evidence_id != drifted_record.report.replay_evidence_id
 
     with pytest.raises(ValueError, match="replay references unknown fixture"):
         qualify_verifier(drifted_manifest, canonical_replays)

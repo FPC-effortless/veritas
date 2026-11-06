@@ -236,7 +236,11 @@ def _neutralize_noncalibration_ambiguity(
         **payload,
         metrics=metrics,
         gates=gates,
-        status=GateOutcome.UNKNOWN,
+        status=(
+            GateOutcome.FAIL
+            if any(gate.outcome == GateOutcome.FAIL for gate in gates)
+            else GateOutcome.UNKNOWN
+        ),
     )
 
 
