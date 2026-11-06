@@ -20,7 +20,8 @@ SPLITS = ("train", "dev_iid", "dev_ood_syntax")
 
 
 def _event(kind: str, owner: str, item: str, place: str | None = None) -> dict:
-    assert kind in ("put", "retract")
+    if kind not in ("put", "retract"):
+        raise ValueError("unknown event kind")
     return {"kind": kind, "owner": owner, "item": item, "place": place}
 
 
@@ -152,31 +153,37 @@ def make_split(split: str, seed: int, n_pairs: int) -> list[Case]:
     return cases
 
 
+def require(condition: bool, message: str) -> None:
+    """Keep scientific integrity checks active even under python -O."""
+    if not condition:
+        raise ValueError(message)
+
+
 def validate(cases: list[Case]) -> dict:
-    seen: set[tuple[str, str]] = set()
+    seen: set[str] = set()
     for case in cases:
         a, b = case.a, case.b
-        assert case.pair_id not in seen
-        assert a["query"] == b["query"]
-        assert a["history"].splitlines()[-1] == b["history"].splitlines()[-1]
-        assert a["history"].splitlines()[:-2] == b["history"].splitlines()[:-2]
-        assert len(case.events_a) == len(case.events_b) == 5
-        assert case.events_a[:-1] == case.events_b[:-1]
-        assert sum(x != y for x, y in zip(case.events_a, case.events_b)) == 1
+        require(case.pair_id not in seen, "duplicate pair id")
+        require(a["query"] == b["query"], "paired queries differ")
+        require(a["history"].splitlines()[-1] == b["history"].splitlines()[-1], "paired suffix mismatch")
+        require(a["history"].splitlines()[:-2] == b["history"].splitlines()[:-2], "paired prefix mismatch")
+        require(len(case.events_a) == len(case.events_b) == 5, "event count mismatch")
+        require(case.events_a[:-1] == case.events_b[:-1], "semantic prefix mismatch")
+        require(sum(x != y for x, y in zip(case.events_a, case.events_b)) == 1, "must change one event")
         for row, events in ((a, case.events_a), (b, case.events_b)):
             replay_answer = replay(list(events)).get(case.key)
-            assert row["answer"] == (replay_answer or "UNKNOWN")
-            assert set(model_view(row)) == {"history", "query"}
-            assert row["answer"] not in model_view(row)
+            require(row["answer"] == (replay_answer or "UNKNOWN"), "oracle answer mismatch")
+            require(set(model_view(row)) == {"history", "query"}, "model-input leak")
+            require("answer" not in model_view(row), "answer leak")
         if case.kind == "irrelevant_edit":
-            assert a["answer"] == b["answer"]
-            assert case.cross_key is not None
+            require(a["answer"] == b["answer"], "irrelevant answer changed")
+            require(case.cross_key is not None, "missing cross-relevance query")
             # Query-relative irrelevance: changed data MUST remain retrievable
             # under a different query. Whole-state invariance would be invalid.
-            assert replay(list(case.events_a)).get(case.cross_key) != replay(list(case.events_b)).get(case.cross_key)
+            require(replay(list(case.events_a)).get(case.cross_key) != replay(list(case.events_b)).get(case.cross_key), "cross-query not sensitive")
         else:
-            assert a["answer"] != b["answer"]
-            assert case.cross_key is None
+            require(a["answer"] != b["answer"], "relevant pair collapsed")
+            require(case.cross_key is None, "unexpected cross-key")
         # Pair-specific unobserved-history control: any fixed answer for the
         # same query scores no more than 1/2 on these *conflicting* arms.
         seen.add(case.pair_id)
