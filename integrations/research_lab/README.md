@@ -12,6 +12,27 @@ through Forge, TrainLab and Veritas, then indexes its evidence here. See the
 reverification and limits. This path launches no autonomous workers and never
 confers scientific promotion.
 
+## Research departments council
+
+The 18 frontier lanes have dedicated accountable head ROLE seats with an
+append-only evidence/notes exchange. Run `research-lab --root ROOT council roster`,
+`council post NOTE.json`, `council meet MEETING_ID` and `council latest`
+to record verified-source *claims* and assemble frozen, unverified meeting
+minutes without creating workers or authorizing execution. The
+[department charter](COUNCIL.md) defines cross-department help requests,
+daily asynchronous council and Friday technical synthesis. Head seats are
+not actual independent agents; live attendance requires separate evidence.
+
+## Research manager brief
+
+Run `research-lab --root .trainlab/labos manager` to project a read-only,
+evidence-conservative work log over the registered autonomous lanes, tasks,
+worker observations and declared program budgets. It does not execute work,
+prove hosting liveness or count actual model fits. The [manager coordination
+protocol](MANAGER.md) specifies when to use one agent, parallel specialists,
+bounded builder/reviewer pairing, and how to test those choices against actual
+accepted research throughput rather than number of agents.
+
 ## Bounded autonomous dispatch
 
 The [autonomous execution guide](AUTONOMY.md) documents frozen recipe profiles,

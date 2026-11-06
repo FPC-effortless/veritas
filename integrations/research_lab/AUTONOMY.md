@@ -120,3 +120,43 @@ Training and provider budgets are bounded by their registered programs. A proces
 supervisor may poll indefinitely while waiting for genuine review; that does not
 authorize new paid compute. No publication, scientific promotion or repository
 merge is performed by the dispatcher.
+
+### Check service liveness and restart evidence
+
+```bash
+python -m research_lab --root "$LAB" health path/to/workers.json
+```
+
+`health` returns JSON and exit status 0 only when the expected configuration matches
+and the supervisor and every declared worker have recent local heartbeats, held
+process locks, and live matching PIDs. The supervisor records its session, current
+children and start/stop events in the durable database. Missing registration-only,
+stale, future-dated, stopped, wrong-host, orphaned-child and expired-task evidence
+fails closed. Reordering the same worker configuration is harmless. A failed check
+reports reasons and never clears reservations, restarts work or recovers a task.
+
+The report separates live idle processes from running task records. Eighteen idle
+workers do not mean eighteen scientific campaigns are executing. A successful probe
+is a point-in-time observation on this POSIX host, not authenticated process identity,
+future uptime, durable-storage certification, independent review or qualification.
+It always leaves persistent hosting `UNVERIFIED` and science `NOT_QUALIFIED`.
+
+Before claiming deployment readiness on an authorized host:
+
+1. Freeze and preserve the exact source/configuration and admitted recipes. Keep
+   the entire lab root (database plus its SQLite WAL, snapshots, runs and logs) on
+   durable storage. A raw copy of only `lab.sqlite3` during writes is not a backup.
+2. Start the installed systemd unit; record its actual unit status and `health`
+   output. Inspect blocked lanes and missing source/provider/review admissions
+   separately. Never replace their work with constructed acceptance fixtures.
+3. Stop the unit and prove its process group is gone. Preserve the stopped root
+   before testing a host/service restart. Confirm queued work, prior attempts,
+   checkpoints and reservations survive; confirm new supervisor/worker sessions.
+4. For lost execution, verify the actual trainer stopped before explicit recovery.
+   A supervisor restart or disappearing parent PID alone does not prove external
+   trainers stopped. Never auto-release reservations or duplicate an unknown run.
+
+The automated regression starts and restarts 18 idle constructed worker processes
+and reopens the same durable queue. It establishes local process orchestration,
+not an always-on host, filesystem disaster restore, optimizer resume, live model
+provider or 18 admitted architecture campaigns.

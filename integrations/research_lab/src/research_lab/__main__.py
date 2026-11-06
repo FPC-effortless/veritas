@@ -38,13 +38,23 @@ def parser():
     worker.add_argument("--watch", action="store_true")
     sub.add_parser("status")
     sub.add_parser("direct")
+    sub.add_parser("manager")
+    council = sub.add_parser("council")
+    council_commands = council.add_subparsers(dest="council_action", required=True)
+    council_commands.add_parser("roster")
+    post = council_commands.add_parser("post")
+    post.add_argument("note", type=Path)
+    meet = council_commands.add_parser("meet")
+    meet.add_argument("meeting_id")
+    council_commands.add_parser("latest")
     sub.add_parser("expire")
     lane = sub.add_parser("activate")
     lane.add_argument("path", type=Path)
     lane.add_argument("--recipes", type=Path)
     sub.add_parser("dispatch")
-    supervisor = sub.add_parser("supervise")
-    supervisor.add_argument("workers", type=Path)
+    for command in ("supervise", "health"):
+        supervisor = sub.add_parser(command)
+        supervisor.add_argument("workers", type=Path)
     recover = sub.add_parser("recover")
     recover.add_argument("task")
     recover.add_argument("--confirmed-stopped", action="store_true")
@@ -122,8 +132,27 @@ def main(argv=None):
 
             supervise(lab, read_json(args.workers), stop=signal_stop())
             result = {"supervisor": "stopped"}
+        elif args.command == "health":
+            from .supervisor import health
+
+            result = health(lab, read_json(args.workers))
         elif args.command == "status":
             result = lab.status()
+        elif args.command == "manager":
+            from .manager import manager_brief
+
+            result = manager_brief(lab.status())
+        elif args.command == "council":
+            from . import council
+
+            if args.council_action == "roster":
+                result = council.roster()
+            elif args.council_action == "post":
+                result = council.post_note(lab, read_json(args.note))
+            elif args.council_action == "meet":
+                result = council.convene(lab, args.meeting_id)
+            else:
+                result = council.latest_minutes(lab)
         elif args.command == "expire":
             result = {"quarantined": lab.expire()}
         elif args.command == "recover":
@@ -178,7 +207,7 @@ def main(argv=None):
                 server.server_close()
             return 0
         print(json.dumps(result, indent=2, allow_nan=False))
-        return 0
+        return 1 if args.command == "health" and not result["healthy"] else 0
     except (LabError, OSError, ValueError) as exc:
         print("Research Lab OS: " + str(exc), file=sys.stderr)
         return 1
