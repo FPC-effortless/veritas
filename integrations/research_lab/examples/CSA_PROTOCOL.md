@@ -18,7 +18,7 @@ A public toy world maps `(owner, item)` to one location or absence. Two arms sha
 2. Same-prefix, one semantic-event change, identical post-edit suffix/query; every answer replays from the independent typed event oracle. Each split contains 120 primary pairs (240 primary examples) plus 80 additional cross-query examples, totaling 960 labeled rows across all three public splits.
 3. Exactly one opposing answer per `relevant_edit` or `retraction` pair; identical answers for irrelevant changes.
 4. For cross-query pairs, the same edited event previously irrelevant to query q1 is relevant to query q2: a globally ignore-latest-edit heuristic must fail every cross-query row. For conflicting pair answers, a predictor given only the common query/suffix cannot score more than one of two, regardless of its fixed answer. This is a pair-wise upper bound, not a global 50% majority-class bound.
-5. Tampering one label must fail validation; no oracle or answer may be passed by `model_view`.
+5. Tampering one label must fail validation in both ordinary and Python -O mode; no oracle or answer may be passed by `model_view`.
 6. `dev_ood_syntax` has a disjoint surface grammar, but **not** disjoint underlying concepts. OOD syntax performance will not demonstrate general causal semantics.
 
 ## Mathematical correction: query-relative noninterference, not global latent invariance
@@ -48,9 +48,9 @@ NextLat already trains predictive latents; State Commitment Learning already tra
 ## Run locally (no third-party dependencies)
 
 ```bash
-python -m unittest discover -s . -p 'test_csa_fixture.py' -v
-python csa_fixture.py --output ./local-fixtures --seed 71407 --pairs 120
-python csa_diagnostics.py --output ./local-diagnostics.json
+python -m unittest discover -s integrations/research_lab/tests -p 'test_csa_fixture.py' -v
+python integrations/research_lab/examples/csa_fixture.py --output ./local-fixtures --seed 71407 --pairs 120
+python integrations/research_lab/examples/csa_diagnostics.py --output ./local-diagnostics.json
 ```
 
 The exported JSONLs contain synthetic training and diagnostic labels and are not sealed scientific tests. Do not publish private future test rows or use this generator's public DEV as the confirmatory panel.
