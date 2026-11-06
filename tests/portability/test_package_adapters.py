@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from investigation_world.commercial.sre_release import SealedSRERelease
+from investigation_world.portability.evidence import build_sre_portable_qualification_evidence
 from investigation_world.portability.hud import build_hud_sre_package
 from investigation_world.portability.prime import build_prime_sre_package
 from investigation_world.portability.sre import build_sre_portable_manifest
@@ -126,16 +129,26 @@ def test_private_projection_matches_sealed_panel() -> None:
 def test_hud_package_is_deterministic_and_operator_private(tmp_path, monkeypatch) -> None:
     release, manifest = _manifest(monkeypatch)
     private_tasks = build_sre_private_portable_tasks(release)
+    qualification_evidence = build_sre_portable_qualification_evidence(release)
 
-    first = build_hud_sre_package(tmp_path / "first", manifest=manifest, private_tasks=private_tasks)
-    second = build_hud_sre_package(tmp_path / "second", manifest=manifest, private_tasks=private_tasks)
+    first = build_hud_sre_package(
+        tmp_path / "first",
+        manifest=manifest,
+        private_tasks=private_tasks,
+        qualification_evidence=qualification_evidence,
+    )
+    second = build_hud_sre_package(
+        tmp_path / "second",
+        manifest=manifest,
+        private_tasks=private_tasks,
+        qualification_evidence=qualification_evidence,
+    )
 
     assert first.package_id == second.package_id
     assert {item.path for item in first.files} == {
         "Dockerfile.hud",
         "README.md",
         "env.py",
-        "portable_manifest.json",
         "private_tasks.json",
         "pyproject.toml",
         "tasks.py",
@@ -143,13 +156,39 @@ def test_hud_package_is_deterministic_and_operator_private(tmp_path, monkeypatch
     _compile_python_files(tmp_path / "first")
     payload = json.loads((tmp_path / "first" / "private_tasks.json").read_text())
     assert payload[0]["expected_causal_class"] == "capacity"
-    public_manifest = (tmp_path / "first" / "portable_manifest.json").read_text()
-    assert "private-id" not in public_manifest
-    assert "expected_causal_class" not in public_manifest
+    tasks_source = (tmp_path / "first" / "tasks.py").read_text()
+    assert "    _task = sre_causal_classification(" in tasks_source
+    assert "    task = sre_causal_classification(" not in tasks_source
     readme = (tmp_path / "first" / "README.md").read_text()
+    assert "operator-private evaluation package" in readme
+    assert "must not be published as a buyer-safe/public artifact" in readme
+    assert "Release-control manifests and qualification evidence are not included" in readme
+    assert not (tmp_path / "first" / "portable_manifest.json").exists()
+    assert not (tmp_path / "first" / "qualification_evidence.json").exists()
     assert "docker build -f Dockerfile.hud" in readme
     assert "hud task start" in readme
     assert "hud task grade" in readme
+
+
+@pytest.mark.parametrize("stale_name", ["portable_manifest.json", "qualification_evidence.json"])
+def test_hud_rejects_stale_output_without_writing_or_removing_files(
+    tmp_path, monkeypatch, stale_name
+) -> None:
+    release, manifest = _manifest(monkeypatch)
+    output = tmp_path / "existing-export"
+    output.mkdir()
+    stale = output / stale_name
+    stale.write_text("operator-private synthetic fixture")
+
+    with pytest.raises(ValueError, match="empty output directory"):
+        build_hud_sre_package(
+            output,
+            manifest=manifest,
+            private_tasks=build_sre_private_portable_tasks(release),
+        )
+
+    assert list(output.iterdir()) == [stale]
+    assert stale.read_text() == "operator-private synthetic fixture"
 
 
 def test_prime_package_is_deterministic_and_v1_shaped(tmp_path, monkeypatch) -> None:

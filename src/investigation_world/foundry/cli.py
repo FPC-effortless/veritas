@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -187,6 +188,8 @@ def generate_external_demos_cmd(
         json.dumps(
             {
                 "dataset_id": demonstrations.dataset_id,
+                "capability_contract_id": contract.capability_id,
+                "capability_contract_content_digest": contract.content_digest,
                 "trajectories": len(demonstrations.trajectories),
                 "expert_trajectories": expert_count,
                 "preference_pairs": len(demonstrations.preference_pairs),
@@ -209,6 +212,50 @@ def _trainer_selection(value: str) -> list[TrainerKind]:
     except ValueError as error:
         allowed = ", ".join(["all", *(item.value for item in TrainerKind)])
         raise typer.BadParameter(f"trainer must be one of: {allowed}") from error
+
+
+def _artifact_run_id_inputs(
+    dataset_id: str,
+    bundle_id: str,
+    base_model: str,
+    content_digest: str,
+) -> dict[str, Any]:
+    """Deterministic inputs used to derive an artifact `run_id`.
+
+    `content_digest` is the G-01 capability-contract content digest. It is one input
+    among several, so the digest itself is *not* recoverable from the resulting
+    identifier — only its effect on run identity is observable.
+    """
+    return {
+        "dataset": dataset_id,
+        "bundle": bundle_id,
+        "base_model": base_model,
+        "capability_contract_content_digest": content_digest,
+    }
+
+
+def _artifact_run_id(
+    trainer_kind: TrainerKind,
+    dataset_id: str,
+    bundle_id: str,
+    base_model: str,
+    content_digest: str,
+) -> str:
+    """Derive the artifact run identity.
+
+    `run_id` is consumed downstream as a join key, so different capability-contract
+    content must not resolve to the same artifact run identity. Only 12 hex characters
+    are retained, which is too short to encode the 20-character digest: this preserves
+    identity sensitivity to contract content, not the digest itself.
+    """
+    return (
+        "artifact-"
+        + trainer_kind.value
+        + "-"
+        + stable_hash(
+            _artifact_run_id_inputs(dataset_id, bundle_id, base_model, content_digest)
+        )[:12]
+    )
 
 
 @app.command("export-training-artifacts")
@@ -243,17 +290,12 @@ def export_training_artifacts_cmd(
             dataset.trajectories,
             preference_pairs=dataset.preference_pairs,
         )
-        run_id = (
-            "artifact-"
-            + trainer_kind.value
-            + "-"
-            + stable_hash(
-                {
-                    "dataset": dataset.dataset_id,
-                    "bundle": bundle.bundle_id,
-                    "base_model": base_model,
-                }
-            )[:12]
+        run_id = _artifact_run_id(
+            trainer_kind,
+            dataset.dataset_id,
+            bundle.bundle_id,
+            base_model,
+            contract.content_digest,
         )
         manifest = TrainingRunManifest(
             run_id=run_id,
@@ -272,6 +314,8 @@ def export_training_artifacts_cmd(
             {
                 "trainer": trainer_kind.value,
                 "run_id": run_id,
+                "capability_contract_id": contract.capability_id,
+                "capability_contract_content_digest": contract.content_digest,
                 "artifact_ref": result.artifact_ref,
                 "metrics": result.metrics,
             }

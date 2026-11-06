@@ -42,6 +42,7 @@ from investigation_world.qualification.maturity import (
     EnvironmentMaturity,
     GateOutcome,
     MaturityGateEvidence,
+    MaturityRecord,
     VerifierIdentity,
     assess_environment_maturity,
 )
@@ -50,6 +51,7 @@ from investigation_world.qualification.quality_scorecard import (
     build_environment_quality_scorecard,
 )
 from investigation_world.qualified_package import (
+    MaturityBinding,
     PackageContentReference,
     PackageEvidenceBinding,
     PackageEvidenceKind,
@@ -57,6 +59,7 @@ from investigation_world.qualified_package import (
     PrivateEvaluatorReference,
     PrivateEvaluatorStatus,
     QualifiedEnvironmentPackage,
+    QualityScorecardBinding,
     build_qualified_environment_package,
     serialize_buyer_safe_manifest,
     serialize_qualified_package,
@@ -401,14 +404,9 @@ def test_public_manifest_filters_private_identifiers_and_private_hashes() -> Non
     assert manifest.private_evaluator_status == PrivateEvaluatorStatus.PRESENT
     assert "private-evaluator-demo" not in payload
     assert package.private_evaluator.content_sha256 not in payload
-    assert all(
-        item.visibility == AttestationVisibility.PUBLIC
-        for item in manifest.attestations
-    )
+    assert all(item.visibility == AttestationVisibility.PUBLIC for item in manifest.attestations)
     assert all(item.visibility == EvidenceVisibility.PUBLIC for item in manifest.evidence)
-    assert all(
-        item.visibility == EvidenceVisibility.PUBLIC for item in manifest.supply_chain
-    )
+    assert all(item.visibility == EvidenceVisibility.PUBLIC for item in manifest.supply_chain)
 
 
 def test_private_only_changes_do_not_create_buyer_safe_fingerprint() -> None:
@@ -465,25 +463,19 @@ def test_private_portable_manifest_is_not_accepted_as_buyer_package_binding() ->
         build_qualified_environment_package(
             environment=_environment(),
             verifier=_verifier(),
-            portable_manifest=_portable_manifest(
-                visibility=PortableVisibility.PRIVATE_OPERATOR
-            ),
+            portable_manifest=_portable_manifest(visibility=PortableVisibility.PRIVATE_OPERATOR),
             maturity_record=maturity,
             scorecard=scorecard,
             attestations=(_attestation(),),
             supply_chain=_supply_chain(),
-            private_evaluator=PrivateEvaluatorReference(
-                status=PrivateEvaluatorStatus.UNKNOWN
-            ),
+            private_evaluator=PrivateEvaluatorReference(status=PrivateEvaluatorStatus.UNKNOWN),
         )
 
 
 def test_source_and_license_disclosure_are_required() -> None:
     package = _package()
     bad = package.model_dump(exclude={"package_id", "package_content_sha256"})
-    bad["supply_chain"] = tuple(
-        item for item in bad["supply_chain"] if item["kind"] != "license"
-    )
+    bad["supply_chain"] = tuple(item for item in bad["supply_chain"] if item["kind"] != "license")
 
     with pytest.raises(ValidationError, match="licensing"):
         QualifiedEnvironmentPackage(**bad)
@@ -496,3 +488,105 @@ def test_non_present_private_evaluator_cannot_carry_identifiers() -> None:
             reference_id="secret-reference",
             content_sha256=DIGESTS["a"],
         )
+
+
+@pytest.mark.parametrize("claim", ["maturity", "scorecard", "attestation", "conformance"])
+def test_copied_claims_cannot_change_under_retained_source_authorities(claim: str) -> None:
+    payload = _package().model_dump(mode="python")
+    payload.update(package_id="", package_content_sha256="")
+    if claim == "maturity":
+        payload["maturity"]["status"] = EnvironmentMaturity.COMMERCIAL_RELEASE
+        payload["maturity"]["unknown_gates"] = ()
+    elif claim == "scorecard":
+        for dimension in payload["scorecard"]["dimensions"]:
+            dimension["outcome"] = "PASS"
+    elif claim == "attestation":
+        payload["attestations"][0]["achieved_status"] = EnvironmentMaturity.COMMERCIAL_RELEASE
+    else:
+        payload["conformance"][0]["status"] = "UNKNOWN"
+    with pytest.raises(ValidationError, match="canonical source"):
+        QualifiedEnvironmentPackage.model_validate(payload)
+
+
+def test_private_scorecard_evidence_does_not_fingerprint_buyer_manifest() -> None:
+    package = _package()
+    context = _maturity_and_scorecard()[1].context
+    packages = []
+    for digest in ("a" * 64, "b" * 64):
+        evidence = _evidence(visibility=EvidenceVisibility.OPERATOR_PRIVATE, artifact_digest=digest)
+        evidence_payload = evidence.model_dump(mode="python")
+        evidence_payload.update(
+            evidence_id="",
+            evidence_content_sha256="",
+            record_id="",
+            evidence_type="qualification.semantic_completeness",
+            outcome=EvidenceOutcome.PASS,
+        )
+        scorecard = build_environment_quality_scorecard(
+            context=context,
+            evidence=(EvidenceRecord.model_validate(evidence_payload),),
+        )
+        payload = package.model_dump(mode="python")
+        payload.update(
+            package_id="",
+            package_content_sha256="",
+            scorecard=QualityScorecardBinding.from_scorecard(scorecard),
+        )
+        payload["authorities"]["scorecard"] = scorecard
+        packages.append(QualifiedEnvironmentPackage.model_validate(payload))
+    left, right = packages
+    assert left.scorecard.dimensions == right.scorecard.dimensions
+    assert left.scorecard.scorecard_id != right.scorecard.scorecard_id
+    assert left.package_id != right.package_id
+    assert serialize_buyer_safe_manifest(left) == serialize_buyer_safe_manifest(right)
+    public = serialize_buyer_safe_manifest(left).decode()
+    assert left.scorecard.scorecard_content_sha256 not in public
+    assert left.scorecard.scorecard_id not in public
+    assert left.maturity.maturity_record_id not in repr(left.buyer_safe_manifest().maturity)
+    assert left.maturity.qualification_identity not in repr(left.buyer_safe_manifest().maturity)
+
+
+def test_operator_round_trip_preserves_revalidatable_sources() -> None:
+    package = _package()
+    restored = QualifiedEnvironmentPackage.model_validate_json(serialize_qualified_package(package))
+    assert restored == package
+    payload = package.model_dump(mode="python")
+    payload.update(package_id="", package_content_sha256="")
+    del payload["authorities"]
+    with pytest.raises(ValidationError, match="authorities"):
+        QualifiedEnvironmentPackage.model_validate(payload)
+
+
+def test_source_mutation_cannot_evade_canonical_validation() -> None:
+    package = _package()
+    source = package.authorities.maturity_record.model_copy(
+        update={"status": EnvironmentMaturity.COMMERCIAL_RELEASE},
+    )
+    sources = package.authorities.model_copy(update={"maturity_record": source})
+    changed = package.model_copy(update={"authorities": sources})
+    with pytest.raises(ValidationError, match="evidence-derived status"):
+        serialize_qualified_package(changed)
+    with pytest.raises(ValidationError, match="evidence-derived status"):
+        serialize_buyer_safe_manifest(changed)
+
+
+def test_private_maturity_provenance_is_not_exported_or_fingerprinted() -> None:
+    original = _package()
+    packages = []
+    for marker in ("SYNTHETIC-PRIVATE-PROVENANCE-A", "SYNTHETIC-PRIVATE-PROVENANCE-B"):
+        record = original.authorities.maturity_record.model_dump(mode="python")
+        record.update(record_id="", provenance={"private_fixture": marker})
+        source = MaturityRecord.model_validate(record)
+        payload = original.model_dump(mode="python")
+        payload.update(
+            package_id="", package_content_sha256="", maturity=MaturityBinding.from_record(source)
+        )
+        payload["authorities"]["maturity_record"] = source
+        package = QualifiedEnvironmentPackage.model_validate(payload)
+        public = serialize_buyer_safe_manifest(package).decode()
+        assert marker not in public
+        assert source.record_id not in public
+        assert "authorities" not in public
+        packages.append(package)
+    assert packages[0].package_id != packages[1].package_id
+    assert serialize_buyer_safe_manifest(packages[0]) == serialize_buyer_safe_manifest(packages[1])

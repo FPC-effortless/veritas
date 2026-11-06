@@ -7,6 +7,8 @@ on:
       - "pyproject.toml"
       - "requirements-quality.txt"
       - "quality/**"
+      - "docs/**/*.py"
+      - "integrations/**/*.py"
       - "src/**/*.py"
       - "tests/**/*.py"
       - "tools/**/*.py"

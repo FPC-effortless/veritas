@@ -97,19 +97,13 @@ class PortablePackageBinding(BaseModel):
     def validate_binding(self) -> "PortablePackageBinding":
         if self.visibility == PortableVisibility.PRIVATE_OPERATOR:
             raise ValueError("qualified packages require a public or buyer-safe portable manifest")
-        if (self.public_contract_id is None) != (
-            self.public_contract_schema_version is None
-        ):
-            raise ValueError(
-                "public contract ID and schema version must be supplied together"
-            )
+        if (self.public_contract_id is None) != (self.public_contract_schema_version is None):
+            raise ValueError("public contract ID and schema version must be supplied together")
         return self
 
     @classmethod
     def from_manifest(cls, manifest: PortableEnvironmentManifest) -> Self:
-        validated = PortableEnvironmentManifest.model_validate(
-            manifest.model_dump(mode="python")
-        )
+        validated = PortableEnvironmentManifest.model_validate(manifest.model_dump(mode="python"))
         operational = validated.operational_contract
         return cls(
             manifest_id=validated.manifest_id,
@@ -157,9 +151,7 @@ class MaturityBinding(BaseModel):
             field_name="maturity verifier_content_sha256",
         )
         object.__setattr__(self, "failed_gates", tuple(sorted(set(self.failed_gates))))
-        object.__setattr__(
-            self, "unknown_gates", tuple(sorted(set(self.unknown_gates)))
-        )
+        object.__setattr__(self, "unknown_gates", tuple(sorted(set(self.unknown_gates))))
         if set(self.failed_gates).intersection(self.unknown_gates):
             raise ValueError("maturity failed and UNKNOWN gates must be disjoint")
         return self
@@ -229,9 +221,7 @@ class QualityScorecardBinding(BaseModel):
 
     @classmethod
     def from_scorecard(cls, scorecard: EnvironmentQualityScorecard) -> Self:
-        validated = EnvironmentQualityScorecard.model_validate(
-            scorecard.model_dump(mode="python")
-        )
+        validated = EnvironmentQualityScorecard.model_validate(scorecard.model_dump(mode="python"))
         return cls(
             scorecard_id=validated.scorecard_id,
             scorecard_content_sha256=validated.scorecard_content_sha256,
@@ -292,9 +282,7 @@ class ConformanceBinding(BaseModel):
 
     @classmethod
     def from_certificate(cls, certificate: ConformanceCertificate) -> Self:
-        validated = ConformanceCertificate.model_validate(
-            certificate.model_dump(mode="python")
-        )
+        validated = ConformanceCertificate.model_validate(certificate.model_dump(mode="python"))
         return cls(
             certificate_id=validated.certificate_id,
             certificate_content_sha256=validated.certificate_content_sha256,
@@ -333,9 +321,7 @@ class AttestationBinding(BaseModel):
 
     @classmethod
     def from_attestation(cls, attestation: EnvironmentAttestation) -> Self:
-        validated = EnvironmentAttestation.model_validate(
-            attestation.model_dump(mode="python")
-        )
+        validated = EnvironmentAttestation.model_validate(attestation.model_dump(mode="python"))
         return cls(
             attestation_id=validated.attestation_id,
             content_sha256=validated.content_sha256,
@@ -470,6 +456,78 @@ def _sorted_unique(
     return ordered
 
 
+class BuyerSafeMaturitySummary(BaseModel):
+    """Disclosed outcomes, not the identity of private-backed qualification evidence."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: EnvironmentMaturity
+    target_status: EnvironmentMaturity
+    qualification_policy_id: str
+    qualification_policy_version: str
+    failed_gates: tuple[str, ...] = ()
+    unknown_gates: tuple[str, ...] = ()
+
+
+class BuyerSafeQualityScorecardSummary(BaseModel):
+    """Disclosed dimensions without private-backed scorecard IDs or hashes."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    policy_id: str
+    policy_version: str
+    dimensions: tuple[QualityDimensionBinding, ...]
+
+    @property
+    def failed_dimensions(self) -> tuple[QualityDimension, ...]:
+        return tuple(
+            item.dimension
+            for item in self.dimensions
+            if item.outcome == QualityDimensionOutcome.FAIL
+        )
+
+    @property
+    def unknown_dimensions(self) -> tuple[QualityDimension, ...]:
+        return tuple(
+            item.dimension
+            for item in self.dimensions
+            if item.outcome == QualityDimensionOutcome.UNKNOWN
+        )
+
+
+class PackageAuthorities(BaseModel):
+    """Operator-only canonical records supporting the package's copied claims.
+
+    Validation preserves canonical content identities; it does not authenticate an
+    issuer, verify signatures, execute qualification, or grant release authority.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    portable_manifest: PortableEnvironmentManifest
+    maturity_record: MaturityRecord
+    scorecard: EnvironmentQualityScorecard
+    conformance_certificates: tuple[ConformanceCertificate, ...] = ()
+    attestations: tuple[EnvironmentAttestation, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def canonicalize_sources(self) -> "PackageAuthorities":
+        for field, key in (
+            ("conformance_certificates", lambda item: item.certificate_id),
+            ("attestations", lambda item: item.attestation_id),
+        ):
+            object.__setattr__(
+                self,
+                field,
+                _sorted_unique(
+                    getattr(self, field),
+                    key=key,
+                    field_name=field,
+                ),
+            )
+        return self
+
+
 class BuyerSafeQualifiedPackageManifest(BaseModel):
     """Public procurement view. It never includes operator-private identity or hashes."""
 
@@ -481,8 +539,8 @@ class BuyerSafeQualifiedPackageManifest(BaseModel):
     environment: EnvironmentIdentity
     verifier: VerifierIdentity
     portable: PortablePackageBinding
-    maturity: MaturityBinding
-    scorecard: QualityScorecardBinding
+    maturity: BuyerSafeMaturitySummary
+    scorecard: BuyerSafeQualityScorecardSummary
     conformance: tuple[ConformanceBinding, ...] = ()
     attestations: tuple[AttestationBinding, ...] = ()
     evidence: tuple[PackageEvidenceBinding, ...] = ()
@@ -494,16 +552,11 @@ class BuyerSafeQualifiedPackageManifest(BaseModel):
     def validate_manifest(self) -> "BuyerSafeQualifiedPackageManifest":
         if self.schema_version != PUBLIC_MANIFEST_SCHEMA_VERSION:
             raise ValueError("unsupported buyer-safe qualified-package schema version")
-        if any(
-            item.visibility != AttestationVisibility.PUBLIC
-            for item in self.attestations
-        ):
+        if any(item.visibility != AttestationVisibility.PUBLIC for item in self.attestations):
             raise ValueError("buyer-safe manifest may contain only PUBLIC attestations")
         if any(item.visibility != EvidenceVisibility.PUBLIC for item in self.evidence):
             raise ValueError("buyer-safe manifest may contain only PUBLIC evidence references")
-        if any(
-            item.visibility != EvidenceVisibility.PUBLIC for item in self.supply_chain
-        ):
+        if any(item.visibility != EvidenceVisibility.PUBLIC for item in self.supply_chain):
             raise ValueError("buyer-safe manifest may contain only PUBLIC supply-chain references")
 
         payload = self.model_dump(
@@ -533,6 +586,7 @@ class QualifiedEnvironmentPackage(BaseModel):
     schema_version: str = PACKAGE_SCHEMA_VERSION
     package_id: str = ""
     package_content_sha256: str = ""
+    authorities: PackageAuthorities
     environment: EnvironmentIdentity
     verifier: VerifierIdentity
     portable: PortablePackageBinding
@@ -559,18 +613,14 @@ class QualifiedEnvironmentPackage(BaseModel):
             or self.portable.verifier_version != self.verifier.verifier_version
         ):
             raise ValueError("portable manifest belongs to a different verifier")
-        if (
-            self.maturity.environment_content_sha256
-            != self.environment.content_sha256
-        ):
+        if self.maturity.environment_content_sha256 != self.environment.content_sha256:
             raise ValueError("maturity record belongs to a different environment")
         if self.maturity.verifier_content_sha256 != self.verifier.content_sha256:
             raise ValueError("maturity record belongs to a different verifier")
         if (
             self.scorecard.environment_id != self.environment.environment_id
             or self.scorecard.environment_version != self.environment.environment_version
-            or self.scorecard.environment_content_sha256
-            != self.environment.content_sha256
+            or self.scorecard.environment_content_sha256 != self.environment.content_sha256
         ):
             raise ValueError("quality scorecard belongs to a different environment")
         if (
@@ -627,9 +677,7 @@ class QualifiedEnvironmentPackage(BaseModel):
                 or item.public_contract_schema_version
                 != self.portable.public_contract_schema_version
             ):
-                raise ValueError(
-                    "conformance certificate belongs to a different portable contract"
-                )
+                raise ValueError("conformance certificate belongs to a different portable contract")
         for item in attestations:
             if item.environment_content_sha256 != self.environment.content_sha256:
                 raise ValueError("attestation belongs to a different environment")
@@ -641,6 +689,25 @@ class QualifiedEnvironmentPackage(BaseModel):
             raise ValueError("qualified package requires a source-lineage reference")
         if "license" not in disclosed_kinds:
             raise ValueError("qualified package requires a licensing reference")
+
+        # Retaining opaque source IDs is insufficient: revalidate the canonical
+        # records and compare every copied claim before issuing a package identity.
+        sources = PackageAuthorities.model_validate(self.authorities.model_dump(mode="python"))
+        expected_bindings = {
+            "portable": PortablePackageBinding.from_manifest(sources.portable_manifest),
+            "maturity": MaturityBinding.from_record(sources.maturity_record),
+            "scorecard": QualityScorecardBinding.from_scorecard(sources.scorecard),
+            "conformance": tuple(
+                ConformanceBinding.from_certificate(item)
+                for item in sources.conformance_certificates
+            ),
+            "attestations": tuple(
+                AttestationBinding.from_attestation(item) for item in sources.attestations
+            ),
+        }
+        for name, expected in expected_bindings.items():
+            if getattr(self, name) != expected:
+                raise ValueError(f"{name} binding does not match canonical source")
 
         payload = self.model_dump(
             mode="json",
@@ -657,15 +724,24 @@ class QualifiedEnvironmentPackage(BaseModel):
         return self
 
     def buyer_safe_manifest(self) -> BuyerSafeQualifiedPackageManifest:
-        validated = QualifiedEnvironmentPackage.model_validate(
-            self.model_dump(mode="python")
-        )
+        validated = QualifiedEnvironmentPackage.model_validate(self.model_dump(mode="python"))
         return BuyerSafeQualifiedPackageManifest(
             environment=validated.environment,
             verifier=validated.verifier,
             portable=validated.portable,
-            maturity=validated.maturity,
-            scorecard=validated.scorecard,
+            maturity=BuyerSafeMaturitySummary(
+                status=validated.maturity.status,
+                target_status=validated.maturity.target_status,
+                qualification_policy_id=validated.maturity.qualification_policy_id,
+                qualification_policy_version=validated.maturity.qualification_policy_version,
+                failed_gates=validated.maturity.failed_gates,
+                unknown_gates=validated.maturity.unknown_gates,
+            ),
+            scorecard=BuyerSafeQualityScorecardSummary(
+                policy_id=validated.scorecard.policy_id,
+                policy_version=validated.scorecard.policy_version,
+                dimensions=validated.scorecard.dimensions,
+            ),
             conformance=validated.conformance,
             attestations=tuple(
                 item
@@ -673,9 +749,7 @@ class QualifiedEnvironmentPackage(BaseModel):
                 if item.visibility == AttestationVisibility.PUBLIC
             ),
             evidence=tuple(
-                item
-                for item in validated.evidence
-                if item.visibility == EvidenceVisibility.PUBLIC
+                item for item in validated.evidence if item.visibility == EvidenceVisibility.PUBLIC
             ),
             supply_chain=tuple(
                 item
@@ -703,20 +777,25 @@ def build_qualified_environment_package(
 ) -> QualifiedEnvironmentPackage:
     """Compose a package from existing authorities without recomputing their semantics."""
 
+    sources = PackageAuthorities(
+        portable_manifest=portable_manifest,
+        maturity_record=maturity_record,
+        scorecard=scorecard,
+        conformance_certificates=tuple(conformance_certificates),
+        attestations=tuple(attestations),
+    )
     return QualifiedEnvironmentPackage(
-        environment=EnvironmentIdentity.model_validate(
-            environment.model_dump(mode="python")
-        ),
+        authorities=sources,
+        environment=EnvironmentIdentity.model_validate(environment.model_dump(mode="python")),
         verifier=VerifierIdentity.model_validate(verifier.model_dump(mode="python")),
         portable=PortablePackageBinding.from_manifest(portable_manifest),
         maturity=MaturityBinding.from_record(maturity_record),
         scorecard=QualityScorecardBinding.from_scorecard(scorecard),
         conformance=tuple(
-            ConformanceBinding.from_certificate(item)
-            for item in conformance_certificates
+            ConformanceBinding.from_certificate(item) for item in sources.conformance_certificates
         ),
         attestations=tuple(
-            AttestationBinding.from_attestation(item) for item in attestations
+            AttestationBinding.from_attestation(item) for item in sources.attestations
         ),
         evidence=tuple(evidence),
         supply_chain=tuple(supply_chain),
@@ -726,9 +805,7 @@ def build_qualified_environment_package(
 
 
 def serialize_qualified_package(package: QualifiedEnvironmentPackage) -> bytes:
-    validated = QualifiedEnvironmentPackage.model_validate(
-        package.model_dump(mode="python")
-    )
+    validated = QualifiedEnvironmentPackage.model_validate(package.model_dump(mode="python"))
     return _canonical_bytes(validated.model_dump(mode="json"))
 
 
