@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forge-temporal-data"
+version = "0.2.0"
+description = "Standalone evidence-preserving chronological data release toolkit"
+readme = "WORKBENCH.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.optional-dependencies]
+workbench = ["trainlab-local[server]>=0.3.0,<0.4"]
+
+[project.scripts]
+forge-temporal = "forge_data.__main__:main"
+forge-workbench = "forge_data.workbench:main"
+
+[project.urls]
+Source = "https://github.com/FPC-effortless/veritas/tree/main/integrations/forge"
+Issues = "https://github.com/FPC-effortless/veritas/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+forge_data = ["static/*"]

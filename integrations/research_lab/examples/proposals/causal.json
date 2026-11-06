@@ -1,0 +1,46 @@
+{
+  "schema": "research_lab.proposal.v1",
+  "id": "causal",
+  "author": "causal_design",
+  "question": "Does information carried by a keyed memory across an observation/query boundary causally improve lifecycle query correctness when the current query contains no recoverable value?",
+  "hypothesis": "On independently generated, balanced keyed-lifecycle histories, a frozen persistent keyed-store reference will exceed its reset-at-boundary control by at least 0.20 in macro lifecycle accuracy. This is an execution/information-flow falsifier for Research Lab OS, not a learned-architecture capability claim.",
+  "competing_explanations": [
+    "The queried value is recoverable from query features, an operation marker, or a fixed position rather than carried state.",
+    "Apparent benefit comes from UNKNOWN prevalence or a single easy lifecycle stratum rather than correct value retrieval and correction.",
+    "Seed, example, or compute differences between arms explain the score difference instead of the state intervention.",
+    "A stale associative record can look useful on ordinary reads while failing correction or deletion."
+  ],
+  "predictions": [
+    "For each preregistered seed, the persistent arm's macro lifecycle accuracy minus the paired reset arm's accuracy is at least 0.20.",
+    "The exact keyed reference achieves 1.0 accuracy separately on ordinary reads, corrected reads, deleted-key queries and absent-key queries; any error invalidates the fixture or adapter rather than counting as a hypothesis result.",
+    "Resetting only between the final observation and QUERY removes value-present recall while preserving query bytes, example order, evaluation code and workload.",
+    "Swapping populated carried states between independent histories reduces value-present accuracy relative to correctly matched state, ruling out a presence-only signal.",
+    "Balanced per-stratum and value-present-only reporting exposes a model that succeeds only by emitting UNKNOWN."
+  ],
+  "controls": [
+    "Generate 2048 fresh histories per seed with equal ordinary-read, correction, deletion and absent-key strata; randomize queried keys, values, distractor order and query position independently of the target.",
+    "Use exactly the same frozen histories and query bytes for all paired arms; initialize every stream independently, and exclude exact TRAIN/DEV histories if a learned adapter is subsequently added.",
+    "Keep the exact keyed store as a correctness reference and the always-UNKNOWN predictor as a shortcut diagnostic. Neither is the primary learned competitor and neither establishes a model-training advantage.",
+    "Precompute reference targets with an independently written replay of WRITE and DELETE operations, and verify the lifecycle category before executing any arm.",
+    "Record per-arm per-seed predictions, category counts, error counts, input hashes, interpreter identity, fixed work counters and elapsed time; retain all failed seeds."
+  ],
+  "ablations": [
+    "carry: retain keyed state across the observation/query boundary",
+    "reset: clear the same implementation's state immediately before QUERY without changing the stream",
+    "state_swap: use another history's populated state while preserving the current history's QUERY",
+    "no_overwrite: retain the first WRITE for a key to expose stale-answer failures in the correction stratum"
+  ],
+  "primary_metric": "macro_lifecycle_accuracy",
+  "direction": "max",
+  "minimum_effect": 0.20,
+  "seeds": [701, 702, 703],
+  "stopping_rule": "Freeze generator, code/input hashes, four strata, three seeds and all arms before the first run. Execute all 2048 histories per seed and every arm without outcome-based early stopping or retries. Fail the operational demonstration on any reference error, missing prediction file, changed input, omitted seed or nonfinite metric. Describe the mechanism contrast as supported only if the effect threshold holds independently in all three seeds; otherwise report unsupported or invalid with the failing evidence. Report seed-wise paired effects and descriptive spread, without presenting three generator seeds as three independent dataset-distribution replications.",
+  "limitations": [
+    "The keyed-store reference is a deterministic diagnostic, not TAC, PSN, DPSL, a Transformer, GRU, modern SSM or a newly trained AI architecture.",
+    "The reset intervention deliberately removes the only value-carrying channel; the resulting effect demonstrates causal state use in this fixture, not discovery, learnability, robust generalization or LLM replacement.",
+    "Software execution, independent design and clean replay are distinct from scientific qualification; the final operational acceptance must retain NOT_QUALIFIED scientific status.",
+    "Generated symbolic histories do not establish natural-language agent quality, source authenticity, production latency, GPU efficiency or deployment readiness.",
+    "Macro accuracy and separate present-value/UNKNOWN scores prevent a majority-UNKNOWN summary but do not certify subgroup risk or shifted-data reliability."
+  ],
+  "next_discriminating_test": "After the operational flow passes, freeze a learned keyed-memory adapter and credible parameter-matched Transformer and recurrent/SSM controls; qualify them on fresh DEV, then evaluate the same carry/reset/state-swap contrasts on held-out interleaved-query histories with unrelated-key edits, variable delay and higher load. Do not choose hyperparameters from the final test."
+}

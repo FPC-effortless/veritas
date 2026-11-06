@@ -200,7 +200,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
           run_install: false
@@ -210,8 +210,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Audit critical vulnerabilities
-        run: pnpm audit --audit-level=critical
+      - name: Audit all dependency vulnerabilities
+        run: pnpm audit --audit-level=low
       - name: Require independent exact-head review
         # One-time migration bootstraps for reviewer-authority PRs #331, #332, and #334 only.
         # PR numbers are unique, so these exceptions are permanently inert after merge.
