@@ -1,0 +1,34 @@
+{
+  "schema": "trainlab.experiment.v1",
+  "name": "Mean baseline \u00b7 constructed demo",
+  "description": "Fit an intercept-only baseline to the same constructed fixture. Local CPU, 200 updates, fixed validation split.",
+  "command": [
+    "python",
+    "train_demo.py",
+    "--model",
+    "mean"
+  ],
+  "seed": 7,
+  "timeout_seconds": 30,
+  "source_kind": "CONSTRUCTED",
+  "split_identity": "constructed-regression-v1-train80-validation40",
+  "inputs": [
+    "constructed_regression.json",
+    "train_demo.py"
+  ],
+  "artifacts": [
+    "checkpoint.json",
+    "predictions.json"
+  ],
+  "metrics": {
+    "validation_mse": "min",
+    "validation_mae": "min",
+    "train_mse": "min"
+  },
+  "budget": {
+    "updates": 200,
+    "training_examples": 80,
+    "tuning_trials": 0,
+    "learned_parameters": 1
+  }
+}

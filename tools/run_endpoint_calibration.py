@@ -6,19 +6,38 @@ import os
 import time
 import urllib.error
 import urllib.request
+from http.client import HTTPException
 from pathlib import Path
 from urllib.parse import urlparse
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run CompanyWorld calibration against an OpenAI-compatible endpoint")
-    parser.add_argument("--endpoint", required=True, help="Full /v1/chat/completions-compatible URL")
+    parser = argparse.ArgumentParser(
+        description="Run CompanyWorld calibration against an OpenAI-compatible endpoint"
+    )
+    parser.add_argument(
+        "--endpoint", required=True, help="Full /v1/chat/completions-compatible URL"
+    )
     parser.add_argument("--model", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--api-key-env", default="VERITAS_MODEL_API_KEY")
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--max-new-tokens", type=int, default=320)
     args = parser.parse_args()
+
+    try:
+        endpoint_url = urlparse(args.endpoint)
+        if (
+            endpoint_url.scheme not in {"http", "https"}
+            or not endpoint_url.hostname
+            or endpoint_url.username is not None
+            or endpoint_url.password is not None
+        ):
+            raise ValueError
+        # Validate the port before any request without reflecting the supplied URL.
+        endpoint_url.port
+    except ValueError:
+        raise ValueError("endpoint must be an HTTP(S) URL without embedded credentials") from None
 
     from investigation_world.calibration import run_full_context_calibration
 
@@ -56,14 +75,19 @@ def main() -> None:
             with urllib.request.urlopen(request, timeout=args.timeout) as response:
                 body = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:1000]
-            raise RuntimeError(f"model endpoint returned HTTP {exc.code}: {detail}") from exc
+            exc.close()
+            raise RuntimeError(f"model endpoint returned HTTP {exc.code}") from None
+        except (OSError, ValueError, HTTPException):
+            # Transport/decode exceptions may contain URLs, credentials or response bytes.
+            raise RuntimeError("model endpoint request failed or returned invalid JSON") from None
         request_seconds += time.time() - tick
         calls += 1
         try:
             content = body["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError("model endpoint response is not OpenAI chat-completions compatible") from exc
+        except (KeyError, IndexError, TypeError):
+            raise RuntimeError(
+                "model endpoint response is not OpenAI chat-completions compatible"
+            ) from None
         return str(content)
 
     report = run_full_context_calibration(generate, model_name=args.model)
@@ -72,7 +96,7 @@ def main() -> None:
         "request_seconds": round(request_seconds, 3),
         "model_calls": calls,
         "transport": "openai-compatible-http",
-        "endpoint_host": urlparse(endpoint).netloc,
+        "endpoint_host": endpoint_url.netloc,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True))
