@@ -1,0 +1,190 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2013-02-I-TX-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2013-02-I-TX"
+  ],
+  "simulation_start": "2013-04-18T00:51:00Z",
+  "simulation_as_of": "2013-05-04T12:00:00Z",
+  "initial_public_state": {
+    "incident": "April 17, 2013 fire and ammonium-nitrate explosion at the West Fertilizer Company in West, Texas",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct the event and revise risk hypotheses as community-damage evidence, later preliminary findings, and final CSB conclusions become available. Distinguish what can be observed from what the investigating institution later concluded.",
+    "epistemic_rule": "Publisher announcements, damage footage, preliminary findings, and final institutional findings are separate evidence surfaces and must retain their original roles and publication chronology."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "west-fertilizer-company",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "West Fertilizer Company"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "review_video",
+    "request_document",
+    "build_timeline",
+    "assess_community_damage",
+    "assess_responder_risk",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "compare_evidence",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "separate_publisher_announcement_from_media_landing_page": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-west-video-release-news-2013-05-03",
+      "source_id": "uscsb",
+      "source_artifact_id": "west-video-release-news-2013-05-03",
+      "case_ids": [
+        "CSB-2013-02-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-releases-video-documenting-the-blast-damage-in-west-texas/",
+      "content_ref": "external-document://uscsb/2013-02-I-TX/video-release-news-2013-05-03",
+      "available_from": "2013-05-04T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-west-fertilizer-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-west-blast-damage-video-page-2013-05-10",
+      "source_id": "uscsb",
+      "source_artifact_id": "west-blast-damage-video-page-2013-05-10",
+      "case_ids": [
+        "CSB-2013-02-I-TX"
+      ],
+      "modality": "video",
+      "epistemic_role": "primary_evidence",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/csb-video-documenting-the-blast-damage-in-west-texas/",
+      "content_ref": "external-page://uscsb/2013-02-I-TX/blast-damage-video-page-2013-05-10",
+      "available_from": "2013-05-11T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-west-fertilizer-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-west-preliminary-findings-2014-04-22",
+      "source_id": "uscsb",
+      "source_artifact_id": "west-preliminary-findings-2014-04-22",
+      "case_ids": [
+        "CSB-2013-02-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/chemical-safety-board-ongoing-investigation-emphasizes-lack-of-protection-for-communities-at-risk-from-ammonium-nitrate-storage-facilities-finds-lack-of-regulation-at-all-levels-of-government-/",
+      "content_ref": "external-document://uscsb/2013-02-I-TX/preliminary-findings-2014-04-22",
+      "available_from": "2014-04-23T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-west-fertilizer-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-west-final-approval-2016-01-29",
+      "source_id": "uscsb",
+      "source_artifact_id": "west-final-approval-2016-01-29",
+      "case_ids": [
+        "CSB-2013-02-I-TX"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-board-approves-the-west-fertilizer-company-report-and-recommendations-with-a-unanimous-vote/",
+      "content_ref": "external-document://uscsb/2013-02-I-TX/final-approval-2016-01-29",
+      "available_from": "2016-01-30T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-west-fertilizer-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-west-dangerously-close-2016-01-29",
+      "source_id": "uscsb",
+      "source_artifact_id": "west-dangerously-close-2016-01-29",
+      "case_ids": [
+        "CSB-2013-02-I-TX"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/dangerously-close-explosion-in-west-texas/",
+      "content_ref": "external-page://uscsb/2013-02-I-TX/dangerously-close-2016-01-29",
+      "available_from": "2016-01-30T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-west-fertilizer-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "west-video-page-to-release-news",
+      "source_fragment_id": "csb-west-blast-damage-video-page-2013-05-10",
+      "target_fragment_id": "csb-west-video-release-news-2013-05-03",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "west-preliminary-to-damage-video",
+      "source_fragment_id": "csb-west-preliminary-findings-2014-04-22",
+      "target_fragment_id": "csb-west-blast-damage-video-page-2013-05-10",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "west-final-to-preliminary",
+      "source_fragment_id": "csb-west-final-approval-2016-01-29",
+      "target_fragment_id": "csb-west-preliminary-findings-2014-04-22",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "west-final-video-to-final-approval",
+      "source_fragment_id": "csb-west-dangerously-close-2016-01-29",
+      "target_fragment_id": "csb-west-final-approval-2016-01-29",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-west-final-institutional-findings-2016",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation identified major safety issues involving hazard awareness, emergency planning and response, fertilizer-grade ammonium nitrate storage and regulatory oversight, and land-use planning around the facility.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-west-final-approval-2016-01-29"
+      ]
+    }
+  ],
+  "actual_timeline": [
+    {
+      "at": "2013-04-18T00:51:00Z",
+      "event": "A fertilizer-grade ammonium nitrate stockpile detonated after a fire had been reported roughly twenty minutes earlier."
+    }
+  ],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_evidence_role_awareness": true,
+    "require_responder_and_community_risk_reasoning": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}

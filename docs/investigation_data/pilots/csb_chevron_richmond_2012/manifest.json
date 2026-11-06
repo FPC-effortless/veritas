@@ -1,0 +1,168 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2012-03-I-CA-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2012-03-I-CA"
+  ],
+  "simulation_start": "2012-08-07T01:31:00Z",
+  "simulation_as_of": "2012-09-12T12:00:00Z",
+  "initial_public_state": {
+    "incident": "August 6, 2012 pipe rupture, vapor release, and fire at the Chevron Richmond refinery",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Build and revise a causal hypothesis as surveillance evidence and later CSB analysis become available. Distinguish direct observations from institutional interpretations and do not use evidence released after the simulated cutoff.",
+    "epistemic_rule": "Raw surveillance evidence, CSB interim findings, CSB reconstructions, and final institutional findings have distinct evidentiary roles; none is automatically private ground truth."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "chevron-richmond",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "Chevron Richmond Refinery"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "review_video",
+    "request_document",
+    "build_timeline",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "compare_evidence",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "distinguish_primary_evidence_from_official_findings": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-chevron-surveillance-2012-09-11",
+      "source_id": "uscsb",
+      "source_artifact_id": "chevron-surveillance-2012-09-11",
+      "case_ids": [
+        "CSB-2012-03-I-CA"
+      ],
+      "modality": "video",
+      "epistemic_role": "primary_evidence",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/surveillance-video-from-the-august-6-accident-at-the-chevron-refinery-in-richmond-ca/",
+      "content_ref": "external-page://uscsb/2012-03-I-CA/surveillance-2012-09-11",
+      "available_from": "2012-09-12T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-chevron-richmond-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-chevron-interim-findings-2013-04-19",
+      "source_id": "uscsb",
+      "source_artifact_id": "chevron-interim-findings-2013-04-19",
+      "case_ids": [
+        "CSB-2012-03-I-CA"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-board-members-approve-chevron-richmond-refinery-fire-interim-investigation-report/",
+      "content_ref": "external-document://uscsb/2012-03-I-CA/interim-findings-2013-04-19",
+      "available_from": "2013-04-20T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-chevron-richmond-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-chevron-animation-2013-04-19",
+      "source_id": "uscsb",
+      "source_artifact_id": "chevron-animation-2013-04-19",
+      "case_ids": [
+        "CSB-2012-03-I-CA"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/chevron-richmond-refinery-fire-animation/",
+      "content_ref": "external-page://uscsb/2012-03-I-CA/animation-2013-04-19",
+      "available_from": "2013-04-20T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-chevron-richmond-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-chevron-final-approval-2015-01-30",
+      "source_id": "uscsb",
+      "source_artifact_id": "chevron-final-approval-2015-01-30",
+      "case_ids": [
+        "CSB-2012-03-I-CA"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-board-approves-chevron-refinery-final-report-with-a-unanimous-vote/",
+      "content_ref": "external-document://uscsb/2012-03-I-CA/final-approval-2015-01-30",
+      "available_from": "2015-01-31T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-chevron-richmond-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "chevron-interim-to-surveillance",
+      "source_fragment_id": "csb-chevron-interim-findings-2013-04-19",
+      "target_fragment_id": "csb-chevron-surveillance-2012-09-11",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "chevron-animation-to-surveillance",
+      "source_fragment_id": "csb-chevron-animation-2013-04-19",
+      "target_fragment_id": "csb-chevron-surveillance-2012-09-11",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "chevron-final-to-interim",
+      "source_fragment_id": "csb-chevron-final-approval-2015-01-30",
+      "target_fragment_id": "csb-chevron-interim-findings-2013-04-19",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-chevron-final-institutional-findings-2015",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation identified gaps in industry guidance and shortcomings in Chevron safety culture and emergency response, building on earlier findings about process-safety deficiencies before the vapor release and fire.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-chevron-final-approval-2015-01-30"
+      ]
+    }
+  ],
+  "actual_timeline": [
+    {
+      "at": "2012-08-07T01:31:00Z",
+      "event": "The process pipe ruptured and released hot flammable hydrocarbon fluid that partially vaporized."
+    },
+    {
+      "at": "2012-08-07T01:33:00Z",
+      "event": "The flammable portion of the vapor cloud ignited approximately two minutes after the release."
+    }
+  ],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_evidence_role_awareness": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}

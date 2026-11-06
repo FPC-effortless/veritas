@@ -54,7 +54,9 @@ def _sample(
     )
 
 
-def _materialized_episode(index: int, sample: SampledTaskParameters, *, delay: int) -> CompanyWorldEpisode:
+def _materialized_episode(
+    index: int, sample: SampledTaskParameters, *, delay: int
+) -> CompanyWorldEpisode:
     base = build_o2c_episode(index, delay_days=delay)
     world_id = {
         DistributionSplit.TRAIN: "CW-FOUNDRY-TRAIN",
@@ -72,7 +74,12 @@ def build_transfer_suite(
     train_candidates: int = 24,
     eval_per_split: int = 8,
 ) -> dict[str, list[CompanyWorldEpisode]]:
-    suites: dict[str, list[CompanyWorldEpisode]] = {"train_pool": [], "iid": [], "ood": [], "adversarial": []}
+    suites: dict[str, list[CompanyWorldEpisode]] = {
+        "train_pool": [],
+        "iid": [],
+        "ood": [],
+        "adversarial": [],
+    }
 
     for offset in range(train_candidates):
         index = 2000 + offset
@@ -87,7 +94,9 @@ def build_transfer_suite(
             budget_ratio=1.0,
             adversarial_pressure=0.1,
         )
-        suites["train_pool"].append(_materialized_episode(index, sample, delay=(offset * 3 + 1) % 8))
+        suites["train_pool"].append(
+            _materialized_episode(index, sample, delay=(offset * 3 + 1) % 8)
+        )
 
     for offset in range(eval_per_split):
         index = 4000 + offset
@@ -115,7 +124,9 @@ def build_transfer_suite(
             budget_ratio=0.75,
             adversarial_pressure=0.45,
         )
-        suites["ood"].append(_materialized_episode(6000 + offset, ood_sample, delay=8 + (offset % 8)))
+        suites["ood"].append(
+            _materialized_episode(6000 + offset, ood_sample, delay=8 + (offset % 8))
+        )
 
         adv_sample = _sample(
             split=DistributionSplit.ADVERSARIAL,
@@ -159,7 +170,9 @@ def score_generator(generate: GenerateFn, episodes: list[CompanyWorldEpisode]) -
         result = _claims(payload, episode.task.model_dump(mode="json"))
         score = verify_companyworld(result, episode).overall_reward
         scores.append(score)
-        rows.append({"episode_id": episode.episode_id, "score": round(score, 6), "parsed": bool(payload)})
+        rows.append(
+            {"episode_id": episode.episode_id, "score": round(score, 6), "parsed": bool(payload)}
+        )
     return {
         "mean": round(mean(scores), 6) if scores else 0.0,
         "min": round(min(scores), 6) if scores else 0.0,
@@ -189,19 +202,25 @@ def select_frontier_examples(
         fallback = True
         # If there is no learnability frontier yet, train on the easiest measured
         # cases rather than mislabeling impossible tasks as frontier matched.
-        ranked = sorted(scored, key=lambda item: (-item[0], len(item[1].records), item[1].episode_id))
+        ranked = sorted(
+            scored, key=lambda item: (-item[0], len(item[1].records), item[1].episode_id)
+        )
         frontier = ranked[: min(max(minimum, len(frontier)), len(ranked))]
     return {
         "episodes": [episode for _, episode in frontier],
         "scores": [round(score, 6) for score, _ in frontier],
         "frontier_matched": not fallback,
         "candidate_mean": round(mean(score for score, _ in scored), 6) if scored else 0.0,
-        "candidate_success_rate": round(sum(score > 0 for score, _ in scored) / len(scored), 6) if scored else 0.0,
+        "candidate_success_rate": round(sum(score > 0 for score, _ in scored) / len(scored), 6)
+        if scored
+        else 0.0,
         "window": [lower, upper],
     }
 
 
-def build_training_rows(frontier_episodes: list[CompanyWorldEpisode], *, target_count: int = 48) -> list[dict[str, Any]]:
+def build_training_rows(
+    frontier_episodes: list[CompanyWorldEpisode], *, target_count: int = 48
+) -> list[dict[str, Any]]:
     if not frontier_episodes:
         return []
     rows: list[dict[str, Any]] = []

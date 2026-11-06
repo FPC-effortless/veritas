@@ -1,0 +1,30 @@
+{
+  "review_id": "review-csb-williams-olefins-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2013-03-I-LA",
+  "source_case_aliases": [
+    "CSB-2013-03-I-LA",
+    "CSB-2013-3-I-LA"
+  ],
+  "scope": [
+    "Reference CSB-authored public news and video landing pages by external locator only.",
+    "Preserve Gold-10 identifier 2013-03-I-LA and CSB recommendation-series form 2013-3-I-LA as aliases.",
+    "Treat the June 14, 2013 deployment release as investigation-start context, not a causal finding.",
+    "Do not synthesize a pre-final factual or animation stage that is not present in the reviewed CSB case record.",
+    "Treat the October 19, 2016 final case-study release as final institutional findings.",
+    "Treat the January 25, 2017 Blocked In video as post-final communication.",
+    "Do not resolve, bulk-download, redistribute, or extract embedded third-party media in this pilot.",
+    "Do not copy final-report PDFs, appendices, source text, video bytes, captions, transcripts, frames, or photographs into the repository.",
+    "Exclude worker, contractor, investigator, and other individual names from normalized task state.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises provenance, sparse temporal gating, overpressure/isolation reasoning, identifier reconciliation, and external evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Media resolution, transcript extraction, frame extraction, local acquisition, redistribution, or training use requires a separate artifact-level review.",
+    "CSB final findings are institutional evidence and are not promoted to omniscient causal ground truth."
+  ]
+}

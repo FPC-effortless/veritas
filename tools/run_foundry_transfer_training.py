@@ -42,18 +42,24 @@ def main() -> None:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        dtype=torch.float32,
+        # Supported throughout the workflow's Transformers 4.x range.
+        torch_dtype=torch.float32,
         low_cpu_mem_usage=True,
     )
     model.eval()
 
     def render_prompt(prompt: str) -> str:
         messages = [
-            {"role": "system", "content": "Follow the requested JSON schema exactly. Return JSON only."},
+            {
+                "role": "system",
+                "content": "Follow the requested JSON schema exactly. Return JSON only.",
+            },
             {"role": "user", "content": prompt},
         ]
         if getattr(tokenizer, "chat_template", None):
-            return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            return tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
         return messages[0]["content"] + "\n\n" + messages[1]["content"] + "\n\n"
 
     generation_seconds = 0.0
@@ -62,7 +68,9 @@ def main() -> None:
     def generate(prompt: str) -> str:
         nonlocal generation_seconds, generation_calls
         rendered = render_prompt(prompt)
-        encoded = tokenizer(rendered, return_tensors="pt", truncation=True, max_length=args.max_length)
+        encoded = tokenizer(
+            rendered, return_tensors="pt", truncation=True, max_length=args.max_length
+        )
         tick = time.time()
         with torch.inference_mode():
             output = model.generate(
@@ -112,7 +120,9 @@ def main() -> None:
             target_text = str(row["target"])
             full_text = prompt_text + target_text + (tokenizer.eos_token or "")
             prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
-            encoded = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=args.max_length)
+            encoded = tokenizer(
+                full_text, return_tensors="pt", truncation=True, max_length=args.max_length
+            )
             labels = encoded["input_ids"].clone()
             labels[:, : min(len(prompt_ids), labels.shape[-1])] = -100
             output = model(**encoded, labels=labels)
@@ -129,10 +139,7 @@ def main() -> None:
         "ood": score_generator(generate, suites["ood"]),
         "adversarial": score_generator(generate, suites["adversarial"]),
     }
-    gains = {
-        split: round(after[split]["mean"] - before[split]["mean"], 6)
-        for split in before
-    }
+    gains = {split: round(after[split]["mean"] - before[split]["mean"], 6) for split in before}
     heldout_positive = any(gains[split] > 0 for split in ("iid", "ood", "adversarial"))
     report = {
         "schema_version": "0.2.0",
@@ -159,7 +166,10 @@ def main() -> None:
         "interpretation": (
             "Verifier-measured held-out capability improved."
             if heldout_positive
-            else "Training loss may have changed, but no verifier-measured held-out capability gain was demonstrated."
+            else (
+                "Training loss may have changed, but no verifier-measured held-out capability "
+                "gain was demonstrated."
+            )
         ),
         "runtime": {
             "wall_seconds": round(time.time() - started, 3),

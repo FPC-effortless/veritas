@@ -1,0 +1,196 @@
+{
+  "schema_version": "1.0",
+  "episode_id": "csb-2019-04-I-PA-staged-fusion-pilot",
+  "domain": "industrial_accident_investigation",
+  "source_case_ids": [
+    "CSB-2019-04-I-PA",
+    "CSB-2019-06-I-PA"
+  ],
+  "simulation_start": "2019-06-21T00:00:00Z",
+  "simulation_as_of": "2019-06-22T12:00:00Z",
+  "initial_public_state": {
+    "incident": "June 21, 2019 fire and explosions at the Philadelphia Energy Solutions refinery",
+    "investigation_role": "Independent industrial accident investigator",
+    "task": "Reconstruct the loss-of-containment and escalation sequence, assess hydrofluoric-acid safeguards and offsite consequences, and revise hypotheses as CSB evidence matures.",
+    "epistemic_rule": "Deployment context, ongoing factual analysis, preliminary reconstruction, final findings, and post-final safety communication must remain temporally and epistemically distinct."
+  },
+  "actors": [
+    {
+      "actor_id": "uscsb",
+      "role": "investigator_and_publisher",
+      "public_attributes": {
+        "name": "U.S. Chemical Safety and Hazard Investigation Board"
+      }
+    },
+    {
+      "actor_id": "pes-refinery",
+      "role": "facility_operator",
+      "public_attributes": {
+        "name": "Philadelphia Energy Solutions Refinery"
+      }
+    }
+  ],
+  "available_actions": [
+    "inspect_evidence",
+    "review_video",
+    "request_document",
+    "build_timeline",
+    "assess_corrosion",
+    "assess_hf_safeguards",
+    "assess_offsite_consequence",
+    "compare_preliminary_and_final_analysis",
+    "reconcile_source_identifiers",
+    "form_hypothesis",
+    "revise_hypothesis",
+    "submit_findings"
+  ],
+  "constraints": {
+    "no_hindsight": true,
+    "evidence_release_time_enforced": true,
+    "ongoing_updates_are_not_final_findings": true,
+    "source_identifier_aliases_are_preserved": true,
+    "public_exact_times_are_not_private_ground_truth": true,
+    "official_findings_are_not_private_truth": true,
+    "review_scope": "link_only_public_material"
+  },
+  "fragments": [
+    {
+      "fragment_id": "csb-pes-deployment-2019-06-21",
+      "source_id": "uscsb",
+      "source_artifact_id": "pes-deployment-2019-06-21",
+      "case_ids": [
+        "CSB-2019-04-I-PA",
+        "CSB-2019-06-I-PA"
+      ],
+      "modality": "document",
+      "epistemic_role": "context",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/chemical-safety-board-deploying-to-site-of-refinery-explosion-and-fire-outside-philadelphia-pa/",
+      "content_ref": "external-document://uscsb/pes/deployment-2019-06-21",
+      "available_from": "2019-06-22T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-pes-philadelphia-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-pes-factual-update-2019-10-16",
+      "source_id": "uscsb",
+      "source_artifact_id": "pes-factual-update-2019-10-16",
+      "case_ids": [
+        "CSB-2019-04-I-PA",
+        "CSB-2019-06-I-PA"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/chemical-safety-board-releases-factual-update-and-new-animation-detailing-the-events-of-the-massive-explosion-and-fire-at-the-pes-refinery-in-philadelphia-pa/",
+      "content_ref": "external-document://uscsb/pes/factual-update-2019-10-16",
+      "available_from": "2019-10-17T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-pes-philadelphia-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-pes-preliminary-animation-2019-10-16",
+      "source_id": "uscsb",
+      "source_artifact_id": "pes-preliminary-animation-2019-10-16",
+      "case_ids": [
+        "CSB-2019-04-I-PA",
+        "CSB-2019-06-I-PA"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/preliminary-animation-of-philadelphia-energy-solutions-refinery-fire-and-explosions/",
+      "content_ref": "external-page://uscsb/pes/preliminary-animation-2019-10-16",
+      "available_from": "2019-10-17T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-pes-philadelphia-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-pes-final-release-2022-10-11",
+      "source_id": "uscsb",
+      "source_artifact_id": "pes-final-release-2022-10-11",
+      "case_ids": [
+        "CSB-2019-04-I-PA",
+        "CSB-2019-06-I-PA"
+      ],
+      "modality": "document",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/csb-releases-final-report-into-2019-pes-fire-and-explosion-in-philadelphia/",
+      "content_ref": "external-document://uscsb/pes/final-release-2022-10-11",
+      "available_from": "2022-10-12T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-pes-philadelphia-link-only-v1"
+    },
+    {
+      "fragment_id": "csb-pes-wake-up-call-2022-10-27",
+      "source_id": "uscsb",
+      "source_artifact_id": "pes-wake-up-call-2022-10-27",
+      "case_ids": [
+        "CSB-2019-04-I-PA",
+        "CSB-2019-06-I-PA"
+      ],
+      "modality": "video",
+      "epistemic_role": "official_finding",
+      "derivation": "original",
+      "sensitivity": "public",
+      "locator": "https://www.csb.gov/videos/wake-up-call-refinery-disaster-in-philadelphia/",
+      "content_ref": "external-page://uscsb/pes/wake-up-call-2022-10-27",
+      "available_from": "2022-10-28T12:00:00Z",
+      "reliability": "high",
+      "rights_review_id": "review-csb-pes-philadelphia-link-only-v1"
+    }
+  ],
+  "relations": [
+    {
+      "relation_id": "pes-factual-update-to-deployment",
+      "source_fragment_id": "csb-pes-factual-update-2019-10-16",
+      "target_fragment_id": "csb-pes-deployment-2019-06-21",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "pes-animation-to-factual-update",
+      "source_fragment_id": "csb-pes-preliminary-animation-2019-10-16",
+      "target_fragment_id": "csb-pes-factual-update-2019-10-16",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "pes-final-to-preliminary",
+      "source_fragment_id": "csb-pes-final-release-2022-10-11",
+      "target_fragment_id": "csb-pes-factual-update-2019-10-16",
+      "relation": "same_event"
+    },
+    {
+      "relation_id": "pes-post-final-video-to-final",
+      "source_fragment_id": "csb-pes-wake-up-call-2022-10-27",
+      "target_fragment_id": "csb-pes-final-release-2022-10-11",
+      "relation": "same_event"
+    }
+  ],
+  "ground_truth_claims": [],
+  "official_findings": [
+    {
+      "finding_id": "csb-pes-final-institutional-findings-2022",
+      "authority": "U.S. Chemical Safety and Hazard Investigation Board",
+      "finding": "The CSB final investigation concluded that a corroded pipe elbow ruptured in the hydrofluoric-acid alkylation unit and identified mechanical-integrity, safeguard-reliability, emergency-isolation, and inherently-safer-design issues.",
+      "confidence": 1.0,
+      "source_evidence_ids": [
+        "csb-pes-final-release-2022-10-11"
+      ]
+    }
+  ],
+  "actual_timeline": [],
+  "causal_edges": [],
+  "verifier_targets": {
+    "mode": "staged_evidence_hypothesis_revision",
+    "require_temporal_justification": true,
+    "require_identifier_alias_reconciliation": true,
+    "require_corrosion_and_hf_safeguard_reasoning": true,
+    "require_preliminary_vs_final_distinction": true,
+    "do_not_promote_official_findings_to_ground_truth": true
+  }
+}

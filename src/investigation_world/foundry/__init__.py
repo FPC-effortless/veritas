@@ -1,3 +1,23 @@
+from investigation_world.foundry.calibration_ingestion import (
+    CalibrationDataset,
+    CalibrationIngestionPlan,
+    CalibrationIngestionResult,
+    CalibrationStatistic,
+    DatasetFormat,
+    DatasetProfile,
+    DependencyFitRule,
+    DistributionFitRule,
+    fit_calibration_plan,
+    profile_dataset,
+)
+from investigation_world.foundry.capability_families import (
+    CapabilityFamily,
+    CapabilityFamilyId,
+    external_investigation_capability_contract,
+    external_investigation_family,
+    selective_agency_capability_contract,
+    selective_agency_family,
+)
 from investigation_world.foundry.challenges import ChallengeSpec, FailureClass, challenge_from_trace, classify_failure
 from investigation_world.foundry.companyworld import (
     adapt_companyworld_tasks,
@@ -8,9 +28,42 @@ from investigation_world.foundry.companyworld import (
 from investigation_world.foundry.curriculum import TaskPerformance, frontier_priority, select_frontier_tasks
 from investigation_world.foundry.cycle import FoundryCycleConfig, FoundryCycleResult, aggregate_task_performance, run_foundry_cycle
 from investigation_world.foundry.distributions import DistributionPartition, FoundryDistributionManifest, manifest_from_tasks
+from investigation_world.foundry.expert_trajectories import (
+    DemonstrationSet,
+    ExpertiseAssessment,
+    ExpertTrajectory,
+    PreferencePair,
+    TrainingUse,
+    TrajectoryRole,
+    VerifiedTrajectory,
+    assess_trace,
+    curate_verified_trace,
+    make_preference_pair,
+    qualify_expert_trace,
+)
+from investigation_world.foundry.external_distribution import (
+    CalibrationBinding,
+    CalibrationParameter,
+    ExternalInvestigationBuildPlan,
+    ExternalInvestigationDistribution,
+    ExternalInvestigationWorldSpec,
+    ExternalWorldSummary,
+    default_external_investigation_build_plan,
+    load_external_investigation_distribution,
+    materialize_external_investigation_build_plan,
+    resolve_external_world_spec,
+    write_external_investigation_distribution,
+)
+from investigation_world.foundry.external_investigation import (
+    adapt_external_investigation_tasks,
+    external_investigation_task_metadata,
+    infer_external_investigation_difficulty,
+)
+from investigation_world.foundry.external_runtime import ExternalInvestigationEpisode, ExternalInvestigationRuntime
 from investigation_world.foundry.materializer import (
     FoundryCompanyWorldRuntime,
     FoundryRuntimeConfig,
+    FoundryToolFailure,
     MaterializedCompanyWorldTask,
     materialize_companyworld_task,
 )
@@ -32,6 +85,24 @@ from investigation_world.foundry.mutations import apply_mutation
 from investigation_world.foundry.promotion import ChallengeValidation, PromotionPolicy, promotable, promotion_failures
 from investigation_world.foundry.replay import branch_from_snapshot, make_snapshot
 from investigation_world.foundry.reward import GatedRewardContract, RewardWeights, gated_reward
+from investigation_world.foundry.selective_agency import (
+    adapt_selective_agency_tasks,
+    infer_selective_agency_difficulty,
+    selective_agency_task_metadata,
+)
+from investigation_world.foundry.selective_agency_distribution import (
+    SELECTIVE_AGENCY_DISTRIBUTION_VERSION,
+    SelectiveAgencyDistributionBundle,
+    SelectiveAgencyDistributionConfig,
+    SelectiveAgencyDistributionItem,
+    SelectiveAgencyDistributionValidation,
+    compile_selective_agency_distribution,
+    selective_agency_agent_payload,
+    selective_agency_foundry_metadata,
+    selective_agency_oracle_payload,
+    validate_selective_agency_distribution,
+    write_selective_agency_distribution,
+)
 from investigation_world.foundry.task_distribution import (
     CapabilityBundle,
     DifficultyDistribution,
@@ -44,6 +115,48 @@ from investigation_world.foundry.task_distribution import (
 )
 from investigation_world.foundry.trace_store import append_trace, load_traces, trace_cost
 from investigation_world.foundry.tracing import TracingRuntimeProxy, execute_counterfactual, replay_trace_prefix
+from investigation_world.foundry.training_adapters import (
+    ArtifactTrainerAdapter,
+    ExternalCommandTrainerAdapter,
+    PreferenceTrainerAdapter,
+    RLTrainerAdapter,
+    SFTTrainerAdapter,
+    VOPSDTrainerAdapter,
+    trainer_adapter_for,
+)
+from investigation_world.foundry.training_corpus import generate_training_demonstration_set
+from investigation_world.foundry.training_product import (
+    PreferenceTrainingExample,
+    TrainerAdapter,
+    TrainerKind,
+    TrainingBundle,
+    TrainingExample,
+    TrainingRecipe,
+    TrainingRunManifest,
+    TrainingRunResult,
+    compile_training_bundle,
+)
+from investigation_world.foundry.trajectory_generation import (
+    CounterfactualMutation,
+    ExternalInvestigationPolicy,
+    OracleExpertPolicy,
+    generate_counterfactual_trajectory,
+    generate_demonstration_set,
+    generate_verified_trajectory,
+    mutate_investigation_result,
+)
+from investigation_world.foundry.world_calibration import (
+    CalibrationReport,
+    CalibrationSource,
+    CalibrationSourceKind,
+    DependencyTarget,
+    DistributionTarget,
+    ProcedurePrior,
+    WorldCalibrationSpec,
+    calibration_fingerprint,
+    validate_calibration_report,
+    world_manifest_id,
+)
 from investigation_world.foundry.worlds import (
     CompanyWorldBuildPlan,
     CompanyWorldBuildSpec,
@@ -54,20 +167,42 @@ from investigation_world.foundry.worlds import (
 )
 
 __all__ = [
-    "CapabilityBundle", "CapabilityContract", "ChallengeSpec", "ChallengeValidation", "CompanyWorldBuildPlan",
-    "CompanyWorldBuildSpec", "CounterfactualBranch", "DifficultyDistribution", "DifficultyVector",
-    "DistributionPartition", "DistributionSplit", "EfficiencyPoint", "FailureClass", "FloatRange",
+    "ArtifactTrainerAdapter", "CalibrationBinding", "CalibrationDataset", "CalibrationIngestionPlan",
+    "CalibrationIngestionResult", "CalibrationParameter", "CalibrationReport", "CalibrationSource",
+    "CalibrationSourceKind", "CalibrationStatistic", "CapabilityBundle", "CapabilityContract", "CapabilityFamily",
+    "CapabilityFamilyId", "ChallengeSpec", "ChallengeValidation", "CompanyWorldBuildPlan", "CompanyWorldBuildSpec",
+    "CounterfactualBranch", "CounterfactualMutation", "DatasetFormat", "DatasetProfile", "DemonstrationSet",
+    "DependencyFitRule", "DependencyTarget", "DifficultyDistribution", "DifficultyVector", "DistributionFitRule",
+    "DistributionPartition", "DistributionSplit", "DistributionTarget", "EfficiencyPoint", "ExpertTrajectory",
+    "ExpertiseAssessment", "ExternalCommandTrainerAdapter", "ExternalInvestigationBuildPlan",
+    "ExternalInvestigationDistribution", "ExternalInvestigationEpisode", "ExternalInvestigationPolicy",
+    "ExternalInvestigationRuntime", "ExternalInvestigationWorldSpec", "ExternalWorldSummary", "FailureClass", "FloatRange",
     "FoundryCompanyWorldRuntime", "FoundryCycleConfig", "FoundryCycleResult", "FoundryDistributionManifest",
-    "FoundryMetrics", "FoundryRuntimeConfig", "FoundryTaskMetadata", "GatedRewardContract", "IntRange",
-    "MaterializedCompanyWorldTask", "MutationKind", "MutationLineage", "PromotionPolicy", "RewardWeights",
-    "RolloutTrace", "SampledTaskParameters", "StateSnapshot", "TaskDistributionSpec", "TaskPerformance",
-    "TraceEvent", "TracingRuntimeProxy", "adapt_companyworld_tasks", "aggregate_task_performance",
-    "append_trace", "apply_mutation", "branch_from_snapshot", "challenge_from_trace", "classify_failure",
-    "companyworld_capability_contract", "companyworld_task_metadata", "default_companyworld_build_plan",
-    "execute_counterfactual", "foundry_objective", "frontier_priority", "gated_reward",
-    "infer_companyworld_difficulty", "load_traces", "make_snapshot", "manifest_from_tasks",
-    "materialize_companyworld_build_plan", "materialize_companyworld_task", "pareto_frontier",
-    "patched_generator_source", "promotable", "promotion_failures", "replay_trace_prefix",
-    "run_foundry_cycle", "sample_task_batch", "sample_task_parameters", "select_frontier_tasks",
-    "stable_hash", "trace_cost", "write_companyworld_world_manifest",
+    "FoundryMetrics", "FoundryRuntimeConfig", "FoundryTaskMetadata", "FoundryToolFailure", "GatedRewardContract",
+    "IntRange", "MaterializedCompanyWorldTask", "MutationKind", "MutationLineage", "OracleExpertPolicy", "PreferencePair",
+    "PreferenceTrainerAdapter", "PreferenceTrainingExample", "ProcedurePrior", "PromotionPolicy", "RLTrainerAdapter",
+    "RewardWeights", "RolloutTrace", "SELECTIVE_AGENCY_DISTRIBUTION_VERSION", "SFTTrainerAdapter",
+    "SampledTaskParameters", "SelectiveAgencyDistributionBundle", "SelectiveAgencyDistributionConfig",
+    "SelectiveAgencyDistributionItem", "SelectiveAgencyDistributionValidation", "StateSnapshot", "TaskDistributionSpec",
+    "TaskPerformance", "TraceEvent", "TracingRuntimeProxy", "TrainerAdapter", "TrainerKind", "TrainingBundle",
+    "TrainingExample", "TrainingRecipe", "TrainingRunManifest", "TrainingRunResult", "TrainingUse", "TrajectoryRole",
+    "VOPSDTrainerAdapter", "VerifiedTrajectory", "WorldCalibrationSpec", "adapt_companyworld_tasks",
+    "adapt_external_investigation_tasks", "adapt_selective_agency_tasks", "aggregate_task_performance", "append_trace",
+    "apply_mutation", "assess_trace", "branch_from_snapshot", "calibration_fingerprint", "challenge_from_trace",
+    "classify_failure", "companyworld_capability_contract", "companyworld_task_metadata", "compile_selective_agency_distribution",
+    "compile_training_bundle", "curate_verified_trace", "default_companyworld_build_plan",
+    "default_external_investigation_build_plan", "execute_counterfactual", "external_investigation_capability_contract",
+    "external_investigation_family", "external_investigation_task_metadata", "fit_calibration_plan", "foundry_objective",
+    "frontier_priority", "gated_reward", "generate_counterfactual_trajectory", "generate_demonstration_set",
+    "generate_training_demonstration_set", "generate_verified_trajectory", "infer_companyworld_difficulty",
+    "infer_external_investigation_difficulty", "infer_selective_agency_difficulty", "load_external_investigation_distribution",
+    "load_traces", "make_preference_pair", "make_snapshot", "manifest_from_tasks", "materialize_companyworld_build_plan",
+    "materialize_companyworld_task", "materialize_external_investigation_build_plan", "mutate_investigation_result",
+    "pareto_frontier", "patched_generator_source", "profile_dataset", "promotable", "promotion_failures",
+    "qualify_expert_trace", "replay_trace_prefix", "resolve_external_world_spec", "run_foundry_cycle", "sample_task_batch",
+    "sample_task_parameters", "select_frontier_tasks", "selective_agency_agent_payload",
+    "selective_agency_capability_contract", "selective_agency_family", "selective_agency_foundry_metadata",
+    "selective_agency_oracle_payload", "selective_agency_task_metadata", "stable_hash", "trace_cost", "trainer_adapter_for",
+    "validate_calibration_report", "validate_selective_agency_distribution", "world_manifest_id",
+    "write_companyworld_world_manifest", "write_external_investigation_distribution", "write_selective_agency_distribution",
 ]

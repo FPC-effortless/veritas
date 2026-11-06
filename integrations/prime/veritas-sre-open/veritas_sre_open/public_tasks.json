@@ -1,0 +1,74 @@
+[
+  {
+    "task_id": "VOPEN-REG-001",
+    "source": "project-authored-synthetic",
+    "prompt": "A new API release completed eight minutes before errors began. Requests now fail on a schema field introduced by that release, host CPU and memory are normal, and rolling back immediately restores service. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "regression"
+  },
+  {
+    "task_id": "VOPEN-REG-002",
+    "source": "project-authored-synthetic",
+    "prompt": "Only instances running today's parser build reject a previously accepted payload. Older instances remain healthy, there is no resource saturation or network fault, and reverting the build removes the failures. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "regression"
+  },
+  {
+    "task_id": "VOPEN-REG-003",
+    "source": "project-authored-synthetic",
+    "prompt": "Immediately after a configuration rollout, every worker using the new configuration fails startup validation while workers on the previous configuration remain available. Reverting the configuration restores the failed workers. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "regression"
+  },
+  {
+    "task_id": "VOPEN-INF-001",
+    "source": "project-authored-synthetic",
+    "prompt": "Application code and traffic are unchanged, but packet loss appears simultaneously between the application tier and both database replicas after a routing withdrawal. CPU and queue depth are normal. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "infrastructure"
+  },
+  {
+    "task_id": "VOPEN-INF-002",
+    "source": "project-authored-synthetic",
+    "prompt": "Several services begin timing out when their shared storage volume becomes unreachable. No release occurred, request volume is normal, and health returns after the storage attachment is repaired. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "infrastructure"
+  },
+  {
+    "task_id": "VOPEN-INF-003",
+    "source": "project-authored-synthetic",
+    "prompt": "A zone loses connectivity to the internal service-discovery endpoint. Unchanged application instances in that zone cannot resolve dependencies, while identical instances in another zone remain healthy. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "infrastructure"
+  },
+  {
+    "task_id": "VOPEN-CAP-001",
+    "source": "project-authored-synthetic",
+    "prompt": "Incoming traffic triples without a deploy. Worker CPU is pinned, queue age and backlog rise steadily, dependencies remain reachable, and adding workers drains the queue and restores latency. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "capacity"
+  },
+  {
+    "task_id": "VOPEN-CAP-002",
+    "source": "project-authored-synthetic",
+    "prompt": "The database connection pool reaches its configured maximum during a sustained demand increase. Requests wait for connections, host networking is healthy, and increasing pool and database capacity resolves the incident. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "capacity"
+  },
+  {
+    "task_id": "VOPEN-CAP-003",
+    "source": "project-authored-synthetic",
+    "prompt": "A batch workload consumes all available worker slots and interactive jobs begin waiting. There was no code change or dependency outage; pausing the batch work immediately frees slots and service recovers. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "capacity"
+  },
+  {
+    "task_id": "VOPEN-TRN-001",
+    "source": "project-authored-synthetic",
+    "prompt": "For roughly ninety seconds, an upstream dependency returns intermittent timeouts and then recovers without any deployment, scaling action, configuration change, or operator intervention. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "transient"
+  },
+  {
+    "task_id": "VOPEN-TRN-002",
+    "source": "project-authored-synthetic",
+    "prompt": "A small fraction of requests receive upstream 503 responses for two minutes. Resource levels remain normal, the application version is unchanged, and errors disappear on their own with no persistent component failure found. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "transient"
+  },
+  {
+    "task_id": "VOPEN-TRN-003",
+    "source": "project-authored-synthetic",
+    "prompt": "A brief burst of elevated latency affects dependency calls, then metrics return to baseline before any rollback, restart, repair, or scale event can occur. No lasting fault is observed afterward. Classify the most likely causal class as one of regression, infrastructure, capacity, transient. Return only JSON: {\"causal_class\":\"...\"}.",
+    "expected_causal_class": "transient"
+  }
+]

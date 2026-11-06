@@ -78,11 +78,30 @@ def apply_mutation(
         task = payload.setdefault("task", {})
         constraints = task.setdefault("constraints", {})
         failures = constraints.setdefault("foundry_tool_failures", [])
-        failures.append({"system": params.get("system", "UNKNOWN"), "at_step": int(params.get("at_step", 0))})
+        failure: dict[str, Any] = {
+            "at_step": int(params.get("at_step", 0)),
+            "persistent": bool(params.get("persistent", False)),
+        }
+        # Preserve legacy system-scoped payloads byte-for-byte in shape. Explicit aggregator/global
+        # scopes do not invent a fake system identifier.
+        if "system" in params and params.get("system") is not None:
+            failure["system"] = params["system"]
+        elif "scope" not in params:
+            failure["system"] = "UNKNOWN"
+        if "scope" in params:
+            failure["scope"] = params["scope"]
+        failures.append(failure)
     elif kind == MutationKind.PERMISSION_CHANGE:
         task = payload.setdefault("task", {})
         constraints = task.setdefault("constraints", {})
-        constraints["foundry_permission_change"] = params
+        change = dict(params)
+        existing = constraints.get("foundry_permission_change")
+        if existing is None:
+            constraints["foundry_permission_change"] = change
+        elif isinstance(existing, list):
+            existing.append(change)
+        else:
+            constraints["foundry_permission_change"] = [existing, change]
     else:
         raise ValueError(kind)
 

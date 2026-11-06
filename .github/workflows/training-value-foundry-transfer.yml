@@ -1,13 +1,7 @@
 name: Training Value Foundry Transfer
 
+# Model execution remains a controlled experiment, not an automatic PR/push check.
 on:
-  push:
-    branches:
-      - feature/foundry-transfer-training
-    paths:
-      - ".github/workflows/training-value-foundry-transfer.yml"
-      - "src/investigation_world/training_value/**"
-      - "tools/run_foundry_transfer_training.py"
   workflow_dispatch:
 
 permissions:

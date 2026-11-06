@@ -1,0 +1,25 @@
+{
+  "review_id": "review-csb-husky-superior-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2018-02-I-WI",
+  "scope": [
+    "Reference CSB-authored public news and video landing pages by external locator only.",
+    "Treat the April 26, 2018 deployment release as investigation-start context, not a completed causal finding.",
+    "Treat the August 2, 2018 factual update and interim animation as ongoing institutional analysis, distinct from the December 2022 final report.",
+    "Treat the June 9, 2023 safety video as post-final communication, not evidence that was available during the original investigation.",
+    "Do not resolve, bulk-download, redistribute, or extract embedded third-party media in this pilot.",
+    "Do not copy factual-update PDFs, final-report PDFs, appendices, or other source artifact bytes into the repository.",
+    "Exclude worker, resident, responder, investigator, and other individual names from the normalized episode actors and task state.",
+    "Do not convert approximate event times such as around 10 a.m. CDT into exact private timestamps.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises provenance, temporal gating, transient-operation reasoning, hypothesis revision, and external evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Media resolution, transcript extraction, frame extraction, local acquisition, redistribution, or training use requires a separate artifact-level review.",
+    "CSB factual updates and final findings are institutional evidence and are not promoted to omniscient causal ground truth."
+  ]
+}

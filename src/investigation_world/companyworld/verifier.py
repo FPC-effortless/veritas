@@ -105,6 +105,12 @@ def _evidence_support_fraction(
     return 0.0
 
 
+def _f1(weighted_correct: float, predicted_count: int, truth_count: int) -> float:
+    precision = weighted_correct / max(1, predicted_count)
+    recall = weighted_correct / max(1, truth_count)
+    return 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
+
+
 def verify_companyworld(
     result: InvestigationResult,
     episode: CompanyWorldEpisode,
@@ -113,6 +119,11 @@ def verify_companyworld(
     budget_total: int = 40,
 ) -> CompanyWorldVerificationResult:
     """Score an operational investigation against CompanyWorld evaluator truth.
+
+    ``fact_score`` remains an oracle-correctness diagnostic. Reward, however, is grounded in
+    admissible public evidence: a claim that happens to match private truth but is unsupported by
+    its cited evidence cannot earn task reward. This prevents misleading projections, lucky guesses,
+    or other non-entailing evidence from receiving substantial partial credit.
 
     Agent claims use the existing InvestigationResult.claims surface with dictionaries shaped as:
     {object_type, object_id, field_name, value}. Evidence entries cite record_id (document_id is
@@ -144,21 +155,29 @@ def verify_companyworld(
     fact_score = 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
 
     cited = _cited_record_ids(result)
-    supported = sum(
-        _evidence_support_fraction(cited, episode, truth[key]) for key in correct
-    )
+    support_by_key = {
+        key: _evidence_support_fraction(cited, episode, truth[key])
+        for key in correct
+    }
+    supported = sum(support_by_key.values())
     evidence_support = supported / max(1, len(correct)) if correct else 0.0
+
+    # Grounded correctness is the reward-bearing quantity. Partial listed-count support contributes
+    # fractionally; unsupported oracle-correct claims remain visible in fact_score but do not count
+    # as grounded success.
+    grounded_fact_score = _f1(supported, len(predicted), len(truth))
 
     substantive = bool(predicted)
     if oracle.answerable:
-        abstention = 1.0 if substantive and fact_score > 0 else 0.0
+        abstention = 1.0 if substantive and grounded_fact_score > 0 else 0.0
     else:
         abstention = 1.0 if result.unknowns and not substantive else 0.0
 
-    calibration = max(0.0, 1.0 - abs(result.overall_confidence - fact_score))
+    calibration_target = grounded_fact_score if oracle.answerable else abstention
+    calibration = max(0.0, 1.0 - abs(result.overall_confidence - calibration_target))
     efficiency = (
         max(0.0, 1.0 - budget_spent / max(1, budget_total))
-        if fact_score > 0
+        if grounded_fact_score > 0
         else 0.0
     )
 
@@ -166,11 +185,11 @@ def verify_companyworld(
         reward = 0.75 * abstention + 0.15 * calibration + 0.10 * (
             max(0.0, 1.0 - budget_spent / max(1, budget_total)) if abstention else 0.0
         )
-    elif not substantive or fact_score <= 0:
+    elif not substantive or grounded_fact_score <= 0:
         reward = 0.0
     else:
         reward = (
-            0.60 * fact_score
+            0.60 * grounded_fact_score
             + 0.20 * evidence_support
             + 0.10 * calibration
             + 0.05 * abstention
