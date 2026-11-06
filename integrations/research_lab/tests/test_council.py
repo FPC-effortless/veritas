@@ -232,10 +232,14 @@ class ResearchCouncilTests(unittest.TestCase):
         carried = copy.deepcopy(original)
         carried.update(id="psn.request2", summary="A new unrelated department update")
         council.post_note(self.lab, carried)
-        self.assertEqual(council.convene(self.lab, "meeting.carried")["help_exchanges"], first["help_exchanges"])
+        self.assertEqual(
+            council.convene(self.lab, "meeting.carried")["help_exchanges"], first["help_exchanges"]
+        )
         changed = copy.deepcopy(carried)
         changed["id"] = "psn.request3"
-        changed["help_requests"][0].update(id="PSN.revision_b", question="Review revision B", evidence_ref="revision-B")
+        changed["help_requests"][0].update(
+            id="PSN.revision_b", question="Review revision B", evidence_ref="revision-B"
+        )
         council.post_note(self.lab, changed)
         latest = council.convene(self.lab, "meeting.changed")
         self.assertEqual(latest["help_exchanges"][0]["status"], "AWAITING_TARGET_REPORT")
@@ -253,7 +257,8 @@ class ResearchCouncilTests(unittest.TestCase):
         from research_lab.core import canonical, identity
         with self.lab.transaction() as db:
             db.execute("INSERT INTO department_notes VALUES (?,?,?,?,?)", (
-                changed["id"], changed["department"], identity(changed), canonical(changed), time.time(),
+                changed["id"], changed["department"], identity(changed), canonical(changed),
+                time.time(),
             ))
         with self.assertRaisesRegex(LabError, "request.*immutable"):
             council.convene(self.lab, "meeting.ambiguous")
@@ -264,7 +269,10 @@ class ResearchCouncilTests(unittest.TestCase):
         repaired["id"] = "psn.repaired"
         repaired["help_requests"][0]["id"] = "PSN.revision_b"
         council.post_note(self.lab, repaired)
-        self.assertEqual(council.convene(self.lab, "meeting.repaired")["help_exchanges"][0]["status"], "AWAITING_TARGET_REPORT")
+        self.assertEqual(
+            council.convene(self.lab, "meeting.repaired")["help_exchanges"][0]["status"],
+            "AWAITING_TARGET_REPORT",
+        )
 
     def test_malformed_department_types_fail_with_domain_error(self):
         for department in ([], {}, None, True, 123):
@@ -280,7 +288,9 @@ class ResearchCouncilTests(unittest.TestCase):
         path.write_text(json.dumps(malformed))
         error = io.StringIO()
         with redirect_stderr(error):
-            self.assertEqual(main(["--root", str(self.tmp / "cli-invalid"), "council", "post", str(path)]), 1)
+            self.assertEqual(
+                main(["--root", str(self.tmp / "cli-invalid"), "council", "post", str(path)]), 1
+            )
         self.assertIn("Research Lab OS:", error.getvalue())
         self.assertNotIn("Traceback", error.getvalue())
 
