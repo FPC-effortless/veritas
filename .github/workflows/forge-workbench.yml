@@ -1,0 +1,63 @@
+name: Forge dataset workbench
+
+on:
+  pull_request:
+    paths:
+      - 'integrations/forge/**'
+      - 'integrations/trainlab/**'
+      - '.github/workflows/forge-workbench.yml'
+  push:
+    paths:
+      - 'integrations/forge/**'
+      - 'integrations/trainlab/**'
+      - '.github/workflows/forge-workbench.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  forge-workbench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the sibling GUI packages and pinned production adapter
+        run: |
+          python -m pip install --require-hashes -r integrations/trainlab/requirements-server.txt
+          python -m pip install './integrations/trainlab[server]' './integrations/forge[workbench]'
+      - name: Verify core, GUI, hosting and both installed entrypoints
+        run: |
+          python -m unittest discover -s integrations/forge/tests -v
+          python -m unittest discover -s integrations/forge/tests_workbench -v
+          python -m unittest discover -s integrations/trainlab/tests -v
+          forge-workbench --help
+          forge-temporal --help
+          trainlab --help
+          node --check integrations/forge/src/forge_data/static/app.js
+      - name: Audit GUI source
+        if: matrix.python == '3.13'
+        run: |
+          python -m pip install bandit
+          python -m bandit integrations/forge/src/forge_data/workbench.py -q -ll
+      - name: Actual authenticated desktop and mobile GUI acceptance
+        if: matrix.python == '3.13'
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+          python integrations/forge/tests_workbench/browser_smoke.py --evidence "$RUNNER_TEMP/forge-gui-evidence"
+      - name: Retain the actual Forge GUI evidence
+        if: always() && matrix.python == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-gui-evidence
+          path: ${{ runner.temp }}/forge-gui-evidence
+          if-no-files-found: warn
