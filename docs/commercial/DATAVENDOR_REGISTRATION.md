@@ -9,19 +9,21 @@ persistent, executable, partially observable operational worlds.
 
 **Veritas SRE Evaluation Pack v1**
 
-The flagship environment gives an agent a realistic incident-response objective and requires
-it to investigate evidence, perform stateful operational actions, modify the underlying native
-artifact correctly, preserve safety/process invariants, and reach a verified terminal state.
+The flagship evaluates whether a model or agent can infer an incident's causal class from its
+title and incomplete early public updates, without later resolution notes or evaluator labels.
+It returns one of four classes: regression, infrastructure, capacity or transient.
 
-The reward is not based on whether the final response sounds correct. The verifier independently
-checks outcome, state, constraints, side effects, process, efficiency and evidence.
+The HUD adapter parses the answer and compares it with evaluator-private truth for a deterministic
+classification reward. The full evaluation report also measures balanced accuracy, macro F1,
+raw accuracy and structured-output reliability. This frozen SKU does not test remediation,
+stateful tool actions, native-artifact mutation or seven-dimensional operational verification.
 
 ## Why it is differentiated
 
-Most benchmark examples can be solved by producing the right answer or action label. Veritas
-makes the operational world authoritative. Unsafe or out-of-order actions can be blocked; harmful
-intermediate states remain detectable; and native-artifact correctness is checked separately from
-the agent's report.
+The frozen SRE v4 panel is source-disjoint and qualification-gated, with exact release identities,
+material support across all four causal classes, hidden evaluator truth and buyer-safe aggregate
+reports. Its narrower classification claim is distinct from Veritas's broader operational-world
+capabilities. See [the canonical SKU contract](sre-evaluation-pack-v1.md).
 
 ## Validation
 

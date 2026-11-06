@@ -16,26 +16,27 @@ release to HUD without making HUD the Veritas core abstraction.
 The demonstration should therefore prove one coherent chain:
 
 ```text
-persistent operational world
-  -> evidence / telemetry
-  -> agent investigation
-  -> stateful tool actions
-  -> native artifact change
-  -> independent seven-dimensional verification
-  -> portable HUD task
-  -> hosted trajectory / reward
+frozen qualified SRE v4 panel
+  -> incident title and early public updates
+  -> model / agent causal-class answer
+  -> deterministic evaluator-private classification grader
+  -> portable HUD task / reward
+  -> buyer-safe aggregate evaluation report
 ```
 
 ## What the reviewer should see
 
-1. A concrete SRE incident with partial observability.
-2. Multiple evidence sources whose timestamps/provenance matter.
-3. Stateful actions whose preconditions can block unsafe attempts.
-4. A real native operational artifact, not only a synthetic status variable.
-5. A verifier that reconstructs final state independently of the agent's narrative.
-6. Trajectory-wide invariant checks, including harmful intermediate actions.
-7. Efficiency/tool-budget scoring.
-8. A successful HUD trace and a deliberately failed shortcut trace.
+1. A permitted public/synthetic incident fixture with incomplete early evidence.
+2. The distinction between early agent-visible updates and later evaluator-only evidence.
+3. A structured answer selecting regression, infrastructure, capacity or transient.
+4. Deterministic classification grading rather than a narrative-quality judgment.
+5. Correct, incorrect, empty and malformed-answer smoke cases with expected rewards.
+6. Buyer-safe aggregate metrics, clearly distinguished from single-fixture smoke results.
+7. Hosted evidence only after a separately authorized run has actually completed.
+
+The frozen SRE SKU does not implement stateful remediation, native-artifact mutation,
+trajectory-wide operational invariants, tool-budget scoring or seven-dimensional verification.
+Those broader Veritas capabilities require their own environment and evidence contracts.
 
 ## Existing Veritas evidence
 
@@ -44,9 +45,10 @@ that HUD is an adapter over a vendor-neutral portable contract. The contract inc
 reset, capability, verifier, artifact/provenance/licensing, taskset visibility, and
 content-derived identity guarantees.
 
-The native SRE runtime uses the same qualified environment rather than recreating a second
-HUD-only benchmark. Private task rows, hidden labels, evaluator oracles, credentials and
-private artifacts remain outside the buyer-safe package.
+The SRE HUD adapter uses the canonical classification reward rather than recreating a second
+HUD-only benchmark. The generated export is operator-private and includes hidden scoring truth.
+Private task rows, hidden labels, evaluator oracles, credentials and private artifacts must
+remain outside buyer-safe/public distribution.
 
 ## HUD publication path
 
@@ -65,18 +67,11 @@ python tools/export_sre_portable_package.py \
   --expected-private-release-manifest-id <EXACT_ID>
 ```
 
-Then, from the generated HUD package:
-
-```bash
-uv tool install hud --python 3.12 --with anthropic
-hud set HUD_API_KEY=...
-hud eval tasks.py claude --gateway --full
-hud deploy
-hud sync tasks <VERITAS_SRE_TASKSET_SLUG>
-```
-
-HUD's current documentation describes the same environment -> taskset -> eval -> deploy
-loop and recommends a non-zero eval before training or marketplace publication.
+For local validation, follow the generated README's HUD v6 protocol-first task-start/task-grade
+commands. Hosted evaluation and deployment are separate, authorized operator actions: first
+verify current SDK commands, account permissions and the private evaluator boundary. Do not
+upload the generated private taskset or export as a public marketplace artifact. Sealed-data
+access, provider transmission and paid compute are not authorized by this document.
 
 ## Evidence standard
 
@@ -87,9 +82,10 @@ it exists in HUD. The registration package must distinguish:
 - local deterministic validation;
 - hosted HUD execution evidence.
 
-A polished recording should include one successful run and one adversarial/shortcut run.
-The latter is important because it demonstrates that reward is tied to operational state
-and verifier constraints rather than to plausible prose.
+A recording should use an explicitly public/synthetic fixture and show both a correct reference
+class and an incorrect/malformed answer. This proves the demonstrated grader behavior, not model
+success on the private panel. Private evaluation traces and labels remain operator-only; publish
+only authorized buyer-safe aggregates.
 
 ## DataVendor positioning
 
@@ -101,10 +97,10 @@ Recommended one-sentence description:
 
 Recommended flagship description:
 
-> Veritas SRE Evaluation Pack v1 is a qualified, portable incident-response environment.
-> Agents investigate partially observed production-style incidents, operate a native
-> artifact, and are graded by an independent verifier over outcome, state, constraints,
-> side effects, process, efficiency and evidence.
+> Veritas SRE Evaluation Pack v1 is a qualified, portable incident-cause classification
+> environment. Models or agents infer one of four causal classes from incomplete early
+> incident evidence and receive deterministic evaluator-private grading and buyer-safe
+> aggregate reports.
 
 ## Claims boundary
 

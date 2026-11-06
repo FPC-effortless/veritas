@@ -31,6 +31,8 @@ build/
 node_modules/
 .next/
 out/
+next-env.d.ts
+*.tsbuildinfo
 
 # Local databases and generated artifacts
 *.sqlite
@@ -38,8 +40,10 @@ out/
 .veritas-data/
 .veritas-prepared/
 .veritas-fused/
+.trainlab/
 
 # OS/editor
 .DS_Store
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
