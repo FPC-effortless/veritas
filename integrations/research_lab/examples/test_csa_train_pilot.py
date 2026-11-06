@@ -1,6 +1,13 @@
 """Training-interface and loss checks; does not establish model capability."""
 import unittest
-import torch
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    import torch
+    import numpy
+except ImportError:
+    raise unittest.SkipTest("Optional synthetic CPU pilot requires torch and numpy; stdlib Research Lab OS remains usable")
 from csa_training_pilot import build_vocab, PairDataset, batchify, StateGRU,loss_for_pairs,ANSWERS
 
 class ObjectiveChecks(unittest.TestCase):

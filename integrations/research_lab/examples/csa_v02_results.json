@@ -55,7 +55,7 @@
     "csa_v02.py": "3df421799d7ea0c8982a3e261b52a6e737e66240f7eb2c306a0e656a25cd4bc4",
     "csa_v02_diagnostics.py": "a93ecdc249d93b14cd1dd99669fe79791ff1296105fa61b24abacfd1d8f797cf",
     "gradient_probe.py": "84a1bd23e92306cf32b80b3bb8c416dfb7cbf178e363487370c70a73c987dd1f",
-    "test_csa_train_pilot.py": "e3fc9d901d2475bdb7166c2a167c0125d6ed6c9e535c2353f2e9d3835b0b30c6",
+    "test_csa_train_pilot.py": "3534fd0af9a5a2ee6af9679cc9ba7333c8ee55717acd80a93066c0482fe66f81",
     "test_csa_v02.py": "4794be705ce0ea3ecce284c586894ba87b755761d6d0390393e8862dfce6302c"
   },
   "status": "UNQUALIFIED_CPU_EXPLORATORY",
