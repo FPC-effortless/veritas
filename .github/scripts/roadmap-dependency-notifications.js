@@ -79,13 +79,42 @@ function isExplicitNoSourceOwnership(text) {
 function parseContract(text) {
   const positiveOwnership = contractValue(text, 'Positive ownership', false) || '';
   const watchers = contractValue(text, 'Watchers', false) || '';
+  const evidenceRaw = contractValue(text, 'Completion evidence comment');
   return {
     enrolled: String(text || '').includes(ENROLLMENT_MARKER),
     branch: contractValue(text, 'Branch'),
     positiveOwnership,
     paths: parsePaths(positiveOwnership),
     watchers: [...watchers.matchAll(/@([A-Za-z0-9-]+)/g)].map((match) => match[1]),
+    completionRule: contractValue(text, 'Completion rule'),
+    completionClass: contractValue(text, 'Completion class'),
+    evidenceCommentId: /^[1-9][0-9]*$/.test(String(evidenceRaw || ''))
+      ? Number(evidenceRaw)
+      : null,
+    terminalState: contractValue(text, 'Terminal state'),
   };
+}
+
+function validOwnerEvidenceDependency(status, contract, issue, evidence) {
+  const event = status?.completion_evidence;
+  return Boolean(
+    status?.state === 'DONE' &&
+      validTransitionSequence(status) &&
+      event?.schema_version === 'veritas.owner-evidence-completion.v1' &&
+      event.rule === 'OWNER_EVIDENCE' &&
+      event.completion_class === 'COORDINATION_OPERATION' &&
+      event.transition_seq === status.transition_seq &&
+      contract.completionRule === 'OWNER_EVIDENCE' &&
+      contract.completionClass === 'COORDINATION_OPERATION' &&
+      contract.terminalState === 'DONE' &&
+      contract.evidenceCommentId === event.evidence_comment_id &&
+      issue?.state === 'closed' &&
+      evidence?.id === event.evidence_comment_id &&
+      evidence?.author_association === 'OWNER' &&
+      evidence?.user?.login === event.evidence_actor &&
+      evidence?.created_at === event.evidence_created_at &&
+      String(evidence?.body || '').startsWith('Completion evidence:')
+  );
 }
 
 function branchIsConcrete(branch) {
@@ -408,6 +437,26 @@ module.exports = async function reconcileDependencies({ github, context }) {
     ) {
       return { ok: false, reason: `hard dependency ${workId} is not trusted DONE` };
     }
+    const providerIssue = (
+      await github.rest.issues.get({ owner, repo, issue_number: provider.issue })
+    ).data;
+    const contract = parseContract(providerIssue.body || '');
+    const evidenceId = current.status.completion_evidence?.evidence_comment_id;
+    if (Number.isInteger(evidenceId) && evidenceId > 0) {
+      const evidence = (
+        await github.rest.issues.getComment({ owner, repo, comment_id: evidenceId })
+      ).data;
+      if (!validOwnerEvidenceDependency(current.status, contract, providerIssue, evidence)) {
+        return { ok: false, reason: `hard dependency ${workId} has invalid OWNER evidence` };
+      }
+      return {
+        ok: true,
+        work_id: workId,
+        issue: provider.issue,
+        completion_kind: 'OWNER_EVIDENCE',
+        evidence_comment_id: evidenceId,
+      };
+    }
     const linkedPr = current.status.linked_pr;
     const linkedHead = current.status.linked_pr_head;
     if (!Number.isInteger(linkedPr) || !/^[0-9a-f]{40}$/.test(String(linkedHead || ''))) {
@@ -598,4 +647,5 @@ module.exports.__test = {
   pathsOverlap,
   repositoryPathToken,
   validTransitionSequence,
+  validOwnerEvidenceDependency,
 };

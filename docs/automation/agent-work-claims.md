@@ -56,6 +56,14 @@ A separate narrow recovery command exists only for legacy bootstrap metadata-onl
 
 `/recover-metadata` is OWNER-only and does not accept a branch argument. It applies only when the trusted lane is bootstrap-derived with zero frozen source paths, zero transition history, no linked PR, an exact allow-listed no-source `Positive ownership` form, and matching non-concrete descriptive branch metadata. Source-owning, concrete-branch, transitioned, or non-OWNER cases fail closed.
 
+An even narrower completion-recovery command exists for closed legacy implementation issues whose bootstrap status predates exact PR handoff metadata:
+
+```text
+/recover-completed <recorded-agent-id> <merged-pr-number> <reason>
+```
+
+This command is OWNER-only. It preserves the recorded agent and concrete Work Contract branch, requires machine-checkable ownership, validates that the PR references the issue and Work ID, binds the exact PR head and merge commit, and proves that merge is present on current `main`. It records an explicit recovery event and moves the trusted state to DONE; it does not fabricate a historical independent review or ordinary handoff.
+
 ## Commands
 
 Commands are exact single lines:
@@ -67,6 +75,7 @@ Commands are exact single lines:
 /blocked <agent-id> <reason>
 /handoff <agent-id> <pr-number>
 /done <agent-id> <pr-number>
+/recover-completed <recorded-agent-id> <merged-pr-number> <reason>
 /recover <new-agent-id> <branch> <reason>
 /recover-metadata <new-agent-id> <reason>
 ```
@@ -120,6 +129,8 @@ A narrow migration exception permits legacy REVIEW records created before `owner
 
 Implementation-level DONE does not imply scientific, Frontier, training, commercial, external/manual, convergence, release, or private-evidence completion.
 
+Dependency reconciliation normally requires this exact merged-PR identity. The only non-PR provider exception is a closed coordination issue whose Work Contract and trusted status both bind the same OWNER-authored `OWNER_EVIDENCE` / `COORDINATION_OPERATION` completion record. The reconciler re-fetches that exact comment and validates its owner association, actor, timestamp, completion class, and transition sequence; labels or an unbound DONE value are insufficient.
+
 ## Bootstrap and reconciliation
 
 OWNER-only bootstrap remains available for migration and repair. It:
@@ -132,6 +143,15 @@ OWNER-only bootstrap remains available for migration and repair. It:
 6. publishes the complete active reservation registry on #150 before materializing newly migrated active local state;
 7. materializes/migrates trusted records;
 8. reconciles discovery labels from trusted state.
+
+Bootstrap may reconcile an otherwise pristine, holderless
+`bootstrap/reconciliation required` placeholder to a READY Work Contract after
+rejected commands have advanced its replay cursor. The cursor must remain a
+nonnegative safe integer, `transition_seq` must remain zero, and all holder,
+branch, timing, linked-PR, blocker, and release fields must still match the
+original placeholder. Rejected commands therefore remain processed and are not
+replayed, while transitioned, held, explicitly blocked, or malformed records
+remain fail-closed.
 
 If bootstrap cannot publish the reservation registry, it does not materialize new active trusted state. If registry publication succeeds and later status/label publication fails, the reservation remains fail-closed until another OWNER reconciliation.
 
