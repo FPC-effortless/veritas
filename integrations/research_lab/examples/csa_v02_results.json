@@ -1,0 +1,130 @@
+{
+  "benchmark_cells": 12,
+  "benchmark_pairs": 480,
+  "class_majority_accuracy": 0.125,
+  "cross_query_examples": 240,
+  "date": "2026-11-06",
+  "gradient_at_init": {
+    "history_max_over_query": 0.029750119370874017,
+    "history_over_query": 0.0008323374149767915,
+    "last_history_over_query": 0.004792043677298352
+  },
+  "independent_scientific_review": "NOT_ESTABLISHED",
+  "primary_examples": 960,
+  "smoke_train_overfit_8": {
+    "dev_iid": {
+      "accuracy": 0.1375,
+      "ce": 6.844683074951172,
+      "cross_accuracy": 0.2,
+      "cross_n": 20,
+      "n": 80,
+      "opposing_pair_both_correct": 0.03333333333333333,
+      "opposing_pairs": 30
+    },
+    "dev_ood_comp": {
+      "accuracy": 0.1,
+      "ce": 7.4829856872558596,
+      "cross_accuracy": 0.2,
+      "cross_n": 20,
+      "n": 80,
+      "opposing_pair_both_correct": 0.0,
+      "opposing_pairs": 30
+    },
+    "dev_ood_syntax": {
+      "accuracy": 0.125,
+      "ce": 6.476976776123047,
+      "cross_accuracy": 0.15,
+      "cross_n": 20,
+      "n": 80,
+      "opposing_pair_both_correct": 0.0,
+      "opposing_pairs": 30
+    },
+    "train": {
+      "accuracy": 0.6875,
+      "ce": 0.5953368544578552,
+      "cross_accuracy": 0.75,
+      "cross_n": 4,
+      "n": 16,
+      "opposing_pair_both_correct": 0.5,
+      "opposing_pairs": 6
+    }
+  },
+  "source_sha256": {
+    "PROTOCOL_V02.md": "218afb184086d14abb6cccf6a7f73b9fbf59f2c6d7d44e7042285c31febdc818",
+    "csa_training_pilot.py": "d366d49af7a5ce8cae04b69a1e0b54ede89a6a506d5b6c009f0cde0635af5b95",
+    "csa_v02.py": "3df421799d7ea0c8982a3e261b52a6e737e66240f7eb2c306a0e656a25cd4bc4",
+    "csa_v02_diagnostics.py": "a93ecdc249d93b14cd1dd99669fe79791ff1296105fa61b24abacfd1d8f797cf",
+    "gradient_probe.py": "84a1bd23e92306cf32b80b3bb8c416dfb7cbf178e363487370c70a73c987dd1f",
+    "test_csa_train_pilot.py": "3534fd0af9a5a2ee6af9679cc9ba7333c8ee55717acd80a93066c0482fe66f81",
+    "test_csa_v02.py": "4794be705ce0ea3ecce284c586894ba87b755761d6d0390393e8862dfce6302c"
+  },
+  "status": "UNQUALIFIED_CPU_EXPLORATORY",
+  "tests": {
+    "no_fit_python_O": 7,
+    "no_fit_stdlib": 7,
+    "objective_optional_torch": 3
+  },
+  "trained_runs": {
+    "CE": {
+      "accuracy": {
+        "dev_iid": 0.115,
+        "dev_ood_comp": 0.1075,
+        "dev_ood_syntax": 0.0925,
+        "train": 0.1253125
+      },
+      "architecture": "single-layer GRU with history erased into final recurrent hidden state",
+      "file_sha256": "1348d357d6549694f83c98e49b59c5660b2e8119056672c69f216c27865b28bd",
+      "opposing_pair_both_correct": {
+        "dev_iid": 0.0,
+        "dev_ood_comp": 0.0,
+        "dev_ood_syntax": 0.0,
+        "train": 0.0
+      },
+      "parameters": 27705,
+      "seed": 10,
+      "training_seconds": 24.547,
+      "updates": 350
+    },
+    "CE_REWEIGHT": {
+      "accuracy": {
+        "dev_iid": 0.12,
+        "dev_ood_comp": 0.1325,
+        "dev_ood_syntax": 0.1,
+        "train": 0.1290625
+      },
+      "architecture": "gru",
+      "file_sha256": "bfcd54f1c28962bcafafdb859109c120cbc69e8e6eb9e6b08d1940b7e1b63244",
+      "opposing_pair_both_correct": {
+        "dev_iid": 0.0,
+        "dev_ood_comp": 0.0,
+        "dev_ood_syntax": 0.0,
+        "train": 0.0
+      },
+      "parameters": 27705,
+      "seed": 10,
+      "training_seconds": 26.159,
+      "updates": 350
+    },
+    "PAIR": {
+      "accuracy": {
+        "dev_iid": 0.115,
+        "dev_ood_comp": 0.1075,
+        "dev_ood_syntax": 0.0925,
+        "train": 0.1253125
+      },
+      "architecture": "gru",
+      "file_sha256": "046eeb5d22316947667eef69a948fbf84cbb7dd7c54ea7b9b35b5fe2f04fb7f3",
+      "opposing_pair_both_correct": {
+        "dev_iid": 0.0,
+        "dev_ood_comp": 0.0,
+        "dev_ood_syntax": 0.0,
+        "train": 0.0
+      },
+      "parameters": 27705,
+      "seed": 10,
+      "training_seconds": 25.636,
+      "updates": 350
+    }
+  },
+  "transformer_full_context_350": "TIMED_OUT_AFTER_120S_WITHOUT_TERMINAL_ARTIFACT"
+}
