@@ -1,6 +1,7 @@
 """Deterministic no-fit scientific integrity checks for WIL-TRAIN-001."""
 import hashlib
 import json
+import subprocess
 import tempfile
 import unittest
 import sys
@@ -102,10 +103,20 @@ class NoFitFixtureTests(unittest.TestCase):
         saved = victim.a["answer"]
         try:
             victim.a["answer"] = "TAMPERED"
-            with self.assertRaises(AssertionError):
+            with self.assertRaises(ValueError):
                 validate(panel)
         finally:
             victim.a["answer"] = saved
+
+    def test_validation_is_not_removed_by_python_optimized_mode(self):
+        script = ("from csa_fixture import make_split,validate; "
+                  "cases=make_split('train',71407,3); "
+                  "cases[0].a['answer']='TAMPER'; validate(cases)")
+        result = subprocess.run([sys.executable, "-O", "-c", script],
+                                env={"PYTHONPATH": str(Path(__file__).resolve().parents[1] / "examples")},
+                                capture_output=True, text=True, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ValueError", result.stderr)
 
     def test_invalid_split_and_sizes_rejected(self):
         with self.assertRaises(ValueError):
