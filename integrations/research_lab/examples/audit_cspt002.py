@@ -5,8 +5,8 @@ import json
 import random
 from pathlib import Path
 
-import torch
 import cspt002 as c
+import torch
 
 
 def audit(paths, *, arms=None):
@@ -31,9 +31,15 @@ def audit(paths, *, arms=None):
             replayed = c.evaluate(model, worlds)
             for key, value in replayed.items():
                 if abs(value - receipt[split][key]) > 1e-12:
-                    raise AssertionError(f"{path} {split} {key} mismatch {value} != {receipt[split][key]}")
-        records.append({**receipt, "checkpoint_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                        "checkpoint_filename": path.name, "exact_dev_test_replay": "PASS"})
+                    raise AssertionError(
+                        f"{path} {split} {key} mismatch {value} != {receipt[split][key]}"
+                    )
+        records.append({
+            **receipt,
+            "checkpoint_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "checkpoint_filename": path.name,
+            "exact_dev_test_replay": "PASS",
+        })
     return records
 
 
