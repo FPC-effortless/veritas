@@ -126,9 +126,10 @@ def _render_readme(manifest: PortableEnvironmentManifest) -> str:
 Generated from portable manifest `{manifest.manifest_id}`.
 
 This directory is an **operator-private evaluation package**. `private_tasks.json` contains hidden
-scoring truth and must not be published as a buyer-safe/public artifact. `qualification_evidence.json`
-is buyer-safe and intentionally contains only release identities, aggregate counts, gate outcomes,
-and policy anchors—not scenario IDs or hidden labels.
+scoring truth and must not be published as a buyer-safe/public artifact.
+Release-control manifests and qualification evidence are not included in this runtime export.
+Their omission does not make the private task rows safe to disclose or establish qualification;
+retain release-control evidence separately within the authorized operator boundary.
 
 Build the HUD protocol server image:
 
@@ -156,6 +157,10 @@ def build_hud_sre_package(
     private_tasks: list[SREPrivatePortableTask],
     qualification_evidence: PortableQualificationEvidence | None = None,
 ) -> PortablePackageBuildResult:
+    # Docker copies the complete export directory, not only the package inventory.
+    # Refuse stale content rather than deleting operator files or packaging omitted provenance.
+    if output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir())):
+        raise ValueError("HUD package export requires an empty output directory")
     if not private_tasks:
         raise ValueError("HUD private SRE package requires at least one private task")
     if len(private_tasks) != manifest.taskset.private_task_count:

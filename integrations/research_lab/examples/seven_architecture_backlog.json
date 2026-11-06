@@ -1,0 +1,17 @@
+{
+  "schema": "research_lab.backlog.v1",
+  "sources": [
+    {"name": "ARCHPAR001_Parallel_Research_Report.pdf", "library_file_id": "libfile_b604a2a49b288191b158b639fae40748", "scope": "CURRENT_REPORT_READ; underlying training archive not re-audited by LABOS001"},
+    {"name": "ARCHPAR002_Memory_Research_Report.pdf", "library_file_id": "libfile_b81403ed40788191be4bacda260e40f9", "scope": "CURRENT_REPORT_READ; underlying training archive not re-audited by LABOS001"}
+  ],
+  "lanes": [
+    {"id": "PSN", "status": "REPORTED_MEMORY_FAILURE", "question": "Why does the fresh append adapter fail value retrieval?", "next_test": "Qualify addressing and optimization on fresh DEV before combining modules.", "source": "ARCHPAR002", "execution": "SOURCE_RECOVERY_AND_FROZEN_TRAINING_PROTOCOL_REQUIRED"},
+    {"id": "PSN2", "status": "NO_CONSISTENT_NODE_PULSE_ADVANTAGE", "question": "Does native node/pulse state add capability beyond the node-free decoder?", "next_test": "Use qualified seeds, a matched decoder and held-out operation compositions.", "source": "ARCHPAR001", "execution": "SOURCE_RECOVERY_AND_FROZEN_TRAINING_PROTOCOL_REQUIRED"},
+    {"id": "DPSL", "status": "ASSOCIATIONS_USEFUL_LIFECYCLE_UNRESOLVED", "question": "Can corrections and deletion replace stale associations?", "next_test": "Compare append association with explicit replacement under matched unrelated-key edits.", "source": "ARCHPAR002", "execution": "SOURCE_RECOVERY_AND_FROZEN_TRAINING_PROTOCOL_REQUIRED"},
+    {"id": "Bounded-field", "status": "GATING_GAIN_ADDRESSING_UNQUALIFIED", "question": "Can useful relevance gating coexist with reliable keyed addressing?", "next_test": "Separate relevance detection from query addressing with matched state and readout capacity.", "source": "ARCHPAR002", "execution": "SOURCE_RECOVERY_AND_FROZEN_TRAINING_PROTOCOL_REQUIRED"},
+    {"id": "ATLAS-CASSA", "status": "NO_NAMED_TRANSPORT_CORRECTNESS_GAIN", "question": "Is there a task requiring the geometric transport that the prior partial ablation missed?", "next_test": "Audit all transport paths and preregister a geometry-requiring task before training.", "source": "ARCHPAR001", "execution": "SOURCE_RECOVERY_AND_FROZEN_TRAINING_PROTOCOL_REQUIRED"},
+    {"id": "USEF-X", "status": "GROUPING_REPAIRED_RETENTION_UNQUALIFIED", "question": "Does the local-prior contract preserve old factors while learning new factors?", "next_test": "First qualify unseen-factor acquisition, then distinguish forgetting from initial failure.", "source": "ARCHPAR001", "execution": "SOURCE_RECOVERY_AND_FROZEN_TRAINING_PROTOCOL_REQUIRED"},
+    {"id": "NSF-v8-NFD", "status": "COMPACT_DELAYED_READOUT_NOT_ROBUST", "question": "Which compact state subset is sufficient across seeds and longer delays?", "next_test": "Freeze compact feature subsets on TRAIN and evaluate fresh seeds and longer gaps.", "source": "ARCHPAR002", "execution": "SOURCE_RECOVERY_AND_FROZEN_TRAINING_PROTOCOL_REQUIRED"}
+  ],
+  "constraints": ["Credible trained Transformer and recurrent/SSM controls are primary comparisons for learned models.", "Exact stores and simple algorithms are diagnostic references, not evidence of learned architecture superiority.", "No lane is relabeled as a newly trained result by importing a report.", "No final-panel tuning or deletion of failed seeds."]
+}
