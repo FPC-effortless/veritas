@@ -47,4 +47,5 @@ After the PR exists and the implementation head is ready for review, record on t
 
 `/handoff <agent-id> <pr-number>`
 
-See `docs/agents/handoff-contract.md` for the complete handoff, review, branch-discipline, and completion rules.
+See `docs/agents/handoff-contract.md` for handoff, review and branch discipline.
+Canonical work-class completion requirements remain in `docs/roadmap/completion-rules.md`.

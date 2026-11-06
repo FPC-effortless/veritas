@@ -1,0 +1,47 @@
+{
+  "schema": "research_lab.proposal.v1",
+  "id": "robustness",
+  "author": "robustness_design",
+  "question": "Does a frozen keyed-memory implementation retain correct latest-value semantics when unrelated edits, corrections, deletion and delay are varied independently?",
+  "hypothesis": "A keyed memory that genuinely implements latest-value lookup will preserve present-value recall after unrelated edits and delays, replace corrected values, and return UNKNOWN after deletion; balanced aggregate accuracy alone will not establish this behavior.",
+  "competing_explanations": [
+    "An apparent recall gain comes from a fixed last-write or query position rather than the requested key.",
+    "The memory preserves associations but returns stale values after correction or deletion.",
+    "An always-UNKNOWN strategy exploits the absent/deleted class mixture.",
+    "A robustness loss is caused by longer sequences rather than by unrelated-key mutation itself."
+  ],
+  "predictions": [
+    "On a fixed 8-key, 4-value vocabulary, unrelated edits to nonqueried keys will change at most 5 percentage points of queried-key accuracy when sequence length and query position are matched.",
+    "For a history and its paired correction, the answer will change to the new value; for its paired deletion, the answer will change to UNKNOWN. Each lifecycle category must reach 90% rather than relying on the pooled score.",
+    "Replacing unrelated mutations with length-matched distractors will distinguish mutation sensitivity from sequence-length sensitivity.",
+    "Query-key permutation with correspondingly permuted visible histories will preserve correctness, while inconsistent key permutation will impair addressed recall."
+  ],
+  "controls": [
+    "Freeze implementation, any training recipe, all thresholds and the full protocol before generating final cases. Use separate development and final history seeds, exact duplicate exclusion and no final-panel tuning.",
+    "Generate 480 held-out base histories per data seed, balanced across present read, corrected read, deleted query and never-written query. Split keys and values uniformly within every feasible category, randomize query positions, and expose only event inputs to the implementation.",
+    "Use the same base bindings for every paired variant: ordinary recall, unrelated edits, length-matched distractors, queried-key correction and queried-key deletion. Preserve the requested key's true lifecycle when applying unrelated mutations.",
+    "Cross delays of 0, 8 and 24 with unrelated mutation counts of 0, 2 and 4; match total history length between mutation and distractor arms within each delay cell.",
+    "Use an independently implemented exact keyed store solely as a correctness reference and scorer; keep target maps and expected answers outside model inputs. Report always-UNKNOWN as a diagnostic floor, not a primary architecture competitor.",
+    "Where learned-model comparison is made, include a trained Transformer and GRU with common data, training exposure and tuning allowance; report parameters and actual elapsed compute, and make no architecture ranking when training qualification fails.",
+    "Fix 300 optimizer updates and 60 seconds per learned fit, three initialization seeds and three separately generated final data seeds. If a fit is unqualified, timed out or fails, retain its failure and exclude it from architecture-superiority claims."
+  ],
+  "ablations": [
+    "Clear carried memory before each query while preserving visible inputs to test whether the state supplies information.",
+    "Disable replacement-on-correction and retain earlier key-value associations to expose stale-answer sensitivity.",
+    "Disable deletion/tombstone handling to verify that the deleted-query panel detects stale retained values.",
+    "Apply a matched irrelevant-key permutation versus a query-key permutation, scoring invariance and addressing separately."
+  ],
+  "primary_metric": "paired_value_query_accuracy_gain_over_reset",
+  "direction": "max",
+  "minimum_effect": 0.10,
+  "seeds": [271, 577, 911],
+  "stopping_rule": "Run the fixed 480-base-history factorial panel for each of the three final data seeds exactly once after implementation freeze. Stop each learned fit at the first of 300 optimizer updates or 60 seconds; do not early-stop on final results or replace failed seeds. Success requires a paired present/corrected value-query accuracy gain over reset of at least 0.10, minimum accuracy across all four lifecycle categories at least 0.90, and no more than 0.05 paired loss from ordinary recall to a matched unrelated-mutation arm in every seed. Report per-cell counts, accuracy, stale-answer rate, UNKNOWN coverage, paired differences and a history-cluster bootstrap interval; initialization seeds share cases and must not be treated as independent data replications.",
+  "limitations": [
+    "This is a proposed synthetic CPU diagnostic and has no observed results or qualification status yet.",
+    "Familiar keys and values test lifecycle semantics, not lexical novelty, natural-language agent quality or hidden structure discovery.",
+    "An exact keyed store may satisfy this contract by construction; that proves the harness detects lifecycle errors, not that a neural architecture has learned the same operation.",
+    "Three data seeds and a small fixed training allowance are insufficient for a general model ranking or a broad distribution-shift certificate.",
+    "The complete factorial contains several stress contrasts. The prespecified value-query gain, worst-category guard and matched-mutation degradation rule govern the primary decision; other contrasts remain diagnostic."
+  ],
+  "next_discriminating_test": "If recall survives length-matched unrelated edits but correction or deletion fails, compare explicit latest-write replacement with append-only association under identical frozen histories. If all categories pass, preregister interleaved multiquery histories with held-out operation order and new key counts; do not reuse this final panel for tuning."
+}
