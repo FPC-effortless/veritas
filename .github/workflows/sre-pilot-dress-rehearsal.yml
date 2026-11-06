@@ -413,7 +413,7 @@ jobs:
           fi
 
       - name: Upload encrypted private rehearsal evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sre-v4-pilot-dress-rehearsal-private-seal
           path: |
@@ -424,7 +424,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload buyer-safe pilot dress rehearsal package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sre-v4-pilot-dress-rehearsal
           path: results/pilot-dress-rehearsal
