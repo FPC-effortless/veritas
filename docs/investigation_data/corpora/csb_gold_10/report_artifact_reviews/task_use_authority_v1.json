@@ -1,0 +1,145 @@
+{
+  "schema_version": "1.0",
+  "authority_id": "gold10-report-task-use-v1",
+  "source_id": "uscsb",
+  "reviewed_at": "2026-09-01",
+  "review_scope": "internal_task_and_verifier_evidence_only",
+  "not_authorized": [
+    "raw_pdf_redistribution",
+    "public_package_redistribution",
+    "model_training_rights",
+    "commercial_release",
+    "scientific_qualification",
+    "frontier_qualification"
+  ],
+  "source_policy": {
+    "acquisition": "approved",
+    "redistribution": "review_required",
+    "ai_use": "allowed_with_conditions",
+    "attribution_required": true,
+    "personal_data_redaction_rule": "Apply the canonical source personal-data/redaction boundary before extracted content becomes agent-visible."
+  },
+  "staleness_rule": "A record is authoritative only when case_id, artifact_id, report_sha256, receipt_sha256, catalog_sha256, canonical_url, and acquisition_url exactly match canonical repository inputs.",
+  "artifacts": [
+    {
+      "case_id": "2005-04-I-TX",
+      "artifact_id": "csb-2005-04-i-tx-final-report",
+      "report_sha256": "43c21fb942453f04c7457154b5c1db4b0cd192f18cf8b51c94043be5fd619e01",
+      "receipt_sha256": "a10e064201e9bc15ce17dbf250d95587833fd0eeda169570c47c0ae01ac3fe9f",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/assets/1/20/csbfinalreportbp.pdf",
+      "acquisition_url": "https://www.csb.gov/assets/1/20/csbfinalreportbp.pdf",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2008-03-I-FL",
+      "artifact_id": "csb-2008-03-i-fl-final-report",
+      "report_sha256": "f933649ecbfebb1be7cb3707298d4c3c247f6f65653e666e9115861eb0abfdbc",
+      "receipt_sha256": "be3aa862aff5ca4b5e467ff3c3a014ba534a994904500d702cd0342ec56749a6",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/file.aspx?DocumentId=5661",
+      "acquisition_url": "https://www.csb.gov/assets/1/20/T2_Final_Copy_9_17_09.pdf?13900=",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2008-05-I-GA",
+      "artifact_id": "csb-2008-05-i-ga-final-report",
+      "report_sha256": "1642624786ce975c3b6be8eb4c19a5f07d7831bf8d6e3ca8326dd85f1f957a9e",
+      "receipt_sha256": "c658f28221e19e8047ceeb18a141a874ae8a357ebcc53f622178e61907aafa17",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/UserFiles/file/Imperial%20Sugar%20Report%20Final%20updated.pdf",
+      "acquisition_url": "https://www.csb.gov/userfiles/file/imperial%20sugar%20report%20final%20updated.pdf",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2010-08-I-WA",
+      "artifact_id": "csb-2010-08-i-wa-final-report",
+      "report_sha256": "454bf2291a5e9b933eac0fc0565b51d09a79056c7a3b4767aae5b2d564cd9d4b",
+      "receipt_sha256": "cfdb26a6036e90183dfec04a77e4300755f8b00b9adfcc4023ec0038620d505c",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/file.aspx?DocumentId=5851",
+      "acquisition_url": "https://www.csb.gov/assets/1/7/tesoro_anacortes_2014-may-01.pdf",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2012-03-I-CA",
+      "artifact_id": "csb-2012-03-i-ca-final-report",
+      "report_sha256": "5f3c9b829de0a0394448a9babaaeacae467ef810be16ce409c50e04115a454d1",
+      "receipt_sha256": "8006f2a9133e32686901214c27122a243f35d826f5ac126235dd3fbda0ff2126",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/file.aspx?DocumentId=5917",
+      "acquisition_url": "https://www.csb.gov/assets/1/20/chevron_final_investigation_report_2015-01-28.pdf",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2013-02-I-TX",
+      "artifact_id": "csb-2013-02-i-tx-final-report",
+      "report_sha256": "4fd05654aa04a287b47d2a4d5c66bcbabeb0d124c73b2acc481e6d83240cd0fc",
+      "receipt_sha256": "b51c6fa11c47670e8fe6028feca6e53257d44f190e0f5da419a68d8efad11728",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/file.aspx?DocumentId=5983",
+      "acquisition_url": "https://www.csb.gov/assets/1/20/West_Fertilizer_FINAL_Report_for_website_0223161.pdf?15628=",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2013-03-I-LA",
+      "artifact_id": "csb-2013-03-i-la-final-report",
+      "report_sha256": "e825754c4753b0eb531bec22291fd762c56d571f5249449ffdf20c95151b5709",
+      "receipt_sha256": "afa1af36da4d68c9ca10af809179713cc1bc70165efa0495b0629438fdcce39e",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/file.aspx?DocumentId=6004",
+      "acquisition_url": "https://www.csb.gov/assets/1/6/Williams_Case_Study_2016-10-19.pdf?15713=",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2017-08-I-TX",
+      "artifact_id": "csb-2017-08-i-tx-final-report",
+      "report_sha256": "4c929a4ed5b881e710d9aa8863e0a61c6d268c474f6e8f1b29c2b7322c2d61a7",
+      "receipt_sha256": "3e11e1a1abc94b7cea7bf2670b8d8e7a0bb074ee344a993dfcf9c40386d7a60b",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/file.aspx?DocumentId=6068",
+      "acquisition_url": "https://www.csb.gov/assets/1/20/final_arkema_draft_report_2018-05-23.pdf",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2018-02-I-WI",
+      "artifact_id": "csb-2018-02-i-wi-final-report",
+      "report_sha256": "fba325bda0a4244932d5b5773283d349479ffd8b9aa39cfbf0df7e2a1a7f9977",
+      "receipt_sha256": "e88875bdc80db29e3b507bb49d9723474ed92fc3934d24f358518fb78ed24149",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/assets/1/20/Husky_Superior_Refinery_Report_2022-12-23_%281%291.pdf?16884=",
+      "acquisition_url": "https://www.csb.gov/assets/1/20/husky_superior_refinery_report_2022-12-23_(1)1.pdf?16884=",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    },
+    {
+      "case_id": "2019-04-I-PA",
+      "artifact_id": "csb-2019-04-i-pa-final-report",
+      "report_sha256": "c6f116a076a1539af8921319c1d03920bb5d5cf5e124640b22e3188341a772ca",
+      "receipt_sha256": "07ab5a45cf51add0c455a7504989e9498095ece64ffcbb0665b60b50f28209b4",
+      "catalog_sha256": "7f7196ec02c6c5d720ef054e69edc3eacc04a94d1f8fc683ca914636928d2350",
+      "canonical_url": "https://www.csb.gov/file.aspx?DocumentId=6202",
+      "acquisition_url": "https://www.csb.gov/assets/1/20/PES_Final_Report_Published_October_2022_r1.pdf?16845=",
+      "decision": "approved_for_internal_task_evidence_with_conditions",
+      "restrictions": ["internal_extraction_and_normalization_only", "no_raw_pdf_git_commit", "no_raw_pdf_public_or_exported_redistribution", "exclude_or_separately_review_embedded_third_party_media", "retain_csb_attribution_and_source_locator_provenance", "institutional_findings_are_not_private_ground_truth", "respect_frozen_temporal_cut", "apply_personal_data_and_redaction_review_before_agent_visibility", "minimize_verbatim_reproduction", "no_commercial_frontier_scientific_or_training_value_claim"],
+      "review_basis": "Exact report and receipt are verified in the canonical Gold-10 registry. Canonical source policy permits acquisition and AI use with conditions while keeping redistribution review-required; this record authorizes only internal task/verifier evidence under the listed restrictions."
+    }
+  ]
+}

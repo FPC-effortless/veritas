@@ -20,6 +20,15 @@ Lower layers may operationalize higher layers but may not weaken them.
 
 `request -> reconstruct repo/task context -> classify task -> define outcome + falsifier -> isolate branch/worktree -> implement/experiment minimally -> targeted verification -> broader verification -> domain/scientific gates -> independent review -> PR/proposal -> merge/release only when authorized`
 
+Merge-authoritative review evidence is defined by
+`docs/automation/review-provenance.md` and enforced by
+`tools/review_provenance.py`. A distinct exact-head GitHub approval is accepted
+when available. In this single-owner agent-operated repository, a genuinely fresh
+review agent/session may instead record the canonical exact-head agent-review
+marker. GitHub verifies the review object and head binding; session independence
+is an explicit operational assertion, not a separate GitHub identity claim.
+Free-form self-declared independence does not satisfy the gate.
+
 ## Hard stops
 
 - Never assume a PASS from missing evidence.
@@ -35,3 +44,7 @@ Lower layers may operationalize higher layers but may not weaken them.
 ## Mode independence
 
 These rules apply equally in ordinary Chat and ChatGPT Work. Mode changes the available execution surface, not the engineering standard. Resolve available tools at runtime; do not make the workflow depend on a mode-specific tool name.
+
+## Optional shared engineering skill
+
+For relevant tasks also read `.agents/skills/fpc-universal/SKILL.md`. This shared guide is subordinate to all repository-specific instructions and policies.

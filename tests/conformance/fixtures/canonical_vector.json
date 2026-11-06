@@ -1,0 +1,58 @@
+{
+  "schema_version": "veritas-cross-runtime-conformance-v1",
+  "seed": 17,
+  "actions": [
+    {
+      "kind": "operation",
+      "name": "search",
+      "arguments": {
+        "system": "ERP",
+        "query": "pending order"
+      }
+    },
+    {
+      "kind": "action",
+      "name": "prepare_order",
+      "arguments": {}
+    },
+    {
+      "kind": "action",
+      "name": "approve_order",
+      "arguments": {
+        "order_id": "ORDER-001",
+        "note": "approve"
+      }
+    },
+    {
+      "kind": "operation",
+      "name": "submit",
+      "arguments": {
+        "conclusion": "Order approved after preparation.",
+        "claimed_state": {
+          "order.status": "approved"
+        },
+        "evidence_ids": [
+          "record-001"
+        ],
+        "confidence": 0.9
+      }
+    }
+  ],
+  "required_fields": [
+    "observations",
+    "state_digests",
+    "evidence",
+    "action_parameters",
+    "action_outcomes",
+    "termination",
+    "truncation",
+    "budgets",
+    "invariants",
+    "target_assertions",
+    "process_requirements",
+    "evidence_requirements",
+    "reward_weights",
+    "verifier_components",
+    "aggregate_reward"
+  ]
+}

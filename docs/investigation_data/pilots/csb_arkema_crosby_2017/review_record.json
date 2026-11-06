@@ -1,0 +1,24 @@
+{
+  "review_id": "review-csb-arkema-crosby-link-only-v1",
+  "reviewed_at": "2026-08-28",
+  "status": "approved_for_link_only_pilot",
+  "source_id": "uscsb",
+  "case_id": "CSB-2017-08-I-TX",
+  "scope": [
+    "Reference CSB-authored public news, investigation, and video landing pages by external locator only.",
+    "Use the August 31, 2017 CSB investigation statement as early contextual evidence, not as a completed causal finding.",
+    "Treat the November 15, 2017 preliminary animation as an institutional reconstruction created during an ongoing investigation.",
+    "Do not resolve, bulk-download, redistribute, or extract embedded third-party media in this pilot.",
+    "Do not copy the final-report PDF or executive-summary files into the repository; use the dated May 24, 2018 final-release page for temporal evidence.",
+    "Exclude employee, responder, resident, investigator, and other individual names from the normalized episode actors and task state.",
+    "Do not invent exact event timestamps when the source surface supports only calendar-date precision.",
+    "Use 12:00Z on the following calendar day for date-only publication evidence."
+  ],
+  "redistribution": "No source artifact bytes are checked into the repository by this review.",
+  "ai_use": "Pilot exercises provenance, temporal gating, dependency-failure reasoning, extreme-weather resilience, and external evidence references only; source text/video is not copied into the training corpus by this review.",
+  "limitations": [
+    "This is an internal Veritas provenance/redaction review record, not a legal opinion.",
+    "Embedded media resolution, transcript extraction, frame extraction, local media acquisition, redistribution, or training use requires a separate artifact-level review.",
+    "CSB findings are institutional conclusions and are not promoted to omniscient causal ground truth."
+  ]
+}

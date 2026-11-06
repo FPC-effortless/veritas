@@ -8,6 +8,8 @@ Canonical release tag: **v0.11.0**.
 
 Veritas 0.11 is the commercial-portability release. It is built on the 0.9 native-artifact runtime, the 0.9.1 experimental-integrity hardening, and the 0.10 benchmark-qualification release. The merged portability implementation is the software release identity; 0.11 is no longer reserved for a future industrial-sandbox rewrite.
 
+Development `main` may contain post-`v0.11.0` integration work while package metadata remains `0.11.0`; that does **not** create or authorize a new 0.11 release artifact. Portable operational convergence is one such post-release integration candidate and remains subject to the release authority described below.
+
 ## Release identity
 
 The buyer-facing 0.11 release must agree across all public surfaces:
@@ -36,7 +38,8 @@ Veritas currently includes:
 - generic benchmark qualification with source-disjoint splitting, near-duplicate clustering, provenance, replay, leakage, contamination, feasibility, policy-ordering and exploit-resistance gates;
 - private-panel stratum coverage gates that reject majority-class benchmark artifacts;
 - vendor-neutral portable environment/task/release/capability/reset/verifier/artifact/metering contracts;
-- standalone HUD v6 and Prime Verifiers v1 packaging for the qualified SRE v4 release.
+- standalone HUD v6 and Prime Verifiers v1 packaging for the qualified SRE v4 release;
+- a generic `PortableOperationalContract` / `PortableRuntimeProtocol` program with MCP compilation, Woyengi schema consumption, trajectory/reverification, NeMo/OpenEnv/Harbor/Prime/HUD operational exporters, sandbox boundaries, and cross-runtime conformance machinery on the post-release development line.
 
 ## 0.11 commercial portability
 
@@ -55,6 +58,14 @@ The exact sealed SRE v4 proof establishes:
 - deterministic HUD and Prime package identities.
 
 The validated buyer-safe identities are pinned in `release/0.11.0/PORTABILITY_IDENTITIES.json` and are carried into the GitHub release provenance record.
+
+## Portable operational convergence candidate
+
+The generic operational program is integrated through shared package surfaces without superseding the frozen SRE HUD/Prime compatibility paths. `PortableEnvironmentManifest` can reference generic operational semantics by `PortableOperationalContract` schema version plus `PortablePublicContract.public_id`; the full contract ID is intentionally excluded because it commits to evaluator-private semantics. Unbound legacy manifests omit the new reference field entirely so their serialized shape and content-derived identity remain compatible.
+
+The installed generic command is `veritas-portable`; `tools/world_portability.py` remains a compatibility launcher. Exact interface versions, runtime mapping status, and unsupported external-runtime semantics are recorded in `docs/portability/portable-operational-convergence.md`.
+
+This integration is **not** scientific qualification, Frontier Qualification, commercial qualification, or release authorization.
 
 ## Operational Worlds Production v3
 
@@ -135,6 +146,55 @@ Veritas 0.11.0 is publishable only when the exact release commit passes:
 
 The release workflow then emits an immutable procurement object containing Python distribution hashes, GHCR image digest, pinned HUD/Prime/qualification identities, SBOM and provenance.
 
+### Portable operational convergence release gate
+
+Any release that promotes the generic portable operational program must additionally have fresh evidence for all of the following on the exact candidate/merge ref:
+
+- deterministic `PortableOperationalContract` fixture and canonical bytes;
+- public/private leakage suite;
+- deterministic reset;
+- native operational verifier/reward parity;
+- cross-runtime semantic conformance with no semantic loss promoted over missing evidence;
+- full OpenEnv and Prime `AdapterConformanceReport` replay from evaluator/operator-side evidence,
+  without widening either agent-facing contract;
+- clean external wheel/package installation;
+- existing SRE HUD smoke;
+- existing SRE Prime smoke;
+- Woyengi pinned-fixture parity;
+- deterministic trajectory conversion;
+- offline reverification;
+- explicit documentation of unsupported external-runtime semantics.
+
+The `Portable Operational Convergence` workflow supplies the generic implementation/package gates. Existing `Portability Validation` supplies the frozen SRE HUD/Prime compatibility gates. Ordinary repository `CI` remains required for the full repository verification ladder. A missing, skipped, unavailable, or stale gate is **UNVERIFIED**, not PASS.
+
+Repository-wide Python quality uses pinned Ruff/Mypy versions and a fail-closed ratcheted baseline.
+The ratchet prevents new diagnostic fingerprints while package owners remove pre-existing debt; it
+does not convert outstanding lint/type debt into a clean full-repository PASS.
+
 ## Next release: 0.12
 
 0.12 is the next industrial-fidelity and procurement-hardening line. Candidate integrations include live Kubernetes/container/network execution, Terraform/cloud control planes, broader Excel calculation semantics, deeper enterprise replicas, browser/OCR investigation surfaces, raster/PostGIS GIS execution, deeper cross-domain causal propagation, stronger supply-chain attestations, and additional commercially qualified environment SKUs.
+
+### Post-0.11 quality foundation
+
+The development line now includes the v1 Veritas Environment Maturity Model. Its canonical states
+are `DRAFT`, `EXECUTABLE`, `VERIFIER_VALIDATED`, `SCIENTIFICALLY_QUALIFIED`,
+`FRONTIER_QUALIFIED`, `TRAINING_VALIDATED`, and `COMMERCIAL_RELEASE`. Promotion is sequential,
+content/version bound, and fail-closed: missing evidence remains `UNKNOWN`. Deterministic
+qualification identities are distinct from timestamped historical records, so requalification does
+not erase prior status.
+
+This implements the maturity substrate, not the later verifier, frontier, training-value, or
+procurement qualification programs that provide transition evidence.
+
+The development line also includes the generic Verifier Qualification Suite. It requires the full
+falsifier taxonomy, repeated deterministic replays, alternative-correct-strategy acceptance, and
+separate gates for false positives/negatives, reward hacking, evidence, state, process, side effects,
+and ambiguity. This is protocol implementation only: existing domain verifiers remain at their
+previous evidence state until their own content-bound fixture manifests and replays are supplied.
+
+The repository also adopts a “Do Not Build” architecture policy. Full trainers, model serving,
+hyperscale sandbox clouds, generic expert marketplaces, benchmark aggregation, broad harness
+catalogs, generic agent frameworks, and target-runtime replacement remain presumptive non-goals.
+Proposals entering those areas must document why integration is insufficient and how the smallest
+owned boundary strengthens Veritas assurance.

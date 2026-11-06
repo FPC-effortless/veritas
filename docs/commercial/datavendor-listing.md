@@ -29,10 +29,14 @@ Do not choose regulated-domain tags unless the listing actually contains that do
 
 ## Asset
 
-**Type:** RL environment / agent evaluation environment  
-**Quantity:** 1  
-**Delivery:** managed HUD runtime  
-**Version:** Veritas SRE Evaluation Pack v1 / Veritas 0.11.0  
+**Type:** RL environment / agent evaluation environment
+
+**Quantity:** 1
+
+**Delivery:** managed HUD runtime
+
+**Version:** Veritas SRE Evaluation Pack v1 / Veritas 0.11.0
+
 **Repository/release reference:** `https://github.com/FPC-effortless/veritas/releases/tag/v0.11.0`
 
 Do not attach a raw zip of the private panel, private source snapshots, hidden causal labels, canonical private scenario IDs, or decryption material.
@@ -103,7 +107,7 @@ Safe to show in the listing:
 - `docs/commercial/marketplace-release.md`;
 - `docs/portability/README.md`;
 - buyer-safe qualification summary / aggregate evidence;
-- public synthetic `veritas-sre-open` material once merged.
+- public synthetic [`veritas-sre-open`](../../integrations/prime/veritas-sre-open/) material, already merged into this repository. External Hub or marketplace publication remains a separate authorized step.
 
 Do not preview:
 

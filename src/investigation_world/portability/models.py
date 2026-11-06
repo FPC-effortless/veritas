@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from investigation_world.foundry.models import stable_hash
+
+if TYPE_CHECKING:
+    from investigation_world.portable_contract import PortableOperationalContract
 
 
 class PortableVisibility(StrEnum):
@@ -142,6 +145,27 @@ class PortableMeteringContract(BaseModel):
     )
 
 
+class PortableOperationalContractReference(BaseModel):
+    """Buyer-safe reference from a release manifest to generic operational semantics.
+
+    Only the schema version and public contract identity cross this boundary. The full
+    ``PortableOperationalContract.contract_id`` commits to evaluator-private material and must not
+    be copied into buyer-safe manifests.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: str
+    public_contract_id: str
+
+    @classmethod
+    def from_contract(cls, contract: "PortableOperationalContract") -> Self:
+        return cls(
+            schema_version=contract.schema_version,
+            public_contract_id=contract.public.public_id,
+        )
+
+
 class PortableEnvironmentManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -164,6 +188,16 @@ class PortableEnvironmentManifest(BaseModel):
     provenance: dict[str, Any] = Field(default_factory=dict)
     licensing: dict[str, Any] = Field(default_factory=dict)
     metering: PortableMeteringContract = Field(default_factory=PortableMeteringContract)
+    operational_contract: PortableOperationalContractReference | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_manifest(self, handler: Any) -> dict[str, Any]:
+        """Keep legacy SRE manifests byte/identity compatible when no generic contract is bound."""
+
+        payload = handler(self)
+        if self.operational_contract is None:
+            payload.pop("operational_contract", None)
+        return payload
 
     @model_validator(mode="after")
     def validate_manifest_id(self) -> "PortableEnvironmentManifest":

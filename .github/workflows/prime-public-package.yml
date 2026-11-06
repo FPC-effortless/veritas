@@ -1,0 +1,66 @@
+name: Prime Public Package
+
+on:
+  pull_request:
+    paths:
+      - "integrations/prime/veritas-sre-open/**"
+      - "tests/portability/test_prime_public_sre_open.py"
+      - ".github/workflows/prime-public-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheel-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test and external SDK dependencies
+        run: |
+          python -m pip install pytest
+          python -m pip install "verifiers>=0.2,<0.3"
+
+      - name: Run public/private and scoring falsifiers
+        run: python -m pytest tests/portability/test_prime_public_sre_open.py -q
+
+      - name: Build standalone Hub wheel
+        run: |
+          mkdir -p "$RUNNER_TEMP/veritas-sre-open-wheel"
+          python -m pip wheel --no-deps \
+            --wheel-dir "$RUNNER_TEMP/veritas-sre-open-wheel" \
+            integrations/prime/veritas-sre-open
+          wheel="$(find "$RUNNER_TEMP/veritas-sre-open-wheel" -maxdepth 1 -name '*.whl' -print -quit)"
+          test -n "$wheel"
+          python -m zipfile -l "$wheel" | grep -F "veritas_sre_open/public_tasks.json"
+          echo "VERITAS_SRE_OPEN_WHEEL=$wheel" >> "$GITHUB_ENV"
+
+      - name: Install built wheel, not source tree
+        run: python -m pip install "$VERITAS_SRE_OPEN_WHEEL"
+
+      - name: Load Verifiers v1 and Hub compatibility entrypoints from wheel
+        run: |
+          cd "$RUNNER_TEMP"
+          python - <<'PY'
+          import verifiers.v1 as vf
+          from veritas_sre_open import SREOpenTaskset, load_environment
+
+          taskset = SREOpenTaskset(vf.TasksetConfig())
+          tasks = taskset.load()
+          assert len(tasks) == 12
+          assert len({task.data.public_task_id for task in tasks}) == 12
+          assert all(task.data.public_task_id.startswith("VOPEN-") for task in tasks)
+
+          legacy = load_environment()
+          assert legacy is not None
+          print("Built veritas-sre-open wheel loaded against current Verifiers SDK")
+          PY

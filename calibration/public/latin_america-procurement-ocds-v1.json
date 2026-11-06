@@ -1,0 +1,171 @@
+{
+  "profile_id": "latin_america-procurement-ocds-v1",
+  "version": "1",
+  "region": "latin_america",
+  "industry": "generic",
+  "size_band": "medium",
+  "size_scope": "exact",
+  "source_ids": [
+    "uruguay_arce_ocds"
+  ],
+  "distributions": {
+    "procurement.items_per_tender": {
+      "minimum": 1.0,
+      "p10": 1.0,
+      "p50": 1.0,
+      "p90": 13.0,
+      "maximum": 1032.0,
+      "unit": "",
+      "observation_count": 18513,
+      "source_ids": [
+        "uruguay_arce_ocds"
+      ]
+    },
+    "procurement.awards_per_process": {
+      "minimum": 1.0,
+      "p10": 1.0,
+      "p50": 1.0,
+      "p90": 2.0,
+      "maximum": 55.0,
+      "unit": "",
+      "observation_count": 43967,
+      "source_ids": [
+        "uruguay_arce_ocds"
+      ]
+    },
+    "procurement.parties_per_process": {
+      "minimum": 1.0,
+      "p10": 1.0,
+      "p50": 2.0,
+      "p90": 3.0,
+      "maximum": 56.0,
+      "unit": "",
+      "observation_count": 50812,
+      "source_ids": [
+        "uruguay_arce_ocds"
+      ]
+    },
+    "firm.employee_count": {
+      "minimum": 50.0,
+      "p10": 90.0,
+      "p50": 220.0,
+      "p90": 650.0,
+      "maximum": 1000.0,
+      "unit": "employees",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "procurement.receipt_lag_days": {
+      "minimum": 0.2,
+      "p10": 1.0,
+      "p50": 6.0,
+      "p90": 28.0,
+      "maximum": 120.0,
+      "unit": "days",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "procurement.po_amount_usd": {
+      "minimum": 25.0,
+      "p10": 180.0,
+      "p50": 2800.0,
+      "p90": 45000.0,
+      "maximum": 2500000.0,
+      "unit": "USD",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "communications.emails_per_employee_day": {
+      "minimum": 0.5,
+      "p10": 2.0,
+      "p50": 8.0,
+      "p90": 28.0,
+      "maximum": 75.0,
+      "unit": "messages/day",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "procurement.purchase_orders_per_employee_year": {
+      "minimum": 0.4,
+      "p10": 1.2,
+      "p50": 4.5,
+      "p90": 16.0,
+      "maximum": 45.0,
+      "unit": "PO/employee/year",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "finance.invoice_lag_days": {
+      "minimum": 0.0,
+      "p10": 0.5,
+      "p50": 4.0,
+      "p90": 18.0,
+      "maximum": 90.0,
+      "unit": "days",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "controls.approval_limit_usd": {
+      "minimum": 500.0,
+      "p10": 2500.0,
+      "p50": 15000.0,
+      "p90": 100000.0,
+      "maximum": 1000000.0,
+      "unit": "USD",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "finance.payment_lag_days": {
+      "minimum": 0.2,
+      "p10": 5.0,
+      "p50": 28.0,
+      "p90": 65.0,
+      "maximum": 180.0,
+      "unit": "days",
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "procurement.vendors_per_100_employees": {
+      "minimum": 8.0,
+      "p10": 18.0,
+      "p50": 55.0,
+      "p90": 160.0,
+      "maximum": 450.0,
+      "unit": "vendors/100 employees",
+      "observation_count": 0,
+      "source_ids": []
+    }
+  },
+  "categories": {
+    "procurement.payment_terms": {
+      "weights": {
+        "NET_7": 0.08,
+        "NET_15": 0.17,
+        "NET_30": 0.48,
+        "NET_45": 0.13,
+        "NET_60": 0.14
+      },
+      "observation_count": 0,
+      "source_ids": []
+    },
+    "organization.department_mix": {
+      "weights": {
+        "operations": 0.3,
+        "sales": 0.18,
+        "finance": 0.12,
+        "procurement": 0.08,
+        "warehouse": 0.12,
+        "technology": 0.08,
+        "people": 0.06,
+        "legal_compliance": 0.06
+      },
+      "observation_count": 0,
+      "source_ids": []
+    }
+  },
+  "empirical_observation_count": 113292,
+  "state": "hybrid",
+  "notes": [
+    "Metrics without sufficient observations were inherited from the bootstrap prior."
+  ]
+}
