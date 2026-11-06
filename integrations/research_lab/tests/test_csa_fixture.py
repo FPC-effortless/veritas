@@ -8,7 +8,7 @@ from pathlib import Path
 
 # The public no-fit generator lives in examples; CI discovers this test from tests.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
-from csa_fixture import (KINDS, PLACES, SPLITS, export, make_split, model_view, public_rows,
+from csa_fixture import (KINDS, PLACES, SPLITS, cross_query_rows, export, make_split, model_view, public_rows,
                          replay, validate)
 
 
@@ -80,6 +80,21 @@ class NoFitFixtureTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(blob).hexdigest(), a["splits"][split]["sha256"])
                 rows = [json.loads(x) for x in blob.splitlines()]
                 self.assertEqual(len(rows), 240)
+                probe_blob = (Path(d1) / a["splits"][split]["cross_probe_file"]).read_bytes()
+                self.assertEqual(hashlib.sha256(probe_blob).hexdigest(),
+                                 a["splits"][split]["cross_probe_sha256"])
+                self.assertEqual(len(probe_blob.splitlines()), 80)
+
+    def test_query_relative_not_global_invariance(self):
+        for panel in self.panels.values():
+            probes = cross_query_rows(panel)
+            self.assertEqual(len(probes), 80)
+            for i in range(0, len(probes), 2):
+                a, b = probes[i:i+2]
+                self.assertEqual(a["history"].splitlines()[:-2], b["history"].splitlines()[:-2])
+                self.assertEqual(a["query"], b["query"])
+                self.assertNotEqual(a["answer"], b["answer"])
+                self.assertNotIn("answer", model_view(a))
 
     def test_tampered_label_detected(self):
         panel = self.panels["train"]
@@ -112,6 +127,10 @@ class NonNeuralComparators(unittest.TestCase):
             self.assertEqual(data["recency_accuracy"], 0.5, split)
             self.assertEqual(data["by_kind"]["irrelevant_edit"]["recency_correct"], 0)
             self.assertEqual(data["by_kind"]["retraction"]["recency_correct"], 40)
+            self.assertEqual(data["cross_relevance"]["n"], 80)
+            self.assertEqual(data["cross_relevance"]["symbolic_correct"], 80)
+            self.assertEqual(data["cross_relevance"]["recency_correct"], 80)
+            self.assertEqual(data["cross_relevance"]["ignore_latest_edit_correct"], 0)
 
     def test_symbols_use_model_input_only(self):
         p = make_split("train", 10, 3)[0]
