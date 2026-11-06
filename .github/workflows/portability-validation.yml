@@ -48,6 +48,10 @@ jobs:
   external-adapter-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [hud, prime]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,15 +65,38 @@ jobs:
       - name: Install Veritas test dependencies
         run: python -m pip install -e ".[test]"
 
-      - name: Install current external environment SDKs
+      # HUD uses MCP 2.x while Prime Verifiers uses MCP 1.x. Validate each
+      # adapter in its own runner so one SDK cannot downgrade the other's MCP.
+      - name: Install current HUD SDK
+        if: matrix.adapter == 'hud'
         run: |
           python -m pip install "hud>=0.6,<0.7"
-          python -m pip install "verifiers>=0.2,<0.3"
+          python -m pip check
+          python -c "from hud import Environment"
 
-      - name: Load generated packages against current SDK APIs
-        run: python -m pytest tests/portability/test_external_adapter_smoke.py -q
+      - name: Install current Prime SDK
+        if: matrix.adapter == 'prime'
+        run: |
+          python -m pip install "verifiers>=0.2,<0.3"
+          python -m pip check
+          python -c "import verifiers.v1"
+
+      - name: Load generated HUD package against current SDK API
+        if: matrix.adapter == 'hud'
+        run: >-
+          python -m pytest
+          tests/portability/test_external_adapter_smoke.py::test_generated_hud_package_clean_installs_and_loads_with_current_sdk
+          -q
+
+      - name: Load generated Prime package against current SDK API
+        if: matrix.adapter == 'prime'
+        run: >-
+          python -m pytest
+          tests/portability/test_external_adapter_smoke.py::test_generated_prime_package_clean_installs_and_loads_with_current_v1_sdk
+          -q
 
       - name: Build and load public Prime Hub package
+        if: matrix.adapter == 'prime'
         run: |
           python -m pip install -e integrations/prime/veritas-sre-open
           mkdir -p "$RUNNER_TEMP/veritas-sre-open-wheel"
@@ -99,10 +126,12 @@ jobs:
             --output "$RUNNER_TEMP/veritas-portability-fixture"
 
       - name: Build generated HUD protocol image
+        if: matrix.adapter == 'hud'
         working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
         run: docker build -f Dockerfile.hud -t veritas-sre-portability-fixture:ci .
 
       - name: Exercise HUD task start and grade protocol
+        if: matrix.adapter == 'hud'
         working-directory: ${{ runner.temp }}/veritas-portability-fixture/hud
         run: |
           set -euo pipefail
@@ -134,6 +163,7 @@ jobs:
           printf '%s\n' "$GRADE_OUTPUT" | grep -Eq '(^|[^0-9])1(\.0+)?([^0-9]|$)'
 
       - name: Exercise Prime v1 and legacy compatibility entrypoints
+        if: matrix.adapter == 'prime'
         env:
           PRIME_FIXTURE_ROOT: ${{ runner.temp }}/veritas-portability-fixture/prime
         run: |
