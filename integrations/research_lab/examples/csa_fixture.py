@@ -70,6 +70,7 @@ class Case:
     events_a: tuple[dict, ...]
     events_b: tuple[dict, ...]
     key: tuple[str, str]
+    cross_key: tuple[str, str] | None = None
 
 
 def model_view(row: dict) -> dict[str, str]:
@@ -136,7 +137,8 @@ def make_case(rng: random.Random, index: int, kind: str, split: str) -> Case:
     if kind == "retraction" and {rows[0]["answer"], rows[1]["answer"]} != {"UNKNOWN", new_b}:
         raise AssertionError("retraction intervention mismatch")
     pair_id = f"{split}-{index:06d}"
-    return Case(pair_id, kind, split, rows[0], rows[1], histories[0], histories[1], target)
+    return Case(pair_id, kind, split, rows[0], rows[1], histories[0], histories[1],
+                target, noise_key if kind == "irrelevant_edit" else None)
 
 
 def make_split(split: str, seed: int, n_pairs: int) -> list[Case]:
@@ -168,8 +170,13 @@ def validate(cases: list[Case]) -> dict:
             assert row["answer"] not in model_view(row)
         if case.kind == "irrelevant_edit":
             assert a["answer"] == b["answer"]
+            assert case.cross_key is not None
+            # Query-relative irrelevance: changed data MUST remain retrievable
+            # under a different query. Whole-state invariance would be invalid.
+            assert replay(list(case.events_a)).get(case.cross_key) != replay(list(case.events_b)).get(case.cross_key)
         else:
             assert a["answer"] != b["answer"]
+            assert case.cross_key is None
         # Pair-specific unobserved-history control: any fixed answer for the
         # same query scores no more than 1/2 on these *conflicting* arms.
         seen.add(case.pair_id)
@@ -192,6 +199,23 @@ def public_rows(cases: list[Case]) -> list[dict]:
     return out
 
 
+def cross_query_rows(cases: list[Case]) -> list[dict]:
+    """Second query on the *same* irrelevant-edit histories: now the edit matters."""
+    out = []
+    for case in cases:
+        if case.cross_key is None:
+            continue
+        syntax = "ood" if case.split == "dev_ood_syntax" else "train"
+        query = render_query(*case.cross_key, syntax)
+        for arm, row, events in (("a", case.a, case.events_a),
+                                 ("b", case.b, case.events_b)):
+            value = replay(list(events)).get(case.cross_key)
+            out.append({"pair_id": case.pair_id, "arm": arm, "kind": "cross_relevance",
+                        "split": case.split, "history": row["history"],
+                        "query": query, "answer": value or "UNKNOWN"})
+    return out
+
+
 def export(root: Path, seed: int, pairs: int) -> dict:
     root.mkdir(parents=True, exist_ok=True)
     files: dict[str, dict] = {}
@@ -202,7 +226,15 @@ def export(root: Path, seed: int, pairs: int) -> dict:
                        for row in public_rows(cases))
         path = root / f"csa_{split}.jsonl"
         path.write_text(text, encoding="utf-8")
+        probes = cross_query_rows(cases)
+        probe_text = "".join(json.dumps(row, sort_keys=True, ensure_ascii=True) + "\n"
+                             for row in probes)
+        probe_path = root / f"csa_{split}_cross_probe.jsonl"
+        probe_path.write_text(probe_text, encoding="utf-8")
         files[split] = {"file": path.name, "sha256": hashlib.sha256(text.encode()).hexdigest(),
+                        "cross_probe_file": probe_path.name,
+                        "cross_probe_sha256": hashlib.sha256(probe_text.encode()).hexdigest(),
+                        "cross_probe_rows": len(probes),
                         **validate(cases)}
     manifest = {"protocol": "WIL-TRAIN-001-NOFIT-v0.1", "seed": seed,
                 "not_scientific_test": True, "no_model_training": True,
