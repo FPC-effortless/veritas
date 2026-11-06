@@ -71,7 +71,7 @@ jobs:
             ${{ matrix.extra_args }}
 
       - name: Upload calibration result
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: calibration-${{ matrix.slug }}
           path: calibration-results/${{ matrix.slug }}.json

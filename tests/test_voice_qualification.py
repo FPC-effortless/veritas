@@ -491,7 +491,7 @@ def test_summary_reports_reliability_cost_and_authority() -> None:
     assert by_id["agent-a"].cost_per_verified_success_usd == 0.25
     assert (
         by_id["agent-a"].authority_envelope["valid_refund"]
-        == "qualified"
+        == "human_required"
     )
     assert by_id["agent-b"].success_at_1 == 0.0
     assert by_id["agent-b"].hard_invariant_violation_rate == 1.0

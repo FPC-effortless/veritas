@@ -14,6 +14,7 @@ from investigation_world.commercial.voice_qualification import (
     summarize_voice_qualification,
     validate_voice_episode,
 )
+from investigation_world.commercial.voice_qualification_core import _LoadedVoiceSuite
 from investigation_world.operational.models import EpisodeSubmission, OperationalEpisode
 from investigation_world.operational.runtime import OperationalRuntime
 
@@ -82,12 +83,21 @@ def evaluate_voice_configuration(
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
 
+    sealed_digest = episodes.verified_digest() if isinstance(episodes, _LoadedVoiceSuite) else None
     suite = list(episodes)
     if not suite:
         raise ValueError("at least one voice qualification episode is required")
     for episode in suite:
         validate_voice_episode(episode)
 
+    sealed_cases = {
+        episode.episode_id: (
+            VoiceScenarioFamily(str(episode.metadata["scenario_family"])),
+            VoicePressure(str(episode.metadata["pressure"])),
+            bool(episode.oracle.metadata.get("recovery_required", False)),
+        )
+        for episode in suite
+    } if sealed_digest else {}
     runs: list[VoiceQualificationRun] = []
     for episode in suite:
         family = VoiceScenarioFamily(str(episode.metadata["scenario_family"]))
@@ -107,6 +117,14 @@ def evaluate_voice_configuration(
             runs.append(
                 VoiceQualificationRun(
                     configuration_id=configuration_id,
+                    evidence_scope=(
+                        "sealed" if sealed_digest else "development"
+                        if episode.metadata.get("qualification_split") == "development"
+                        else "unverified"
+                    ),
+                    sealed_suite_sha256=sealed_digest,
+                    sealed_suite_scenarios=len(suite) if sealed_digest else 0,
+                    sealed_suite_cases=sealed_cases,
                     scenario_id=episode.episode_id,
                     family=family,
                     pressure=pressure,
@@ -132,7 +150,7 @@ def compare_voice_configurations(
     if len(drivers) < 2:
         raise ValueError("comparison requires at least two configurations")
 
-    suite = list(episodes)
+    suite = episodes if isinstance(episodes, _LoadedVoiceSuite) else list(episodes)
     if not suite:
         raise ValueError("at least one voice qualification episode is required")
     for episode in suite:
