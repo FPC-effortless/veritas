@@ -51,6 +51,7 @@ from investigation_world.qualification.quality_scorecard import (
     build_environment_quality_scorecard,
 )
 from investigation_world.qualified_package import (
+    BuyerSafeQualifiedPackageManifest,
     MaturityBinding,
     PackageContentReference,
     PackageEvidenceBinding,
@@ -369,6 +370,7 @@ def _package(
         known_limitations=(
             PackageLimitation(
                 code="frontier-evidence-unknown",
+                visibility=EvidenceVisibility.PUBLIC,
                 detail="Frontier utility has not been established.",
                 unknown=True,
             ),
@@ -590,3 +592,62 @@ def test_private_maturity_provenance_is_not_exported_or_fingerprinted() -> None:
         packages.append(package)
     assert packages[0].package_id != packages[1].package_id
     assert serialize_buyer_safe_manifest(packages[0]) == serialize_buyer_safe_manifest(packages[1])
+
+
+def _with_limitations(*limitations: PackageLimitation) -> QualifiedEnvironmentPackage:
+    payload = _package().model_dump(mode="python")
+    payload.update(package_id="", package_content_sha256="", known_limitations=limitations)
+    return QualifiedEnvironmentPackage.model_validate(payload)
+
+
+def test_limitation_text_defaults_to_operator_private() -> None:
+    canary = "SYNTHETIC-PRIVATE-EVALUATOR-ANSWER-CANARY"
+    limitation = PackageLimitation(code="private.fixture", detail=canary)
+    package = _with_limitations(limitation)
+    assert canary not in serialize_buyer_safe_manifest(package).decode()
+    assert package.buyer_safe_manifest().known_limitations == ()
+    assert limitation.visibility == EvidenceVisibility.OPERATOR_PRIVATE
+
+
+def test_explicit_public_limitation_is_preserved() -> None:
+    limitation = PackageLimitation(
+        code="public.frontier-unknown",
+        detail="Frontier utility is unknown.",
+        unknown=True,
+        visibility=EvidenceVisibility.PUBLIC,
+    )
+    package = _with_limitations(limitation)
+    assert package.buyer_safe_manifest().known_limitations == (limitation,)
+    assert limitation.detail in serialize_buyer_safe_manifest(package).decode()
+
+
+@pytest.mark.parametrize(
+    "visibility", [EvidenceVisibility.OPERATOR_PRIVATE, EvidenceVisibility.SEALED]
+)
+def test_private_limitation_mutation_does_not_fingerprint_buyer_manifest(visibility) -> None:
+    packages = [
+        _with_limitations(
+            PackageLimitation(
+                code="private.fixture",
+                detail=canary,
+                visibility=visibility,
+            )
+        )
+        for canary in ("SYNTHETIC-PRIVATE-DETAIL-A", "SYNTHETIC-PRIVATE-DETAIL-B")
+    ]
+    assert packages[0].package_id != packages[1].package_id
+    assert serialize_buyer_safe_manifest(packages[0]) == serialize_buyer_safe_manifest(packages[1])
+    assert b"SYNTHETIC-PRIVATE-DETAIL" not in serialize_buyer_safe_manifest(packages[0])
+
+
+@pytest.mark.parametrize(
+    "visibility", [None, EvidenceVisibility.OPERATOR_PRIVATE, EvidenceVisibility.SEALED]
+)
+def test_direct_buyer_manifest_rejects_private_limitations(visibility) -> None:
+    payload = _package().buyer_safe_manifest().model_dump(mode="python")
+    limitation = {"code": "private.fixture", "detail": "SYNTHETIC-PRIVATE-DETAIL"}
+    if visibility is not None:
+        limitation["visibility"] = visibility
+    payload.update(manifest_id="", manifest_content_sha256="", known_limitations=(limitation,))
+    with pytest.raises(ValidationError, match="PUBLIC limitations"):
+        BuyerSafeQualifiedPackageManifest.model_validate(payload)

@@ -436,6 +436,7 @@ class PackageLimitation(BaseModel):
     code: str
     detail: str = Field(min_length=1)
     unknown: bool = False
+    visibility: EvidenceVisibility = EvidenceVisibility.OPERATOR_PRIVATE
 
     @model_validator(mode="after")
     def validate_limitation(self) -> "PackageLimitation":
@@ -558,6 +559,9 @@ class BuyerSafeQualifiedPackageManifest(BaseModel):
             raise ValueError("buyer-safe manifest may contain only PUBLIC evidence references")
         if any(item.visibility != EvidenceVisibility.PUBLIC for item in self.supply_chain):
             raise ValueError("buyer-safe manifest may contain only PUBLIC supply-chain references")
+
+        if any(item.visibility != EvidenceVisibility.PUBLIC for item in self.known_limitations):
+            raise ValueError("buyer-safe manifest may contain only PUBLIC limitations")
 
         payload = self.model_dump(
             mode="json",
@@ -757,7 +761,11 @@ class QualifiedEnvironmentPackage(BaseModel):
                 if item.visibility == EvidenceVisibility.PUBLIC
             ),
             private_evaluator_status=validated.private_evaluator.status,
-            known_limitations=validated.known_limitations,
+            known_limitations=tuple(
+                item
+                for item in validated.known_limitations
+                if item.visibility == EvidenceVisibility.PUBLIC
+            ),
         )
 
 

@@ -19,13 +19,13 @@ The package binds:
 - optional reference, reverification, diagnostic, installation, and reproduction evidence references;
 - source, licensing, image, dependency, and SBOM content references where available;
 - a separate operator-only private evaluator reference;
-- buyer-safe known limitations.
+- visibility-classified known limitations.
 
 ## Public/private boundary
 
 The full `QualifiedEnvironmentPackage` is an operator object and can bind private or sealed identities. `buyer_safe_manifest()` creates a separate, independently content-addressed projection that:
 
-- retains only `PUBLIC` attestations, evidence references, and supply-chain references;
+- retains only `PUBLIC` attestations, evidence references, supply-chain references, and known limitations;
 - discloses maturity status, policy, failed/unknown gates, and scorecard dimension outcomes as summaries, without private-backed maturity/scorecard identities or hashes;
 - omits canonical source snapshots entirely; they remain operator-only;
 - exposes only whether a private evaluator is present, absent, or unknown;
@@ -33,7 +33,7 @@ The full `QualifiedEnvironmentPackage` is an operator object and can bind privat
 - does not include the operator package ID or digest, so a private-only package mutation cannot create a buyer-visible fingerprint;
 - revalidates the complete package before projection so stale `model_copy(update=...)` mutations fail closed.
 
-Known limitations are treated as buyer-safe disclosure text by construction; callers must not put evaluator-private case details or answer-bearing material into them.
+Known limitations default to `OPERATOR_PRIVATE`. Only limitations explicitly classified `PUBLIC` are copied into buyer output; private and sealed limitation text stays operator-only and cannot change the buyer manifest identity. Direct buyer-manifest construction also rejects non-public limitations. Callers must authorize public disclosure before marking a limitation `PUBLIC`, and must not mark evaluator-private case details or answer-bearing material public.
 
 ## Content identities
 
