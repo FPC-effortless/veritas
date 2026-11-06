@@ -183,7 +183,9 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
       - name: Type-check
-        run: pnpm exec tsc --noEmit
+        run: pnpm typecheck
+      - name: Verify Next.js editor diagnostics and completions
+        run: pnpm test:editor
       - name: Build frontend
         run: pnpm build
 

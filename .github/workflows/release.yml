@@ -99,7 +99,8 @@ jobs:
       - name: Validate frontend
         run: |
           pnpm install --frozen-lockfile
-          pnpm exec tsc --noEmit
+          pnpm typecheck
+          pnpm test:editor
           pnpm build
 
   publish-release:
