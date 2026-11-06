@@ -8,6 +8,7 @@ on:
       - "requirements-quality.txt"
       - "quality/**"
       - "docs/**/*.py"
+      - "integrations/**/*.py"
       - "src/**/*.py"
       - "tests/**/*.py"
       - "tools/**/*.py"

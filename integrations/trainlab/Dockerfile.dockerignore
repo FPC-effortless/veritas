@@ -13,6 +13,7 @@
 !integrations/forge/
 !integrations/forge/pyproject.toml
 !integrations/forge/WORKBENCH.md
+!integrations/forge/LICENSE
 !integrations/forge/src/
 !integrations/forge/src/**
 !integrations/forge/examples/

@@ -1,4 +1,6 @@
-include PRODUCTION.md Dockerfile Dockerfile.dockerignore requirements-server.txt LICENSE
+include PRODUCTION.md MODEL_WORKFLOWS.md Dockerfile Dockerfile.dockerignore requirements-server.txt LICENSE
+include PYTORCH.md Dockerfile.torch Dockerfile.torch.dockerignore requirements-pytorch-cpu.txt
 recursive-include deploy *.yaml Caddyfile
 recursive-include examples *.json *.py
 recursive-include tests *.py
+recursive-include tests_torch *.py

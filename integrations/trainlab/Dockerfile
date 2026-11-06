@@ -11,6 +11,7 @@ COPY integrations/trainlab/src ./src
 COPY integrations/trainlab/examples ./examples
 COPY integrations/forge/pyproject.toml /opt/forge/pyproject.toml
 COPY integrations/forge/WORKBENCH.md /opt/forge/WORKBENCH.md
+COPY integrations/forge/LICENSE /opt/forge/LICENSE
 COPY integrations/forge/src /opt/forge/src
 COPY integrations/forge/examples/dataset_quickstart.py /opt/forge/examples/dataset_quickstart.py
 RUN --mount=type=secret,id=proxy_ca \

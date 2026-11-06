@@ -77,6 +77,8 @@ class Workspace:
                     result.append(
                         {
                             "id": path.name,
+                            "workload": config.get("workload"),
+                            "checks": config.get("checks", {}),
                             **{
                                 key: config[key]
                                 for key in (
