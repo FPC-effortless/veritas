@@ -3,13 +3,14 @@ import copy
 import random
 import sys
 import unittest
+from importlib import import_module
 from pathlib import Path
 
 # Works both next to the runner (archived diagnostic) and in the
 # research_lab/tests directory after installation in Veritas.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cspt002 as m
+m = import_module("cspt002")
 
 
 class DataIntegrity(unittest.TestCase):
@@ -72,9 +73,8 @@ class DataIntegrity(unittest.TestCase):
         self.assertEqual(m.partition(w), m.partition(m.World(w.owners,
             w.objects, w.receiver, w.moved_slot, 1)))
         self.assertNotEqual(w.answer(), w.before_answer())
-        # The training-only target must be a distinct tensor, not an input alias.
-        x = m.batch_examples([w])
-        self.assertFalse(x["context"].equal(x["target_post"]))
+        # Only the training-side target contains post-action state.
+        self.assertNotEqual(m.tokens(inp), m.tokens(target_only))
 
     def test_tokenizer_rejects_context_truncation(self):
         with self.assertRaises(ValueError):
@@ -103,7 +103,13 @@ class DataIntegrity(unittest.TestCase):
             unchanged = m.World(w.owners, w.objects, w.receiver, w.moved_slot, 1-w.moved_slot)
             self.assertEqual(transferred.answer(), w.receiver)
             self.assertNotEqual(unchanged.answer(), w.receiver)
-        self.assertEqual(sum(int(w.receiver == m.World(w.owners,w.objects,w.receiver,w.moved_slot,1-w.moved_slot).answer()) for w in rows), 0)
+        shortcut_successes = sum(
+            int(w.receiver == m.World(
+                w.owners, w.objects, w.receiver, w.moved_slot, 1-w.moved_slot
+            ).answer())
+            for w in rows
+        )
+        self.assertEqual(shortcut_successes, 0)
 
     def test_sampling_reproducible(self):
         a, b = random.Random(181), random.Random(181)
@@ -114,7 +120,10 @@ class DataIntegrity(unittest.TestCase):
 class ModelIntegrity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import torch
+        try:
+            import torch
+        except ModuleNotFoundError as exc:
+            raise unittest.SkipTest("PyTorch is an optional fit dependency") from exc
         cls.torch = torch
         torch.set_num_threads(1)
 
@@ -129,7 +138,10 @@ class ModelIntegrity(unittest.TestCase):
         loss = torch.nn.functional.cross_entropy(logits, batch["owner"])
         loss.backward()
         self.assertGreater(model.encoder.embedding.weight.grad.abs().sum().item(), 0)
-        self.assertGreater(model.encoder.backbone.layers[0].self_attn.in_proj_weight.grad.abs().sum().item(), 0)
+        attention_gradient = (
+            model.encoder.backbone.layers[0].self_attn.in_proj_weight.grad
+        )
+        self.assertGreater(attention_gradient.abs().sum().item(), 0)
         self.assertGreater(model.predictor[0].weight.grad.abs().sum().item(), 0)
         self.assertGreater(model.answer.weight.grad.abs().sum().item(), 0)
 
@@ -145,6 +157,11 @@ class ModelIntegrity(unittest.TestCase):
                 p.lerp_(q + 1, 0.01)
         self.assertTrue(all(not p.requires_grad for p in target.parameters()))
         self.assertTrue(any(not torch.equal(p, q) for p, q in zip(target.parameters(), before)))
+
+    def test_post_state_tensor_separated_from_inference_input(self):
+        w = m.World((0, 1), (3, 4), 2, 0, 0)
+        batch = m.batch_examples([w])
+        self.assertFalse(batch["context"].equal(batch["target_post"]))
 
     def test_no_labels_passed_to_inference(self):
         torch = self.torch
