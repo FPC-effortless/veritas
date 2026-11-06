@@ -12,7 +12,7 @@ import hashlib
 import json
 import random
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 ENTITIES = tuple(f"e{i}" for i in range(12))
