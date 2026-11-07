@@ -1,0 +1,20 @@
+[Unit]
+Description=Research Lab OS bounded director and worker supervisor
+After=network-online.target
+
+[Service]
+Type=simple
+User=researchlab
+WorkingDirectory=/opt/veritas
+Environment=PYTHONPATH=/opt/veritas/integrations/research_lab/src:/opt/veritas/integrations/trainlab/src:/opt/veritas/integrations/forge/src
+ExecStart=/opt/researchlab-venv/bin/python -m research_lab --root /var/lib/research-lab supervise /etc/research-lab/workers.json
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=45
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

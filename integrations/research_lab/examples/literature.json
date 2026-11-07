@@ -1,0 +1,35 @@
+{
+  "schema": "research_lab.literature.v1",
+  "papers": [
+    {
+      "id": "ai-scientist-v2-2504.08066v1",
+      "title": "The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search",
+      "url": "https://arxiv.org/abs/2504.08066v1",
+      "retrieved_at": "2026-11-01",
+      "summary": "The authors describe hypothesis generation, experimental execution, analysis and manuscript preparation with an experiment-manager agent and progressive tree search.",
+      "relevance": "Separate experiment management, evidence analysis and review rather than equating successful code execution with scientific discovery.",
+      "limitations": ["Author-reported results from this paper do not validate this lab's implementation.", "A workflow resemblance does not establish novelty or a replicated scientific capability."],
+      "review_scope": "PRIMARY_ABSTRACT_AND_METADATA"
+    },
+    {
+      "id": "agent-laboratory-emnlp2025.320",
+      "title": "Agent Laboratory: Using LLM Agents as Research Assistants",
+      "url": "https://aclanthology.org/2025.findings-emnlp.320/",
+      "retrieved_at": "2026-11-01",
+      "summary": "The framework develops a human-supplied idea through literature review, experimentation and report writing with opportunities for researcher feedback.",
+      "relevance": "Use bounded specialist work orders and retain human review at scientific and publication decisions.",
+      "limitations": ["Only the primary abstract and metadata were reviewed here.", "The paper's model and cost findings are not measurements of Research Lab OS."],
+      "review_scope": "PRIMARY_ABSTRACT_AND_METADATA"
+    },
+    {
+      "id": "mlagentbench-icml2024",
+      "title": "MLAgentBench: Evaluating Language Agents on Machine Learning Experimentation",
+      "url": "https://proceedings.mlr.press/v235/huang24y.html",
+      "retrieved_at": "2026-11-01",
+      "summary": "The benchmark evaluates agents performing machine-learning experiments across diverse tasks; its abstract reports large differences in success across tasks and challenges in planning and hallucination.",
+      "relevance": "Evaluate an end-to-end research workflow on multiple independent tasks; retain negative outcomes and inspectable action records.",
+      "limitations": ["This catalog does not reproduce the benchmark.", "An engineering fixture cannot establish general research-agent competence."],
+      "review_scope": "PRIMARY_ABSTRACT_AND_METADATA"
+    }
+  ]
+}

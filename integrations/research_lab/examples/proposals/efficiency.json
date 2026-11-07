@@ -1,0 +1,48 @@
+{
+  "schema": "research_lab.proposal.v1",
+  "id": "efficiency",
+  "author": "efficiency_design",
+  "question": "When both implementations answer the same streaming lifecycle queries exactly, does incrementally retained keyed state reduce total CPU work and measured time relative to reconstructing state from the available history at each query?",
+  "hypothesis": "For streams containing repeated queries, incremental state will reduce amortized CPU time by at least 20% relative to prefix replay while preserving 100% exact-match accuracy on every lifecycle category; the advantage should grow with the number of queries and available prefix length.",
+  "competing_explanations": [
+    "An apparent speed advantage comes from excluding retained-state updates or initialization from the timer, rather than from less repeated work.",
+    "A faster implementation answers from stale or incomplete state, trading away correction or deletion correctness.",
+    "Interpreter warmup, cache effects, execution order or unrelated host load explain the wall-time difference.",
+    "The implementations perform different algorithms or receive different information, so the result cannot be attributed to state retention."
+  ],
+  "predictions": [
+    "At identical query positions and inputs, both implementations return identical answers and match an independently implemented reference for present, corrected, deleted and absent keys.",
+    "Counting every lifecycle transition, retained execution visits each non-query event once; replay revisits the prefix preceding each query. Recorded counts should match an independent enumeration of those prefixes.",
+    "The paired fractional time reduction is at least 0.20 in the preregistered longest-stream, 16-query condition, for each of three independently generated stream seeds.",
+    "Increasing queries from 4 to 16 at fixed stream length increases the replay event count more than the retained event count; measured timing should be consistent with that mechanism, though noisy short conditions may not show a significant advantage."
+  ],
+  "controls": [
+    "Use two execution modes around the same transition function and key/value representation: one incrementally updates a map; the other constructs an empty map and replays only the already observed prefix before each query. Neither receives future events or labels.",
+    "Generate a frozen workload grid with key-universe sizes 8 and 32, stream lengths 64, 256 and 1024, and exactly 4 or 16 queries distributed through each history. Use the three declared seeds as independently generated data replicates, not only initialization changes.",
+    "Include writes, overwrite corrections, deletes, absent-key queries and unrelated-key edits. Require all declared lifecycle categories to be represented and correct in every condition; empty categories invalidate the condition.",
+    "Generate expected answers outside the timed implementation using an independent event-list reference. A wrong answer invalidates the speed comparison and is retained as a failure; do not report a speed winner from that condition.",
+    "Measure the complete stream, including initialization, all update handling, query handling and answer production. Exclude data generation, reference scoring, disk I/O and serialization from both timers. Report those excluded costs separately.",
+    "Run in one CPU process with one declared worker and fixed thread settings. Record Python/platform/CPU identity, process CPU time, monotonic wall time, event-transition counts, maximum live entries and history bytes. Do not describe host wall time as GPU energy or deployment latency.",
+    "Use 3 untimed warmups followed by 15 paired timing rounds per workload; alternate retained-first and replay-first order, recording every round. Summarize paired medians and seed-level ranges; bootstrap the independent stream seeds only as an explicitly exploratory interval, since three replicates give weak uncertainty estimates.",
+    "Hash workload bytes, code, protocol and output predictions in the TrainLab receipt. Preserve all failures and timing observations. Use separate output directories and an explicit 60-second process timeout; do not silently reduce the workload after seeing results."
+  ],
+  "ablations": [
+    "Single final query: replay receives one reconstruction opportunity, testing whether repeated-query count is the source of any advantage.",
+    "Reset retained state before every query and reconstruct it from the same prefix: correctness remains exact but repeated work should approach replay.",
+    "Long unrelated-key suffixes at fixed query count: isolates history length from the number of queried-key lifecycle changes.",
+    "Timing-only no-op traversal of the identical prefixes: estimates Python loop overhead without presenting it as a competing memory model."
+  ],
+  "primary_metric": "paired fractional reduction in median total process CPU nanoseconds per query: (replay - retained) / replay, restricted to conditions where both variants achieve 100% independent-reference accuracy in every declared lifecycle category",
+  "direction": "max",
+  "minimum_effect": 0.2,
+  "seeds": [271, 683, 1091],
+  "stopping_rule": "Freeze workload generation, code, query positions and scoring before execution. Run the full fixed grid with 3 warmups and 15 recorded pairs per workload; perform no tuning or early success stopping. The primary hypothesis passes only if every longest-stream, 16-query condition in all three seeds has complete category coverage, exact correctness, independently correct transition counts, and at least 0.20 fractional CPU-time reduction. Any failure is a failed or inconclusive efficiency gate, never removed. A 60-second timeout is an incomplete run requiring a new versioned protocol, not permission to select a favorable subset.",
+  "limitations": [
+    "This tests exact symbolic store execution and operational accounting. It does not train a neural architecture or demonstrate TAC, PSN, DPSL, Transformer or SSM superiority.",
+    "A repeated-prefix replay baseline deliberately performs redundant work; the result does not compare against an optimized cache, KV cache, compressed history or another persistent-memory implementation.",
+    "Exact keyed stores bound the supported semantics and may retain more information than a fixed-width neural state. Memory use and time must both be reported; compute reduction alone is not an equal-memory comparison.",
+    "Three stream seeds and one CPU host support a small mechanism check. Host scheduling, interpreter behavior and tiny-input overhead limit generalization; 15 timing repetitions are not 15 independent datasets.",
+    "No energy meter, GPU utilization or monetary cost is measured. Operation counts and CPU time must not be converted into unsupported energy or dollar savings."
+  ],
+  "next_discriminating_test": "After correctness and accounting pass, compare retained state with a reviewed incremental cache using the same byte budget and complete update costs, then repeat on fresh workload seeds and a second CPU host. Only then run matched learned memory models with frozen trained checkpoints, equivalent quality gates and explicit state-size/compute budgets."
+}
