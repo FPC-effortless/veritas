@@ -1,7 +1,9 @@
 # Merge authority for autonomous roadmap agents
 
-**Policy ID:** `veritas.agent-merge-authority.v1`  
-**Applies to:** roadmap work coordinated through issue Work Contracts  
+**Policy ID:** `veritas.agent-merge-authority.v1`
+
+**Applies to:** roadmap work coordinated through issue Work Contracts
+
 **Authority:** subordinate to `AGENTS.md`, repository security/privacy rules, release/qualification contracts, and explicit user/owner instructions
 
 ## Purpose
@@ -32,7 +34,7 @@ When instructions conflict, apply the stricter applicable rule. In particular:
 1. **Claim is not merge authority.** `CLAIMED` only reserves the declared ownership lane.
 2. **Handoff is not approval.** `REVIEW` means implementation work was offered for independent review, not that it passed review.
 3. **Green CI is not review.** Required checks prove only what they actually test.
-4. **Review is exact-head evidence.** Approval applies to the reviewed commit. A material head change requires fresh independent review and rerun of affected gates.
+4. **Review is exact-head evidence.** Approval applies only to the reviewed commit. Any head change invalidates that review and requires fresh independent review and applicable verification.
 5. **Merge is not qualification.** Landing code cannot silently change scientific, Frontier, training, commercial, or release status.
 6. **Missing evidence fails closed.** `UNKNOWN`, absent, skipped, timed-out, or inaccessible evidence never becomes PASS.
 7. **Current-main matters.** Work whose semantics depend on shared/current-main state must be synchronized before final verification.
@@ -85,9 +87,13 @@ An independent review is acceptable only when it:
 - examines the changed semantics and relevant falsifiers, not only CI status;
 - has no unresolved blocking finding;
 - is performed by a reviewer independent of the implementation path under the active Work Contract;
-- is recorded in a durable repository surface such as the PR review/conversation or linked evidence record.
+- is recorded as the exact-head GitHub review required by the canonical
+  [review-provenance contract](../automation/review-provenance.md): either a distinct-identity
+  approval or a canonical single-owner agent review from a genuinely fresh review session.
 
-A generic approval made before the final implementation head is insufficient unless the reviewer explicitly confirms that the later head is unchanged-equivalent under the repository's review policy. When in doubt, require fresh review.
+An approval on an older head is stale even when the file contents are unchanged. A conversation
+comment, linked evidence record or assertion of unchanged equivalence cannot replace the
+canonical exact-head review object. Obtain fresh review on the final head.
 
 ## Exact-head gate predicate
 
