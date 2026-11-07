@@ -1,396 +1,121 @@
-# Competitive overlap regression review — 2026-08-28
+# Competitive overlap regression review — 2026-08-28, refreshed 2026-11-07
 
-**Work ID:** COMP-001 / issue #182  
-**Original review date:** 2026-08-28
-**Current Veritas baseline:** `349af80fd4d0cb657fb3c32e080f88e3644c0907`
-**Last updated:** 2026-10-12 (Veritas roadmap and MachineExperience refresh; Prime v1 source recheck)
-**Scope:** NeMo Gym, Prime Intellect Verifiers, OpenEnv, Harbor, HUD, and directly overlapping public benchmark/evaluation surfaces.
+**Work ID:** COMP-001 / issue #182
+**Original review:** 2026-08-28; intermediate source update: 2026-10-12
+**Current public-source check:** 2026-11-07 UTC
+**Veritas comparison baseline:** `34f86edf9fbc091245df44ecba2c0b4de6e6a389`
 
-## Evidence policy
+## Evidence policy and changes since the previous review
 
-This review uses current public primary documentation and public repositories. Interface or workflow claims documented in source repositories are treated as evidence that the interface exists. Vendor homepage claims about scale, customers, quality, or outcomes are recorded only as vendor-reported product positioning unless independently supported.
+This refresh replaces stale product descriptions and execution recommendations, rather than making an archive-only disposition of COMP-001. Earlier versions remain in Git history. Public primary sources below were read on the check date; some browser results were cached from the preceding six days. Mutable upstream `main` documentation is not a pinned installed release or a verified runtime result. No competitor software, model, provider, account, private panel, or hosted workflow was executed.
 
-The review does **not** treat:
+Documentation establishes what a project documents, not that its performance, security, interoperability, or qualification claims have been independently reproduced. Vendor product claims are identified as such. `ADOPT`, `INTEGRATE`, `IGNORE`, and `EXCEED` below are engineering dispositions, not comparative scientific rankings or execution permission.
 
-- a competitor marketing statement as scientific validation;
-- a green implementation test as training or Frontier qualification;
-- a larger integration catalog as evidence of stronger environment semantics;
-- a hosted trainer, model gateway, sandbox cloud, or marketplace as functionality Veritas should automatically reproduce.
+Material corrections:
 
-No new roadmap item is created solely to match feature count.
+- NeMo's current environment concept includes an agent harness; the previous assertion that the harness is external to its environment was too strong.
+- Prime's old `docs/v1/tasksets.md` and `docs/v1/harnesses.md` URLs return 404. Replacement top-level docs retain task/trace, multi-agent, and capability semantics. Current runtime docs list subprocess, Docker, Prime, and custom runtimes; the old built-in Modal claim is not retained.
+- OpenEnv now documents reward rubrics, Inspect AI evaluation, and Harbor-based training traces. Describing trajectory scoring only as evolving understated the documented surface.
+- TRAIN-001 is implementation-DONE, not still dependency-blocked. That does not establish training usefulness. Generic packaging has merged, while its trusted coordination record still needs reconciliation. These are separate facts.
 
-## Executive disposition
+## 1. NeMo Gym
 
-The 2026 competitive change is convergence, not displacement. NeMo Gym, Prime Verifiers, OpenEnv, Harbor, and HUD have all moved toward some combination of:
+**Observed:** Its [environment concepts](https://docs.nvidia.com/nemo/gym/main/about/concepts/environments/) describe dataset, agent harness, verifier, and state, with the model external. Runtimes host that composition; a sandbox adds isolation. This is a logical decomposition, not proof that a particular runtime safely isolates arbitrary workloads.
 
-- environment/harness/runtime separation;
-- typed or protocol-defined task/environment interfaces;
-- reusable verification/reward functions;
-- complete rollout traces;
-- evaluation-to-training reuse;
-- isolated/containerized execution;
-- remote provider or hub distribution;
-- authoring CLIs and templates.
+The [authoring guide](https://docs.nvidia.com/nemo/gym/main/contribute/environments/new-environment/) documents manifest-backed scaffolding, validation, verifier fixtures, and `gym env publish`. Importantly, that publish command is a **local readiness check**, not hosted publication. Supported fixtures cover reward endpoints, malformed inputs, and reseeded determinism when declared. The guide explicitly lists deferred automation, including capability checks and certificate-backed validation; it does not promise that static validation proves grading quality.
 
-Veritas should **not** respond by becoming a general trainer, model-serving layer, sandbox cloud, or largest harness catalog. Those are commodity or ecosystem surfaces where integration is the stronger strategy.
+The [evaluation guide](https://docs.nvidia.com/nemo/gym/evaluation/) documents aggregation, profiling, comparison, BLADE diagnosis, and offline reward recomputation. It warns that changing several experimental factors together cannot identify the cause of a score change.
 
-Veritas should concentrate first-party differentiation on the harder assurance layer already present in the architecture:
+**Disposition:** **ADOPT** concrete authoring falsifiers through DX-003 (#172) and controlled diagnostic practices through DIAG-002 (#193), subject to their live scope. **INTEGRATE** execution interfaces rather than reproduce infrastructure. **EXCEED** is the target for Veritas's content-bound/private-safe evidence assurance, not a claim of measured superiority. Do not copy a CLI's “publish” label into release authority.
 
-1. content-bound environment/verifier/evidence identities;
-2. public/private evaluator separation;
-3. environment fidelity and native-artifact truth;
-4. verifier exploit monitoring and independent verifier QA;
-5. append-only trajectories and offline reverification;
-6. cross-runtime semantic conformance;
-7. controlled diagnostics that separate model, harness, verifier, and environment effects;
-8. explicit scientific, Frontier, training, and commercial qualification boundaries;
-9. procurement-grade qualified environment packaging.
+## 2. Prime Intellect Verifiers
 
-The main product gap is therefore **productization and ecosystem reach**, not a need to replace Veritas semantics with a competitor's abstraction.
+**Observed:** The [overview](https://raw.githubusercontent.com/PrimeIntellect-ai/verifiers/main/docs/overview.md) distinguishes tasksets, harnesses, agents, environments, and traces. An environment owns episode control flow across agents; traces carry messages, rewards, metrics, errors, and model-call records. The [taskset guide](https://raw.githubusercontent.com/PrimeIntellect-ai/verifiers/main/docs/tasksets.md) describes immutable task data and task-owned lifecycle/reward functions receiving the trace. This supports trace-oriented interoperability, not an inference that every reward uses all trace information.
 
-## Cross-competitor matrix
+The [environment guide](https://raw.githubusercontent.com/PrimeIntellect-ai/verifiers/main/docs/env.md) explicitly documents user simulation as a second agent, plus multi-attempt/judge compositions. The [harness guide](https://raw.githubusercontent.com/PrimeIntellect-ai/verifiers/main/docs/harnesses.md) declares optional capabilities including MCP, resume, skills, system-prompt handling, and tool interception. Resume does not by itself imply live steering. The [runtime guide](https://raw.githubusercontent.com/PrimeIntellect-ai/verifiers/main/docs/runtimes.md) separates runtime from harness capabilities and documents pre-provision refusal of unsupported runtime requirements. It warns that subprocess execution has host access and Python task hooks run in the evaluator process.
 
-| Dimension | NeMo Gym | Prime Verifiers v1 | OpenEnv | Harbor | HUD | Veritas disposition |
-|---|---|---|---|---|---|---|
-| Environment model | dataset + verifier + tools/state; harness external | taskset + harness + runtime + trace | Gymnasium-style `reset` / `step` / `state` | task = instruction + environment + test | thin manifest + start/grade protocol + capabilities | **EXCEED** on assurance semantics; preserve adapter compatibility |
-| Authoring UX | scaffold/validate/test/publish | taskset scaffold + typed task data/config | CLI init/deploy + generated clients | CLI datasets/tasks/runs | `hud init`, templates, deploy/sync/eval | **ADOPT** the strongest validation ergonomics through DX lanes |
-| Verifier QA | explicit verifier fixtures; full/zero/malformed/deterministic cases | scoring is task-owned and trace-based | reward returned by environment; delayed-reward RFC exists | test scripts; oracle runs; Harbor Index audit process | task grading; integration-test/golden path; vendor advertises trace QA | **EXCEED**, while adopting concrete fixture/audit patterns |
-| Trajectories | rollout collection + offline reverification | serialized `Trace` is first-class | action/state loop; trajectory scoring evolving | per-trial trajectory artifacts; RL rollouts | every graded run is a trace | **EXCEED** on append-only identity/version-aware reverification |
-| Diagnostics | reward profiling and BLADE result diagnosis | trace/reward/metric inspection | web debugging interface | trial logs + benchmark audit | vendor advertises failure analysis and reward-hack QA | **ADOPT** better product surfaces; DIAG-002 remains the right semantic lane |
-| Sandbox/runtime breadth | scale and external sandbox integrations | subprocess/docker/Prime/Modal runtime options | Docker/remote/Spaces | broad local/cloud sandbox provider support | managed deployment + shell/browser/GUI/robot capability surfaces | **INTEGRATE**, do not build provider-count parity |
-| Training | designed to feed external RL frameworks | tightly integrated with prime-rl/hosted training | RL-post-training interface | rollout interfaces; SkyRL integration documented | managed GRPO/training path | **INTEGRATE/IGNORE** trainer implementation; keep TRAIN-001 as qualification authority |
-| Portability | library integrations and resources-server HTTP surfaces | environment hub + runtime/harness composition | explicit environment protocol + MCP | agent/provider/dataset adapters | protocol-first environment envelope | **EXCEED** on semantic conformance; keep adapters thin |
-| Procurement/distribution | environment catalog | Environments Hub + hosted eval/training | HF Spaces/deploy | package registry/hub | deploy platform + vendor marketplace | **INTEGRATE** external distribution; **EXCEED** on qualified package evidence |
+The [README](https://raw.githubusercontent.com/PrimeIntellect-ai/verifiers/main/README.md) connects Verifiers with the Environments Hub, prime-rl, and Hosted Training. Account-native behavior and compatibility with Veritas's pinned adapter are not tested by this review.
 
-## 1. NVIDIA NeMo Gym
-
-### Current observed changes
-
-NeMo Gym now draws a sharp boundary between the environment and the agent harness. Its environment concept is dataset + verifier + tools/state; model and harness are composed externally. It also distinguishes a reusable environment from a versioned benchmark protocol.
-
-The authoring surface is notably mature. New workloads can be scaffolded and then passed through `gym env validate`, `gym env test`, and `gym env publish`. A reusable verifier fixture is required to exercise a full-reward case, zero-reward case, malformed request, and seeded determinism where applicable.
-
-Evaluation now includes run aggregation, reward profiling, and `gym eval reverify`, which recomputes rewards from existing rollouts without rerunning inference. NeMo Gym also exposes result-diagnosis tooling through BLADE.
-
-### Disposition
-
-**ADOPT — verifier fixture ergonomics, not verifier semantics.**
-
-The fixture idea is a strong authoring convention: every verifier-facing reference environment should carry explicit positive, negative, malformed, and determinism falsifiers. Veritas already has stronger invariant/evidence/privacy semantics, so this should remain a testing convention rather than a new scoring authority. DX-003 (#172 / PR #261) and existing verifier-qualification/exploit lanes are the appropriate homes.
-
-**ADOPT — scaffold → validate → test → publish mental model.**
-
-DX-001/DX-002 and current DX-003 already move in this direction. Complete those surfaces before inventing another authoring layer.
-
-**INTEGRATE — NeMo execution/scale rather than reproduce it.**
-
-Veritas should remain portable into NeMo-style execution when useful. Current portability/conformance work is strategically correct; provider/runtime scale is not a reason to make Veritas a cluster scheduler.
-
-**EXCEED — reverification assurance.**
-
-NeMo's offline reverification confirms that replayable reward computation is becoming table stakes. Veritas should retain its stronger append-only, content-bound, version-comparison and privacy-safe reverification contract rather than simplifying toward an opaque rescore command. TRACE-003 (#155) remains the relevant Veritas capability.
-
-**ADOPT — productized diagnostics where semantics permit.**
-
-BLADE is evidence that users expect diagnosis, not just score output. DIAG-002 (#193) is the correct direction, but causal language must remain controlled by matched/intervention design.
-
-## 2. Prime Intellect Verifiers v1
-
-### Current observed changes
-
-Prime Verifiers has moved new environment work to v1, organized around `Taskset`, `Task`/`TaskData`, harnesses, runtimes, and serialized `Trace` objects. Task data is typed and immutable; reward functions score the complete trace rather than an ad-hoc final completion. Toolsets can be exposed over MCP. Tasksets may also be lazy or procedurally infinite, while the consumer bounds the run.
-
-The v1 runtime surface explicitly separates where a harness runs from the task definition, and Prime's broader stack connects the same environment layer to evaluation, prime-rl, the Environments Hub, and hosted training.
-
-Current v1 documentation also makes the environment responsible for multi-agent behavior: it owns the agents, their control flow, and cross-agent rewards. Its `user_sim` environment models the user as another agent and records both sides in the trace. Task tool requirements are checked against harness capabilities (for example, MCP support), and harnesses declare capabilities such as system-prompt appending, MCP, and resume support. These are meaningful environment-actor and task↔harness compatibility semantics, beyond the generic Taskset/Harness/Runtime/Trace composition summarized above.
-
-### Disposition
-
-**ADOPT — explicit task↔harness capability compatibility.**
-
-Veritas should make required harness capabilities machine-readable and reject unsupported task/harness combinations before execution. HARNESS-001 (#176) owns behavioral declarations and HARNESS-002 (#177) owns adapters; extend that contract to capability negotiation rather than creating a parallel harness registry. ACTOR-001 (#269) already requires multi-actor capability negotiation, so this fits an existing semantic owner.
-
-**ADOPT — environment-owned simulated actors and multi-agent control flow.**
-
-Prime's user simulation is an environment actor with observable, trace-bound interaction, not just a harness feature. ACTOR-001 (#269) is the existing owner: it places actor semantics in the executable world, covers communication/control-flow identity, trace capture, and task/harness capability negotiation. Keep the Veritas implementation scoped to that contract and its acceptance criteria; this is a semantic capability, not a parity target.
-
-**ADOPT — trace-first scoring as an interoperability principle.**
-
-Veritas already scores from hidden state, actions, evidence and trajectory semantics. Adapter work should preserve that complete record instead of collapsing Veritas into final-answer-only graders.
-
-**ADOPT selectively — bounded procedural task streams.**
-
-Prime's lazy/infinite taskset design is useful when procedural generation is expensive or unbounded. Veritas already has production-scale procedural distributions; no new generic abstraction is warranted until an actual consumer needs streaming generation.
-
-**INTEGRATE — Prime Hub/runtime/training.**
-
-Prime is a distribution and training consumer, not a reason for Veritas to own `prime-rl`-like training infrastructure. The existing external distribution ticket #71 and portability adapters remain the correct path.
-
-**INTEGRATE — harnesses through conformance, not copied implementations.**
-
-HARNESS-001 (#176; PR #259 merged 2026-08-29) defines the behavioral declaration. HARNESS-002 (#177) should support a small buyer-relevant set deeply. Raw harness count is not a meaningful target.
-
-**IGNORE — trainer parity.**
-
-Prime's tight prime-rl integration is strategically useful as an integration target. Veritas should not recreate optimizer/trainer implementation. TRAIN-001 (#162) should qualify whether training actually produced held-out capability rather than owning the optimizer.
+**Disposition:** **ADOPT** explicit task/harness/runtime compatibility declarations through HARNESS-001/#176, HARNESS-002/#177, and ACTOR-001/#269; **ADOPT** environment-owned simulated actors through the existing actor contract, not a new parity ticket. **INTEGRATE** external training/distribution through #71 and existing adapters. **IGNORE** first-party trainer parity. Preserve Veritas evaluator privacy rather than assuming another project's task references are safe for public export.
 
 ## 3. OpenEnv
 
-### Current observed changes
+**Observed:** The [current README](https://raw.githubusercontent.com/openenv/OpenEnv/main/README.md) documents synchronous/asynchronous `reset`, `step`, and `state` over WebSocket; Docker/local/cloud/Spaces deployment; MCP production tool exposure; rubric rewards; Inspect AI evaluation; and Harbor harness integration with framework-neutral training traces. It also documents scaffold/validate/push commands and distinguishes host-bound local serving from isolated deployment. The old Hugging Face GitHub URL redirects to `openenv/OpenEnv`.
 
-OpenEnv presents a small Gymnasium-style environment standard around `reset()`, `step()`, and `state()`, with isolated server-side environments and generated clients. It supports Docker/remote deployment and Hugging Face Spaces. Its documentation now describes MCP as the standardized process-boundary tool surface when an environment is remote or separately deployed.
-
-OpenEnv also documents an interactive web debugging surface and active RFCs for delayed rewards and harness integration. The project explicitly labels itself experimental and warns that APIs may change.
-
-### Disposition
-
-**INTEGRATE — protocol compatibility.**
-
-The compact `reset`/`step`/`state` model and MCP transport are useful external contracts. Veritas should continue exposing compatible adapters while preserving its richer private evaluator, evidence, budget, fidelity, and conformance semantics internally.
-
-**IGNORE for now — copying OpenEnv's experimental core API into Veritas.**
-
-Because OpenEnv itself warns of API churn, Veritas should not make an experimental external interface its source of semantic truth.
-
-**IGNORE for now — delayed-reward feature matching.**
-
-Delayed reward is only worth first-party Veritas work when a qualified training/evaluation use case requires it. A competitor RFC is not sufficient evidence.
-
-**ADOPT selectively — human-debuggable environment inspection.**
-
-OpenEnv's web UI shows the value of visual state/action history during authoring. Veritas should first finish the current authoring/templates/diagnostics work; a new UI ticket is not justified by this review alone.
+**Disposition:** **INTEGRATE** useful protocol/harness surfaces under existing portability and HARNESS-002/#177 ownership. **ADOPT** concise validation ergonomics through DX-003/#172. **IGNORE** catalog-count parity and a speculative new UI/trainer project. The earlier claim that its scoring surface was merely evolving is withdrawn; so is reliance on an older experimental-status warning as the present reason to avoid integration. Versioned compatibility and semantic-loss checks, not a label, should govern adoption. No live OpenEnv deployment or token-capture correctness was tested.
 
 ## 4. Harbor
 
-### Current observed changes
+**Observed:** The [README](https://raw.githubusercontent.com/harbor-framework/harbor/main/README.md) documents agent evaluation, benchmark sharing, local Docker and remote providers, and rollout generation. Its scale claims are project-reported, not reproduced here. The [RL documentation](https://www.harborframework.com/docs/training-workflows/rl) describes an external rollout interface and SkyRL integration; the fetched page resolved to a commit-pinned documentation page, not an executed training run.
 
-Harbor positions itself as an evaluation/optimization harness that can run arbitrary agents, package/share benchmarks and environments, execute large parallel jobs across local and cloud sandbox providers, and generate rollouts for RL. Its result layout retains per-trial agent logs, verifier logs, rewards, and trajectory artifacts.
+The [Harbor Index repository](https://github.com/harbor-framework/harbor-index) describes 80 tasks selected from over 6,000 candidates with repeated runs, broken-task detection, human audits, and reward-hacking supervision. Those counts and process claims are the maintainers' report; this review does not independently audit their selection or leaderboard.
 
-The more strategically important signal is Harbor's benchmark QA practice. Harbor Index documents an 80-task benchmark distilled from more than 6,000 candidates using repeated model runs, automated broken-task identification, human audits, and reward-hacking supervision. Terminal-Bench documentation also recommends repeated oracle runs to validate task reliability in a chosen sandbox.
-
-Harbor documents RL integration through external framework interfaces rather than requiring Harbor to own the optimizer; its current RL documentation names SkyRL integration.
-
-### Disposition
-
-**INTEGRATE — cloud sandbox breadth.**
-
-SANDBOX-001 (#174, active PR #263) is correct to go deep on Local and Docker first. SANDBOX-002 (#175) should prove one real remote provider. Veritas should not chase Harbor's provider count.
-
-**ADOPT — repeated oracle/task reliability checks.**
-
-Repeated reference/oracle execution is a useful falsifier for task flakiness and sandbox sensitivity. It should feed Gold/verifier QA, not become an assumption that oracle success proves task quality.
-
-**ADOPT — candidate filtering + human audit + reward-hacking supervision.**
-
-This is directly aligned with Veritas's high-assurance differentiation. VQ-007 is already merged in PR #247 and GOLD-002 (#178) requires independent attacks and retention of findings. Those lanes should absorb the lesson; no duplicate ticket is needed.
-
-**INTEGRATE — Harbor as a harness/runtime/export target.**
-
-HARNESS-002 and SANDBOX-002 should allow Harbor ecosystem use where buyer demand justifies it. Environment authors should not rewrite canonical Veritas semantics for Harbor.
-
-**IGNORE — first-party RL framework implementation.**
-
-Harbor itself demonstrates the stronger architecture: expose rollout interfaces and integrate a trainer. Veritas should do the same.
+**Disposition:** **INTEGRATE** runtime/harness breadth only through existing owner-scoped lanes such as HARNESS-002/#177 and SANDBOX-002/#175 when eligible. **ADOPT** retained negative findings and repeated task checks through GOLD-002/#178 and verifier QA. **IGNORE** provider-count parity and first-party RL framework implementation. This recommendation does not lift the hold on #263 or authorize any sandbox implementation or execution.
 
 ## 5. HUD
 
-### Current observed changes
+**Observed:** The [SDK README](https://raw.githubusercontent.com/hud-evals/hud-python/main/README.md) documents a manifest/start/grade envelope, capability-driven interaction, template-based tasks, image deployment, taskset synchronization, and trace recording. Its capabilities include shell, MCP, browser, GUI, and beta robotics. These are documented interfaces, not evidence that any Veritas package has successfully deployed on the current upstream version.
 
-HUD's open SDK is explicitly protocol-first. The environment exposes a manifest, `tasks.start`, and `tasks.grade`; between those calls the agent drives declared capabilities such as shell/SSH, MCP, browser/CDP, GUI/RFB, or robot interfaces. This keeps the environment independent of one model or harness.
+The [coding-template README](https://raw.githubusercontent.com/hud-evals/01-coding-template/main/README.md) requires its golden integration path to receive full reward before shipping. It uses scenario-oriented examples, so it must not be assumed interchangeable with every current SDK template API without version-specific checks.
 
-HUD's templates combine task generation and grading into a small async-generator authoring surface. Its packaging flow builds an environment image, deploys it, syncs tasksets, runs evaluations, and records each graded run as a trace. HUD also provides a managed training path.
+The [product page](https://www.hud.ai/) advertises automated grader/reward-hack QA, failure analysis, collaborative task review, and DataVendor monetization. These remain **vendor claims**, not independently established detection accuracy, revenue, account access, legal eligibility, or buyer demand.
 
-HUD's public product page currently advertises automated trace QA for grader mistakes/reward hacking and a failure-analysis surface. Those are vendor-reported platform capabilities, not independently validated here, but they are directionally consistent with the Harbor Index QA signal and Veritas's own exploit-monitoring roadmap.
+**Disposition:** **INTEGRATE** distribution through external/manual #71 and existing portability contracts; **ADOPT** golden-path plus negative/exploit falsifiers through authoring and verifier-QA lanes. **EXCEED** is an assurance goal requiring evidence, not an achieved competitive ranking. **IGNORE** marketplace/platform cloning. Hosted access, NDA/tier behavior, publication, pricing, and payment remain unverified and separately authorized.
 
-HUD also markets a vendor marketplace for selling environment inventory to research teams.
+## Cross-cutting regression assessment
 
-### Disposition
+| Required dimension | Current evidence and disposition |
+| --- | --- |
+| Environment semantics | NeMo composition, Prime task/agent control flow, OpenEnv step API and HUD capability envelope are distinct abstractions. **INTEGRATE** adapters; retain canonical Veritas semantics. |
+| Verifier QA | NeMo fixtures, HUD golden paths and Harbor's reported audit process provide concrete patterns. **ADOPT** falsifiers without substituting them for independent verifier QA. |
+| Scientific / Frontier / training qualification | Interface docs and successful rollouts do not establish these states. **EXCEED** as an assurance objective; no head-to-head scientific result is claimed. |
+| Realism | Containers and browser/native-artifact access do not by themselves prove fidelity. **EXCEED** through disclosed Veritas fidelity contracts and claim-specific evidence, not unsupported comparative adjectives. |
+| Trajectories / reverification | Prime records traces, OpenEnv documents training captures, and NeMo documents offline rescoring. **INTEGRATE** while preserving identity, visibility and replay boundaries. |
+| Diagnostics | NeMo documents controlled comparisons; HUD advertises diagnosis. **ADOPT** useful presentation, retain intervention/evidence limits. |
+| Developer experience | Documented scaffold/validate loops are actionable patterns. **ADOPT** within DX ownership; do not start duplicate authoring frameworks. |
+| Sandbox / harness breadth | Multiple projects document external harnesses/providers. **INTEGRATE** where demand and authorization justify it; **IGNORE** provider-count parity. |
+| Portability / conformance | Similar envelopes do not establish semantic equivalence. **EXCEED** on explicit semantic-loss and conformance evidence, as a design goal. |
+| Expert task QA | Harbor reports human audit and retained attack checks. **ADOPT** through GOLD-002; do not infer an independent Veritas red-team occurred. |
+| Procurement / release packaging | Prime/HUD offer distribution surfaces; Veritas's package must preserve private/public and UNKNOWN boundaries. **INTEGRATE** distribution, never equate package installation with commercial completion. |
 
-**INTEGRATE — protocol/distribution and marketplace.**
+## Internal baseline and executable sequence
 
-Issue #71 already separates the external HUD account/listing/deployment work from repository qualification. That remains preferable to building a Veritas marketplace merely for parity.
+At the exact Veritas baseline above, [BUILD_STATUS.md](../../BUILD_STATUS.md) records software release 0.11.0, the frozen SRE portability proof, and post-release generic operational integration. That document, the scientific overlay and individual evidence contracts remain authoritative. This comparative review reran none of their scientific or release evidence. It does not promote a release or infer broad qualification from a narrow SRE result.
 
-**ADOPT — golden integration-test convention.**
+The following trusted bot status snapshots were read on 2026-11-07. Links identify the records; these are mutable live snapshots, not permanent permission grants. Labels, issue-body State fields, strategic rank and this table cannot override them.
 
-HUD's coding template requires an integration-test/golden path to receive full reward before a task is shippable. This is a good minimum authoring falsifier, provided Veritas continues to require negative/exploit cases too. DX-003 and Gold QA are the appropriate consumers.
+| Lane | Observed coordination / repository state | Consequence for this review |
+| --- | --- | --- |
+| HARNESS-001 #176 | [DONE, transition 11](https://github.com/FPC-effortless/veritas/issues/176#issuecomment-5454878595), linked #259 | Reuse the merged contract, not a duplicate foundation. |
+| DX-003 #172 | [REVIEW, transition 8](https://github.com/FPC-effortless/veritas/issues/172#issuecomment-5455031182), linked #261; #261 merge `f6ebcf7` is in baseline history | Code presence is not permission to overwrite or silently complete stale coordination. Reconcile through the owning authorized workflow. |
+| TRAIN-001 #162 | [DONE, transition 3](https://github.com/FPC-effortless/veritas/issues/162#issuecomment-5461181957), linked #461; implementation merge `6e2911a` present | Reuse the offline policy engine. [Its contract](../training_qualification/README.md) is not a trainer, execution attestor, or real training-value PASS. |
+| PKG-001 #168 | [BLOCKED, transition 3](https://github.com/FPC-effortless/veritas/issues/168#issuecomment-5461181154), old limitation-privacy finding; #299 merge `b4c0b11` present | Report the code/status mismatch, not a new claim or automatic DONE. Authorized reconciliation must verify the actual fix. |
+| HARNESS-002 #177, SANDBOX-002 #175 | [#177 BLOCKED](https://github.com/FPC-effortless/veritas/issues/177#issuecomment-5461180710), [#175 BLOCKED](https://github.com/FPC-effortless/veritas/issues/175#issuecomment-5461180936), each transition 0 | Integration targets only; neither is advertised as claim-ready. |
+| GOLD-002 #178, DIAG-002 #193 | [#178 BLOCKED](https://github.com/FPC-effortless/veritas/issues/178#issuecomment-5461180616), [#193 BLOCKED](https://github.com/FPC-effortless/veritas/issues/193#issuecomment-5461178584), each transition 0 | QA/diagnostic dispositions map to existing owners but do not authorize execution. |
+| ACTOR-001 #269, CONV-001 #199 | [#269 BLOCKED](https://github.com/FPC-effortless/veritas/issues/269#issuecomment-5461171254), [#199 BLOCKED](https://github.com/FPC-effortless/veritas/issues/199#issuecomment-5461177839), each transition 0 | Capability negotiation and package convergence remain scope/dependency-gated. |
+| SANDBOX-001 #174 / PR #263 | [BLOCKED, transition 12](https://github.com/FPC-effortless/veritas/issues/174#issuecomment-5454980376); unresolved security review restriction | Do not recommend integration, inspect its implementation, or execute its artifacts under this review. Only its public status/reference was read. |
 
-**ADOPT — automatic trace QA as a product surface, using Veritas evidence rules.**
+Strategic priority remains trustworthy evidence, retained attacks, controlled diagnostics, usable packaging and selective ecosystem interoperability. **Executable order is not a ranked feature list**:
 
-The underlying concept is strong: inspect traces for grader defects and reward hacking before they become training data. VQ-007's content-addressed exploit corpus is the stronger semantic foundation. Productized automation can consume it; it should not replace it with an opaque vendor-style quality score.
+1. Reuse already-integrated contracts and implementation; do not recreate completed work from this old review.
+2. Before any future implementation, verify trusted state, frozen ownership, actual dependencies and exact-head gates. A BLOCKED lane remains blocked even if a provider appears merged. Any required reconciliation belongs to the authorized coordinator, not this document.
+3. Preserve [existing-work classifications](../roadmap/existing-work-audit.md): #28 is EVIDENCE_ONLY, and #25's accidental integration was reverted by #501 (`7dcf1b0`, present in baseline history). Neither is an execution or merge recommendation. Existing scope holds, including #263, remain intact.
+4. External distribution #71 and seller/payment #32 remain separate manual-authority work under that same audit. No current account-native access, listing, payment or private-evidence completion was established here.
+5. Any future training usefulness claim must satisfy the canonical training evidence contract. The old instruction to keep TRAIN-001 implementation blocked is withdrawn; implementation-DONE is not empirical capability gain.
 
-**INTEGRATE — training, do not duplicate it.**
+## Source ledger and unavailable evidence
 
-Managed GRPO is useful as an external training backend. TRAIN-001 remains responsible for determining whether a before/after model change is actually training-valid under held-out, exploit, replication and regression evidence.
+All primary pages linked in sections 1–5 were checked on **2026-11-07 UTC**. This is a read date, not their publication date. The material available through those pages supports the narrowed descriptions above. The browser reported cached ages from today to six days old; upstream pages can change after this check.
 
-**IGNORE — marketplace/platform scope expansion inside core Veritas.**
+- NeMo: environment concepts, new-environment guide and evaluation guide retrieved successfully. A guessed `NVIDIA/NeMo-Gym` GitHub URL returned 404; it is not used as evidence of product absence. Official NVIDIA documentation provides the supported facts.
+- Prime: README, overview, top-level tasksets/harnesses/env/runtimes guides retrieved. Old `docs/v1/tasksets.md` and `docs/v1/harnesses.md` returned 404; current linked replacements were used. No claim of current Modal support is retained.
+- OpenEnv: old GitHub repository URL redirected; current `openenv/OpenEnv` README retrieved. No stale experimental-status or delayed-reward-RFC claim is needed for the current disposition.
+- Harbor: README, Harbor Index and RL guide retrieved. The RL guide resolved to `26106c6d9c66848a1440faf5724d336affac52aa` documentation. Provider throughput, leaderboard integrity and task-selection quality were not reproduced.
+- HUD: SDK README, coding-template README and public product page retrieved. Hosted training effectiveness, QA accuracy, buyer demand, pricing/tier/NDA behavior and account-native compatibility remain unverified.
+- Veritas: baseline AGENTS, BUILD_STATUS, training qualification contract, existing-work audit and the linked trusted status records were read. No private benchmark rows, held-out artifacts, secret-bearing exports, models or external runs were accessed.
 
-Distribution is strategically important, but external account/platform capabilities are not environment semantics. Keep them behind commercial/distribution lanes and explicit authority.
+## Duplicate / supersession disposition and falsifiers
 
-## Veritas position by review dimension
+No new roadmap item or expanded trainer/model-serving/cloud/marketplace program is warranted by this review. Recommendations map to the named existing contracts. No duplicate was identified that this document can legitimately mark superseded; no issue/PR was closed or status changed. A future duplicate disposition must use its owning coordination process rather than silently treating old status as current.
 
-### Environment semantics — **leading differentiation; EXCEED**
-
-Current Veritas main has persistent operational state, hidden evaluator truth, state/action preconditions, evidence authority/freshness/provenance, ordered/repeated/forbidden process constraints, trajectory-wide invariants, budgets, side effects, native artifacts, and a shared multi-domain verifier contract. Competitor protocols should be adapter targets, not replacements.
-
-### Verifier QA — **strong core; keep tightening**
-
-The merged VQ-007 exploit monitor (PR #247) provides retained, content-addressed exploit findings and regression checks. Gold's external red-team (#178) adds the independent human/attack requirement. NeMo verifier fixtures, Harbor repeated oracle runs, and HUD golden integration tests are useful test-pattern inputs.
-
-### Scientific / Frontier / training qualification — **architecturally stronger separation, evidence still staged**
-
-Competitors often optimize the path from reward to training. Veritas's differentiator should be proving whether the environment/verifier/reward was trustworthy and whether held-out capability actually improved. TRAIN-001 (#162) should remain blocked until its evidence dependencies are satisfied rather than being bypassed by a trainer integration.
-
-### Environment realism/fidelity — **leading differentiation; EXCEED**
-
-Native XLSX, SQLite, declarative infrastructure, rendered evidence corpora, GIS artifacts, and the governed fidelity work provide a more explicit realism boundary than generic container execution. Do not equate containerization or one native file with high fidelity.
-
-### Trajectories/reverification — **strong and strategically important**
-
-NeMo's reverify feature validates the category. Since this report's original review, the Machine Experience foundation merged: `MachineExperience` wraps `TrajectoryV2` with learning-readiness, structured diagnostics, and visibility boundaries. It provides a canonical experience record for downstream learning and held-out transfer while preserving the trajectory as the execution/replay authority. It does not itself qualify training value or learning efficiency. Veritas should retain append-only identity/history, version comparison, not-reverifiable states, and buyer-safe privacy behavior.
-
-### Diagnostics — **semantic foundation good; productization behind leaders**
-
-NeMo BLADE and HUD's advertised failure analysis show the expected UX. DIAG-002 (#193) should build controlled intervention analysis rather than a generic dashboard of unverifiable causal labels.
-
-### Developer experience — **improving, still a competitive execution gap**
-
-NeMo, Prime, OpenEnv, Harbor, and HUD all offer short scaffold/run loops. DX-003 (#172 / PR #261, merged 2026-08-29) materially narrows this gap with installable executable examples. Keep building on those examples; do not describe the lane as awaiting review.
-
-### Sandbox/harness breadth — **intentionally narrower; INTEGRATE**
-
-This is not a strategic defect if adapters are good. HARNESS-001/#176 (PR #259, merged 2026-08-29) establishes the behavioral conformance contract. SANDBOX-001/#174 remains active in PR #263 for deep local implementations. HARNESS-002/#177 and SANDBOX-002/#175 should add small, demand-driven external coverage.
-
-### Portability/conformance — **leading differentiation; EXCEED**
-
-Veritas's vendor-neutral contract and cross-runtime semantic conformance are more important than matching every provider-specific option. Maintain exact semantic loss reporting and fail closed on drift.
-
-### Expert task QA — **must become visibly operational**
-
-Harbor Index's filtering/audit process is the strongest current external signal in this review. Veritas's Gold pilot and GOLD-002 external red-team should demonstrate an equal or stronger process with retained negative findings, independent reviewers, exploit regression and no hidden answer leakage.
-
-### Procurement/release packaging — **strategically distinctive, not finished generically**
-
-The existing 0.11 SRE portability release proves a vendor-neutral packaging direction. PKG-001 (#168) and CONV-001 (#199) should generalize this only after their evidence dependencies are met. A package must be able to say UNKNOWN/not-qualified; packaging must not manufacture maturity.
-
-## Strategic priority versus executable sequence
-
-Strategic rank is not execution permission. The highest-value work is the assurance + qualified-package differentiation, but current dependencies still govern what can execute.
-
-### Strategic priorities
-
-1. **High-assurance verifier/task quality:** exploit monitoring, independent red-team, expert QA, retained negative evidence.
-2. **Qualified environment package:** buyer-safe, content-bound, reproducible procurement object.
-3. **Controlled diagnostics:** explain model/harness/environment/verifier failure without unsupported causal claims.
-4. **Ecosystem reach:** thin adapters into dominant harness, sandbox, environment-hub, and trainer surfaces.
-5. **Developer ergonomics:** make the assurance path easier than bypassing it.
-
-### Execution sequence from current roadmap state
-
-1. Complete independent review/merge of active additive lanes rather than starting duplicates: SANDBOX-001 PR #263 and any active trace audit lane.
-2. With HARNESS-001 merged, select 2–4 buyer-relevant harness families under HARNESS-002 (#177), based on actual demand rather than popularity.
-3. After SANDBOX-001 merges and an account/provider is available, prove exactly one remote backend under SANDBOX-002 (#175).
-4. Run Gold task/verifier QA and GOLD-002 (#178) before Gold scale-up; incorporate repeated oracle/reference checks, exploit regression, and independent audit.
-5. Advance DIAG-002 (#193) only when its semantic/harness dependencies are merged.
-6. Generalize qualified packaging through PKG-001 (#168) and CONV-001 (#199) only after qualification/conformance dependencies are real.
-7. Keep trainer integrations external; execute TRAIN-001 (#162) only when the required held-out/exploit/replication evidence can be produced.
-
-## Duplicate / supersession check
-
-No new roadmap ticket is justified by this review. The main externally visible competitor improvements already map to existing Veritas lanes:
-
-- verifier/reward-hack QA -> VQ-007 (merged PR #247) + GOLD-002 #178;
-- authoring ergonomics -> merged DX-003 #172 / PR #261;
-- environment actors and task/harness capability negotiation -> ACTOR-001 #269;
-- harness breadth -> HARNESS-001 #176 -> HARNESS-002 #177;
-- sandbox breadth -> SANDBOX-001 #174 -> SANDBOX-002 #175;
-- diagnostic productization -> DIAG-002 #193;
-- training integration/qualification boundary -> TRAIN-001 #162;
-- procurement packaging -> PKG-001 #168 + CONV-001 #199;
-- HUD/Prime external distribution -> #71.
-
-No scoped open ticket was found that should be marked superseded solely because of a competitor change. Creating additional parallel tickets would increase overlap rather than capability.
-
-## Decision summary
-
-### ADOPT
-
-- NeMo-style verifier fixtures: positive, negative, malformed, deterministic cases.
-- Scaffold/validate/test/publish authoring ergonomics.
-- Repeated oracle/reference runs as a flakiness signal.
-- Candidate filtering, independent/human audit, and reward-hacking supervision.
-- Golden integration-test paths, always paired with negative/exploit falsifiers.
-- Productized trace/failure diagnostics, while preserving evidence and causal-language constraints.
-
-### INTEGRATE
-
-- NeMo/Prime/OpenEnv/Harbor/HUD environment and runtime protocols through thin adapters.
-- External harnesses through HARNESS conformance.
-- External cloud sandboxes through a small provider-neutral adapter set.
-- External hubs/marketplaces for distribution.
-- External RL/SFT/GRPO trainers as consumers of Veritas-qualified experience.
-
-### IGNORE
-
-- trainer/optimizer parity;
-- model-serving parity;
-- sandbox-provider count as a product metric;
-- cloning hosted marketplace/platform features into core Veritas;
-- experimental external APIs as new internal semantic authorities;
-- delayed-reward/UI features without a demonstrated Veritas use case.
-
-### EXCEED
-
-- verifier integrity and exploit retention;
-- fidelity disclosure and native-artifact truth;
-- public/private evaluator isolation;
-- content-derived environment/evidence/package identity;
-- offline reverification durability;
-- semantic conformance across runtimes;
-- explicit UNKNOWN/fail-closed qualification states;
-- procurement evidence that distinguishes implementation, scientific, Frontier, training, and commercial status.
-
-## Sources reviewed
-
-The original competitor comparison was reviewed on **2026-08-28**. Veritas roadmap status and MachineExperience were refreshed on **2026-10-12**; the Prime v1 additions were rechecked on that date.
-
-### NeMo Gym / NVIDIA
-
-- NeMo Gym — Environments: https://docs.nvidia.com/nemo/gym/main/about/concepts/environments/
-- NeMo Gym — Evaluation: https://docs.nvidia.com/nemo/gym/about/concepts/evaluation/
-- NeMo Gym — Evaluate / reverify / profiling: https://docs.nvidia.com/nemo/gym/evaluation/
-- NeMo Gym — New environment / manifest / verifier fixture: https://docs.nvidia.com/nemo/gym/main/contribute/environments/new-environment/
-- NeMo Gym — CLI commands: https://docs.nvidia.com/nemo/gym/reference/cli-commands/
-
-### Prime Intellect
-
-- Verifiers repository: https://github.com/PrimeIntellect-ai/verifiers
-- Verifiers v1 overview: https://github.com/PrimeIntellect-ai/verifiers/blob/main/docs/overview.md
-- Verifiers v1 tasksets: https://github.com/PrimeIntellect-ai/verifiers/blob/main/docs/v1/tasksets.md
-- Verifiers evaluation reference: https://github.com/PrimeIntellect-ai/verifiers/blob/main/skills/evaluate-environments/references/REFERENCE.md
-- Verifiers v1 user-sim environment: https://github.com/PrimeIntellect-ai/verifiers/blob/main/verifiers/v1/envs/user_sim/env.py
-- Verifiers v1 harness capabilities: https://github.com/PrimeIntellect-ai/verifiers/blob/main/docs/v1/harnesses.md
-
-### OpenEnv
-
-- OpenEnv repository: https://github.com/huggingface/OpenEnv
-- OpenEnv MCP tutorial: https://github.com/huggingface/openenv/blob/main/docs/source/tutorials/mcp-environment.md
-
-### Harbor
-
-- Harbor repository/readme: https://github.com/harbor-framework/harbor
-- Harbor evaluation/task documentation: https://github.com/harbor-framework/harbor/blob/main/docs/content/docs/run-jobs/run-evals.mdx
-- Harbor RL workflow: https://www.harborframework.com/docs/training-workflows/rl
-- Terminal-Bench repository: https://github.com/harbor-framework/terminal-bench
-- Harbor Index QA/leaderboard process: https://github.com/harbor-framework/harbor-index
-
-### HUD
-
-- HUD SDK repository: https://github.com/hud-evals/hud-python
-- HUD product page: https://www.hud.ai/
-- HUD CLI reference: https://docs.hud.ai/reference/cli/misc
-- HUD environment guide: https://www.hud.ai/resources/rl-environments-what-they-are-how-to-build
-- HUD coding environment template: https://github.com/hud-evals/01-coding-template
-
-## Evidence boundary
-
-This review is a roadmap/comparative engineering artifact. It does not independently validate competitor performance claims, qualify Veritas scientifically, authorize Frontier/training/commercial status, or authorize merge/release. Any implementation change still requires its own Work Contract, falsifiers, exact-head verification, independent review, and authority.
+This review fails if a dated/unavailable source is treated as current verified capability, marketing becomes scientific evidence, blocked work is advertised as READY, a merge is called qualification, private evidence is exposed, or feature counts alone justify scope expansion. The refresh explicitly corrects the first and third risks while retaining separate implementation, scientific, Frontier, training, commercial and release authorities.

@@ -2,7 +2,7 @@
 
 ## Reproduction identity
 
-The baseline uses Python 3.12 with Ruff 0.16.5 and Mypy 2.3.1, pinned in
+The current checker uses Python 3.12 with Ruff 0.17.3 and Mypy 2.4.1, pinned in
 `requirements-quality.txt`. Commands are recorded verbatim in
 `python-quality-baseline.json` and executed by `tools/quality_baseline.py`.
 
@@ -16,6 +16,14 @@ The issue description recorded an earlier unpinned diagnostic observation of 118
 174 Mypy errors across 45 files. That result is not reproducible as a release gate because neither
 the tool versions nor the exact command scope were recorded. It is retained as historical context,
 not silently presented as equivalent to the pinned full-repository run above.
+
+## Toolchain migration
+
+PR #398 updates the pinned tools from Ruff 0.16.5 and Mypy 2.3.1. The historical
+counts above describe the original baseline. The migration preserves every
+diagnostic fingerprint and multiplicity in that baseline: no new diagnostic
+allowance is added. The full-repository check must pass with the new tools before
+integration.
 
 ## Enforcement decision
 

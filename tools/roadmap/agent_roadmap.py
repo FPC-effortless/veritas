@@ -88,11 +88,24 @@ def validate(data: dict[str, Any]) -> list[str]:
         else:
             by_issue[issue] = work_id
 
-        for key in ("title", "branch", "program", "wave"):
+        for key in ("title", "program", "wave"):
             if not isinstance(row.get(key), str) or not row[key].strip():
                 errors.append(f"{work_id}: {key} must be non-empty")
         if row.get("state") not in STATES:
             errors.append(f"{work_id}: invalid state {row.get('state')!r}")
+        branch = row.get("branch")
+        if branch is not None and (not isinstance(branch, str) or not branch.strip()):
+            errors.append(f"{work_id}: branch must be null or non-empty")
+        if row.get("state") in TRUSTED_STATUS_REQUIRED and branch is None:
+            errors.append(f"{work_id}: active coordination state requires a branch")
+        claimant = row.get("claimant")
+        if (
+            row.get("state") == "BLOCKED"
+            and isinstance(claimant, str)
+            and claimant.strip()
+            and branch is None
+        ):
+            errors.append(f"{work_id}: owner-held BLOCKED state requires a branch")
         linked_pr = row.get("linked_pr")
         if linked_pr is not None and (
             not isinstance(linked_pr, int) or isinstance(linked_pr, bool) or linked_pr <= 0
@@ -251,7 +264,6 @@ def parse_contract(body: str, issue: int) -> dict[str, Any]:
         "branch",
         "positive_ownership",
         "negative_ownership",
-        "linked_pr",
     }
     missing = sorted(required - fields.keys())
     if missing:
@@ -261,7 +273,9 @@ def parse_contract(body: str, issue: int) -> dict[str, Any]:
     ids = [part.strip() for part in fields["work_id"].split("/") if part.strip()]
     if not ids:
         raise RoadmapError(f"issue #{issue}: empty Work ID")
-    linked = REF_RE.search(fields["linked_pr"])
+    # The body-level PR is only a fallback. Trusted live status is fetched later
+    # and remains authoritative for CLAIMED/REVIEW linkage.
+    linked = REF_RE.search(fields.get("linked_pr", "none"))
     paths = sorted(
         {
             token.strip()
@@ -348,6 +362,13 @@ def dependency_name_map(
     return names
 
 
+def contract_status_identities(contract: dict[str, Any]) -> list[str]:
+    """Return the trusted-status spellings explicitly declared by a contract."""
+    identifiers = [contract["work_id"], *contract["aliases"]]
+    composite = " / ".join(identifiers)
+    return [*identifiers, composite]
+
+
 def derive_dependencies(
     contract: dict[str, Any],
     issue_to_id: dict[int, str],
@@ -357,15 +378,19 @@ def derive_dependencies(
     dependencies = {issue_to_id[ref] for ref in contract["refs"] if ref in issue_to_id}
     summary = contract["dependency_summary"]
     for name, primary in name_to_id.items():
+        if primary == contract["work_id"]:
+            continue
         pattern = rf"(?<![A-Za-z0-9_-]){re.escape(name)}(?![A-Za-z0-9_-])"
         if re.search(pattern, summary):
             dependencies.add(primary)
     return sorted(dependencies)
 
 
-def status_state(status: dict[str, Any], *, issue_number: int, work_id: str) -> str:
+def status_state(
+    status: dict[str, Any], *, issue_number: int, work_ids: list[str]
+) -> str:
     """Resolve execution state from a trusted status record."""
-    if status.get("issue_number") != issue_number or status.get("work_id") != work_id:
+    if status.get("issue_number") != issue_number or status.get("work_id") not in work_ids:
         raise RoadmapError(f"issue #{issue_number}: trusted status identity mismatch")
     state = status.get("state")
     if state not in STATES:
@@ -377,13 +402,13 @@ def validate_live_status(
     status: dict[str, Any],
     *,
     issue_number: int,
-    work_id: str,
+    work_ids: list[str],
     state: str,
 ) -> tuple[str | None, str | None, int | None]:
     """Validate status fields that are authoritative for the live coordination state."""
     if (
         status.get("issue_number") != issue_number
-        or status.get("work_id") != work_id
+        or status.get("work_id") not in work_ids
         or status.get("state") != state
     ):
         raise RoadmapError(f"issue #{issue_number}: trusted status disagrees with live issue")
@@ -459,7 +484,8 @@ def sync(
 
         trusted = status_record(repo, number, token)
         if trusted is not None:
-            state = status_state(trusted, issue_number=number, work_id=contract["work_id"])
+            work_ids = contract_status_identities(contract)
+            state = status_state(trusted, issue_number=number, work_ids=work_ids)
             trusted_by_issue[number] = trusted
         else:
             state = state_from_labels(issue, number)
@@ -489,12 +515,11 @@ def sync(
             claimant, status_branch, status_linked_pr = validate_live_status(
                 trusted,
                 issue_number=number,
-                work_id=contract["work_id"],
+                work_ids=contract_status_identities(contract),
                 state=state,
             )
             linked_pr = status_linked_pr
-            if status_branch is not None:
-                branch = status_branch
+            branch = status_branch
         else:
             if state in TRUSTED_STATUS_REQUIRED:
                 raise RoadmapError(f"issue #{number}: {state} missing trusted coordination status")
