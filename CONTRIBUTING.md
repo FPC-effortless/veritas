@@ -26,6 +26,47 @@ policies. This demonstrates software operation, not scientific qualification.
 For a smaller setup, install only the package you are changing; see the
 [compatibility matrix](docs/ecosystem/compatibility.md).
 
+## Frontend compiler and editor setup
+
+Use Node.js 22+ and pnpm 10 from the repository root:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test:editor
+pnpm build
+```
+
+The compiler is pinned to TypeScript 7.0.2. The separate `typescript-editor`
+package is an npm alias pinned to TypeScript 6.0.3 for the editor only. TypeScript
+7 does not supply the legacy JavaScript language-service API that the Next.js
+plugin uses. A successful compiler check or build does not verify this plugin.
+See the [Next.js TypeScript documentation](https://nextjs.org/docs/app/api-reference/config/typescript#using-typescript-7)
+and its [IDE plugin instructions](https://nextjs.org/docs/app/api-reference/config/typescript#ide-plugin).
+
+In VS Code, open this repository root, then open a TypeScript file and choose
+**TypeScript: Select TypeScript Version → Use Workspace Version**. The committed
+`.vscode/settings.json` uses both current and legacy VS Code setting names to
+select `node_modules/typescript-editor/lib` and disable the native server. It
+prompts for this workspace SDK choice. Confirm the selected editor version is
+**6.0.3**, then restart the TypeScript server if necessary. In other editors, configure their legacy
+TypeScript language-service integration to use
+`node_modules/typescript-editor/lib/tsserver.js`. Keep the `next` plugin in
+`tsconfig.json`. Do not select the TypeScript 7 native language server for this
+checkout until it supports this plugin; disable any native-preview extension
+for this workspace if it overrides the selected editor server.
+
+`pnpm typecheck` explicitly invokes the TypeScript 7 compiler, so the editor
+alias cannot change the CI compiler through an executable-name collision.
+`pnpm test:editor` starts the SDK selected by the committed editor settings and
+checks actual Next.js Server Component hook diagnostics, invalid route-runtime
+diagnostics, and route-runtime completions over the tsserver protocol. A second
+project disables the plugin as a negative control and must lose those features.
+The synthetic fixtures are removed after the test. This is a headless editor
+integration test, not an automated check of a developer's personal IDE settings.
+Keep this dual-version path until Next.js supports the native language server;
+re-run both checks whenever either TypeScript package or Next.js changes.
+
 ## Propose and implement a change
 
 Search existing issues and documentation first. Use a bug report for a concrete
