@@ -69,15 +69,24 @@ This is the minimum checklist before accepting payment for the first design-part
 
 These are required to call the release externally distributed, but they do not block direct private-pilot outreach.
 
-- [ ] Exact `v0.11.0` SRE HUD package deployed from a seller HUD account.
-- [ ] At least one HUD-native task/evaluation run completes and is inspected for reward/grader/private-data issues.
-- [ ] HUD DataVendor vendor intake submitted.
+#### HUD / DataVendor
+
+- [ ] DataVendor vendor organization setup completed, HUD review passed and vendor NDA signed for Tier 1 listing access.
+- [ ] Veritas SRE v1 added as one managed RL/evaluation environment using the private-boundary rules in `datavendor-listing.md`.
+- [ ] Tier 1 DataVendor listing submitted for review; live/approved is the stronger completion state.
+- [ ] If the seller workflow exposes HUD-native deployment, exact `v0.11.0` SRE HUD package deployed from the seller account.
+- [ ] At least one HUD-native task/evaluation run completes and is inspected for reward/grader/private-data issues before claiming HUD-native external validation.
+- [ ] Tier 2+ brief access requested only if the seller intends to respond to custom buyer Project briefs.
+
+#### Prime Intellect
+
+- [ ] Private Hub proof completed with the operator package or explicitly skipped in favor of the public sample.
 - [ ] Sanitized/public `veritas-sre-open` package pushed to the Prime Intellect Environments Hub.
 - [ ] Clean install of the Hub-hosted Prime environment succeeds outside the developer checkout.
 - [ ] At least one Prime Hosted Evaluation completes end to end with no private SRE material exposed.
 - [ ] Prime environment/partner/bounty application references the live Hub artifact and immutable Veritas release.
 
-See `marketplace-release.md`, `hud-submission.md`, and `prime-submission.md` for the external submission packets.
+See `marketplace-release.md`, `hud-submission.md`, `datavendor-listing.md`, and `prime-submission.md` for the external submission packets.
 
 ## Outreach can begin before every enterprise control is complete
 
