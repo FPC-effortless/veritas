@@ -206,7 +206,6 @@ def evaluate_reviews(
                 for comment in comments
                 if isinstance(comment, dict)
                 and int(comment.get("pull_request_review_id") or 0) == review_id
-                and (not comment.get("commit_id") or comment.get("commit_id") == head_sha)
             ]
             if inline:
                 return ReviewDecision(

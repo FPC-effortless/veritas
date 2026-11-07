@@ -1,7 +1,9 @@
 # Branch naming and exact-base policy for parallel roadmap agents
 
-**Policy ID:** `veritas.agent-branch-policy.v1`  
-**Applies to:** roadmap work coordinated through issue Work Contracts  
+**Policy ID:** `veritas.agent-branch-policy.v1`
+
+**Applies to:** roadmap work coordinated through issue Work Contracts
+
 **Authority:** subordinate to `AGENTS.md`, active Work Contracts, repository protection/rulesets, and explicit higher-authority instructions
 
 ## Purpose
@@ -78,21 +80,21 @@ Avoid ambiguous or pathological ref forms even if a partial parser might accept 
 The coordination workflow currently:
 
 - records the branch supplied by the accepted `/claim` command;
+- rejects a `/claim` branch that differs from a concrete declared Work Contract `Branch`;
 - stores it in the agent-work status;
 - can validate a supplied heartbeat branch against the recorded branch;
 - validates at `/handoff` that the linked PR's head branch matches the recorded claim branch.
 
-The current workflow does **not** by itself guarantee that the claimed branch equals the issue body's declared Work Contract `Branch` value.
-
-Therefore agents and roadmap validators must treat the following as a required invariant:
+For a concrete Work Contract branch, the workflow enforces the following invariant at claim time:
 
 ```text
 claimed branch == declared Work Contract branch
 ```
 
-unless the Work Contract explicitly declares an allowed branch pattern or stack exception.
-
-A future validator may enforce this mechanically. Until then, absence of automation is not permission to diverge.
+Non-concrete declarations do not receive that equality check; this does not make an arbitrary
+branch or an undeclared stack authorized. Agents and reviewers must still establish the applicable
+branch/pattern/stack policy. After a claim, the latest trusted status is the recorded execution
+authority; editing the issue body does not change the active branch reservation.
 
 ## Exact base selection
 
@@ -305,7 +307,9 @@ Use it only when allowed by collaboration/review policy. After rebase:
 
 - the new head is a different exact candidate;
 - rerun affected gates;
-- do not cite pre-rebase exact-head approval as approval of the new head unless an independent reviewer explicitly establishes unchanged equivalence under repository policy.
+- obtain a fresh canonical exact-head review of the new head; an older approval or an
+  unchanged-equivalence assertion cannot satisfy the repository's
+  [review-provenance contract](../automation/review-provenance.md).
 
 Never force-push a shared/protected branch merely to make history look cleaner.
 
