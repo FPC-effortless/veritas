@@ -7,5 +7,5 @@
       "preview-*": true
     }
   },
-  "ignoreCommand": "a=$VERCEL_GIT_PREVIOUS_SHA;b=$VERCEL_GIT_COMMIT_SHA;test -n \"$a$b\"&&git diff --quiet \"$a\" \"$b\" -- app components lib public 'package*.json' '*lock*' '*.config.*' 'tsconfig*.json' 'middleware.*' 'instrumentation.*' components.json vercel.json||exit 1"
+  "ignoreCommand": "git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" \"$VERCEL_GIT_COMMIT_SHA\" -- app components lib public 'package*.json' pnpm-workspace.yaml .npmrc '*lock*' '*.config.*' 'tsconfig*.json' 'middleware.*' 'instrumentation.*' components.json vercel.json||exit 1"
 }
