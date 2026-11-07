@@ -1,7 +1,9 @@
 # Agent identity conventions for roadmap coordination
 
-**Policy ID:** `veritas.agent-identity.v1`  
-**Applies to:** roadmap coordination commands handled by `.github/workflows/agent-work-claims.yml`  
+**Policy ID:** `veritas.agent-identity.v1`
+
+**Applies to:** roadmap coordination commands handled by `.github/workflows/agent-work-claims.yml`
+
 **Security classification:** public coordination metadata; never a credential
 
 ## Purpose

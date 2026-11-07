@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible public software failure
+title: "Bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use SECURITY.md for vulnerabilities. Do not include credentials, customer data, private evaluator assets or protected TEST rows. Prefer a public constructed reproduction.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Veritas
+        - Forge
+        - TrainLab
+        - Research Lab OS
+        - Cross-component integration
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Commit, package versions, Python and OS
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal public reproduction and observed result
+      description: Include exact commands, expected behavior and a sanitized error. Mark checks you did not run.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and affected boundary
+      description: Describe impact and relevant input/artifact identities without uploading private files or hidden labels.

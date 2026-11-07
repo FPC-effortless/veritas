@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,6 +26,7 @@ from investigation_world.trajectory.reverify.models import (
     ReverificationOutcome,
     ReverificationStatus,
 )
+from investigation_world.trajectory.reverify.native import validate_native_submission
 from investigation_world.trajectory.reverify.operational import (
     AuthorizedVerifierRegistry,
     OperationalVerifierBinding,
@@ -121,7 +123,8 @@ def _validate_action_events(
     trajectory: TrajectoryV2,
     evidence: OperationalReplayEvidence,
 ) -> None:
-    trace_actions = _successful_calls(trajectory, "act")
+    # Blocked/no-effect attempts still consume budget and participate in verification.
+    trace_actions = [e for e in trajectory.events if e.payload.get("method") == "act"]
     if len(trace_actions) != len(evidence.action_events):
         _issue(ReverificationStatus.UNKNOWN, "ACTION_EVENT_COUNT_MISMATCH")
 
@@ -193,6 +196,9 @@ def _validate_state_chain(
     replayed_state = copy.deepcopy(evidence.initial_state)
     for event in evidence.action_events:
         replayed_state.update(copy.deepcopy(event.state_changes))
+    if evidence.native_submission is not None:
+        checks = json.loads(evidence.native_submission.verification_json)["checks"]
+        replayed_state.update({f"native_artifact.{key}": value for key, value in checks.items()})
     if replayed_state != evidence.final_state:
         _issue(ReverificationStatus.UNKNOWN, "REPLAYED_FINAL_STATE_MISMATCH")
 
@@ -218,6 +224,11 @@ def _validate_evidence_against_trajectory(
     _validate_contract_binding(trajectory, evidence)
     _validate_action_events(trajectory, evidence)
     _validate_submission(trajectory, evidence)
+    try:
+        validate_native_submission(trajectory, evidence)
+    except Exception:
+        # An untrusted receipt or unavailable pinned source must never escape as a crash.
+        _issue(ReverificationStatus.NOT_REVERIFIABLE, "NATIVE_SUBMISSION_EVIDENCE_INVALID")
     _validate_state_chain(trajectory, evidence)
     _validate_budget_binding(trajectory, evidence)
 
@@ -406,13 +417,23 @@ def reverify_trajectory(
         None,
     )
     if existing is not None:
+        # Retain archival annotations/classification, but refresh verifier evidence.
+        record = ReverificationRecord.model_validate(
+            {**existing.model_dump(mode="python"), "private_metadata": record.private_metadata}
+        )
+        payload = canonical.model_dump(mode="python")
+        payload["reverifications"] = tuple(
+            record if item.record_id == record.record_id else item
+            for item in canonical.reverifications
+        )
+        updated = TrajectoryV2.model_validate(payload)
         return _result(
             trajectory=canonical,
             requested_verifier=verifier,
             status=ReverificationStatus.ALREADY_RECORDED,
             reason_code="REVERIFICATION_RECORD_ALREADY_PRESENT",
-            record=existing,
-            updated=canonical,
+            record=record,
+            updated=updated,
         )
 
     updated = canonical.with_reverification(record)

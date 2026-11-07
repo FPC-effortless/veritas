@@ -88,7 +88,7 @@ jobs:
           python -m pytest tests/
           python -m build
           python -m twine check dist/*
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
           run_install: false
@@ -99,7 +99,8 @@ jobs:
       - name: Validate frontend
         run: |
           pnpm install --frozen-lockfile
-          pnpm exec tsc --noEmit
+          pnpm typecheck
+          pnpm test:editor
           pnpm build
 
   publish-release:
@@ -138,7 +139,7 @@ jobs:
             --output-format JSON \
             --output-file sbom.cdx.json
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -151,7 +152,7 @@ jobs:
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
       - name: Build and push immutable release image
         id: container
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

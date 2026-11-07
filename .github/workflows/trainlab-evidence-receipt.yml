@@ -1,0 +1,33 @@
+name: TrainLab receipt boundary (constructed only)
+
+on:
+  push:
+    branches:
+      - company/trainlab-evidence-validator-2026-10-30
+  pull_request:
+    branches:
+      - feature/forge-local-quickstart-2026-10-30
+    paths:
+      - 'integrations/forge/**'
+      - '.github/workflows/trainlab-evidence-receipt.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  receipt-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      PYTHONPATH: integrations/forge/src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: TrainLab evidence structural and anti-promotion tests
+        run: python -m unittest discover -s integrations/forge/tests -p 'test_*.py' -v
+      - name: Validate constructed no-fit receipt without any model
+        run: |
+          python -m forge_data validate-evidence \
+            --input integrations/forge/examples/CONSTRUCTED_trainlab_evidence.json
