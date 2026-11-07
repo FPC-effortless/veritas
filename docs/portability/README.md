@@ -103,15 +103,17 @@ Dockerfile.hud
 pyproject.toml
 env.py
 tasks.py
-portable_manifest.json
 private_tasks.json
-qualification_evidence.json
 README.md
 ```
 
-`private_tasks.json` is operator-private and is deliberately separate from the buyer-safe portable
-manifest. `qualification_evidence.json` is buyer-safe aggregate qualification evidence and contains
-no private rows or hidden labels.
+The runtime export omits `portable_manifest.json` and `qualification_evidence.json`; retain release
+control evidence separately within the authorized operator boundary. `private_tasks.json` still
+contains hidden scoring truth, so the complete export remains operator-private and must not be
+published as a buyer-safe/public artifact. Omitting provenance is not qualification evidence.
+
+Export to a fresh empty directory. The HUD builder rejects existing nonempty output directories
+without deleting their contents, preventing stale omitted files from entering Docker's build context.
 
 For the pinned HUD 0.6 SDK used by 0.11 validation, the executable local image path is standard Docker:
 
