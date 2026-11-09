@@ -15,7 +15,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
+  # The review helper starts a PR rerun; they must not cancel one another.
+  group: security-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
