@@ -2,7 +2,7 @@
 
 ## Reproduction identity
 
-The current checker uses Python 3.12 with Ruff 0.17.3 and Mypy 2.4.1, pinned in
+The current checker uses Python 3.12 with Ruff 0.17.4 and Mypy 2.4.1, pinned in
 `requirements-quality.txt`. Commands are recorded verbatim in
 `python-quality-baseline.json` and executed by `tools/quality_baseline.py`.
 
@@ -24,6 +24,10 @@ counts above describe the original baseline. The migration preserves every
 diagnostic fingerprint and multiplicity in that baseline: no new diagnostic
 allowance is added. The full-repository check must pass with the new tools before
 integration.
+
+PR #502 advances Ruff from 0.17.3 to 0.17.4 while preserving those same
+fingerprints and multiplicities. The version guard and baseline metadata move
+together; the quality gate still rejects every newly introduced diagnostic.
 
 ## Enforcement decision
 

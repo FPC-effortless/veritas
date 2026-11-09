@@ -20,9 +20,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout Forge
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Checkout pinned Woyengi source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: FPC-effortless/Woyengi
           ref: c2a93c5534878cab616ac298d37e63343c345c46

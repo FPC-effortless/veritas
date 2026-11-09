@@ -24,7 +24,7 @@ jobs:
       VERITAS_SRE_PRIVATE_RELEASE_MANIFEST_ID: PRIVREL-036192DA63716D331C929C0C
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
