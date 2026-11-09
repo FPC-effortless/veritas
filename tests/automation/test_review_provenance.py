@@ -417,3 +417,31 @@ def test_security_workflow_enforces_provenance_after_scans() -> None:
     assert "tools/review_provenance.py check" in node_block
     assert "github.event_name != 'pull_request_review'" in source_block
     assert "github.event_name != 'pull_request_review'" in node_block
+
+
+def _security_concurrency_group(event_name: str, ref: str) -> str:
+    header = SECURITY.read_text(encoding="utf-8").split("jobs:", 1)[0]
+    concurrency = header.split("concurrency:\n", 1)[1]
+    assert "  cancel-in-progress: true" in concurrency
+    group = concurrency.split("  group: ", 1)[1].splitlines()[0]
+    for name, value in {"workflow": "Security", "event_name": event_name, "ref": ref}.items():
+        group = group.replace("${{ github." + name + " }}", value)
+    assert "${{" not in group
+    return group
+
+
+def test_security_review_refresh_cannot_cancel_the_scan_it_restarts() -> None:
+    ref = "refs/pull/502/merge"
+    refresh = _security_concurrency_group("pull_request_review", ref)
+    restarted_scan = _security_concurrency_group("pull_request", ref)
+    # A review event starts the PR run before its own job has finished.
+    assert refresh != restarted_scan
+
+
+@pytest.mark.parametrize("event_name", ["pull_request", "pull_request_review"])
+def test_security_concurrency_remains_scoped_to_event_and_pr(event_name: str) -> None:
+    ref = "refs/pull/502/merge"
+    group = _security_concurrency_group(event_name, ref)
+    assert group == _security_concurrency_group(event_name, ref)
+    assert group != _security_concurrency_group(event_name, "refs/pull/505/merge")
+    assert "Security" in group
