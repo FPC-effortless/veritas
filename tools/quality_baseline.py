@@ -14,7 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = ROOT / "quality" / "python-quality-baseline.json"
 SCHEMA_VERSION = "veritas-python-quality-baseline-v1"
-EXPECTED_VERSIONS = {"ruff": "0.17.3", "mypy": "2.4.1"}
+EXPECTED_VERSIONS = {"ruff": "0.17.4", "mypy": "2.4.1"}
 RUFF_COMMAND = (
     sys.executable,
     "-m",
