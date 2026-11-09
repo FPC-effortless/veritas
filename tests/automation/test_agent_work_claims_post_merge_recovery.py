@@ -304,7 +304,7 @@ def test_recovery_is_separate_serialized_and_delegates_review_authority():
 
 def test_recovery_never_routes_untrusted_comment_through_a_shell():
     workflow = _workflow()
-    assert "uses: actions/github-script@v7" in workflow
+    assert "uses: actions/github-script@v9" in workflow
     assert "shell:" not in workflow
     assert "run:" not in workflow
 
