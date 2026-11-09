@@ -259,7 +259,7 @@ jobs:
           output: ${{ runner.temp }}/veritas-image-audit.json
       - name: Retain API-image audit and package inventory
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: veritas-image-audit
           path: ${{ runner.temp }}/veritas-image-audit.json
