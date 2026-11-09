@@ -37,7 +37,7 @@ jobs:
         run: python -m pytest tests/unit/test_ecosystem_quickstart.py tests/unit/test_shared_evidence_contract.py -q
       - name: Retain only public constructed acceptance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ecosystem-acceptance-python-${{ matrix.python }}
           path: ${{ runner.temp }}/ecosystem-acceptance/acceptance.json
