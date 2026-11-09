@@ -167,7 +167,7 @@ jobs:
         run: python -m pip install -e ".[test]"
 
       - name: Download all independent seed reports for model
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: training-value-v3-${{ matrix.model.slug }}-seed-*
           path: seed-reports

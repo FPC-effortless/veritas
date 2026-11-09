@@ -78,7 +78,7 @@ jobs:
           echo "Required deployment credentials are configured."
 
       - name: Download retained frozen encrypted SRE v4 seal
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sre-v4-portability-encrypted-seal-retained
           path: ${{ runner.temp }}/sre-v4-seal
