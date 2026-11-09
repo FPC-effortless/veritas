@@ -33,7 +33,7 @@ jobs:
         with:
           ref: main
       - name: Reconcile dependency-ready work
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const reconcile = require(

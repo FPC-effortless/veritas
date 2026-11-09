@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Resolve exact candidate from event
         id: candidate
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const eventPr = context.payload.pull_request;
@@ -59,7 +59,7 @@ jobs:
 
       - name: Apply trusted non-executable review policy
         if: steps.candidate.outputs.eligible == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           TARGET_PR: ${{ steps.candidate.outputs.pull_number }}
           TARGET_HEAD: ${{ steps.candidate.outputs.head }}
@@ -178,7 +178,7 @@ jobs:
       TARGET_HEAD: ${{ needs.verify-candidate.outputs.head }}
     steps:
       - name: Submit machine-isolated exact-head approval
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const pull_number = Number(process.env.TARGET_PR);
