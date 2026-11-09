@@ -288,7 +288,7 @@ def test_recovery_is_separate_serialized_and_delegates_review_authority():
         "contents: read",
         "issues: write",
         "pull-requests: read",
-        "- uses: actions/checkout@v4",
+        "- uses: actions/checkout@v7",
         "Resolve canonical exact-head review provenance",
         "tools/review_provenance.py",
         "REVIEW_PROVENANCE_PASS:",

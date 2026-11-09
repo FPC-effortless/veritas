@@ -46,7 +46,7 @@ def test_claim_workflow_serializes_and_drains_through_script() -> None:
     script = _script()
     assert "group: agent-work-coordination" in workflow
     assert "cancel-in-progress: false" in workflow
-    assert "actions/checkout@v4" in workflow
+    assert "actions/checkout@v7" in workflow
     assert "agent-work-claims.js" in workflow
     assert "sort((a, b) => a.id - b.id)" in script
     assert "last_command_comment_id" in script
