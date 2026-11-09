@@ -43,7 +43,7 @@ jobs:
           output: ${{ runner.temp }}/trainlab-pytorch-image-audit.json
       - name: Retain the security gate report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trainlab-pytorch-image-audit
           path: ${{ runner.temp }}/trainlab-pytorch-image-audit.json

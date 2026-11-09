@@ -56,7 +56,7 @@ jobs:
           python integrations/research_lab/tests/browser_smoke.py --root "$RUNNER_TEMP/labos001" --evidence "$RUNNER_TEMP/labos001/browser"
       - name: Retain constructed execution evidence
         if: always() && matrix.python == '3.13'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: research-lab-os-constructed-evidence
           path: ${{ runner.temp }}/labos001
