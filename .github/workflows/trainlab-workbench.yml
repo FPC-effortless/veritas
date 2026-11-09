@@ -76,7 +76,7 @@ jobs:
           output: ${{ runner.temp }}/trainlab-image-audit.json
       - name: Retain production acceptance and image audit evidence
         if: always() && matrix.python == '3.13'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trainlab-production-evidence
           path: |

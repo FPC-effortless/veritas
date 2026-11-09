@@ -42,7 +42,7 @@ jobs:
           print("Qualification: NOT QUALIFIED / NO MODEL FIT / NO HISTORICAL AS-OF PROOF")
           PY
       - name: Archive original public response and source acquisition receipt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: public-nyc311-source-candidate-${{ github.run_id }}
           path: ${{ runner.temp }}/public-nyc311-source-candidate

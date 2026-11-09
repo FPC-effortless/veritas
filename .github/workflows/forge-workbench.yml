@@ -56,7 +56,7 @@ jobs:
           python integrations/forge/tests_workbench/browser_smoke.py --evidence "$RUNNER_TEMP/forge-gui-evidence"
       - name: Retain the actual Forge GUI evidence
         if: always() && matrix.python == '3.13'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: forge-gui-evidence
           path: ${{ runner.temp }}/forge-gui-evidence

@@ -37,7 +37,7 @@ jobs:
         with:
           ref: main
       - name: Synchronize evidence-backed completion
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const syncCompletion = require(

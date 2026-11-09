@@ -24,7 +24,7 @@ jobs:
       issues: write
     steps:
       - name: Create trigger label if absent
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             try {
@@ -60,7 +60,7 @@ jobs:
     steps:
       - name: Resolve and bound exact candidate
         id: candidate
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const eventPr = context.payload.pull_request;
@@ -228,7 +228,7 @@ jobs:
       CODEX_COMMENT: ${{ needs.prepare.outputs.codex_comment }}
     steps:
       - name: Require exact-head CI, quality, and clean semantic review
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const pull_number = Number(process.env.TARGET_PR);
@@ -482,7 +482,7 @@ jobs:
       CODEX_COMMENT: ${{ needs.prepare.outputs.codex_comment }}
     steps:
       - name: Revalidate and submit exact-head approval
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const pull_number = Number(process.env.TARGET_PR);
@@ -745,7 +745,7 @@ jobs:
             }
 
       - name: Refresh Security after semantic approval
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const head = process.env.TARGET_HEAD;

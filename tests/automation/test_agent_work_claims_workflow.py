@@ -1118,7 +1118,7 @@ async function runRootFileCollision() {
 
 def test_untrusted_comment_text_is_not_sent_to_a_shell() -> None:
     workflow = _workflow()
-    assert "uses: actions/github-script@v7" in workflow
+    assert "uses: actions/github-script@v9" in workflow
     assert "shell:" not in workflow
     assert "run:" not in workflow
 
