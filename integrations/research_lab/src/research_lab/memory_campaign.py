@@ -10,15 +10,6 @@ from datetime import datetime
 from pathlib import Path
 
 from forge_data.dataset import Dataset
-from investigation_world.benchmark.memory_comparison import score, state
-from investigation_world.evidence import (
-    EvidenceArtifactRef,
-    EvidenceOutcome,
-    EvidenceProducerRef,
-    EvidenceRecord,
-    EvidenceSubjectRef,
-    EvidenceVisibility,
-)
 from trainlab.runner import (
     LabError,
     contained_file,
@@ -28,6 +19,16 @@ from trainlab.runner import (
     run_experiment,
     verify_run,
     write_json,
+)
+
+from investigation_world.benchmark.memory_comparison import score, state
+from investigation_world.evidence import (
+    EvidenceArtifactRef,
+    EvidenceOutcome,
+    EvidenceProducerRef,
+    EvidenceRecord,
+    EvidenceSubjectRef,
+    EvidenceVisibility,
 )
 
 from .adapters import import_forge, import_trainlab
@@ -157,10 +158,23 @@ def _attempt(root, slot, examples):
     run_dir = attempts[0]
     try:
         record = read_json(contained_file(run_dir, "run.json"))
+        if not isinstance(record, dict):
+            raise LabError("receipt must be an object")
         if record.get("status") == "running":
             return {"status": "UNFINISHED", "reason": "NO_FINALIZED_RECEIPT"}
         if not verify_run(run_dir)["valid"]:
             raise LabError("receipt integrity")
+        started = datetime.fromisoformat(record["started_at"])
+        finished = datetime.fromisoformat(record["finished_at"])
+        if (
+            started.tzinfo is None or finished.tzinfo is None or finished < started
+            or record["elapsed_seconds"] is None
+            or (
+                record["status"] == "succeeded"
+                and (type(record.get("exit_code")) is not int or record["exit_code"] != 0)
+            )
+        ):
+            raise LabError("inconsistent terminal receipt")
         recipe = load_config(contained_file(root / "inputs", slot["recipe"]))
         saved = load_config(contained_file(run_dir, "experiment.json"))
         if saved != recipe or record["id"] != run_dir.name:

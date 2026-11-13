@@ -19,7 +19,6 @@ def state(memory):
     ):
         raise ValueError("invalid bounded memory prefix")
     current = dict.fromkeys(keys)
-    previous = current.copy()
     history = {key: set() for key in keys}
     deleted = set()
     for event in events:
@@ -28,7 +27,6 @@ def state(memory):
         fields = {"op", "key", "value"} if event["op"] == "set" else {"op", "key"}
         if set(event) != fields or not _text(event["key"]) or event["key"] not in current:
             raise ValueError("invalid memory event fields or key")
-        previous = current.copy()
         key = event["key"]
         if event["op"] == "set":
             if not _text(event["value"]):
@@ -41,7 +39,7 @@ def state(memory):
             deleted.add(key)
     untouched = {
         key for key in keys
-        if events and key != events[-1]["key"] and previous[key] is not None
+        if events and key != events[-1]["key"] and current[key] is not None
     }
     stale = {key: values - {current[key]} for key, values in history.items()}
     return current, stale, deleted, untouched

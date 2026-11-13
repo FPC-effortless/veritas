@@ -240,3 +240,41 @@ def test_metric_denominators_and_strict_predictions():
 def test_malformed_events_rejected(event):
     with pytest.raises(ValueError):
         state({"keys": ["a"], "events": [event]})
+
+
+@pytest.mark.parametrize("change", [
+    "list", "null", "missing_finish", "null_finish", "invalid_finish", "naive_finish",
+    "before_start", "null_duration", "nonzero_exit", "bool_exit", "missing_exit",
+])
+def test_malformed_terminal_receipts_remain_invalid_slots(prepared, change):
+    _, root, pin = prepared
+    run(root, pin)
+    attempt = next((root / "runs/perfect-7").iterdir())
+    record = read_json(attempt / "run.json")
+    if change == "list":
+        record = []
+    elif change == "null":
+        record = None
+    elif change == "missing_finish":
+        del record["finished_at"]
+    elif change == "null_finish":
+        record["finished_at"] = None
+    elif change == "invalid_finish":
+        record["finished_at"] = "invalid"
+    elif change == "naive_finish":
+        record["finished_at"] = "2030-01-01T00:00:00"
+    elif change == "before_start":
+        record["finished_at"] = "1970-01-01T00:00:00+00:00"
+    elif change == "null_duration":
+        record["elapsed_seconds"] = None
+    elif change == "nonzero_exit":
+        record["exit_code"] = 7
+    elif change == "bool_exit":
+        record["exit_code"] = False
+    else:
+        del record["exit_code"]
+    write_json(attempt / "run.json", record)
+    report = assess(root, pin)
+    assert report["slots"]["perfect-7"]["status"] == "INVALID"
+    assert report["slots"]["perfect-17"]["status"] == "SUCCEEDED"
+    assert report["execution"] == "INCOMPLETE"
