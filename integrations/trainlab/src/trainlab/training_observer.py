@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import math
 from collections import defaultdict
 from copy import deepcopy
 
@@ -11,7 +10,9 @@ from .experiment_diagnostics import _number
 from .prediction_artifacts import _bytes, _hash, _require, _text
 
 
-def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module_names=None):
+def train_step(
+    model, optimizer, batch, *, step, task, classes, ignore_index=-100, module_names=None
+):
     """Execute one trusted synchronous CPU dense PyTorch cross-entropy step.
 
     Captures first observed activation, gradient or parameter anomaly. It owns
@@ -23,7 +24,9 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
 
     _require(type(step) is int and 0 <= step <= 10**9, "invalid step")
     _require(
-        task in ("classification", "next_token") and type(ignore_index) is int,
+        task in ("classification", "next_token")
+        and type(ignore_index) is int
+        and -(2**63) <= ignore_index < 2**63,
         "unsupported training task",
     )
     tensors = (torch.Tensor,)
@@ -56,6 +59,7 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
         _require(
             inputs.dtype == torch.long
             and inputs.ndim == 2
+            and (inputs >= 0).all().item()
             and inputs.shape == labels.shape
             and inputs.shape[1] >= 2
             and mask is not None
@@ -72,7 +76,13 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
         _require(active.all().item(), "classification does not accept ignored labels")
     else:
         _require(torch.equal(active, mask), "mask and ignored target positions differ")
-    _require((labels[active] >= 0).all().item(), "negative observed target")
+    _require(
+        type(classes) is int and 2 <= classes <= 1000000, "declared class/vocabulary count required"
+    )
+    _require(
+        ((labels[active] >= 0) & (labels[active] < classes)).all().item(),
+        "target outside declared vocabulary",
+    )
 
     named = list(model.named_parameters())
     params = [(name, p) for name, p in named if p.requires_grad]
@@ -92,6 +102,7 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
     first = None
     observations = {
         "outputs": 0,
+        "outputs_by_module": dict.fromkeys((name for name, _ in selected), 0),
         "gradient_parameters": 0,
         "missing_gradients": [],
         "updated_parameters": None,
@@ -117,8 +128,16 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
         def inspect(_module, _args, output):
             for item in _tensors(output):
                 observations["outputs"] += 1
+                observations["outputs_by_module"][name] += 1
                 if not finite_tensor(item):
                     anomaly("NONFINITE_OR_UNSUPPORTED_ACTIVATION", name)
+
+        return inspect
+
+    def gradient_hook(name):
+        def inspect(gradient):
+            if not finite_tensor(gradient):
+                anomaly("NONFINITE_OR_UNSUPPORTED_GRADIENT", name)
 
         return inspect
 
@@ -131,6 +150,8 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
         if first is None:
             for name, module in selected:
                 handles.append(module.register_forward_hook(hook(name)))
+            for name, parameter in params:
+                handles.append(parameter.register_hook(gradient_hook(name)))
             optimizer.zero_grad(set_to_none=True)
             result = model(inputs)
             _require(
@@ -139,11 +160,10 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
                 and result.device.type == "cpu"
                 and result.is_floating_point()
                 and result.shape[:-1] == labels.shape
-                and result.shape[-1] >= 2
+                and result.shape[-1] == classes
                 and result.numel() <= 2000000,
                 "unexpected logits shape or type",
             )
-            _require((labels[active] < result.shape[-1]).all().item(), "target outside vocabulary")
             if not finite_tensor(result):
                 anomaly("NONFINITE_LOGITS", "<root>")
             if first is None:
@@ -152,7 +172,8 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
                     anomaly("NONFINITE_LOSS", "cross_entropy")
                 else:
                     observations["loss"] = float(loss.detach().item())
-                    loss.backward()
+                    if loss.requires_grad:
+                        loss.backward()
                     for name, parameter in params:
                         if parameter.grad is None:
                             observations["missing_gradients"].append(name)
@@ -189,7 +210,10 @@ def train_step(model, optimizer, batch, *, step, task, ignore_index=-100, module
         "first_anomaly": first,
         "observations": observations,
         "unchanged_update": observations["updated_parameters"] == 0,
-        "scope": "One CPU step. No kernel, scaler, accumulation or distributed tracing.",
+        "scope": (
+            "One CPU step. Selected forward outputs and parameter gradients only. "
+            "No intermediate gradients, kernels, scaling, accumulation or distributed traces."
+        ),
         "scientific_qualification": "NOT_QUALIFIED",
     }
 
@@ -261,21 +285,26 @@ def slice_trajectory(panel, checkpoints, *, panel_sha256, expected_steps):
         lookup[check["step"]] = check["predictions"]
     result, complete, regression = {}, True, False
     for name, ids in grouped.items():
-        points, best, acquired, damaged = [], None, None, None
+        points, best_hits, acquired, damaged = [], None, None, None
         for step in expected_steps:
             predictions = lookup.get(step, {})
             known = [i for i in ids if predictions.get(i) is not None]
-            score = math.fsum(predictions[i] == labels[i]["label"] for i in known) / len(ids)
+            hits = sum(predictions[i] == labels[i]["label"] for i in known)
+            score = None
             if len(known) != len(ids):
-                score = None
                 complete = False
-            if score is not None:
-                if best is not None and best - score > panel["max_regression"] and damaged is None:
+            else:
+                score = hits / len(ids)
+                if (
+                    best_hits is not None
+                    and (best_hits - hits) / len(ids) > panel["max_regression"]
+                    and damaged is None
+                ):
                     damaged = step
                     regression = True
                 if score >= panel["acquired_score"]:
                     acquired = step if acquired is None else acquired
-                    best = score if best is None else max(score, best)
+                    best_hits = hits if best_hits is None else max(hits, best_hits)
             points.append({"step": step, "accuracy": score, "observed": len(known)})
         result[name] = {
             "rows": len(ids),

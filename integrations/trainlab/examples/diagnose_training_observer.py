@@ -33,7 +33,7 @@ def execute(root):
     steps = list(range(1, 9))
     checkpoints, reports = [], []
     for step in steps:
-        report = train_step(model, optimizer, batch, step=step, task="classification")
+        report = train_step(model, optimizer, batch, step=step, task="classification", classes=2)
         reports.append(report)
         with torch.inference_mode():
             answers = model(validation).argmax(-1).tolist()
@@ -66,9 +66,11 @@ def execute(root):
     for name, block in (("activation", BadActivation()), ("gradient", BadGradient())):
         failed = nn.Sequential(nn.Linear(2, 2), block)
         opt = torch.optim.SGD(failed.parameters(), lr=0.3)
-        faults[name] = train_step(failed, opt, batch, step=1, task="classification")
+        faults[name] = train_step(failed, opt, batch, step=1, task="classification", classes=2)
     frozen_optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
-    faults["frozen"] = train_step(model, frozen_optimizer, batch, step=9, task="classification")
+    faults["frozen"] = train_step(
+        model, frozen_optimizer, batch, step=9, task="classification", classes=2
+    )
 
     language = nn.Embedding(6, 6)
     language_optimizer = torch.optim.Adam(language.parameters(), lr=0.01)
@@ -78,11 +80,13 @@ def execute(root):
         "mask": torch.tensor([[True, True, False]]),
     }
     language_result = train_step(
-        language, language_optimizer, language_batch, step=1, task="next_token"
+        language, language_optimizer, language_batch, step=1, task="next_token", classes=6
     )
     language_batch["labels"][0, 0] = 1
     try:
-        train_step(language, language_optimizer, language_batch, step=2, task="next_token")
+        train_step(
+            language, language_optimizer, language_batch, step=2, task="next_token", classes=6
+        )
     except LabError:
         shift_rejected = True
     else:
