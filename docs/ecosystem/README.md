@@ -5,6 +5,11 @@ capability verification. The public software already uses Apache-2.0; this guide
 makes the existing shared repository easier to enter. It does not announce a new
 release, novel scientific capability or validated customer demand.
 
+The [diagnostic workbench](diagnostic-workbench.md) adds capability-declared
+adapters, explicit check coverage and a bounded session timing ledger. Its
+[roadmap](diagnostic-roadmap.md) separates the implemented slice from broader
+dataset, training, behavioral and repair diagnostics still to build.
+
 | Component | Owns | Start here |
 | --- | --- | --- |
 | Veritas | Executable environments, verifier semantics, evaluation and qualification contracts | [Veritas](../../README.md), [commercial entry point](../commercial/README.md) |
