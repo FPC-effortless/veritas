@@ -1,7 +1,7 @@
 # Research diagnostics roadmap
 
 This tracks the requested architecture-agnostic workbench, beginning with
-DIAGNOSTICS-001 (#519). A foundation is not a complete feature. The intended
+DIAGNOSTICS-001 (#519), tracked in [program #525](https://github.com/FPC-effortless/veritas/issues/525). A foundation is not a complete feature. The intended
 product answers what failed, which explanations survive, which bounded experiment
 can distinguish them, and whether a repair survives fresh evaluation. No finite
 catalog promises complete diagnosis of arbitrary models or datasets.
@@ -16,22 +16,22 @@ catalog promises complete diagnosis of arbitrary models or datasets.
 | 6 | Label investigation | Exact-feature label disagreements now produce review findings with row witnesses; no automatic correction. Adjudication and fresh-evaluation repair comparison remain proposed. |
 | 7 | Leakage/split investigation | Exact selected-feature and declared entity/generator overlap now inspected across train/validation. Near duplicates, preprocessing and true mechanism independence remain unresolved. |
 | 8 | Coverage/drift/rare cases | Proposed general slice/distribution analysis; no claim that existing identifiers prove independent causal coverage. |
-| 9 | Training sanity | Existing optional PyTorch foundations; generalized shape/shift/mask/tiny-fit diagnostic packs remain incomplete. |
-| 10 | Numerical/optimizer forensics | Existing finiteness checks; earliest-fault localization, scaler/update/optimizer context remain future work. |
-| 11 | Learning dynamics | Proposed: slice learning, collapse and acquisition-versus-forgetting analysis. |
+| 9 | Training sanity | Existing optional PyTorch foundations plus actual scalar tiny-fit/frozen-update acceptance in [experiment packs](experiment-diagnostics.md). General shape/shift/mask checks remain incomplete. |
+| 10 | Numerical/optimizer forensics | Ordered event pack localizes first observed nonfinite/gradient/update violations. Scaler/operator/context instrumentation remains incomplete. |
+| 11 | Learning dynamics | Declared loss/diversity/acquisition/retention event checks implemented; missing coverage stays explicit. Causal forgetting and representation analysis remain unimplemented. |
 | 12 | Resume/equivalence | Existing bounded CPU checkpoint/export checks; deterministic adapter replay/batch/order probes added. Precision/stochastic/distributed equivalence remains unverified. |
-| 13 | Benchmark validity | Bounded deletion intervention and explicit preflight review exist; general intervention SDK and qualified shortcut packs remain future work. |
-| 14 | Baseline/supervision qualification | Lifecycle reviews require explicit judgments; general machine-readable supervision/tuning ledgers and baseline competence tests remain future work. |
-| 15 | Statistical design | Proposed: paired/group-aware uncertainty, stopping and selection accounting; bootstrap cannot create independence. |
-| 16 | Behavioral packs | Constructed scalar agreement and store-reset checks only in this slice; calibration, retrieval/generation/forecasting/agent packs are not implemented here. |
+| 13 | Benchmark validity | Paired reference/expected-change/sensitive-group/deficient-control pack added. Actual general intervention execution and independence attestation remain incomplete. |
+| 14 | Baseline/supervision qualification | Machine-readable supervision/budget/seed/selection ledger added, including failed and missing seeds. Competence evidence references remain caller-supplied, not verified. |
+| 15 | Statistical design | Complete declared unit-by-seed paired bootstrap, effects and comparison-family adjustment added. Seed uncertainty, stopping/selection correction and experimental design remain incomplete. |
+| 16 | Behavioral packs | Single-label classification, slice/confusion/error/calibration pack added. Other task packs and deployment acceptance remain incomplete. |
 | 17 | State lifecycle debugger | Bounded lifecycle diagnostic plus store clear/repopulate control; native semantic debugger and conditional collateral-damage metrics remain future work. |
 | 18 | State/component interventions | Existing bounded interventions; no general frozen-model/retraining intervention comparison SDK yet. |
 | 19 | Whole-session cost | Initial direct host interval, phase ledger, failures/retries and explicit missing measurements. Memory, energy, billing, distributed timing and overhead calibration remain future work. |
-| 20 | Quality/cost scaling | Proposed: qualified workload sweeps and uncertainty; tiny adapter timings must not be used as architecture rankings. |
+| 20 | Quality/cost scaling | Context-checked descriptive quality/session-cost Pareto analysis added. Actual scaling sweeps, uncertainty and matched-reliability inference remain incomplete. |
 | 21 | Failure browser/reproducer | Inspectable JSON artifacts/graph; no general UI browser, grouping or automatic minimization yet. |
 | 22 | Hypothesis/repair verification | Research Lab supplies continuity; hypothesis ranking, experiment selection and fresh repair/regression orchestration remain proposed. |
-| 23 | Diagnostic qualification | Injected dataset missingness/overlap/label conflict/prefix limits join stale-artifact, row-mapping, batching and reset controls; no population-level detection sensitivity, false-alarm or overhead claims. |
-| 24 | Portable collaboration/packs | Existing receipts, graph and exportable files; a community pack API and review-comment workflow remain future work. |
+| 23 | Diagnostic qualification | Injected data/artifact/reset faults plus training/benchmark/ledger/statistics/classification/cost clean-fault-unknown controls. No population-level sensitivity, false-alarm or overhead claim. |
+| 24 | Portable collaboration/packs | Versioned six-pack API catalog and portable reports added; signed community loading and exact-version collaborative review UI remain incomplete. |
 
 ## Delivery order
 
