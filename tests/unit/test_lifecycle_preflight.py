@@ -11,6 +11,7 @@ from forge_data.core import canonical, release
 from forge_data.dataset import Dataset
 from research_lab import lifecycle_preflight as gate
 from research_lab.ecosystem import _sha
+from research_lab.evidence import retrieve
 from trainlab.runner import LabError, digest, read_json, write_json
 
 CUTOFF = "2026-11-13T00:00:00Z"
@@ -88,12 +89,27 @@ def prepared(tmp_path):
 
 def review(root, pin, report):
     path = root.parent / "review.json"
-    write_json(path, {"schema": "veritas.lifecycle-preflight-review.v1",
+    write_json(path, {"schema": "veritas.lifecycle-preflight-review.v2",
                       "protocol_sha256": pin, "report_sha256": _sha(report),
                       "verdict": "clean", "findings": [],
                       "independence": "SEPARATE_SESSION_OPERATOR_ASSERTED",
-                      "reviewer": "invented-test-reviewer", "summary": "Software fixture only."})
+                      "reviewer": "invented-test-reviewer", "summary": "Software fixture only.",
+                      "checks": {key: {"status": "PASS", "evidence": ["design.md"],
+                                       "summary": "Invented assertion; not scientific evidence."}
+                                 for key in gate.REVIEW_CHECKS}})
     return path, digest(path)
+
+
+def test_legacy_clean_review_cannot_authorize_execution(prepared):
+    _, root, pin = prepared
+    path, _ = review(root, pin, gate.record(root, pin))
+    decision = read_json(path)
+    decision["schema"] = "veritas.lifecycle-preflight-review.v1"
+    del decision["checks"]
+    write_json(path, decision)
+    with pytest.raises(LabError, match="invalid pre-execution review"):
+        gate.dispatch(root, pin, path, digest(path))
+    assert not (root / "execution").exists()
 
 
 def test_positive_reviewed_sentinel_and_once_only_dispatch(prepared):
@@ -241,6 +257,85 @@ def test_exact_external_review_bytes_are_retained(prepared):
     assert gate.dispatch(root, pin, path, review_pin)["status"] == "succeeded"
     assert (root / "execution/review.json").read_bytes() == compact
     assert digest(root / "execution/review.json") == review_pin
+    assert (root / "review.json").read_bytes() == compact
+
+
+@pytest.mark.parametrize("criterion", gate.REVIEW_CHECKS)
+@pytest.mark.parametrize("status", ["FAIL", "UNKNOWN"])
+def test_each_unresolved_check_blocks_and_retains_exact_review(prepared, monkeypatch,
+                                                            criterion, status):
+    _, root, pin = prepared
+    report = gate.record(root, pin)
+    assert report["status"] == "READY_FOR_REVIEW"
+    path, _ = review(root, pin, report)
+    decision = read_json(path)
+    decision["checks"][criterion]["status"] = status
+    decision["checks"][criterion]["evidence"] = []
+    # A clean overall verdict cannot erase a specific unresolved criterion.
+    raw = json.dumps(decision, separators=(",", ":")).encode()
+    path.write_bytes(raw)
+    monkeypatch.setattr(gate, "run_experiment", lambda *a: pytest.fail("must not execute"))
+    with pytest.raises(LabError, match="review blocks execution"):
+        gate.dispatch(root, pin, path, digest(path))
+    assert not (root / "execution").exists()
+    assert (root / "review.json").read_bytes() == raw
+    graph = retrieve(gate.Controller(root / "research_lab"))
+    review_id = "preflight-review." + digest(path)[:24]
+    assert next(n["body"] for n in graph["nodes"] if n["id"] == review_id) == decision
+    assert {"source": review_id, "relation": "derived_from",
+            "target": "preflight." + _sha(report)[:24]} in graph["links"]
+    # Repeated calls retain the refusal; a clean relabel cannot replace it.
+    with pytest.raises(LabError, match="review blocks execution"):
+        gate.dispatch(root, pin, path, digest(path))
+    path, new_pin = review(root, pin, report)
+    with pytest.raises(LabError, match="pinned JSON mismatch"):
+        gate.dispatch(root, pin, path, new_pin)
+    assert (root / "review.json").read_bytes() == raw
+    assert not (root / "execution").exists()
+
+
+@pytest.mark.parametrize("change", [
+    "missing", "extra", "empty", "outside", "duplicate", "bad_status", "blank", "shape",
+])
+def test_malformed_or_unfrozen_check_does_not_bind_or_dispatch(prepared, change, monkeypatch):
+    _, root, pin = prepared
+    path, _ = review(root, pin, gate.record(root, pin))
+    decision = read_json(path)
+    check = decision["checks"]["shortcut_controls"]
+    if change == "missing":
+        del decision["checks"]["shortcut_controls"]
+    elif change == "extra":
+        decision["checks"]["extra"] = copy.deepcopy(check)
+    elif change == "empty":
+        check["evidence"] = []
+    elif change == "outside":
+        check["evidence"] = ["../external-pass.json"]
+    elif change == "duplicate":
+        check["evidence"] *= 2
+    elif change == "bad_status":
+        check["status"] = True
+    elif change == "blank":
+        check["summary"] = " "
+    else:
+        check["evidence"] = {"design.md": "PASS"}
+    write_json(path, decision)
+    monkeypatch.setattr(gate, "run_experiment", lambda *a: pytest.fail("must not execute"))
+    with pytest.raises(LabError):
+        gate.dispatch(root, pin, path, digest(path))
+    assert not (root / "execution").exists()
+    assert not (root / "review.json").exists()
+
+
+@pytest.mark.parametrize("prior", [b"partial", b""])
+def test_partial_or_tampered_retained_review_is_never_repaired(prepared, prior, monkeypatch):
+    _, root, pin = prepared
+    path, review_pin = review(root, pin, gate.record(root, pin))
+    (root / "review.json").write_bytes(prior)
+    monkeypatch.setattr(gate, "run_experiment", lambda *a: pytest.fail("must not execute"))
+    with pytest.raises(LabError, match="pinned JSON mismatch"):
+        gate.dispatch(root, pin, path, review_pin)
+    assert (root / "review.json").read_bytes() == prior
+    assert not (root / "execution").exists()
 
 
 @pytest.mark.parametrize("status,code", [
