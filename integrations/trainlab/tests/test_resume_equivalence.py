@@ -82,6 +82,24 @@ class ResumeEquivalenceTests(unittest.TestCase):
         with self.assertRaises(LabError):
             self.evaluate()
 
+    def test_large_json_integers_preserve_exact_discrepancy(self):
+        self.samples[0]["components"]["weights"] = [2**53 + 1, 2**53]
+        self.resumed[0]["components"]["weights"] = [float(2**53), 2**53 + 1]
+        for tolerance, expected in ((0, "FAILED"), (0.5, "FAILED"), (1, "TESTED")):
+            self.plan["components"]["weights"]["atol"] = tolerance
+            with self.subTest(tolerance=tolerance):
+                report = self.evaluate()
+                self.assertEqual(report["status"], expected)
+                self.assertEqual(report["components"]["weights"]["max_absolute_difference"], 1)
+
+    def test_exact_integer_delta_with_large_tolerance(self):
+        self.samples[0]["components"]["weights"][0] = 2**52
+        self.resumed[0]["components"]["weights"][0] = -(2**52 + 1)
+        self.plan["components"]["weights"]["atol"] = 2**53
+        report = self.evaluate()
+        self.assertEqual(report["status"], "FAILED")
+        self.assertEqual(report["components"]["weights"]["max_absolute_difference"], 2**53 + 1)
+
     def test_false_numeric_observation_rejected(self):
         self.resumed[0]["components"]["weights"][0] = True
         with self.assertRaises(LabError):

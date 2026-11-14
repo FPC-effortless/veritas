@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import math
+from fractions import Fraction
 from pathlib import Path
 
 from .experiment_diagnostics import _number
@@ -136,12 +137,24 @@ def _trace(trace, plan, plan_pin, role):
 def _measure(left, right, rule):
     if rule["kind"] == "exact":
         return _bytes(left) == _bytes(right), None
-    delta = max(abs(a - b) for a, b in zip(left, right, strict=True))
-    equal = all(
-        math.isclose(a, b, rel_tol=rule["rtol"], abs_tol=rule["atol"])
-        for a, b in zip(left, right, strict=True)
-    )
-    return equal, delta
+    maximum, equal = 0, True
+    absolute, relative = rule["atol"], rule["rtol"]
+    for a, b in zip(left, right, strict=True):
+        # Large integers can round to the same binary64 value. Exact ratios keep
+        # both the tolerance decision and the reported discrepancy meaningful.
+        if type(a) is int or type(b) is int or (type(absolute) is int and absolute > 2**53):
+            left_value, right_value = Fraction(a), Fraction(b)
+            delta = abs(left_value - right_value)
+            limit = max(
+                Fraction(absolute), Fraction(relative) * max(abs(left_value), abs(right_value))
+            )
+            equal &= delta <= limit
+            size = delta.numerator if delta.denominator == 1 else float(delta)
+        else:
+            size = abs(a - b)
+            equal &= math.isclose(a, b, rel_tol=relative, abs_tol=absolute)
+        maximum = max(maximum, size)
+    return equal, maximum
 
 
 def compare(
