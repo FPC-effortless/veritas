@@ -38,6 +38,10 @@ the remote outcome unknown and seals the session. A receipt retained after
 a crash preserves the attempt for inspection. Check the provider's records
 before starting a replacement session.
 
+Responses may use a single decimal content length or an end of stream.
+Multiple length declarations and transfer encodings, including chunked
+transfer, seal the session as unknown.
+
 Call and pacing caps apply to this instance and one synchronous owner.
 The I/O timeout is a socket timeout. DNS resolution, a slowly progressing
 response, background server work and disk operations can outlast it. For hard

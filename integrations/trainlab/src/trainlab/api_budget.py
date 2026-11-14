@@ -16,6 +16,22 @@ from .runner import LabError, write_json
 _RETRYABLE = {"HTTP_ERROR", "RESPONSE_LIMIT"}
 
 
+def _validate_framing(response):
+    lengths = response.headers.get_all("Content-Length", [])
+    transfer = response.headers.get_all("Transfer-Encoding", [])
+    valid = not transfer and (
+        not lengths
+        or (
+            len(lengths) == 1
+            and lengths[0].isascii()
+            and lengths[0].isdecimal()
+            and len(lengths[0]) <= 19
+        )
+    )
+    if not valid:
+        raise http.client.HTTPException("ambiguous or unsupported response framing")
+
+
 class ApiBudget:
     """Single-owner, synchronous POST meter for one trusted endpoint."""
 
@@ -164,6 +180,7 @@ class ApiBudget:
                     row["http_status"] = status = response.status
                     if not 200 <= status <= 599:
                         raise http.client.HTTPException("no supported final HTTP response")
+                    _validate_framing(response)
                     declared_length = response.length
                     payload = response.read(self._max_response_bytes + 1)
                     if declared_length is not None and len(payload) < min(

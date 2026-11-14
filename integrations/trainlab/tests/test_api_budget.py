@@ -35,7 +35,12 @@ class RequestBudgetTests(unittest.TestCase):
                     self.wfile.flush()
                     options = []
                 self.send_response(status)
-                self.send_header("Content-Length", str(len(reply) + bool(options)))
+                if options == ["transfer-encoding"]:
+                    self.send_header("Transfer-Encoding", "chunked")
+                else:
+                    self.send_header("Content-Length", str(len(reply) + bool(options)))
+                if options == ["conflicting-length"]:
+                    self.send_header("Content-Length", str(len(reply)))
                 self.send_header("Location", "/redirected")
                 self.end_headers()
                 self.wfile.write(reply)
@@ -133,6 +138,23 @@ class RequestBudgetTests(unittest.TestCase):
         attempt = read_json(self.root / "api-receipt.json")["attempts"][0]
         self.assertEqual(attempt["state"], "OUTCOME_UNKNOWN")
         self.assertEqual(attempt["http_status"], 200)
+
+    def test_conflicting_response_length_is_rejected(self):
+        self.responses.append((200, b"body", "conflicting-length"))
+        session = self.session()
+        with self.assertRaisesRegex(LabError, "unknown"):
+            session.post(b"request")
+        attempt = read_json(self.root / "api-receipt.json")["attempts"][0]
+        self.assertEqual(attempt["state"], "OUTCOME_UNKNOWN")
+        self.assertIsNone(attempt["response_body_bytes_read"])
+
+    def test_unsupported_transfer_encoding_is_rejected(self):
+        self.responses.append((200, b"4\r\nbody\r\n0\r\n\r\n", "transfer-encoding"))
+        session = self.session()
+        with self.assertRaisesRegex(LabError, "unknown"):
+            session.post(b"request")
+        attempt = read_json(self.root / "api-receipt.json")["attempts"][0]
+        self.assertEqual(attempt["state"], "OUTCOME_UNKNOWN")
 
     def test_relative_receipt_root_is_pinned_at_creation(self):
         self.responses.append((200, b"ok"))
