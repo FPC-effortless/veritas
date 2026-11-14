@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.metadata
 import importlib.util
 import json
@@ -11,11 +12,22 @@ import subprocess
 import sys
 from pathlib import Path
 
+from trainlab.prediction_artifacts import (
+    conformance_checks,
+    make_request,
+    read_predictions,
+    write_predictions,
+)
 from trainlab.research_diagnostics import Adapter, Diagnostic, Workbench
 from trainlab.runner import LabError, digest, read_json, run_experiment, verify_run, write_json
 
 BACKENDS = ("cli", "store", "sklearn", "torch", "wrong")
 CUTOFF = "2026-11-14T00:00:00Z"
+
+
+def configuration_identity(recipe, protocol):
+    """Bind both the command recipe and its pinned runtime/source dependencies."""
+    return hashlib.sha256((digest(recipe) + digest(protocol)).encode("ascii")).hexdigest()
 
 
 def versions():
@@ -76,30 +88,52 @@ def worker(backend):
         if not rows:
             raise LabError("empty constructed validation")
         data["xs"] = [row["features"]["x"] for row in rows]
+        data["rows"] = [{"id": row["record_id"], "input": row["features"]["x"]}
+                        for row in rows]
 
     def update():
         model["state"].update({x: 2 * x for x in data["xs"]})
 
-    def agreement():
-        predictions = data["predictions"]
+    def agreement(predictions):
         expected = [2 * x for x in data["xs"]]
         valid = isinstance(predictions, list) and len(predictions) == len(expected)
         return valid and predictions == expected
 
     def persist():
-        write_json(output / "predictions.json", {"predictions": data.get("predictions")})
+        initial = {str(x): 2 * x for x in data["xs"]} if backend == "store" else "weights only"
+        data["request"] = make_request(
+            identities, data["rows"],
+            task={"name": "constructed-y2x", "output_schema": "finite-json-v1"},
+            state={**state, "mode": "sequential" if backend == "store" else "stateless",
+                   "initial_state_sha256": _sha(initial)})
+        predictions = [{"id": row["id"], "output": value}
+                       for row, value in zip(data["rows"], data["predictions"], strict=True)]
+        data["prediction_sha256"] = write_predictions(
+            output / "predictions.json", data["request"], predictions)
+
+    def reuse():
+        return read_predictions(output / "predictions.json",
+                                data["prediction_sha256"], data["request"])
+
+    def predict_rows(rows):
+        values = model["predict"]([r["input"] for r in rows])
+        return [{"id": row["id"], "output": value} for row, value in zip(rows, values, strict=True)]
+
+    def reset_initial():
+        model["state"].clear()
+        update()
 
     operations = {"load": load, "preprocess": preprocess,
                   "predict": lambda xs: model["predict"](xs), "verify": agreement,
-                  "persist": persist}
+                  "persist": persist, "reuse": reuse, "predict_rows": predict_rows}
     if backend == "store":
-        operations.update(update=update, reset=lambda: model["state"].clear())
+        operations.update(update=update, clear=lambda: model["state"].clear(), reset=reset_initial)
     package = {"sklearn": "sklearn", "torch": "torch"}.get(backend)
     if package and importlib.util.find_spec(package) is None:
         operations = {}  # Missing backend is explicitly unsupported, never a clean pass.
     state = {"persists": "key-value records until reset" if backend == "store" else "weights only",
              "query_mutates": False,
-             "reset": "clear all records" if backend == "store" else "not_applicable"}
+             "reset": "restore fixture records" if backend == "store" else "not_applicable"}
     adapter = Adapter(backend, operations, state)
 
     def outcome(ok, summary):
@@ -116,13 +150,33 @@ def worker(backend):
             ctx.invoke("update", phase="update")
         return outcome(True, "Forge validation inputs selected; TEST not selected or scored.")
 
-    def answers(ctx):
+    def predictions(ctx):
         data["predictions"] = ctx.invoke("predict", data["xs"], phase="answer", condition="cold")
-        return outcome(ctx.invoke("verify", phase="verify"),
-                       "Constructed y=2x reference agreement.")
+        return outcome(True, "One prediction pass for two artifact consumers.")
+
+    def answers(ctx):
+        rows = ctx.invoke("reuse", phase="verify")
+        return outcome(ctx.invoke("verify", [r["output"] for r in rows], phase="verify"),
+                       "Constructed y=2x agreement from the pinned artifact.")
+
+    def diversity(ctx):
+        rows = ctx.invoke("reuse", phase="verify")
+        count = len({r["output"] for r in rows})
+        return {"status": "TESTED" if count > 1 else "FAILED",
+                "summary": "Prediction diversity on constructed scalar probes; not label validity.",
+                "metrics": {"distinct_outputs": count, "artifact_consumers": 2}}
+
+    def conformance(ctx):
+        mode = "sequential" if backend == "store" else "stateless"
+        results = [check.check(ctx) for check in conformance_checks(data["rows"], mode=mode)]
+        return {"status": "TESTED" if all(r["status"] == "TESTED" for r in results) else "FAILED",
+                "summary": "Exact replay/batching on public probes; stateless permutation only.",
+                "metrics": {check.name + "_agreement": int(result["status"] == "TESTED")
+                            for check, result in zip(
+                    conformance_checks(data["rows"], mode=mode), results, strict=True)}}
 
     def reset(ctx):
-        ctx.invoke("reset", phase="update")
+        ctx.invoke("clear", phase="update")
         cleared = ctx.invoke("predict", data["xs"], phase="answer", condition="warm")
         ctx.invoke("update", phase="update")
         restored = ctx.invoke("predict", data["xs"], phase="answer", condition="warm")
@@ -141,15 +195,21 @@ def worker(backend):
 
     checks = [Diagnostic("load", "1", ("load",), loaded, "constructed fixed model"),
               Diagnostic("inputs", "1", ("preprocess",), inputs, "public Forge validation"),
-              Diagnostic("answers", "1", ("predict", "verify"), answers, "y=2x scalar examples"),
-              Diagnostic("state_reset", "1", ("reset", "update", "predict"), reset,
+              Diagnostic("prediction_pass", "1", ("predict",), predictions, "one validation pass"),
+              Diagnostic("persist", "2", ("persist",), persisted, "bound prediction JSON"),
+              Diagnostic("answers", "2", ("reuse", "verify"), answers, "y=2x cached predictions"),
+              Diagnostic("diversity", "1", ("reuse",), diversity, "same cached predictions"),
+              Diagnostic("state_reset", "1", ("clear", "update", "predict"), reset,
                          "declared store clear and repopulation"),
-              Diagnostic("persist", "1", ("persist",), persisted, "prediction JSON"),
+              Diagnostic("adapter_conformance", "1", ("predict_rows",)
+                         + (("reset",) if backend == "store" else ()), conformance,
+                         "deterministic declared probes; separate metered model calls"),
               Diagnostic("gradients", "1", ("gradients",), gradients, "exposed gradients only")]
     identities = {"model": _sha({"backend": backend, "fixed_rule": "y=2x except wrong y=3x",
                                  "versions": versions()}),
                   "dataset": protocol["manifest_sha256"], "code": digest(Path("driver.py")),
-                  "configuration": digest(Path(backend + ".json"))}
+                  "configuration": configuration_identity(Path(backend + ".json"),
+                                                          Path("protocol.json"))}
     report = Workbench(adapter, identities, output / "diagnostics", max_calls=30, max_seconds=30,
                        required_phases=("load", "preprocess", "answer", "verify", "persist")
                        + (("update",) if backend == "store" else ())).run(checks)
@@ -178,7 +238,7 @@ def run(root, backends):
     write_json(source / "source.json", {
         "dataset_id": "diagnostic-workbench-control", "source_id": "constructed/y2x",
         "source_version": "1", "adapter": "operations-jsonl", "license_id": "Apache-2.0",
-        "provenance_uri": "https://github.com/FPC-effortless/veritas/issues/519",
+        "provenance_uri": "https://github.com/FPC-effortless/veritas/issues/521",
         "ai_use_allowed": True, "redistribution_allowed": True, "privacy_reviewed": True,
         "split_salt": "diagnostic-workbench-fixed-control",
     })
