@@ -97,14 +97,22 @@ real-project repair/productivity acceptance remain outstanding. Neither a portab
 report nor a green unit suite establishes diagnostic sensitivity on arbitrary
 projects or that all 24 roadmap features are complete.
 
-## Current acceptance status
+## Browser acceptance
 
-The current engineering acceptance bundle contains 89 status nodes from ten
-executed public reports; byte verification and typed dictionary/list pointer
-checks pass. Source review and tests cover export integrity, output-size limits,
-non-regular inputs, stale notes and hostile markup. Interactive browser and visual
-acceptance are **UNVERIFIED**: local Chromium startup was denied a process socket,
-and the managed browser rejected local-file navigation. This UI addition remains
-a draft until a permitted browser environment verifies filtering, keyboard use,
-small-screen layout and absence of external requests. No browser success is
-inferred from HTML generation or unit tests.
+The TrainLab local workbench workflow builds a public constructed bundle and
+opens its offline page in Chromium. The check visits every status filter,
+inspects a finding with the keyboard, opens its raw JSON, checks a 320px
+viewport and rejects external network requests or script errors. Desktop and
+mobile captures are retained with the workflow evidence.
+
+To repeat in an environment where Playwright Chromium can launch:
+
+```bash
+PYTHONPATH=integrations/trainlab/src python \
+  integrations/trainlab/tests/diagnostic_bundle_browser_smoke.py \
+  --evidence /tmp/veritas-diagnostic-browser
+```
+
+The larger executed bundle contains 89 status nodes from ten public reports.
+Use its manifest pin for byte verification. Browser acceptance and bundle
+integrity are recorded separately.

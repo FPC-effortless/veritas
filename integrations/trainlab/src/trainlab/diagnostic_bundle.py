@@ -216,6 +216,7 @@ color:#172536;
 font:16px/1.55 system-ui,sans-serif}}
 
 main{{max-width:1000px;
+overflow-wrap:anywhere;
 margin:auto;
 padding:28px 18px 60px}}
 header{{background:#102c3b;

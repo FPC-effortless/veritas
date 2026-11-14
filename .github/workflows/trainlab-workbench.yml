@@ -56,6 +56,7 @@ jobs:
           python -m pip install playwright
           python -m playwright install --with-deps chromium
           python tests/browser_smoke.py
+          python tests/diagnostic_bundle_browser_smoke.py --evidence "$RUNNER_TEMP/trainlab-diagnostic-browser"
           python tests/production_smoke.py --evidence "$RUNNER_TEMP/trainlab-production-evidence"
       - name: Build the portable production image and exercise recovery
         if: matrix.python == '3.13'
@@ -81,5 +82,6 @@ jobs:
           name: trainlab-production-evidence
           path: |
             ${{ runner.temp }}/trainlab-production-evidence
+            ${{ runner.temp }}/trainlab-diagnostic-browser
             ${{ runner.temp }}/trainlab-image-audit.json
           if-no-files-found: warn
