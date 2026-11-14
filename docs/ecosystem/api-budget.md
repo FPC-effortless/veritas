@@ -32,10 +32,11 @@ limit are returned to the caller as bytes. An oversized response returns
 `RESPONSE_LIMIT` with the body withheld. A 2xx response indicates transport
 success. Independently score the model output to establish correctness.
 
-The meter saves intent before pacing or sending. On a transport interruption,
-truncation or timeout, the remote outcome is unknown and the session declines
-further attempts. Recovering a receipt after a crash does not reissue its
-POST. Inspect the provider's records before starting a replacement session.
+The meter saves intent before pacing or sending. A transport interruption,
+truncation, timeout or an interim response exposed by the HTTP client leaves
+the remote outcome unknown and seals the session. A receipt retained after
+a crash preserves the attempt for inspection. Check the provider's records
+before starting a replacement session.
 
 Call and pacing caps apply to this instance and one synchronous owner.
 The I/O timeout is a socket timeout. DNS resolution, a slowly progressing

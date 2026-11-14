@@ -1,3 +1,4 @@
+import os
 import tempfile
 import threading
 import unittest
@@ -14,6 +15,7 @@ class RequestBudgetTests(unittest.TestCase):
         requests = self.requests = []
         responses = self.responses = []
         release_response = self.release_response = threading.Event()
+        observed_eof = self.observed_eof = threading.Event()
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
@@ -27,11 +29,24 @@ class RequestBudgetTests(unittest.TestCase):
                 if status is None:
                     self.close_connection = True
                     return
+                if options == ["early-hints"]:
+                    self.send_response_only(103)
+                    self.end_headers()
+                    self.wfile.flush()
+                    options = []
                 self.send_response(status)
                 self.send_header("Content-Length", str(len(reply) + bool(options)))
                 self.send_header("Location", "/redirected")
                 self.end_headers()
                 self.wfile.write(reply)
+                if options == ["hold-body"]:
+                    self.wfile.flush()
+                    self.connection.settimeout(2)
+                    try:
+                        if self.connection.recv(1) == b"":
+                            observed_eof.set()
+                    except TimeoutError:
+                        pass
 
             def log_message(self, *args):
                 pass
@@ -119,6 +134,25 @@ class RequestBudgetTests(unittest.TestCase):
         self.assertEqual(attempt["state"], "OUTCOME_UNKNOWN")
         self.assertEqual(attempt["http_status"], 200)
 
+    def test_relative_receipt_root_is_pinned_at_creation(self):
+        self.responses.append((200, b"ok"))
+        original = self.root.parent
+        other = original / "other"
+        unrelated = other / self.root.name / "api-receipt.json"
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text("unrelated")
+        current = Path.cwd()
+        try:
+            os.chdir(original)
+            self.root = Path(self.root.name)
+            session = self.session()
+            os.chdir(other)
+            self.assertEqual(session.post(b"request")["response"], b"ok")
+        finally:
+            os.chdir(current)
+        self.assertEqual(unrelated.read_text(), "unrelated")
+        self.assertEqual(len(read_json(original / self.root / "api-receipt.json")["attempts"]), 1)
+
     def test_interruption_seals_started_attempt(self):
         session = self.session()
         with (
@@ -130,6 +164,18 @@ class RequestBudgetTests(unittest.TestCase):
         self.assertEqual(receipt["state"], "UNRESOLVED")
         self.assertEqual(receipt["attempts"][0]["state"], "OUTCOME_UNKNOWN")
 
+    def test_interim_response_is_not_retryable_final_failure(self):
+        self.responses.append((200, b"actual result", "early-hints"))
+        session = self.session()
+        with self.assertRaisesRegex(LabError, "unknown"):
+            session.post(b"request")
+        receipt = read_json(self.root / "api-receipt.json")
+        self.assertEqual(receipt["state"], "UNRESOLVED")
+        self.assertEqual(receipt["attempts"][0]["http_status"], 103)
+        with self.assertRaisesRegex(LabError, "unresolved"):
+            session.post(b"request", retry_of=0)
+        self.assertEqual(len(self.requests), 1)
+
     def test_socket_timeout_with_pending_local_response(self):
         self.responses.append((200, b"delayed", "hold"))
         session = self.session(io_timeout=0.05)
@@ -139,4 +185,17 @@ class RequestBudgetTests(unittest.TestCase):
             self.assertIsInstance(failure.exception.__cause__, TimeoutError)
         finally:
             self.release_response.set()
+        self.assertEqual(read_json(self.root / "api-receipt.json")["state"], "UNRESOLVED")
+
+    def test_partial_body_timeout_closes_server_socket_with_error_retained(self):
+        self.responses.append((200, b"partial", "hold-body"))
+        session = self.session(io_timeout=0.05)
+        try:
+            session.post(b"request")
+        except LabError as exc:
+            failure = exc
+        else:
+            self.fail("partial response should time out")
+        self.assertIsInstance(failure.__cause__, TimeoutError)
+        self.assertTrue(self.observed_eof.wait(1))
         self.assertEqual(read_json(self.root / "api-receipt.json")["state"], "UNRESOLVED")

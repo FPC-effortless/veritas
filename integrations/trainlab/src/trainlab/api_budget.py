@@ -62,7 +62,7 @@ class ApiBudget:
             and 1 <= max_response_bytes <= 16 * 1024**2,
             "bounded request limits and endpoint identity required",
         )
-        self._root = Path(root)
+        self._root = Path(root).resolve()
         try:
             self._root.mkdir(mode=0o700)
         except FileExistsError as exc:
@@ -160,14 +160,16 @@ class ApiBudget:
             self._last_start = row["wire_started_ns"] = time.monotonic_ns()
             try:
                 connection.request("POST", self._target, body=body, headers=headers)
-                response = connection.getresponse()
-                row["http_status"] = response.status
-                declared_length = response.length
-                payload = response.read(self._max_response_bytes + 1)
-                if declared_length is not None and len(payload) < min(
-                    declared_length, self._max_response_bytes + 1
-                ):
-                    raise http.client.IncompleteRead(payload)
+                with connection.getresponse() as response:
+                    row["http_status"] = status = response.status
+                    if not 200 <= status <= 599:
+                        raise http.client.HTTPException("no supported final HTTP response")
+                    declared_length = response.length
+                    payload = response.read(self._max_response_bytes + 1)
+                    if declared_length is not None and len(payload) < min(
+                        declared_length, self._max_response_bytes + 1
+                    ):
+                        raise http.client.IncompleteRead(payload)
             except (OSError, http.client.HTTPException) as exc:
                 row["state"] = "OUTCOME_UNKNOWN"
                 raise LabError("POST transport failed; remote outcome unknown") from exc
@@ -176,7 +178,7 @@ class ApiBudget:
                 payload = None
                 row["state"] = "RESPONSE_LIMIT"
             else:
-                row["state"] = "SUCCEEDED" if 200 <= response.status < 300 else "HTTP_ERROR"
+                row["state"] = "SUCCEEDED" if 200 <= status < 300 else "HTTP_ERROR"
         finally:
             connection.close()
             if row["wire_started_ns"] is not None:
