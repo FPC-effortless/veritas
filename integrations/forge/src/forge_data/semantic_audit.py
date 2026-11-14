@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import json
+import re
 import stat
 import struct
-import wave
 import zlib
 from pathlib import Path
 
@@ -111,6 +109,7 @@ def _png(data):
     _require(data.startswith(b"\x89PNG\r\n\x1a\n"), "invalid PNG signature")
     pos, stride, height, profile = 8, 0, 0, False
     blocks = []
+    palette = False
     closed_data = False
     while pos + 12 <= len(data):
         size, kind = struct.unpack_from(">I4s", data, pos)
@@ -140,7 +139,7 @@ def _png(data):
             stride = 1 + width * {0: 1, 2: 3, 4: 2, 6: 4}.get(color, 0)
             profile = bits == 8 and color != 3 and interlace == 0 and stride * height <= IMAGE_LIMIT
         elif kind == b"IDAT":
-            _require(not closed_data, "nonconsecutive PNG data")
+            _require(not closed_data and (color != 3 or palette), "invalid PNG data order")
             blocks.append(payload)
         elif kind == b"IEND":
             _require(size == 0 and end == len(data) and blocks, "invalid PNG ending")
@@ -160,7 +159,16 @@ def _png(data):
         else:
             _require(kind != b"IHDR", "duplicate PNG header")
             if kind == b"PLTE":
-                _require(not blocks and 0 < size <= 768 and size % 3 == 0, "invalid PNG palette")
+                _require(
+                    color not in (0, 4)
+                    and not palette
+                    and not blocks
+                    and 0 < size <= 768
+                    and size % 3 == 0
+                    and (color != 3 or size // 3 <= 2**bits),
+                    "invalid PNG palette",
+                )
+                palette = True
             elif not kind[0:1].islower():
                 profile = False
             closed_data = bool(blocks)
@@ -168,45 +176,104 @@ def _png(data):
     raise ForgeError("incomplete PNG")
 
 
+def _wav(data):
+    _require(
+        len(data) >= 12
+        and data[:4] == b"RIFF"
+        and data[8:12] == b"WAVE"
+        and int.from_bytes(data[4:8], "little") == len(data) - 8,
+        "invalid WAV envelope",
+    )
+    pos, alignment, samples = 12, None, None
+    supported = True
+    while pos < len(data):
+        _require(len(data) - pos >= 8, "incomplete WAV chunk")
+        chunk, size = struct.unpack_from("<4sI", data, pos)
+        start = pos + 8
+        end = start + size
+        pos = end + size % 2
+        _require(pos <= len(data) and (size % 2 == 0 or data[end] == 0), "bad WAV padding")
+        if chunk == b"fmt ":
+            _require(alignment is None and size >= 16, "invalid WAV format chunk")
+            tag, channels, rate, byte_rate, alignment, bits = struct.unpack_from(
+                "<HHIIHH", data, start
+            )
+            _require(channels > 0 and rate > 0 and alignment > 0, "invalid WAV audio format")
+            supported = tag == 1
+            if supported:
+                _require(
+                    bits in (8, 16, 24, 32)
+                    and alignment == channels * (bits // 8)
+                    and byte_rate == alignment * rate
+                    and size in (16, 18)
+                    and (size == 16 or data[start + 16 : end] == b"\0\0"),
+                    "invalid PCM WAV metadata",
+                )
+        elif chunk == b"data":
+            _require(
+                alignment is not None and samples is None and size > 0, "invalid WAV data chunk"
+            )
+            if supported:
+                _require(size % alignment == 0, "partial PCM frame")
+            samples = size
+    _require(samples is not None, "missing WAV data")
+    return supported
+
+
+_CSV_SEPARATOR = re.compile(r'[",\r\n]')
+
+
+def _csv_field(text, start):
+    if text.startswith('"', start):
+        quote = text.find('"', start + 1)
+        while quote >= 0 and text.startswith('"', quote + 1):
+            quote = text.find('"', quote + 2)
+        _require(quote >= 0, "unclosed CSV quote")
+        end = quote + 1
+    else:
+        match = _CSV_SEPARATOR.search(text, start)
+        end = match.start() if match else len(text)
+    _require(end == len(text) or text[end] in ",\r\n", "invalid CSV delimiter")
+    return end
+
+
+def _csv(text):
+    position, row, width, headers = 0, 0, 0, []
+    while position < len(text) or text.endswith(",") and width:
+        end = _csv_field(text, position)
+        delimiter = text[end : end + 1]
+        width += 1
+        if row == 0:
+            field = text[position:end]
+            if field.startswith('"'):
+                field = field[1:-1].replace('""', '"')
+            headers.append(field)
+        position = end + (2 if text.startswith("\r\n", end) else 1)
+        if delimiter != ",":
+            if row == 0:
+                _require(
+                    all(h.strip() for h in headers) and len(set(headers)) == len(headers),
+                    "invalid CSV header",
+                )
+            else:
+                _require(width == len(headers), "ragged CSV row")
+            row += 1
+            width = 0
+
+
 def _check_media(kind, data):
     _require(data, "empty media")
     if kind == "png":
         return _png(data)
     if kind == "wav":
-        _require(
-            len(data) >= 12
-            and data[:4] == b"RIFF"
-            and data[8:12] == b"WAVE"
-            and int.from_bytes(data[4:8], "little") == len(data) - 8,
-            "invalid WAV envelope",
-        )
-        with wave.open(io.BytesIO(data), "rb") as audio:
-            frames = audio.getnframes()
-            frame_size = audio.getnchannels() * audio.getsampwidth()
-            _require(
-                frames > 0
-                and frame_size > 0
-                and audio.getframerate() > 0
-                and frames * frame_size <= len(data)
-                and len(audio.readframes(frames)) == frames * frame_size,
-                "invalid or truncated PCM WAV data",
-            )
-    elif kind == "json":
+        return _wav(data)
+    if kind == "json":
         _bound(_json(data.decode("utf-8")))
     else:
         text = data.decode("utf-8-sig")
         _require(bool(text.strip()) and "\0" not in text, "invalid or empty text")
         if kind == "csv":
-            rows = csv.reader(io.StringIO(text, newline=""), strict=True)
-            headers = next(rows, [])
-            _require(
-                bool(headers)
-                and all(h.strip() for h in headers)
-                and len(set(headers)) == len(headers),
-                "invalid CSV header",
-            )
-            for row in rows:
-                _require(len(row) == len(headers), "ragged CSV row")
+            _csv(text)
     return True
 
 
@@ -273,8 +340,6 @@ class _MediaScan:
             ValueError,
             UnicodeError,
             EOFError,
-            wave.Error,
-            csv.Error,
             struct.error,
             zlib.error,
         ):
@@ -348,7 +413,11 @@ def audit(
     path = Path(path)
     _require(_regular(path), "view requires a regular file")
     document = _load(path, sha256)
-    rules = _rules(Path(rules_path), rules_sha256, document["feature_fields"])
+    fields = set(document["feature_fields"])
+    _require(
+        all(row["features"].keys() <= fields for row in document["rows"]), "undeclared row feature"
+    )
+    rules = _rules(Path(rules_path), rules_sha256, fields)
     root = Path(media_root).absolute() if media_root is not None else None
     if root is not None:
         _require(

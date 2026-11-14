@@ -139,6 +139,48 @@ class SemanticAuditTests(unittest.TestCase):
         with self.assertRaises(ForgeError):
             self.run_audit(max_rows=1)
 
+    def test_invalid_media_that_permissive_decoders_accept(self):
+        palette = b"\0\0\0"
+        chunk = (
+            struct.pack(">I", len(palette))
+            + b"PLTE"
+            + palette
+            + struct.pack(">I", zlib.crc32(b"PLTE" + palette))
+        )
+        grayscale = png()
+        wav_path = self.asset / "wav"
+        malformed = bytearray(wav_path.read_bytes())
+        struct.pack_into("<IH", malformed, 28, 1, 1)
+        self.rows[0]["features"].update(
+            png=self.file("palette.png", grayscale[:33] + chunk + grayscale[33:]),
+            csv=self.file("bare-quote.csv", b'a,b\nab"c,ok\n'),
+            wav=self.file("bad-alignment.wav", malformed),
+        )
+        report = self.run_audit(media_root=self.asset)
+        self.assertEqual({f["field"] for f in report["findings"]}, {"png", "csv", "wav"})
+        self.assertTrue(all(f["reason"] == "MEDIA_FORMAT" for f in report["findings"]))
+
+    def test_quoted_csv_and_odd_length_padded_pcm(self):
+        samples = b"\x00\x80\xff"
+        body = (
+            b"WAVEfmt "
+            + struct.pack("<IHHIIHH", 16, 1, 1, 8000, 8000, 1, 8)
+            + b"data"
+            + struct.pack("<I", len(samples))
+            + samples
+            + b"\0"
+        )
+        self.rows[0]["features"].update(
+            csv=self.file("quoted.csv", b'"a,a",b\r\n"escaped "" and\n newline",ok\r\n'),
+            wav=self.file("padded.wav", b"RIFF" + struct.pack("<I", len(body)) + body),
+        )
+        self.assertEqual(self.run_audit(media_root=self.asset)["status"], "TESTED")
+
+    def test_undeclared_row_field_is_rejected_beyond_scan_prefix(self):
+        self.rows[1]["features"]["unlisted"] = 0
+        with self.assertRaises(ForgeError):
+            self.run_audit(max_rows=1)
+
     def test_incompatible_rules_and_booleans_in_numeric_bounds_rejected(self):
         for rule in (
             {"type": "string", "min": 1},
