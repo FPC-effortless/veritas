@@ -76,6 +76,21 @@ class BehaviorTests(unittest.TestCase):
         self.assertEqual(result["slices"]["no-positives"]["inapplicable"], 1)
         self.assertEqual(result["slices"]["partial"]["unobserved"], 1)
 
+    def test_hash_cannot_alias_surrogates_and_unicode_scalars(self):
+        scalar = chr(0x1F600)
+        surrogates = chr(0xD83D) + chr(0xDE00)
+        report = sequence([row(scalar, [scalar], [scalar])])
+        self.assertEqual(report["overall"]["metrics"]["exact_match"], 1)
+        controls = (
+            (sequence, row(surrogates, [scalar], [scalar]), {}),
+            (sequence, row(scalar, [scalar], [surrogates]), {}),
+            (regression, row("a", 0, 0, slice_=surrogates), {}),
+            (retrieval, row("a", {surrogates: True}, [surrogates]), {"cutoff": 1}),
+        )
+        for scorer, candidate, opts in controls:
+            with self.assertRaises(LabError):
+                scorer([candidate], **opts)
+
     def test_invalid_values_ids_and_ranks(self):
         controls = (
             (regression, [row("a", True, 1)], {}),

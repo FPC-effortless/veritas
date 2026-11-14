@@ -8,9 +8,14 @@ from collections import defaultdict
 from itertools import pairwise
 
 from .experiment_diagnostics import _items, _number
-from .prediction_artifacts import _bytes, _require, _text
+from .prediction_artifacts import _bytes, _require
+from .prediction_artifacts import _text as _bounded_text
 
 _FIELDS = {"id", "slice", "label", "prediction"}
+
+
+def _text(value):
+    return _bounded_text(value) and all(not 0xD800 <= ord(char) <= 0xDFFF for char in value)
 
 
 def _mean(values):
@@ -77,7 +82,10 @@ def _report(task, rows, results, metrics, configuration, intervals=False):
 
 def _validate(rows, fields):
     _items(rows, maximum=2000)
-    _require(all(set(row) == fields and _text(row["slice"]) for row in rows), "invalid row schema")
+    _require(
+        all(set(row) == fields and all(_text(row[k]) for k in ("id", "slice")) for row in rows),
+        "invalid row schema or Unicode identity",
+    )
 
 
 def regression(rows, *, intervals=False):
