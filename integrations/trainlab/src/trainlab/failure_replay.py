@@ -110,6 +110,10 @@ def reduce_failure(root, case, implementations, *, max_calls=100, max_seconds=10
         "bounded reduction budget required",
     )
     root = Path(root).absolute()
+    _require(
+        not any(p.is_symlink() for p in (root, *root.parents)),
+        "reproducer directory may not use symlinks",
+    )
     root.mkdir(mode=0o700, parents=True, exist_ok=False)
     started = monotonic()
     trials = []

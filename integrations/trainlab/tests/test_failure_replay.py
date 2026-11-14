@@ -64,6 +64,15 @@ class FailureReplayTests(unittest.TestCase):
             replay(self.root, result["reproducer_sha256"], self.implementations)["status"], "FAILED"
         )
 
+    def test_reduction_rejects_a_symlink_parent_before_execution(self):
+        link = self.root.with_name("link")
+        destination = self.root.with_name("actual")
+        destination.mkdir()
+        link.symlink_to(destination, target_is_directory=True)
+        with self.assertRaisesRegex(LabError, "symlinks"):
+            reduce_failure(link / "repro", self.case, self.implementations)
+        self.assertEqual(list(destination.iterdir()), [])
+
     def test_clean_and_unavailable_outcomes_have_no_reproducer(self):
         clean_case = {**self.case, "events": []}
         clean = reduce_failure(self.root, clean_case, self.implementations)
