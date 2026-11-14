@@ -34,6 +34,10 @@ class BehaviorTests(unittest.TestCase):
         self.assertEqual(incomplete["status"], "PARTIAL")
         self.assertEqual(incomplete["overall"]["metrics"]["mae"], 0)
 
+    def test_rmse_preserves_small_finite_errors(self):
+        result = regression([row("tiny", 0, 1e-200)])
+        self.assertEqual(result["overall"]["metrics"]["rmse"], 1e-200)
+
     def test_sequence_order_edit_empty_and_partial(self):
         result = sequence(
             [
@@ -49,6 +53,7 @@ class BehaviorTests(unittest.TestCase):
         self.assertEqual(metrics["exact_match"], 1 / 3)
         self.assertEqual(metrics["target_position_accuracy"], 0.25)
         self.assertEqual(metrics["mean_edit_distance"], 1)
+        self.assertEqual(result["overall"]["observed_target_positions"], 4)
         self.assertIsNone(
             sequence([row("e", [], [])])["overall"]["metrics"]["target_position_accuracy"]
         )

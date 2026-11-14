@@ -40,6 +40,8 @@ def _report(task, rows, results, metrics, configuration, intervals=False):
             report["queries_with_incomplete_judgments"] = sum(
                 type(row["label"]) is dict and None in row["label"].values() for row, _ in pairs
             )
+        if task == "sequence":
+            report["observed_target_positions"] = sum(result[2] for result in values)
         if intervals:
             coverage = [
                 row["interval"][0] <= row["label"] <= row["interval"][1]
@@ -106,9 +108,13 @@ def regression(rows, *, intervals=False):
 
     def metrics(values):
         errors = [error for (error,) in values]
+        scale = max(abs(error) for error in errors)
+        rmse = (
+            scale * math.sqrt(_mean([(error / scale) ** 2 for error in errors])) if scale else 0.0
+        )
         return {
             "mae": _mean([abs(error) for error in errors]),
-            "rmse": math.sqrt(_mean([error**2 for error in errors])),
+            "rmse": rmse,
             "mean_signed_error": _mean(errors),
         }
 
