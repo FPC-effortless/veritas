@@ -243,7 +243,11 @@ Workbench(adapter, identities, Path(os.environ["TRAINLAB_OUTPUT_DIR"]) / "diagno
             "inputs": ["driver.py"], "artifacts": ["diagnostics/report.json"],
             "metrics": {"never": "max"}, "budget": {"model_fits": 0},
         })
-        receipt = run_experiment(source / "recipe.json", self.root.with_name("runs"))
+        # CI can import the parent with relative PYTHONPATH=src. The child runs
+        # from a temporary recipe directory, so bind its source path absolutely.
+        package_source = str(Path(__file__).resolve().parents[1] / "src")
+        with patch.dict("os.environ", {"PYTHONPATH": package_source}):
+            receipt = run_experiment(source / "recipe.json", self.root.with_name("runs"))
         self.assertEqual(receipt["status"], "timed_out")
         directory = self.root.with_name("runs") / receipt["id"]
         self.assertTrue(verify_run(directory)["valid"])
