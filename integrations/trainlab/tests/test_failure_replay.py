@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from trainlab.failure_replay import reduce_failure, replay
 from trainlab.runner import LabError
@@ -72,6 +73,14 @@ class FailureReplayTests(unittest.TestCase):
         with self.assertRaisesRegex(LabError, "symlinks"):
             reduce_failure(link / "repro", self.case, self.implementations)
         self.assertEqual(list(destination.iterdir()), [])
+
+    def test_clean_result_observed_after_deadline_is_inconclusive(self):
+        clean_case = {**self.case, "events": []}
+        with patch("trainlab.failure_replay.monotonic", side_effect=[0, 0, 1]):
+            result = reduce_failure(self.root, clean_case, self.implementations, max_seconds=0.1)
+        self.assertEqual(result["status"], "INCONCLUSIVE")
+        self.assertIsNone(result["reproducer_sha256"])
+        self.assertEqual(result["trials"][0]["status"], "TESTED")
 
     def test_clean_and_unavailable_outcomes_have_no_reproducer(self):
         clean_case = {**self.case, "events": []}

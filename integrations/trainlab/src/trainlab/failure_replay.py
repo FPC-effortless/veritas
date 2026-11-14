@@ -156,8 +156,11 @@ def reduce_failure(root, case, implementations, *, max_calls=100, max_seconds=10
                 break
             if observed is None:
                 break
-        if minimal and monotonic() - started < max_seconds:
+        if minimal:
             status = "TESTED"
+
+    if monotonic() - started >= max_seconds:
+        status = "INCONCLUSIVE"
 
     pin = None
     if witness:
