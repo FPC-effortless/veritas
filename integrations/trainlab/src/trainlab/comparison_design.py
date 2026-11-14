@@ -130,21 +130,33 @@ def _panel(rows, design):
                 row["candidate"] is None and row["baseline"] is None,
                 "failed or missing cell cannot supply scores",
             )
-        panel[key] = row
+        panel[key] = dict(row)
     return panels
 
 
-def _bootstrap(matrices, draws, seed):
+def _scaled_deltas(rows):
+    """Represent the input JSON numbers on one exact binary denominator."""
+    pairs = [
+        (a, b)
+        for row in rows
+        if row["status"] == "OBSERVED"
+        for a, b in [(row["candidate"].as_integer_ratio(), row["baseline"].as_integer_ratio())]
+    ]
+    denominator = max((d for pair in pairs for _, d in pair), default=1)
+    return [
+        a * (denominator // ad) - b * (denominator // bd) for (a, ad), (b, bd) in pairs
+    ], denominator
+
+
+def _bootstrap(matrices, denominators, draws, seed):
     """Share unit and seed resamples across every comparison in the family."""
     rng = random.Random(seed)
     sizes = next(iter(matrices.values()))
     units, seeds = len(sizes), len(sizes[0])
     combinations = {name: {"crossed": [], "unit_only": [], "seed_only": []} for name in matrices}
-    unit_means = {
-        name: [math.fsum(row) / seeds for row in values] for name, values in matrices.items()
-    }
-    seed_means = {
-        name: [math.fsum(row[j] for row in values) / units for j in range(seeds)]
+    unit_sums = {name: [sum(row) for row in values] for name, values in matrices.items()}
+    seed_sums = {
+        name: [sum(row[j] for row in values) for j in range(seeds)]
         for name, values in matrices.items()
     }
     for _ in range(draws):
@@ -152,13 +164,14 @@ def _bootstrap(matrices, draws, seed):
         s = [rng.randrange(seeds) for _ in range(seeds)]
         uc, sc = Counter(u), Counter(s)
         for name, matrix in matrices.items():
+            normalizer = units * seeds * denominators[name]
             pools = combinations[name]
             pools["crossed"].append(
-                math.fsum(matrix[i][j] * ui * sj for i, ui in uc.items() for j, sj in sc.items())
-                / (units * seeds)
+                sum(matrix[i][j] * ui * sj for i, ui in uc.items() for j, sj in sc.items())
+                / normalizer
             )
-            pools["unit_only"].append(math.fsum(unit_means[name][i] for i in u) / units)
-            pools["seed_only"].append(math.fsum(seed_means[name][j] for j in s) / seeds)
+            pools["unit_only"].append(sum(unit_sums[name][i] for i in u) / normalizer)
+            pools["seed_only"].append(sum(seed_sums[name][j] for j in s) / normalizer)
     return combinations
 
 
@@ -172,15 +185,18 @@ def analyze(design, rows, *, design_sha256, context_sha256):
     """Compute descriptive paired effects and fixed-design percentile intervals."""
     _validate(design)
     _require(
-        _hash(design_sha256)
+        type(design_sha256) is str
+        and _hash(design_sha256)
         and _sha(design) == design_sha256
+        and type(context_sha256) is str
+        and _hash(context_sha256)
         and context_sha256 == design["context_sha256"],
         "comparison context or design changed",
     )
     panels = _panel(rows, design)
     units, seeds = sorted(design["units"]), sorted(design["seeds"])
     count = len(units) * len(seeds)
-    summary, matrices = {}, {}
+    summary, matrices, denominators = {}, {}, {}
     for name, observed in panels.items():
         joined = [
             observed.get(
@@ -198,9 +214,8 @@ def analyze(design, rows, *, design_sha256, context_sha256):
             for s in seeds
         ]
         errors = Counter(row["status"] for row in joined)
-        deltas = [
-            row["candidate"] - row["baseline"] for row in joined if row["status"] == "OBSERVED"
-        ]
+        deltas, denominator = _scaled_deltas(joined)
+        denominators[name] = denominator
         table = [
             {
                 "seed": s,
@@ -220,8 +235,8 @@ def analyze(design, rows, *, design_sha256, context_sha256):
             "failed": errors["FAILED"],
             "required": count,
             "coverage_by_seed": table,
-            "observed_cell_mean": math.fsum(deltas) / len(deltas) if deltas else None,
-            "effect": math.fsum(deltas) / count if complete else None,
+            "observed_cell_mean": sum(deltas) / (len(deltas) * denominator) if deltas else None,
+            "effect": sum(deltas) / (count * denominator) if complete else None,
             "intervals": None,
         }
     tail = design["alpha"] / (2 * len(summary))
@@ -233,7 +248,7 @@ def analyze(design, rows, *, design_sha256, context_sha256):
         and tail * design["draws"] >= 1
     )
     if inferred:
-        samples = _bootstrap(matrices, design["draws"], design["rng_seed"])
+        samples = _bootstrap(matrices, denominators, design["draws"], design["rng_seed"])
         for name, pools in samples.items():
             summary[name]["intervals"] = {k: _bounds(values, tail) for k, values in pools.items()}
     return {

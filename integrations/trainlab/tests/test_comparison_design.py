@@ -92,9 +92,51 @@ class ComparisonDesignTests(unittest.TestCase):
     def test_constant_panel_uses_identical_bounds(self):
         rows = self.rows()
         for row in rows:
-            row["candidate"] = 2
-            row["baseline"] = 1
+            row["candidate"] = 0.1
+            row["baseline"] = 0
         result = self.run_report(rows)
         for report in result["comparisons"].values():
-            self.assertEqual(report["effect"], 1)
-            self.assertTrue(all(v == [1, 1] for v in report["intervals"].values()))
+            self.assertEqual(report["effect"], 0.1)
+            self.assertTrue(all(v == [0.1, 0.1] for v in report["intervals"].values()))
+
+    def test_exact_integer_cancellation_and_result_ownership(self):
+        rows = self.rows()
+        for index, row in enumerate(rows):
+            row["candidate"] = (10**20 + 1, -(10**20))[index] if index < 2 else 0
+        result = self.run_report(rows)
+        self.assertEqual(result["comparisons"]["first"]["effect"], 1 / 9)
+        raw = result["comparisons"]["first"]["cells"][0]
+        rows[0]["candidate"] = 0
+        self.assertEqual(raw["candidate"], 10**20 + 1)
+
+    def test_crossed_interaction_survives_both_flat_marginals(self):
+        plan = self.plan(units=["x", "y"], seeds=[1, 2], comparisons=["interaction"])
+        rows = [
+            {
+                "comparison": "interaction",
+                "unit": u,
+                "seed": seed,
+                "status": "OBSERVED",
+                "candidate": 1 if (u, seed) in (("x", 1), ("y", 2)) else -1,
+                "baseline": 0,
+            }
+            for u in ("x", "y")
+            for seed in (1, 2)
+        ]
+        report = analyze(rows=rows, context_sha256=CONTEXT, **plan)["comparisons"]["interaction"]
+        self.assertEqual(
+            report["intervals"],
+            {
+                "crossed": [-1, 1],
+                "unit_only": [0, 0],
+                "seed_only": [0, 0],
+            },
+        )
+
+    def test_float_effect_cancellation_before_sum(self):
+        rows = self.rows()
+        for row in rows:
+            row.update(candidate=0.0, baseline=0.0)
+        rows[0].update(candidate=1e16, baseline=1.0)
+        rows[1].update(candidate=-1e16)
+        self.assertEqual(self.run_report(rows)["comparisons"]["first"]["effect"], -1 / 9)
