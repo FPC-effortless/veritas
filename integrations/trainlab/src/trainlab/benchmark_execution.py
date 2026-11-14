@@ -25,10 +25,12 @@ _ROW_FIELDS = {
 }
 
 
-def _canonical(value):
+def _canonical(value, *, sort_keys=True):
     _bytes(value)
     try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        return json.dumps(
+            value, sort_keys=sort_keys, separators=(",", ":"), ensure_ascii=False
+        ).encode()
     except UnicodeError as exc:
         raise LabError("finite JSON Unicode scalar values required") from exc
 
@@ -202,7 +204,7 @@ def execute(root, arms, *, panel, panel_sha256, max_calls=384, max_seconds=30):
                         record["state"] = "CALL_FAILED"
                         continue
                     try:
-                        if _canonical(proposed) != _canonical(case[side]):
+                        if _canonical(proposed, sort_keys=False) != _canonical(case[side]):
                             raise LabError("case input mutated")
                         record["output_sha256"] = _digest(returned)
                     except LabError:

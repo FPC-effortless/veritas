@@ -102,6 +102,16 @@ class BenchmarkExecutionTests(unittest.TestCase):
         second = execute(self.root.with_name("same"), self.arms, **self.artifact)
         self.assertEqual(first["observations"], second["observations"])
 
+    def test_reordering_callback_input_is_also_a_mutation(self):
+        def reorder(row):
+            if "unused" in row:
+                row["unused"] = row.pop("unused")
+            return row["value"]
+
+        self.arms["reference_a"] = reorder
+        report = execute(self.root, self.arms, **self.artifact)
+        self.assertEqual(report["observations"][-3]["state"], "INVALID_OUTPUT_OR_MUTATION")
+
     def test_impossible_coverage_is_failed_when_a_shortcut_crashes(self):
         def fail(_row):
             raise RuntimeError("unavailable shortcut")
