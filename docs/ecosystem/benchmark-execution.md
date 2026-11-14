@@ -7,7 +7,7 @@ the shortcut-accuracy ceiling and three declared implementation digests.
 Keep the panel hash alongside its source evidence.
 
 ```bash
-python integrations/trainlab/examples/diagnose_benchmark_execution.py +  --root /tmp/veritas-executed-benchmark-controls
+python integrations/trainlab/examples/diagnose_benchmark_execution.py --root /tmp/veritas-executed-benchmark-controls
 ```
 
 The public replay runs a forward-state reference, a backward-history

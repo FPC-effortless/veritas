@@ -74,7 +74,7 @@ def freeze_panel(
             "invalid case, conflicting expected sensitivity, or unmodified input",
         )
     panel = {
-        "rows": deepcopy(rows),
+        "rows": json.loads(_canonical(rows)),
         "source_sha256": dict(source_sha256),
         "minimum_changed_groups": minimum_changed_groups,
         "minimum_invariant_groups": minimum_invariant_groups,
@@ -184,7 +184,9 @@ def execute(root, arms, *, panel, panel_sha256, max_calls=384, max_seconds=30):
                     try:
                         returned = ctx.invoke(arm, proposed, phase="answer")
                     except BudgetExceeded:
-                        exhausted = True
+                        exhausted = ctx.exhausted is not None
+                        if not exhausted:
+                            record["state"] = "CALL_FAILED"
                         continue
                     except Exception:
                         record["state"] = "CALL_FAILED"

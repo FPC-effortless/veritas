@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from trainlab.benchmark_execution import execute, freeze_panel
+from trainlab.research_diagnostics import BudgetExceeded
 from trainlab.runner import LabError
 
 
@@ -82,6 +83,24 @@ class BenchmarkExecutionTests(unittest.TestCase):
         report = execute(self.root, self.arms, **self.artifact)
         self.assertEqual(report["status"], "INCONCLUSIVE")
         self.assertEqual(report["observations"][0]["state"], "INVALID_OUTPUT_OR_MUTATION")
+
+    def test_callback_budget_exception_is_a_failed_call(self):
+        def fail(_row):
+            raise BudgetExceeded("callback failure")
+
+        self.arms["reference_a"] = fail
+        report = execute(self.root, self.arms, **self.artifact)
+        self.assertEqual(report["summary"]["observed_invocations"], 8)
+        self.assertEqual(report["observations"][0]["state"], "CALL_FAILED")
+        self.assertEqual(report["observations"][-1]["state"], "OBSERVED")
+
+    def test_object_input_order_is_canonical_for_the_same_pin(self):
+        self.arms["reference_a"] = lambda row: list(row.values())
+        first = execute(self.root, self.arms, **self.artifact)
+        row = self.artifact["panel"]["rows"][1]
+        row["intervened"] = dict(reversed(list(row["intervened"].items())))
+        second = execute(self.root.with_name("same"), self.arms, **self.artifact)
+        self.assertEqual(first["observations"], second["observations"])
 
     def test_suspicious_control_and_insufficient_group_support(self):
         self.arms["shortcut"] = lambda row: row["value"]
