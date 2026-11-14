@@ -61,7 +61,7 @@ class BenchmarkExecutionTests(unittest.TestCase):
         self.assertIsNone(report["summary"]["shortcut_accuracy"])
         self.assertEqual(
             [finding["kind"] for finding in report["findings"]],
-            ["REFERENCE_PARITY", "REFERENCE_EXPECTATION"],
+            ["REFERENCE_PARITY", "REFERENCE_EXPECTATION", "INSUFFICIENT_CHANGED_GROUPS"],
         )
 
     def test_mutation_and_pinned_panel_change(self):
@@ -101,6 +101,24 @@ class BenchmarkExecutionTests(unittest.TestCase):
         row["intervened"] = dict(reversed(list(row["intervened"].items())))
         second = execute(self.root.with_name("same"), self.arms, **self.artifact)
         self.assertEqual(first["observations"], second["observations"])
+
+    def test_impossible_coverage_is_failed_when_a_shortcut_crashes(self):
+        def fail(_row):
+            raise RuntimeError("unavailable shortcut")
+
+        self.arms["shortcut"] = fail
+        frozen = freeze_panel(
+            self.rows[:1],
+            source_sha256=self.artifact["panel"]["source_sha256"],
+            minimum_changed_groups=2,
+            minimum_invariant_groups=1,
+            maximum_shortcut_accuracy=0.75,
+        )
+        report = execute(self.root, self.arms, **frozen)
+        self.assertEqual(report["status"], "FAILED")
+        self.assertFalse(report["summary"]["complete"])
+        self.assertEqual(report["summary"]["possible_changed_groups"], 1)
+        self.assertEqual(report["summary"]["possible_invariant_groups"], 0)
 
     def test_suspicious_control_and_insufficient_group_support(self):
         self.arms["shortcut"] = lambda row: row["value"]

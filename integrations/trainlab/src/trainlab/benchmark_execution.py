@@ -89,12 +89,15 @@ def _score(panel, observed):
         for row in observed
         if row["state"] == "OBSERVED"
     }
-    findings, sensitive, invariant = [], set(), set()
+    findings = []
+    verified = {"changed": set(), "invariant": set()}
+    possible = {"changed": set(), "invariant": set()}
     shortcut_scored = shortcut_correct = 0
     cases = panel["rows"]
     for row in cases:
         identity = row["id"]
         agrees = True
+        contradicted = False
         for side in _SIDES:
             expected = _digest(row["expected_" + side])
             a, b, control = (outcomes.get((identity, side, arm)) for arm in _ARMS)
@@ -102,6 +105,7 @@ def _score(panel, observed):
                 findings.append({"kind": "REFERENCE_PARITY", "case": identity, "side": side})
             for arm, result in zip(_ARMS[:2], (a, b), strict=True):
                 if result is not None and result != expected:
+                    contradicted = True
                     findings.append(
                         {
                             "kind": "REFERENCE_EXPECTATION",
@@ -114,23 +118,27 @@ def _score(panel, observed):
             if control is not None:
                 shortcut_scored += 1
                 shortcut_correct += control == expected
+        kind = "changed" if row["expect_change"] else "invariant"
         if agrees:
-            (sensitive if row["expect_change"] else invariant).add(row["group"])
+            verified[kind].add(row["group"])
+        if not contradicted:
+            possible[kind].add(row["group"])
     expected_invocations = len(cases) * len(_ARMS) * len(_SIDES)
     shortcut_total = len(cases) * len(_SIDES)
     complete = len(outcomes) == expected_invocations
     accuracy = shortcut_correct / shortcut_total if shortcut_scored == shortcut_total else None
     if shortcut_correct / shortcut_total > panel["maximum_shortcut_accuracy"]:
         findings.append({"kind": "SHORTCUT_ABOVE_CEILING"})
-    if complete:
-        for name, count in (("changed", len(sensitive)), ("invariant", len(invariant))):
-            if count < panel[f"minimum_{name}_groups"]:
-                findings.append({"kind": f"INSUFFICIENT_{name.upper()}_GROUPS"})
+    for kind, groups in possible.items():
+        if len(groups) < panel[f"minimum_{kind}_groups"]:
+            findings.append({"kind": f"INSUFFICIENT_{kind.upper()}_GROUPS"})
     return findings, {
         "observed_invocations": len(outcomes),
         "expected_invocations": expected_invocations,
-        "verified_changed_groups": len(sensitive),
-        "verified_invariant_groups": len(invariant),
+        "verified_changed_groups": len(verified["changed"]),
+        "verified_invariant_groups": len(verified["invariant"]),
+        "possible_changed_groups": len(possible["changed"]),
+        "possible_invariant_groups": len(possible["invariant"]),
         "observed_shortcut_correct": shortcut_correct,
         "observed_shortcut_total": shortcut_scored,
         "shortcut_accuracy": accuracy,
@@ -181,11 +189,13 @@ def execute(root, arms, *, panel, panel_sha256, max_calls=384, max_seconds=30):
                     if exhausted:
                         continue
                     proposed = deepcopy(case[side])
+                    attempts = ctx.report["attempts"]
+                    previous_count = len(attempts)
                     try:
                         returned = ctx.invoke(arm, proposed, phase="answer")
                     except BudgetExceeded:
                         exhausted = ctx.exhausted is not None
-                        if not exhausted:
+                        if len(attempts) > previous_count and attempts[-1]["status"] == "FAILED":
                             record["state"] = "CALL_FAILED"
                         continue
                     except Exception:
