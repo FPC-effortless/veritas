@@ -46,7 +46,7 @@ bounded and pinned by its bytes. Supported checks are:
 | `utf8` | Decodes as UTF-8, nonblank and without NUL bytes |
 | `json` | Valid UTF-8 finite JSON, unique object keys, bounded nesting |
 | `csv` | UTF-8, strict CSV syntax, distinct nonblank headers and consistent row width |
-| `png` | PNG structure, chunk CRCs and bounded scanline decoding for noninterlaced 8-bit grayscale and truecolor images, with or without alpha |
+| `png` | PNG structure, chunk CRCs and bounded scanline decoding for noninterlaced 8-bit grayscale and truecolor images, with or without alpha, with no ancillary chunks and an exact compressed stream |
 | `wav` | RIFF/WAVE envelope, chunk bounds and padding, consistent PCM metadata, and nonempty frame-aligned PCM data |
 
 Files above 4 MiB, PNG profiles outside the supported decoding subset, non-PCM WAV formats, and

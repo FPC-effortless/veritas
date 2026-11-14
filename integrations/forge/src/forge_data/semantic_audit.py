@@ -169,7 +169,8 @@ def _png(data):
                     "invalid PNG palette",
                 )
                 palette = True
-            elif not kind[0:1].islower():
+            else:
+                # Metadata semantics are outside the checked PNG profile.
                 profile = False
             closed_data = bool(blocks)
         pos = end

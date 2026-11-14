@@ -176,6 +176,15 @@ class SemanticAuditTests(unittest.TestCase):
         )
         self.assertEqual(self.run_audit(media_root=self.asset)["status"], "TESTED")
 
+    def test_unvalidated_png_metadata_stays_unchecked(self):
+        data = png()
+        stamp = b"tEXtComment\0fixture"
+        chunk = struct.pack(">I", len(stamp) - 4) + stamp + struct.pack(">I", zlib.crc32(stamp))
+        self.rows[0]["features"]["png"] = self.file("metadata.png", data[:33] + chunk + data[33:])
+        report = self.run_audit(media_root=self.asset)
+        self.assertEqual(report["status"], "INCONCLUSIVE")
+        self.assertEqual(report["media"]["unavailable_by_reason"]["MEDIA_PROFILE_UNSUPPORTED"], 1)
+
     def test_undeclared_row_field_is_rejected_beyond_scan_prefix(self):
         self.rows[1]["features"]["unlisted"] = 0
         with self.assertRaises(ForgeError):
