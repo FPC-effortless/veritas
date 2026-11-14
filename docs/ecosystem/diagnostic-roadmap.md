@@ -12,9 +12,9 @@ catalog promises complete diagnosis of arbitrary models or datasets.
 | 2 | Coverage/evidence report | Version/scope/status and missing capabilities implemented. Next: reusable slices, uncertainty and finding-to-example navigation. |
 | 3 | Budget-aware execution | Cooperative call/time limits, partial journal, outer TrainLab timeout. RAM/GPU/API hard caps and cost estimates remain unimplemented. |
 | 4 | Reusable computations | [Bound prediction reuse](prediction-artifacts.md), exact request/hash checks and independent consumer reads implemented. Embedding/distributed caches remain future work. |
-| 5 | Dataset audit | Forge temporal/schema foundations; semantic units, modalities and annotation-alignment packs remain proposed. |
-| 6 | Label investigation | Proposed: adjudication with versioned evidence and fresh-evaluation comparison; disagreement must not auto-change labels. |
-| 7 | Leakage/split investigation | Forge grouped/temporal integrity; general near-duplicate, preprocessing and generator-mechanism analysis remain proposed. |
+| 5 | Dataset audit | [Dataset pack](dataset-diagnostics.md) adds missing/null selected-feature findings and bounded row coverage. Semantic units, modalities and annotation alignment remain proposed. |
+| 6 | Label investigation | Exact-feature label disagreements now produce review findings with row witnesses; no automatic correction. Adjudication and fresh-evaluation repair comparison remain proposed. |
+| 7 | Leakage/split investigation | Exact selected-feature and declared entity/generator overlap now inspected across train/validation. Near duplicates, preprocessing and true mechanism independence remain unresolved. |
 | 8 | Coverage/drift/rare cases | Proposed general slice/distribution analysis; no claim that existing identifiers prove independent causal coverage. |
 | 9 | Training sanity | Existing optional PyTorch foundations; generalized shape/shift/mask/tiny-fit diagnostic packs remain incomplete. |
 | 10 | Numerical/optimizer forensics | Existing finiteness checks; earliest-fault localization, scaler/update/optimizer context remain future work. |
@@ -30,7 +30,7 @@ catalog promises complete diagnosis of arbitrary models or datasets.
 | 20 | Quality/cost scaling | Proposed: qualified workload sweeps and uncertainty; tiny adapter timings must not be used as architecture rankings. |
 | 21 | Failure browser/reproducer | Inspectable JSON artifacts/graph; no general UI browser, grouping or automatic minimization yet. |
 | 22 | Hypothesis/repair verification | Research Lab supplies continuity; hypothesis ranking, experiment selection and fresh repair/regression orchestration remain proposed. |
-| 23 | Diagnostic qualification | Injected stale-artifact, row-mapping, batching and reset controls added to initial software controls; no population-level detection sensitivity, false-alarm or overhead claims. |
+| 23 | Diagnostic qualification | Injected dataset missingness/overlap/label conflict/prefix limits join stale-artifact, row-mapping, batching and reset controls; no population-level detection sensitivity, false-alarm or overhead claims. |
 | 24 | Portable collaboration/packs | Existing receipts, graph and exportable files; a community pack API and review-comment workflow remain future work. |
 
 ## Delivery order
