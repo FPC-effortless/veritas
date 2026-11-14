@@ -38,13 +38,27 @@ class ResourceTests(unittest.TestCase):
         self.assertEqual(list(self.root.iterdir()), [])
 
     def test_completed_child_after_supervisor_delay_is_not_within_budget(self):
-        real_sleep = time.sleep
-        with patch(
-            "trainlab.resource_diagnostics.time.sleep", side_effect=lambda _: real_sleep(0.3)
+        real_wait4 = os.wait4
+        real_monotonic = time.monotonic_ns
+        start = real_monotonic()
+        delay_ns = 0
+
+        def delayed_reap(pid, _options):
+            nonlocal delay_ns
+            delay_ns = 300_000_000
+            return real_wait4(pid, 0)
+
+        with (
+            patch("trainlab.resource_diagnostics.os.wait4", side_effect=delayed_reap),
+            patch(
+                "trainlab.resource_diagnostics.time.monotonic_ns",
+                side_effect=lambda: start + delay_ns,
+            ),
         ):
             result, _ = self.execute("pass", limits={**LIMITS, "wall_seconds": 0.15})
         self.assertEqual(result["state"], "TIMEOUT")
         self.assertTrue(result["wall_budget_exceeded"])
+        self.assertFalse(result["timeout_termination_requested"])
         self.assertEqual(result["cost_coverage"], "INCOMPLETE")
 
     def test_boolean_limit_evidence_does_not_equal_integer(self):

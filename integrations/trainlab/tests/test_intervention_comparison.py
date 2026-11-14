@@ -73,8 +73,14 @@ class InterventionTests(unittest.TestCase):
         ), recipe
 
     def test_frozen_intervention_counts_rescue_damage_and_partial(self):
-        baseline = self.artifact("before.json", [0, 0, 0])
-        treatment = self.artifact("after.json", [1, 1, 1], config="f" * 64)
+        def frozen_predict(feature):
+            return int(2 * feature >= 10)
+
+        raw = [row["input"] for row in self.rows]
+        before = [frozen_predict(feature) for feature in raw]
+        after = [frozen_predict(feature + 4) for feature in raw]
+        baseline = self.artifact("before.json", before)
+        treatment = self.artifact("after.json", after, config="f" * 64)
         design, recipe = self.prescription("frozen", baseline, treatment)
         report = compare(design, recipe, self.panel, baseline, treatment)
         self.assertEqual(report["status"], "INCONCLUSIVE")

@@ -33,6 +33,10 @@ exact declared identities. Refit provenance, elapsed training conditions,
 coverage of independent mechanisms and causal isolation require separate
 evidence.
 
+Build prediction requests from well-formed Unicode JSON inputs. The
+comparison reads input digests from the request. Reconstructing original
+input values or checking an upstream hash producer is outside that scope.
+
 ```bash
 python -m unittest discover -s integrations/trainlab/tests -p test_intervention_comparison.py
 ```
