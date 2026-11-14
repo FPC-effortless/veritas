@@ -58,9 +58,10 @@ def _integer(value):
     return value
 
 
-def import_history(path, *, sha256, run_id, metric_key, max_events=10000):
+def import_history(path, *, sha256, run_id, metric_key, initial_page=None, max_events=10000):
     """Read one MLflow Get Metric History response without following pagination."""
     _require(_text(run_id) and _text(metric_key), "declared run and metric identity required")
+    _require(initial_page is None or type(initial_page) is bool, "invalid page origin")
     data = _document(path, sha256)
     _require(set(data) <= {"metrics", "next_page_token"}, "unknown metric response fields")
     token = data.get("next_page_token")
@@ -93,7 +94,7 @@ def import_history(path, *, sha256, run_id, metric_key, max_events=10000):
                 "scope": list(scope),
             }
         )
-    complete = not token and len(metrics) == len(rows)
+    complete = initial_page is True and not token and len(metrics) == len(rows)
     return {
         "schema": "trainlab.external-diagnostic-import.v1",
         "format": "mlflow-metric-history",
@@ -110,6 +111,7 @@ def import_history(path, *, sha256, run_id, metric_key, max_events=10000):
             "scanned_rows": len(rows),
             "source_rows": len(metrics),
             "continuation_present": bool(token),
+            "initial_page_declared": initial_page,
         },
         "boundary": "One local response. Run identity is caller-declared when absent from row.",
         "scientific_qualification": "NOT_QUALIFIED",
@@ -185,6 +187,7 @@ def main():
     history = formats.add_parser("mlflow")
     history.add_argument("--run-id", required=True)
     history.add_argument("--metric-key", required=True)
+    history.add_argument("--initial-page", action=argparse.BooleanOptionalAction, default=None)
     trace = formats.add_parser("pytorch")
     trace.add_argument("--capture-id", required=True)
     for sub in (history, trace):
@@ -200,6 +203,7 @@ def main():
                 max_events=args.max_events,
                 run_id=args.run_id,
                 metric_key=args.metric_key,
+                initial_page=args.initial_page,
             )
         else:
             value = import_trace(

@@ -13,7 +13,7 @@ as a local JSON file. Pass the run ID and metric key used to request it.
 
 ```bash
 python -m trainlab.diagnostic_imports mlflow \
-  --input history.json --sha256 SHA --run-id RUN --metric-key validation_loss
+  --input history.json --sha256 SHA --run-id RUN --metric-key validation_loss --initial-page
 ```
 
 Metric values must be finite. Timestamps are integer milliseconds, and both
@@ -21,7 +21,9 @@ timestamps and steps accept int64 integers and decimal string encodings.
 Source order and repeated steps are preserved. Dataset name, dataset digest
 and logged model form separate scopes. An explicit foreign run ID or metric
 key is rejected. If the response omits run IDs, association comes from the
-import declaration. A continuation token marks the result incomplete.
+import declaration. Declare `--initial-page` only when the request started
+without a page token. Both unknown origin and later pages stay incomplete.
+A continuation token also marks the result incomplete.
 Token contents are omitted, and the importer does not fetch later pages.
 
 ## PyTorch Chrome trace

@@ -12,14 +12,19 @@ class DiagnosticImportsTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
 
-    def history(self, metrics, token=None, max_events=100):
+    def history(self, metrics, token=None, max_events=100, initial_page=None):
         path = self.root / "history.json"
         data = {"metrics": metrics}
         if token is not None:
             data["next_page_token"] = token
         write_json(path, data)
         return import_history(
-            path, sha256=digest(path), run_id="run-1", metric_key="loss", max_events=max_events
+            path,
+            sha256=digest(path),
+            run_id="run-1",
+            metric_key="loss",
+            initial_page=initial_page,
+            max_events=max_events,
         )
 
     def metric(self, step=1, **changes):
@@ -54,6 +59,13 @@ class DiagnosticImportsTests(unittest.TestCase):
         self.assertEqual([row["step"] for row in report["rows"]], [1, 1])
         self.assertEqual([row["source_index"] for row in report["rows"]], [0, 1])
         self.assertNotIn("opaque-secret-marker", str(report))
+
+    def test_last_page_is_not_certified_as_complete_history(self):
+        for origin, expected in ((True, "TESTED"), (False, "INCONCLUSIVE"), (None, "INCONCLUSIVE")):
+            with self.subTest(origin=origin):
+                report = self.history([self.metric()], initial_page=origin)
+                self.assertEqual(report["status"], expected)
+                self.assertIs(report["observations"]["initial_page_declared"], origin)
 
     def test_preserves_scopes_and_rejects_cross_run_or_key(self):
         result = self.history(
