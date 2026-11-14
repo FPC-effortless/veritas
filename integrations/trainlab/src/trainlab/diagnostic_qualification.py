@@ -159,6 +159,10 @@ def _runs(doc, repeats, cases):
                 and len(set(loc)) == len(loc),
                 "invalid or duplicate finding locations",
             )
+            _require(
+                not loc or check["status"] not in ("NOT_RUN", "UNSUPPORTED"),
+                "unexecuted check cannot report witnesses",
+            )
             checks[check["name"]] = check["status"], set(loc)
         result[key] = checks, _times(row["timing"])
     return result

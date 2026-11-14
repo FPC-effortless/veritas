@@ -25,7 +25,7 @@ CASES = ("clean", "missing-feature", "overlap", "evaluation-fit", "constant-outp
 REPEATS = list(range(5))
 LICENSE = {
     "dataset": "Wine",
-    "credit": "Aeberhard, S. and Forina, M. (1991). Wine. UCI Machine Learning Repository.",
+    "credit": "Aeberhard, S. and Forina, M. (1992). Wine. UCI Machine Learning Repository.",
     "source": "https://doi.org/10.24432/C5PC7J",
     "license": "CC BY 4.0",
     "license_url": "https://creativecommons.org/licenses/by/4.0/",

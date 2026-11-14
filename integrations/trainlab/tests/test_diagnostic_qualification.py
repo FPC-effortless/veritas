@@ -93,6 +93,12 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(result["counts"]["unadjudicated"], 1)
         self.assertEqual(result["counts"]["false_positive"], 0)
 
+    def test_unexecuted_checks_cannot_report_witnesses(self):
+        for status in ("NOT_RUN", "UNSUPPORTED"):
+            self.report["runs"][0]["checks"][0]["status"] = status
+            with self.subTest(status=status), self.assertRaises(LabError):
+                self.evaluate()
+
     def test_duplicate_and_unmatched_inputs_rejected(self):
         with self.assertRaises(LabError):
             self.evaluate("0" * 64)

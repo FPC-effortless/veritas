@@ -20,7 +20,8 @@ run has `case`, `repeat`, `workload_sha256`, `checks`, and `timing`. Checks
 name a `name`, `status` and observed `locations`. Status is `CHECKED`,
 `INCONCLUSIVE`, `UNSUPPORTED`, `NOT_RUN`, or `EXECUTION_FAILED`. Supply
 `CHECKED` only when the stated observation scope was covered. A positive
-witness can be retained with incomplete coverage. Absent witnesses from an
+witness can be retained with incomplete coverage from an attempted check.
+`NOT_RUN` and `UNSUPPORTED` must have no witnesses. Absent witnesses from an
 incomplete check are unknown. Findings outside the adjudicated location set
 are counted separately and make the report inconclusive.
 
@@ -57,7 +58,7 @@ python integrations/trainlab/examples/qualify_diagnostics.py --root /tmp/veritas
 
 The example uses the 178-row Wine dataset distributed with scikit-learn
 and freezes a stratified train/validation split. Attribution: Aeberhard, S.
-and Forina, M. (1991). Wine. UCI Machine Learning Repository.
+and Forina, M. (1992). Wine. UCI Machine Learning Repository.
 [Dataset DOI](https://doi.org/10.24432/C5PC7J).
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 The example uses scikit-learn's encoding and adds IDs, splits and fault variants.
