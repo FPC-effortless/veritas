@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .experiment_diagnostics import _number
 from .prediction_artifacts import MAX_BYTES, _bytes, _hash, _require, _text
-from .runner import LabError, _constant, _pairs
+from .runner import LabError, _constant, _finite, _pairs
 
 INT64_MAX = 2**63 - 1
 INT64_MIN = -(2**63)
@@ -76,11 +76,15 @@ def import_history(path, *, sha256, run_id, metric_key, initial_page=None, max_e
             and needed <= set(metric) <= needed | optional
             and metric["key"] == metric_key
             and metric.get("run_id", run_id) == run_id
-            and _number(metric["value"]),
+            and _finite(metric["value"]),
             "invalid or cross-run metric",
         )
         scope = tuple(metric.get(k) for k in ("dataset_name", "dataset_digest", "model_id"))
-        _require(all(value is None or _text(value) for value in scope), "invalid metric scope")
+        _require(
+            all(value is None or _text(value) for value in scope)
+            and (scope[0] is None) == (scope[1] is None),
+            "invalid or incomplete metric scope",
+        )
         step = _integer(metric["step"])
         stamp = _integer(metric["timestamp"])
         _require(stamp >= 0, "negative metric timestamp")
@@ -159,6 +163,7 @@ def import_trace(path, *, sha256, capture_id, max_events=10000):
     return {
         "schema": "trainlab.external-diagnostic-import.v1",
         "format": "pytorch-chrome-trace",
+        "source_schema_version": data["schemaVersion"],
         "source_sha256": sha256,
         "capture_id": capture_id,
         "status": "TESTED" if complete and rows and not skipped else "INCONCLUSIVE",

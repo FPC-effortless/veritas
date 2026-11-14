@@ -19,7 +19,7 @@ python -m trainlab.diagnostic_imports mlflow \
 Metric values must be finite. Timestamps are integer milliseconds, and both
 timestamps and steps accept int64 integers and decimal string encodings.
 Source order and repeated steps are preserved. Dataset name, dataset digest
-and logged model form separate scopes. An explicit foreign run ID or metric
+and logged model form separate scopes. Dataset name and digest occur as a pair. An explicit foreign run ID or metric
 key is rejected. If the response omits run IDs, association comes from the
 import declaration. Declare `--initial-page` only when the request started
 without a page token. Both unknown origin and later pages stay incomplete.

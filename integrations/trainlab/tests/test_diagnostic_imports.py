@@ -84,6 +84,12 @@ class DiagnosticImportsTests(unittest.TestCase):
             with self.subTest(row=bad), self.assertRaises(LabError):
                 self.history([bad])
 
+    def test_metric_accepts_finite_double_range_but_requires_paired_dataset_scope(self):
+        result = self.history([self.metric(value=1e101)], initial_page=True)
+        self.assertEqual(result["rows"][0]["value"], 1e101)
+        with self.assertRaisesRegex(LabError, "incomplete metric scope"):
+            self.history([self.metric(dataset_name="dataset")], initial_page=True)
+
     def test_only_complete_cpu_durations_are_aggregated(self):
         result = self.trace(
             [
