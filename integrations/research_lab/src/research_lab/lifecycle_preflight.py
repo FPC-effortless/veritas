@@ -35,6 +35,10 @@ SCHEMA = "veritas.lifecycle-preflight.v1"
 SPLITS = ("train", "validation")
 STRATA = ("overwrite", "delete_recreate")
 DATA_FILES = ("manifest.json", "train.jsonl", "validation.jsonl", "test.jsonl")
+REVIEW_CHECKS = (
+    "causal_diversity", "oracle_parity", "shortcut_controls", "supervision",
+    "budgets", "model_semantics",
+)
 
 
 def _require(condition, message):
@@ -209,24 +213,63 @@ def verify(root: Path, pin: str):
     return report
 
 
+def _review(root, pin, report, review_path, review_sha256):
+    """Bind one explicit operator review, including refusals, to this campaign."""
+    p = _load(root, pin)
+    review, review_bytes = _pinned_json(Path(review_path).resolve(), review_sha256)
+    _require(isinstance(review, dict) and set(review) == {
+        "schema", "protocol_sha256", "report_sha256", "verdict", "findings",
+        "independence", "reviewer", "summary", "checks"
+    }, "invalid pre-execution review")
+    _require(review["schema"] == "veritas.lifecycle-preflight-review.v2"
+             and review["protocol_sha256"] == pin and review["report_sha256"] == _sha(report)
+             and review["verdict"] in ("clean", "blocking")
+             and isinstance(review["findings"], list) and len(review["findings"]) <= 32
+             and all(isinstance(f, str) and 0 < len(f.strip()) <= 4000
+                     for f in review["findings"])
+             and review["independence"] == "SEPARATE_SESSION_OPERATOR_ASSERTED"
+             and isinstance(review["summary"], str) and 0 < len(review["summary"].strip()) <= 4000,
+             "review is stale, malformed or lacks independence")
+    name(review["reviewer"])
+    checks = review["checks"]
+    _require(isinstance(checks, dict) and set(checks) == set(REVIEW_CHECKS),
+             "review requires all evidence checks")
+    for check in checks.values():
+        _require(isinstance(check, dict) and set(check) == {"status", "evidence", "summary"}
+                 and check["status"] in ("PASS", "FAIL", "UNKNOWN")
+                 and isinstance(check["summary"], str)
+                 and 0 < len(check["summary"].strip()) <= 4000,
+                 "invalid evidence check")
+        refs = check["evidence"]
+        _require(isinstance(refs, list) and len(refs) <= 16
+                 and all(isinstance(ref, str) and ref in p["files"] for ref in refs)
+                 and len(set(refs)) == len(refs)
+                 and (check["status"] != "PASS" or refs), "check lacks frozen evidence")
+    # First valid review wins, including FAIL/UNKNOWN. Partial writes after a crash
+    # fail closed; replacing a blocked decision requires a new frozen campaign.
+    retained = root / "review.json"
+    try:
+        with retained.open("xb") as stream:
+            stream.write(review_bytes)
+    except FileExistsError:
+        pass
+    _pinned_json(contained_file(root, "review.json"), review_sha256)
+    lab = Controller(root / "research_lab")
+    review_id = "preflight-review." + review_sha256[:24]
+    put_node(lab, review_id, "evidence", review)
+    link(lab, review_id, "derived_from", "preflight." + _sha(report)[:24])
+    _require(review["verdict"] == "clean" and review["findings"] == []
+             and all(check["status"] == "PASS" for check in checks.values()),
+             "review blocks execution; failed or unknown checks remain unadmitted")
+    return review_bytes, review_id
+
+
 def dispatch(root: Path, pin: str, review_path: Path, review_sha256: str):
     """A trusted reviewed recipe runs at most once, including interrupted attempts."""
     root = Path(root).resolve()
     report = record(root, pin)
     _require(report["status"] == "READY_FOR_REVIEW", "preflight blocked; no dispatch")
-    review_path = Path(review_path).resolve()
-    review, review_bytes = _pinned_json(review_path, review_sha256)
-    _require(isinstance(review, dict) and set(review) == {
-        "schema", "protocol_sha256", "report_sha256", "verdict", "findings",
-        "independence", "reviewer", "summary"
-    }, "invalid pre-execution review")
-    _require(review["schema"] == "veritas.lifecycle-preflight-review.v1"
-             and review["protocol_sha256"] == pin and review["report_sha256"] == _sha(report)
-             and review["verdict"] == "clean" and review["findings"] == []
-             and review["independence"] == "SEPARATE_SESSION_OPERATOR_ASSERTED"
-             and isinstance(review["summary"], str) and 0 < len(review["summary"].strip()) <= 4000,
-             "review is stale, blocking or lacks independence")
-    name(review["reviewer"])
+    review_bytes, review_id = _review(root, pin, report, review_path, review_sha256)
     attempt = root / "execution"
     try:
         attempt.mkdir(mode=0o700)
@@ -241,9 +284,6 @@ def dispatch(root: Path, pin: str, review_path: Path, review_sha256: str):
     _load(root, pin)
     lab = Controller(root / "research_lab")
     import_trainlab(lab, attempt / "runs" / run["id"])
-    review_id = "preflight-review." + review_sha256[:24]
-    put_node(lab, review_id, "evidence", review)
-    link(lab, review_id, "derived_from", "preflight." + _sha(report)[:24])
     link(lab, "trainlab." + run["id"], "derived_from", review_id)
     return {"status": run["status"], "run_id": run["id"], "review_sha256": review_sha256,
             "protocol_sha256": pin, "scientific_qualification": "NOT_QUALIFIED"}

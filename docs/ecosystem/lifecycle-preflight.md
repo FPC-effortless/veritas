@@ -33,10 +33,17 @@ and supported model semantics. The software positive controls deliberately reuse
 invented mechanisms under distinct subjects; they test this trust boundary and
 must never be cited as scientific diversity evidence.
 
+ECOSYSTEM-ADMISSION-004 (#517) adds explicit evidence judgments to the dispatch
+review. The motivating research follow-up (#482, MEMORY-CAUSAL-GRAMMAR-048)
+observed temporary absence in 4/8 deletion examples while visible route cues
+predicted all eight sensitivity labels on that panel. That remains a development
+pilot, not an admitted comparison or held-out shortcut result. Sensitivity alone
+must not be treated as evidence that shortcuts have been excluded.
+
 ## Prepare and inspect
 
 Install the four sibling ecosystem packages. Place the recipe at the source root.
-Its `inputs` must include the pair inventory, design, model/runner dependencies,
+Its `inputs` must include the pair inventory, design, review evidence, model/runner dependencies,
 and all four Forge files. Its `split_identity` must match the pinned manifest and
 its `source_kind` must be CONSTRUCTED. A minimal source specification is:
 
@@ -79,16 +86,40 @@ must examine the frozen design, data, grouping and intended recipe, then provide
 
 ```json
 {
-  "schema": "veritas.lifecycle-preflight-review.v1",
+  "schema": "veritas.lifecycle-preflight-review.v2",
   "protocol_sha256": "PIN",
   "report_sha256": "CANONICAL_REPORT_SHA256",
   "verdict": "clean",
   "findings": [],
   "independence": "SEPARATE_SESSION_OPERATOR_ASSERTED",
   "reviewer": "reviewer-session-id",
-  "summary": "Exact scope, evidence reviewed, limits and execution decision."
+  "summary": "Exact scope, evidence reviewed, limits and execution decision.",
+  "checks": {
+    "causal_diversity": {"status": "UNKNOWN", "evidence": [], "summary": "Not reviewed."},
+    "oracle_parity": {"status": "UNKNOWN", "evidence": [], "summary": "Not reviewed."},
+    "shortcut_controls": {"status": "UNKNOWN", "evidence": [], "summary": "Not reviewed."},
+    "supervision": {"status": "UNKNOWN", "evidence": [], "summary": "Not reviewed."},
+    "budgets": {"status": "UNKNOWN", "evidence": [], "summary": "Not reviewed."},
+    "model_semantics": {"status": "UNKNOWN", "evidence": [], "summary": "Not reviewed."}
+  }
 }
 ```
+
+This deliberately incomplete example **cannot dispatch**. Every check needs a
+bounded substantive rationale and one of `PASS`, `FAIL`, `UNKNOWN`. A `PASS` must
+cite at least one unique relative filename in the frozen protocol's input closure
+(for example `evidence/shortcut-audit.json`, declared in the recipe before
+`prepare`). The protocol already pins those exact file bytes. Missing, extra,
+malformed or unfrozen references are rejected; a file path or asserted status
+does not itself prove that the evidence is adequate.
+
+All six checks must be `PASS`, with overall verdict `clean` and no findings.
+`FAIL` or `UNKNOWN` blocks dispatch even when mechanical coverage passes and the
+overall verdict says clean. Reviewers must evaluate distinct causal mechanisms,
+independent counterfactual oracle agreement, shortcut counterbalancing and
+held-out template controls, matched supervision, complete budgets and native
+model semantics within the frozen research design. This code does not invent
+scientific thresholds or parse reports to infer those judgments automatically.
 
 Retain the SHA256 of that exact review file separately. Dispatch recomputes the
 preflight and checks both pins before reserving an attempt:
@@ -101,6 +132,23 @@ A missing/stale/blocking review cannot dispatch. A clean review cannot override
 BLOCKED coverage. The review's identity and independence are operator assertions,
 not authenticated remote identity or scientific qualification. Actual execution
 also requires the operator's authority and budget; the JSON does not grant either.
+
+The first structurally valid, correctly pinned review is retained byte for byte
+as `campaign/review.json` and linked to the preflight in Research Lab **before**
+its execution decision is enforced. Thus valid failed/unknown reviews survive
+with no command launch or execution reservation. Invalid or stale reviews do
+not bind the campaign. A different review cannot replace the retained one,
+including changing a failed check to PASS without new evidence. After correction,
+preserve the refused campaign and freeze a new campaign with the revised evidence
+and a new review. A partial review write after a crash fails closed; this entry
+point does not repair it. The existing direct-command/trusted-local boundary
+still applies, including the operator's ability to remove files outside this API.
+
+Review v1 is rejected for new dispatches because it has no per-criterion checks.
+There is no automatic upgrade or inferred PASS. Historical v1 execution evidence
+remains historical evidence under its original pinned runtime; do not rewrite it
+or silently repin old campaigns to the updated runtime. Protocol/report schema
+v1 is unchanged; review schema v2 is the new execution requirement.
 
 One atomic execution-directory reservation prevents concurrent calls, failed
 commands or interrupted controllers from silently launching another attempt. A
