@@ -70,7 +70,10 @@ class TokenMemory:
 
     def update(self, event):
         _require(
-            type(event) is dict and set(event) == {"op", "tokens"} and event["op"] == "tokens",
+            type(event) is dict
+            and len(event) == 2
+            and set(event) == {"op", "tokens"}
+            and event["op"] == "tokens",
             "only explicit token updates are supported",
         )
         tokens = self._tokens(event["tokens"])
