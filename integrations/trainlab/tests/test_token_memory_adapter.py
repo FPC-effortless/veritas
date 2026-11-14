@@ -62,6 +62,15 @@ class MemoryAdapterTests(unittest.TestCase):
         with self.assertRaises(LabError):
             self.make(clone=lambda value: value).query([1])
 
+    def test_malformed_and_excessive_history_fails_before_execution(self):
+        def should_not_run(tokens, value):
+            raise AssertionError("validation must finish before execution")
+
+        memory = self.make(should_not_run)
+        for history in ([[1] * 1025], ["unexpected"], [[1] * 1024] * 65):
+            with self.subTest(length=len(history)), self.assertRaises(LabError):
+                memory.predict_rows([{"id": "x", "input": {"history": history, "query": [1]}}])
+
     def test_row_predictions_have_isolated_fresh_state_and_order(self):
         memory = self.make(lambda ids, s: (len(step(ids, s)[1]["tokens"]), s))
         memory.update({"op": "tokens", "tokens": [7]})

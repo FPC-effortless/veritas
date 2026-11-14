@@ -28,7 +28,8 @@ cross-process checkpoint recovery remain separate.
 Use the previously authorized source directory prepared by the
 [changing-state replay](changing-state-replay.md). The example checks the
 exact source and checkpoint against their historical SHA256 pins and
-loads weights with `weights_only=True`.
+loads weights with `weights_only=True`. Install Forge and TrainLab in the
+CPU PyTorch environment used for the admitted replay.
 
 ```bash
 python integrations/trainlab/examples/diagnose_native_memory.py   --source /path/to/extracted-native-replay-source   --root /tmp/veritas-native-memory

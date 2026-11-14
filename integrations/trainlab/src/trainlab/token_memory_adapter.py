@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 
-from .prediction_artifacts import _bytes, _hash, _require, _rows
+from .prediction_artifacts import _bytes, _hash, _require, _text
 from .research_diagnostics import Adapter
 
 
@@ -93,21 +93,38 @@ class TokenMemory:
 
     def predict_rows(self, rows):
         """Each input contains its own history; preserve row order and live state."""
-        _rows(rows, "input", limit=128)
-        request, total = [], 0
+        _require(type(rows) is list and 1 <= len(rows) <= 128, "bounded rows required")
+        request, seen, total = [], set(), 0
         for row in rows:
+            _require(
+                type(row) is dict
+                and len(row) == 2
+                and set(row) == {"id", "input"}
+                and type(row["id"]) is str
+                and len(row["id"]) <= 2000
+                and _text(row["id"])
+                and row["id"] not in seen,
+                "invalid or duplicate prediction row",
+            )
+            seen.add(row["id"])
             value = row["input"]
             _require(
                 type(value) is dict
+                and len(value) == 2
                 and set(value) == {"history", "query"}
                 and type(value["history"]) is list
                 and len(value["history"]) <= 128,
                 "prediction row requires bounded history and query",
             )
-            prefix = [self._tokens(block) for block in value["history"]]
             query = self._tokens(value["query"])
-            total += sum(map(len, prefix)) + len(query)
+            total += len(query)
             _require(total <= 65536, "prediction token budget exceeded")
+            prefix = []
+            for block in value["history"]:
+                tokens = self._tokens(block)
+                total += len(tokens)
+                _require(total <= 65536, "prediction token budget exceeded")
+                prefix.append(tokens)
             request.append((row["id"], prefix, query))
         result = []
         for identity, prefix, query in request:

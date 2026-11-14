@@ -8,6 +8,7 @@ import json
 import platform
 from copy import deepcopy
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from trainlab.prediction_artifacts import (
     conformance_checks,
@@ -41,28 +42,26 @@ def main(source, root):
     driver_file = (
         Path(__file__).resolve().parents[2] / "research_lab/examples/changing_state_replay.py"
     )
-    if digest(driver_file) != DRIVER_PIN:
-        raise LabError("the frozen replay driver differs")
-    spec = spec_from_file_location("veritas_replay_encoder", driver_file)
-    if spec is None or spec.loader is None:
-        raise LabError("could not bind replay driver")
-    driver = module_from_spec(spec)
-    spec.loader.exec_module(driver)
+    paths = {source / name: pin for name, pin in PINS.items()}
+    paths[driver_file] = DRIVER_PIN
     byte_sources = {}
-    for name, pin in PINS.items():
-        path = source / name
+    for path, pin in paths.items():
         if not path.is_file() or path.is_symlink():
             raise LabError("native source must be a regular file")
         with path.open("rb") as stream:
             payload = stream.read(1024 * 1024 + 1)
         if len(payload) > 1024 * 1024 or hashlib.sha256(payload).hexdigest() != pin:
             raise LabError("native replay source/checkpoint identity differs")
-        byte_sources[name] = payload
-    # Import only the verified source bytes. Write the snapshot under a private
-    # temporary directory so the normal import loader cannot reuse a source cache.
-    from tempfile import TemporaryDirectory
-
+        byte_sources[path.name] = payload
+    # Both imports use verified source snapshots in a fresh private directory.
     with TemporaryDirectory(prefix="veritas-native-model-") as temp:
+        driver_snapshot = Path(temp) / "driver.py"
+        driver_snapshot.write_bytes(byte_sources[driver_file.name])
+        spec = spec_from_file_location("veritas_replay_encoder", driver_snapshot)
+        if spec is None or spec.loader is None:
+            raise LabError("could not bind replay driver")
+        driver = module_from_spec(spec)
+        spec.loader.exec_module(driver)
         verified_source = Path(temp) / "native_slot.py"
         verified_source.write_bytes(byte_sources["native_slot.py"])
         module = driver.load_module(verified_source, "veritas_accepted_slot")
