@@ -10,7 +10,8 @@ requirements.
 and checks that the proposed revision matches the reviewed result. Accepted
 edits may change training labels. Row identities, selected features, validation
 labels and memberships must remain identical. The train and validation rows
-must be disjoint by ID, exact selected features, and known declared groups.
+must have complete selected model features and be disjoint by ID, exact
+selected features and known declared groups.
 An unresolved review or an unknown matched outcome leaves the result
 inconclusive.
 
@@ -25,9 +26,12 @@ scores. An unknown output or label contributes to missing coverage. A
 ## Drift and model outcomes
 
 `compare_drift_performance` runs Forge distributions on two pinned validation
-panels and scores bound predictions from the same fixed model. The panels
+panels and scores bound predictions from the same fixed model. Missing model
+features leave coverage inconclusive. The panels
 must be disjoint by identity, exact selected features and available declared
-groups. Both reports can slice by a declared string-valued feature. A null
+groups. Both reports can slice by a declared string-valued reporting field. The
+leakage check ignores this field so it cannot disguise identical model
+features. Prediction requests bind declared input and reporting fields. A null
 slice value identifies unassigned rows. A missing slice has no invented
 accuracy. Inspect drift and performance side by side. Feature distances and
 accuracy differences do not identify the cause of a performance change.
@@ -43,10 +47,11 @@ python integrations/trainlab/examples/diagnose_dataset_repair.py \
 
 The Wine example uses two fixed 36-row validation panels and 106 training
 rows. Rotate training labels, restore original labels using explicit fixture
-oracle decisions, and fit standardized logistic regression separately on each
-view. Evaluate both fits on the same untouched 36 rows. For the drift control,
+oracle decisions, and fit standardized logistic regression on the clean, faulted and repaired
+views. Verify that the repaired fit matches the independent clean fit. Evaluate all fits on the same untouched 36 rows. For the drift control,
 the repaired model predicts on the second held-out panel after a defined
-alcohol feature shift. Scaler fit excludes both evaluation panels. The output
+alcohol feature shift. The reporting slice uses the original alcohol value.
+Scaler fit excludes both evaluation panels. The output
 retains the views, reviews, bound outputs, configuration, comparison results
 and an independent recount. The original dataset and its redistribution
 license are credited in metadata. Review decisions are constructed controls.

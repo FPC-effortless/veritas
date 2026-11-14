@@ -116,6 +116,29 @@ class DatasetRepairTests(unittest.TestCase):
         with self.assertRaisesRegex(LabError, "exact selected features"):
             self.repair()
 
+    def test_extra_features_do_not_become_inputs_and_unassigned_slice_is_visible(self):
+        self.view["rows"][1]["features"].update(slice=None, unlisted="not an input")
+        self.corrected["rows"][1]["features"].update(slice=None, unlisted="not an input")
+        original = classification_request(
+            self.view, dataset_sha256="c" * 64, model_sha256="d" * 64, **CONFIG
+        )
+        self.view["rows"][1]["features"].pop("unlisted")
+        self.assertEqual(
+            original,
+            classification_request(
+                self.view, dataset_sha256="c" * 64, model_sha256="d" * 64, **CONFIG
+            ),
+        )
+        self.view["rows"][1]["features"]["unlisted"] = "not an input"
+        self.assertIsNone(self.repair()["slices"][0]["value"])
+
+    def test_missing_to_null_is_not_a_label_repair(self):
+        self.view["rows"][0].pop("label")
+        self.corrected["rows"][0]["label"] = None
+        self.reviews[0].update(old_label=None, new_label=None)
+        with self.assertRaisesRegex(LabError, "does not change"):
+            self.repair()
+
     def test_drift_report_uses_fixed_model_and_known_slice_labels(self):
         current = copy.deepcopy(self.view)
         for row in current["rows"][1:]:

@@ -48,7 +48,7 @@ def evidence(root):
         "scale": "training-only standard scaling",
         "fit": "logistic regression max_iter=400",
         "packages": version_info(),
-        "slice": "alcohol >= 13",
+        "slice": "original pre-shift alcohol >= 13",
         "drift": "held-out recent features scaled by 1.3 for alcohol",
     }
     config_pin = sha(config)
@@ -86,6 +86,9 @@ def evidence(root):
                     "rationale": "Restore original label after deliberate class rotation.",
                 }
             )
+    clean_path = root / "clean-view.json"
+    write_json(clean_path, clean)
+    clean_pin = digest(clean_path)
     parent_path = root / "faulted-view.json"
     write_json(parent_path, parent)
     parent_pin = digest(parent_path)
@@ -149,7 +152,8 @@ def evidence(root):
         return {"path": path, "sha256": pin, "model_sha256": model_pin}, results
 
     with threadpool_limits(limits=1):
-        baseline_fit, repaired_fit = fit(parent), fit(corrected)
+        clean_fit, baseline_fit, repaired_fit = fit(clean), fit(parent), fit(corrected)
+        clean_evidence, clean_answers = predict("clean", clean, clean_pin, clean_fit)
         baseline, before = predict("baseline", parent, parent_pin, baseline_fit)
         repaired, after = predict("repaired", corrected, corrected_pin, repaired_fit)
         shifted, recent_results = predict("drift", drift_view, drift_pin, repaired_fit)
@@ -178,7 +182,12 @@ def evidence(root):
         configuration_sha256=config_pin,
         slice_field="slice",
     )
+    if clean_answers != after or clean_evidence["model_sha256"] != repaired["model_sha256"]:
+        raise LabError("repaired fit did not recover the independent clean reference fit")
     recount = {
+        "clean_correct": sum(
+            a == r["label"] for a, r in zip(clean_answers, reference, strict=True)
+        ),
         "before_correct": sum(a == r["label"] for a, r in zip(before, reference, strict=True)),
         "after_correct": sum(a == r["label"] for a, r in zip(after, reference, strict=True)),
         "shifted_correct": sum(
