@@ -94,6 +94,7 @@ def prepared(tmp_path):
                     "recipe": f"{arm}-{seed}.json"}
             slots.append(slot)
             recipe = {
+                "execution_purpose": "engineering_diagnostic",
                 "schema": "trainlab.experiment.v2", "name": slot["id"],
                 "description": "Constructed software control, no training",
                 "command": [sys.executable, "driver.py", arm],

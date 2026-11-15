@@ -70,6 +70,7 @@ def bootstrap(root, *, examples=None):
             write_json(
                 recipe_root / f"{lane}-{arm}.json",
                 {
+                    "execution_purpose": "engineering_diagnostic",
                     "schema": "trainlab.experiment.v1",
                     "name": f"LABOS001 {lane} {arm}",
                     "description": (

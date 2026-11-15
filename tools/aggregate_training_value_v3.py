@@ -7,6 +7,11 @@ from pathlib import Path
 from statistics import mean, median, stdev
 from typing import Any
 
+if __package__ in (None, ""):
+    from training_value_diagnostics import unique_rows
+else:
+    from .training_value_diagnostics import unique_rows
+
 
 def _estimate(values: list[float]) -> dict[str, float | int]:
     from investigation_world.observatory.aggregation import critical_95
@@ -29,7 +34,9 @@ def _estimate(values: list[float]) -> dict[str, float | int]:
 
 def aggregate_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
     if len(reports) < 3:
-        raise ValueError("Training Value v3 aggregate requires at least three independent training seeds")
+        raise ValueError(
+            "Training Value v3 aggregate requires at least three independent training seeds"
+        )
     models = {str(item["model"]) for item in reports}
     train_panels = {str(item["train_panel_id"]) for item in reports}
     heldout_panels = {str(item["heldout_panel_id"]) for item in reports}
@@ -47,7 +54,11 @@ def aggregate_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
     train_gains = [float(item["train_absolute_improvement"]) for item in reports]
     heldout_gains = [float(item["heldout_absolute_improvement"]) for item in reports]
 
-    episode_ids = [str(item["episode_id"]) for item in reports[0]["paired_heldout"]["episode_deltas"]]
+    for report in reports:
+        unique_rows(report["paired_heldout"]["episode_deltas"])
+    episode_ids = [
+        str(item["episode_id"]) for item in reports[0]["paired_heldout"]["episode_deltas"]
+    ]
     per_seed_delta = {
         int(report["training_seed"]): {
             str(item["episode_id"]): float(item["delta"])
@@ -60,19 +71,34 @@ def aggregate_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
     per_episode = []
     for episode_id in episode_ids:
         values = [per_seed_delta[seed][episode_id] for seed in sorted(per_seed_delta)]
-        per_episode.append({
-            "episode_id": episode_id,
-            "delta_by_training_seed": {seed: per_seed_delta[seed][episode_id] for seed in sorted(per_seed_delta)},
-            "mean_delta": round(mean(values), 6),
-            "median_delta": round(median(values), 6),
-            "improved_seed_fraction": round(sum(value > 0 for value in values) / len(values), 6),
-        })
+        per_episode.append(
+            {
+                "episode_id": episode_id,
+                "delta_by_training_seed": {
+                    seed: per_seed_delta[seed][episode_id] for seed in sorted(per_seed_delta)
+                },
+                "mean_delta": round(mean(values), 6),
+                "median_delta": round(median(values), 6),
+                "improved_seed_fraction": round(
+                    sum(value > 0 for value in values) / len(values), 6
+                ),
+            }
+        )
 
     return {
-        "schema_version": "0.3.1",
+        "schema_version": "0.3.2",
         "experiment": "diagnostic_lora_sft_hardened_replicated_transfer",
         "model": next(iter(models)),
         "training_seeds": sorted(seeds),
+        "qualification": "NOT_QUALIFIED_USE_CANONICAL_TRAIN_001",
+        "interpretation_scope": "Descriptive supplied seed summaries; "
+        "no scientific transfer qualification",
+        "per_seed_interpretation": {
+            str(item["training_seed"]): item.get(
+                "interpretation", {"diagnosis": "UNASSESSED_LEGACY_REPORT"}
+            )
+            for item in reports
+        },
         "train_panel_id": next(iter(train_panels)),
         "heldout_panel_id": next(iter(heldout_panels)),
         "heldout_examples": len(episode_ids),
@@ -81,13 +107,17 @@ def aggregate_reports(reports: list[dict[str, Any]]) -> dict[str, Any]:
         "seed_level_proportion_improved": _estimate(proportions),
         "seed_level_train_gain": _estimate(train_gains),
         "seed_level_heldout_gain": _estimate(heldout_gains),
-        "seed_variance_of_mean_delta": round(stdev(mean_deltas) ** 2, 8) if len(mean_deltas) > 1 else 0.0,
+        "seed_variance_of_mean_delta": round(stdev(mean_deltas) ** 2, 8)
+        if len(mean_deltas) > 1
+        else 0.0,
         "per_episode": per_episode,
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Aggregate independent Training Value v3 seed reports")
+    parser = argparse.ArgumentParser(
+        description="Aggregate independent Training Value v3 seed reports"
+    )
     parser.add_argument("--input", type=Path, nargs="+", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()

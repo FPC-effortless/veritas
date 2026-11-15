@@ -131,6 +131,19 @@ def load_config(path: Path) -> dict:
         "metrics",
         "budget",
     }
+    if isinstance(config, dict) and "research_adequacy" in config:
+        from .research_adequacy import validate_pointer
+
+        validate_pointer(config["research_adequacy"])
+        fields.add("research_adequacy")
+    if isinstance(config, dict) and "execution_purpose" in config:
+        if config["execution_purpose"] not in (
+            "research",
+            "engineering_diagnostic",
+            "historical_replay",
+        ):
+            raise LabError("invalid execution purpose")
+        fields.add("execution_purpose")
     version = config.get("schema") if isinstance(config, dict) else None
     if version == "trainlab.experiment.v2":
         fields |= {"workload", "checks"}
@@ -199,19 +212,27 @@ def load_config(path: Path) -> dict:
 
 
 def validate_workload(workload: object) -> None:
-    if not isinstance(workload, dict) or set(workload) != {
-        "kind", "training_method", "execution"
-    }:
+    if not isinstance(workload, dict) or set(workload) != {"kind", "training_method", "execution"}:
         raise LabError("workload must declare kind, training_method and execution")
     if workload["kind"] not in (
-        "train", "debug", "profile", "test", "export", "deployment_check"
+        "train",
+        "debug",
+        "profile",
+        "test",
+        "export",
+        "deployment_check",
     ) or workload["execution"] not in ("single_process", "distributed", "external"):
         raise LabError("unsupported workload kind or execution")
     method = workload["training_method"]
     if workload["kind"] == "train":
         if method not in (
-            "supervised", "self_supervised", "fine_tuning", "distillation",
-            "reinforcement", "continual", "custom"
+            "supervised",
+            "self_supervised",
+            "fine_tuning",
+            "distillation",
+            "reinforcement",
+            "continual",
+            "custom",
         ):
             raise LabError("training workload requires a supported training_method")
     elif method is not None:
@@ -234,7 +255,8 @@ def validate_checks(checks: object, metrics: dict) -> None:
 
 def failed_checks(checks: dict, metrics: dict) -> list[str]:
     return [
-        name for name, bounds in checks.items()
+        name
+        for name, bounds in checks.items()
         if ("min" in bounds and metrics[name] < bounds["min"])
         or ("max" in bounds and metrics[name] > bounds["max"])
     ]
@@ -295,12 +317,44 @@ def run_experiment(
     config = load_config(config_path)
     cwd = config_path.parent
     inputs = {name: digest(contained_file(cwd, name)) for name in config["inputs"]}
+    adequacy = None
+    purpose = config.get("execution_purpose", "research")
+    if purpose == "research" and "research_adequacy" not in config:
+        refusal = runs_root.resolve() / "adequacy-refusals"
+        refusal.mkdir(parents=True, exist_ok=True)
+        write_json(
+            refusal / (uuid.uuid4().hex + ".json"),
+            {
+                "schema": "trainlab.research-adequacy-refusal.v1",
+                "status": "UNKNOWN",
+                "reason": "Research execution requires a pinned adequacy contract",
+                "recipe": config,
+                "inputs": inputs,
+                "qualification": "NOT_QUALIFIED",
+            },
+        )
+        raise LabError("Research adequacy blocked: missing contract (UNKNOWN)")
+    if "research_adequacy" in config:
+        from .research_adequacy import assess
+
+        adequacy = assess(config, cwd, inputs)
+        if adequacy["status"] != "DECLARED_CRITERIA_MET":
+            refusal = runs_root.resolve() / "adequacy-refusals"
+            refusal.mkdir(parents=True, exist_ok=True)
+            write_json(refusal / (uuid.uuid4().hex + ".json"), adequacy)
+            raise LabError("Research adequacy blocked: " + adequacy["status"])
+        if purpose == "research":
+            from .execution_adequacy import validate_execution
+
+            validate_execution(adequacy["contract"], config)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:12]
     directory = runs_root.resolve() / run_id
     directory.mkdir(parents=True, mode=0o700)
     output = directory / "output"
     output.mkdir()
     write_json(directory / "experiment.json", config)
+    if adequacy is not None:
+        write_json(directory / "research_adequacy.json", adequacy)
     record = {
         "schema": "trainlab.run.v1",
         "id": run_id,
@@ -325,6 +379,10 @@ def run_experiment(
         "git": _git_identity(cwd),
         "runtime": {"python": sys.version.split()[0], "platform": platform.platform()},
         "qualification": "NOT_QUALIFIED",
+        "execution_purpose": purpose,
+        "research_adequacy": "UNASSESSED" if adequacy is None else "PLAN_ADMITTED",
+        "claim_eligibility": "NOT_ESTABLISHED",
+        "evidence_capture": "UNASSESSED",
         "source_rights": "NOT_INDEPENDENTLY_VERIFIED",
         "execution_limits": {"log_bytes_per_stream": log_limit},
     }
@@ -446,15 +504,53 @@ def run_experiment(
                 if any(digest(contained_file(cwd, name)) != sha for name, sha in inputs.items()):
                     raise LabError("Declared inputs changed during the experiment")
                 record.update(status="succeeded", metrics=metrics, artifacts=artifacts)
+                if purpose == "research":
+                    from .execution_adequacy import assess_execution
+
+                    document = read_json(
+                        contained_file(output, adequacy["contract"]["execution"]["artifact"])
+                    )
+                    executed = assess_execution(adequacy["contract"], config, inputs, document)
+                    write_json(directory / "execution_adequacy.json", executed)
+                    record["research_adequacy"] = (
+                        "EXECUTED_CRITERIA_MET"
+                        if executed["status"] == "MET"
+                        else executed["status"]
+                    )
+                    if executed["status"] != "MET":
+                        raise LabError("Executed research adequacy blocked: " + executed["status"])
+                    if "capture" in adequacy["contract"]:
+                        from .adequacy_capture import verify_capture
+
+                        capture = read_json(
+                            contained_file(output, adequacy["contract"]["capture"]["artifact"]),
+                            limit=16 * 1024 * 1024,
+                        )
+                        capture_check = verify_capture(capture, document, config, inputs)
+                        write_json(directory / "capture_verification.json", capture_check)
+                        if capture_check.get("admissible") != 1:
+                            raise LabError("Measured capture is incomplete or failed")
+                        measured_metric = adequacy["contract"]["capture"]["metric"]
+                        if metrics[measured_metric] != capture_check["metrics"][measured_metric]:
+                            raise LabError(
+                                "Reported metric differs from independently rescored capture"
+                            )
+                        record["evidence_capture"] = "MEASURED_SUPPORTED_ADAPTER"
+                    record["claim_eligibility"] = "DECLARED_CONDITIONS_ONLY"
+
                 failures = failed_checks(config.get("checks", {}), metrics)
                 if failures:
                     raise LabError(_ACCEPTANCE_FAILURE + ", ".join(failures))
     except KeyboardInterrupt:
         if process is not None:
             _stop(process)
-        record.update(status="interrupted", error="Interrupted by operator.")
+        record.update(
+            status="interrupted",
+            error="Interrupted by operator.",
+            claim_eligibility="NOT_ESTABLISHED",
+        )
     except (OSError, ValueError) as exc:
-        record.update(status="failed", error=str(exc))
+        record.update(status="failed", error=str(exc), claim_eligibility="NOT_ESTABLISHED")
     finally:
         # Reap any descendants before freezing output; experiment commands must
         # wait for their workers and may not leave background jobs running.
@@ -465,7 +561,15 @@ def run_experiment(
             reader.join(timeout=2)
         record["elapsed_seconds"] = round(time.perf_counter() - started, 6)
         record["finished_at"] = _now()
-        for name in ("experiment.json", "stdout.log", "stderr.log", "output/metrics.json"):
+        for name in (
+            "experiment.json",
+            "stdout.log",
+            "stderr.log",
+            "output/metrics.json",
+            "research_adequacy.json",
+            "execution_adequacy.json",
+            "capture_verification.json",
+        ):
             try:
                 record["files"][name] = digest(contained_file(directory, name))
             except (LabError, OSError):
@@ -510,6 +614,26 @@ def validate_record(run: object) -> None:
             raise LabError("invalid run identity")
         if run["status"] not in ("running", "succeeded", "failed", "timed_out", "interrupted"):
             raise LabError("invalid run status")
+        purpose = run.get("execution_purpose")
+        phase = run.get("research_adequacy", "UNASSESSED")
+        eligibility = run.get("claim_eligibility", "NOT_ESTABLISHED")
+        if (
+            purpose not in (None, "research", "engineering_diagnostic", "historical_replay")
+            or phase
+            not in ("UNASSESSED", "PLAN_ADMITTED", "UNKNOWN", "INADEQUATE", "EXECUTED_CRITERIA_MET")
+            or eligibility not in ("NOT_ESTABLISHED", "DECLARED_CONDITIONS_ONLY")
+        ):
+            raise LabError("invalid research admission metadata")
+        if phase in ("UNKNOWN", "INADEQUATE", "EXECUTED_CRITERIA_MET") and purpose != "research":
+            raise LabError("non-research execution cannot claim reconciled adequacy")
+        if eligibility == "DECLARED_CONDITIONS_ONLY" and (
+            purpose != "research"
+            or run["status"] != "succeeded"
+            or phase != "EXECUTED_CRITERIA_MET"
+            or not {"research_adequacy.json", "execution_adequacy.json"}
+            <= set(run.get("files", {}))
+        ):
+            raise LabError("research eligibility lacks successful reconciled evidence")
         for key in ("name", "description", "started_at", "split_identity", "source_kind"):
             if not isinstance(run[key], str) or not run[key]:
                 raise LabError("invalid run metadata")
@@ -599,6 +723,100 @@ def verify_run(directory: Path) -> dict:
         expected_schema = config["schema"].replace("experiment", "run")
         if record["schema"] != expected_schema:
             mismatches.append("run.json schema")
+        if "research_adequacy" in config:
+            from .research_adequacy import verify_report
+
+            if "research_adequacy.json" not in hashes:
+                mismatches.append("missing research adequacy report")
+            else:
+                verify_report(
+                    read_json(contained_file(directory, "research_adequacy.json")),
+                    config,
+                    record["inputs"],
+                )
+            purpose = config.get("execution_purpose", "research")
+            if record.get("execution_purpose") != purpose:
+                mismatches.append("execution purpose")
+            expected_phase = "PLAN_ADMITTED"
+            if purpose == "research" and "execution_adequacy.json" in hashes:
+                from .execution_adequacy import assess_execution, validate_execution
+
+                plan = read_json(contained_file(directory, "research_adequacy.json"))
+                validate_execution(plan["contract"], config)
+                artifact = plan["contract"]["execution"]["artifact"]
+                execution = assess_execution(
+                    plan["contract"],
+                    config,
+                    record["inputs"],
+                    read_json(contained_file(directory, "output/" + artifact)),
+                )
+                expected_phase = (
+                    "EXECUTED_CRITERIA_MET" if execution["status"] == "MET" else execution["status"]
+                )
+                if execution != read_json(contained_file(directory, "execution_adequacy.json")):
+                    mismatches.append("executed research adequacy")
+            if record.get("research_adequacy") != expected_phase:
+                mismatches.append("research adequacy phase")
+            expected_capture = "UNASSESSED"
+            if purpose == "research" and "capture_verification.json" in hashes:
+                from .adequacy_capture import verify_capture
+
+                plan = read_json(contained_file(directory, "research_adequacy.json"))
+                contract = plan["contract"]
+                if "capture" not in contract:
+                    raise LabError("unbound capture verification")
+                captured = verify_capture(
+                    read_json(
+                        contained_file(directory, "output/" + contract["capture"]["artifact"]),
+                        limit=16 * 1024 * 1024,
+                    ),
+                    read_json(
+                        contained_file(directory, "output/" + contract["execution"]["artifact"])
+                    ),
+                    config,
+                    record["inputs"],
+                )
+                if captured != read_json(contained_file(directory, "capture_verification.json")):
+                    mismatches.append("capture verification changed")
+                if captured.get("admissible") == 1:
+                    metric = contract["capture"]["metric"]
+                    if record["metrics"].get(metric) != captured["metrics"][metric]:
+                        mismatches.append("reported metric differs from captured predictions")
+                    else:
+                        expected_capture = "MEASURED_SUPPORTED_ADAPTER"
+            if record.get("evidence_capture", "UNASSESSED") != expected_capture:
+                mismatches.append("evidence capture status")
+            if (
+                purpose == "research"
+                and record["status"] == "succeeded"
+                and "capture"
+                in read_json(contained_file(directory, "research_adequacy.json"))["contract"]
+                and expected_capture != "MEASURED_SUPPORTED_ADAPTER"
+            ):
+                mismatches.append("successful research lacks required measured capture")
+            eligible = (
+                purpose == "research"
+                and record["status"] == "succeeded"
+                and expected_phase == "EXECUTED_CRITERIA_MET"
+            )
+            if purpose == "research" and record["status"] == "succeeded" and not eligible:
+                mismatches.append("successful research lacks executed adequacy")
+            if record.get("claim_eligibility") != (
+                "DECLARED_CONDITIONS_ONLY" if eligible else "NOT_ESTABLISHED"
+            ):
+                mismatches.append("research claim eligibility")
+
+        else:
+            if record.get("evidence_capture", "UNASSESSED") != "UNASSESSED":
+                mismatches.append("ungated run claims measured capture")
+            if record.get("research_adequacy", "UNASSESSED") != "UNASSESSED":
+                mismatches.append("unassessed recipe claims adequacy")
+            if record.get("claim_eligibility", "NOT_ESTABLISHED") != "NOT_ESTABLISHED":
+                mismatches.append("unassessed recipe claims eligibility")
+            if "execution_purpose" in record and record["execution_purpose"] != config.get(
+                "execution_purpose", "research"
+            ):
+                mismatches.append("execution purpose")
         for key in ("workload", "checks"):
             if record.get(key) != config.get(key):
                 mismatches.append("run.json " + key)
@@ -643,7 +861,8 @@ def compare_runs(runs: list[dict]) -> dict:
     fields = ("inputs", "source_kind", "split_identity", "metric_directions", "budget", "seed")
     mismatches = [key for key in fields if any(run[key] != runs[0][key] for run in runs[1:])]
     mismatches.extend(
-        key for key in ("workload", "checks")
+        key
+        for key in ("workload", "checks")
         if any(run.get(key) != runs[0].get(key) for run in runs[1:])
     )
     if any(run["status"] != "succeeded" for run in runs):
@@ -651,6 +870,10 @@ def compare_runs(runs: list[dict]) -> dict:
     return {
         "runs": runs,
         "matched_declared_conditions": not mismatches,
+        "research_claim_eligibility": "NOT_ESTABLISHED",
+        "adequacy_observations": {
+            run["id"]: run.get("research_adequacy", "UNASSESSED") for run in runs
+        },
         "mismatches": mismatches,
         "qualification": "NOT_QUALIFIED",
         "note": (

@@ -245,6 +245,7 @@ def prepare(source, case):
     write_json(
         source / "recipe.json",
         {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v2",
             "name": "quality-" + case,
             "description": "Public constructed data-quality controls; zero model fits",

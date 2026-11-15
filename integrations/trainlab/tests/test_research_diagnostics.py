@@ -236,6 +236,7 @@ Workbench(adapter, identities, Path(os.environ["TRAINLAB_OUTPUT_DIR"]) / "diagno
     [Diagnostic("slow", "1", ("predict",), check, "timeout control")])
 ''')
         write_json(source / "recipe.json", {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v1", "name": "timeout-control",
             "description": "No model; intentionally stalled callback", "seed": 1,
             "command": [sys.executable, "driver.py"], "timeout_seconds": 2,

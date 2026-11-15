@@ -123,3 +123,24 @@ systems. The following stronger operating claims remain unproven:
 The seven current architecture groups enter the knowledge graph with their actual
 reported failure gates and next tests, rather than being relabeled as completed
 new research. See [the capability table and runtime contract](README.md).
+
+## Model-experiment adequacy
+
+New scientific model experiments must use the [claim-specific adequacy contract](../../docs/ecosystem/research-adequacy.md)
+through their TrainLab recipe. Model size, duration, dataset and training regime
+must each support the exact declared test. UNKNOWN/inadequate evidence blocks
+admission on that path. Existing ungated histories remain UNASSESSED and must not
+be promoted as adequate. The current gate enforces supplied necessary conditions;
+scientific review and existing qualification gates remain separate.
+
+
+## Reviewed scoped claims
+
+Ordinary synthesis reports claim promotion NOT_ESTABLISHED. Use the
+[measured claim-assurance workflow](../../docs/ecosystem/claim-assurance.md) to prepare
+exact review evidence and promote only after complete measured replay and an explicit
+accept from a separately trusted key. The Controller exposes prepare_claim_review,
+verify_claim_review and promote_claim. Negative bounded findings remain negative.
+An audit graph node is not perpetual authority: revalidate against current source
+and recipient trust. Aggregate scientific/training/frontier qualification remains
+NOT_QUALIFIED and publication remains unauthorized.

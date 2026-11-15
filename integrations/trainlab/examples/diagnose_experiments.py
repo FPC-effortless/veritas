@@ -294,6 +294,7 @@ def prepare(source, case):
     write_json(
         source / "recipe.json",
         {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v2",
             "name": "experiment-" + case,
             "description": "CPU scalar training control and constructed diagnostic fixtures",

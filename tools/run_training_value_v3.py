@@ -11,6 +11,11 @@ from pathlib import Path
 from statistics import mean, median, stdev
 from typing import Any
 
+if __package__ in (None, ""):
+    from training_value_diagnostics import content_identity, interpretation, score_by_id
+else:
+    from .training_value_diagnostics import content_identity, interpretation, score_by_id
+
 
 def _panel_hash(episode_ids: list[str]) -> str:
     payload = json.dumps(sorted(episode_ids), separators=(",", ":")).encode("utf-8")
@@ -18,8 +23,8 @@ def _panel_hash(episode_ids: list[str]) -> str:
 
 
 def _paired_summary(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
-    before_by_id = {str(row["episode_id"]): float(row["score"]) for row in before["episodes"]}
-    after_by_id = {str(row["episode_id"]): float(row["score"]) for row in after["episodes"]}
+    before_by_id = score_by_id(before)
+    after_by_id = score_by_id(after)
     if set(before_by_id) != set(after_by_id):
         raise ValueError("before/after held-out panels do not match")
     episode_ids = sorted(before_by_id)
@@ -78,7 +83,19 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=1536)
     parser.add_argument("--max-new-tokens", type=int, default=192)
     parser.add_argument("--audit-examples", type=int, default=2)
+    parser.add_argument(
+        "--minimum-reference-score",
+        type=float,
+        default=None,
+        help="Explicit target-sanity threshold; omission leaves interpretation unassessed",
+    )
     args = parser.parse_args()
+    if args.minimum_reference_score is not None and (
+        not math.isfinite(args.minimum_reference_score) or not 0 < args.minimum_reference_score <= 1
+    ):
+        parser.error("minimum-reference-score must be finite and in (0,1]")
+    if args.audit_examples < 0:
+        parser.error("audit-examples must be nonnegative")
 
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -109,11 +126,16 @@ def main() -> None:
 
     def render_prompt(prompt: str) -> str:
         messages = [
-            {"role": "system", "content": "Follow the requested JSON schema exactly. Return JSON only."},
+            {
+                "role": "system",
+                "content": "Follow the requested JSON schema exactly. Return JSON only.",
+            },
             {"role": "user", "content": prompt},
         ]
         if getattr(tokenizer, "chat_template", None):
-            return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            return tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
         return messages[0]["content"] + "\n\n" + messages[1]["content"] + "\n\n"
 
     generation_seconds = 0.0
@@ -123,7 +145,9 @@ def main() -> None:
     def generate(prompt: str) -> str:
         nonlocal generation_seconds
         rendered = render_prompt(prompt)
-        encoded = tokenizer(rendered, return_tensors="pt", truncation=True, max_length=args.max_length)
+        encoded = tokenizer(
+            rendered, return_tensors="pt", truncation=True, max_length=args.max_length
+        )
         tick = time.time()
         with torch.inference_mode():
             output = model.generate(
@@ -147,6 +171,10 @@ def main() -> None:
     heldout_ids = [item.episode_id for item in heldout]
     if set(train_ids) & set(heldout_ids):
         raise ValueError("train and held-out episode identities overlap")
+    train_content = content_identity(train_episodes)
+    heldout_content = content_identity(heldout)
+    if {r["sha256"] for r in train_content} & {r["sha256"] for r in heldout_content}:
+        raise ValueError("train and held-out exact episode contents overlap")
     train_panel_id = _panel_hash(train_ids)
     heldout_panel_id = _panel_hash(heldout_ids)
 
@@ -216,15 +244,18 @@ def main() -> None:
     if paired_heldout["panel_id"] != heldout_panel_id:
         raise RuntimeError("paired held-out panel identity changed during scoring")
 
-    if train_gain <= 0:
-        diagnosis = "no_detected_training_fit"
-    elif heldout_gain <= 0:
-        diagnosis = "training_fit_without_detected_transfer"
-    else:
-        diagnosis = "training_fit_with_heldout_transfer"
+    diagnosis_record = interpretation(
+        reference_train,
+        train_before,
+        train_after,
+        heldout_before,
+        heldout_after,
+        minimum_reference_score=args.minimum_reference_score,
+    )
+    diagnosis = diagnosis_record["diagnosis"]
 
     report: dict[str, Any] = {
-        "schema_version": "0.3.1",
+        "schema_version": "0.3.2",
         "experiment": "diagnostic_lora_sft_hardened_paired_transfer",
         "verifier_contract": "grounded-companyworld-v0.9.1",
         "model": args.model,
@@ -250,6 +281,23 @@ def main() -> None:
         "heldout_absolute_improvement": heldout_gain,
         "paired_heldout": paired_heldout,
         "diagnosis": diagnosis,
+        "interpretation": diagnosis_record,
+        "split_integrity": {
+            "train_contents": train_content,
+            "heldout_contents": heldout_content,
+            "exact_ids_and_serialized_contents_disjoint": True,
+            "semantic_or_near_duplicate_disjointness": "NOT_ESTABLISHED",
+            "scope": "Generated episode serialization only; renamed structures can remain equivalent.",
+        },
+        "audit_coverage": {
+            "requested_per_phase": args.audit_examples,
+            "observed_per_phase": {key: len(value) for key, value in audit.items()},
+            "selection": "FIRST_N_NOT_RANDOMIZED",
+            "complete_output_replay": "NOT_ESTABLISHED",
+        },
+        "parse_semantics": "Nonempty decoded JSON object, not schema validity or correct claims",
+        "training_qualification": "NOT_QUALIFIED_USE_CANONICAL_TRAIN_001",
+        "tiny_overfit_control": "NOT_PERFORMED_BY_THIS_RUNNER",
         "mean_training_loss": round(sum(losses) / len(losses), 6) if losses else None,
         "audit": audit,
         "runtime": {

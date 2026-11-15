@@ -78,6 +78,7 @@ def run_demo(destination: Path) -> dict:
         if kind == "export":
             artifacts += ["model.pt2", "reference.json"]
         config = {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v2",
             "name": f"PyTorch constructed {label}",
             "description": "Real CPU framework acceptance; constructed data, never qualification.",

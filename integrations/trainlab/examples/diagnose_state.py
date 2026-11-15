@@ -285,6 +285,7 @@ def prepare(source, case):
     write_json(
         source / "recipe.json",
         {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v2",
             "name": "state-" + case,
             "description": "Constructed store diagnostic controls; zero model fits",

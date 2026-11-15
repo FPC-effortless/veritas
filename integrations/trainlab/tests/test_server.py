@@ -25,6 +25,7 @@ class DashboardTests(unittest.TestCase):
             "(p/'model.json').write_text('{}')"
         )
         self.config = {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v1",
             "name": "Constructed HTTP test",
             "description": "Fixture only",
