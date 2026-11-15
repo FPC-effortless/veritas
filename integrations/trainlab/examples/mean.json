@@ -1,4 +1,5 @@
 {
+  "execution_purpose": "engineering_diagnostic",
   "schema": "trainlab.experiment.v1",
   "name": "Mean baseline \u00b7 constructed demo",
   "description": "Fit an intercept-only baseline to the same constructed fixture. Local CPU, 200 updates, fixed validation split.",

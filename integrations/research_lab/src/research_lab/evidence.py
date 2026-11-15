@@ -258,6 +258,7 @@ def synthesize(lab, protocol_id):
         )
     return {
         "schema": "research_lab.synthesis.v1",
+        "claim_promotion": "NOT_ESTABLISHED_REQUIRES_MEASURED_REPLAY_AND_AUTHENTICATED_REVIEW",
         "protocol": protocol_id,
         "protocol_pin": identity(p),
         "scope": p["scope"],

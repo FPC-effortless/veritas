@@ -38,6 +38,7 @@ def bootstrap(root):
             write_json(
                 recipes / f"{profile}-{arm}.json",
                 {
+                    "execution_purpose": "engineering_diagnostic",
                     "schema": "trainlab.experiment.v1",
                     "name": f"GRU loop {profile} {arm}",
                     "description": (

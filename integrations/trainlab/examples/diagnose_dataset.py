@@ -116,7 +116,8 @@ def prepare(source, case):
                 "manifest_sha256": manifest, "view_sha256": digest(source / "view.json"),
                 "runtime": _runtime(), "max_rows": 1 if case == "fault-prefix" else 10000}
     write_json(source / "protocol.json", protocol)
-    recipe = {"schema": "trainlab.experiment.v2", "name": "dataset-" + case,
+    recipe = {"execution_purpose": "engineering_diagnostic",
+              "schema": "trainlab.experiment.v2", "name": "dataset-" + case,
               "description": "Public constructed dataset diagnosis; no model training",
               "command": [sys.executable, "driver.py", "--worker"], "seed": 1,
               "timeout_seconds": 60, "source_kind": "CONSTRUCTED", "split_identity": manifest,

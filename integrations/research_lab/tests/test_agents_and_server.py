@@ -41,6 +41,7 @@ class AgentAndServerTests(unittest.TestCase):
             f"(out/'agent_result.json').write_text(json.dumps({result!r}))\n"
         )
         config = {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v1",
             "name": "constructed role bridge",
             "description": "test double, no LLM inference",

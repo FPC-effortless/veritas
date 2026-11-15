@@ -183,6 +183,7 @@ def prepare_source(package, destination):
         for arm in (("csm", "slot") if index % 2 == 0 else ("slot", "csm")):
             identity = f"{arm}-{seed}"
             recipe = {
+                "execution_purpose": "historical_replay",
                 "schema": "trainlab.experiment.v2", "name": identity,
                 "description": "Frozen learned model replay; no new model fit",
                 "command": [sys.executable, "driver.py", "evaluate", arm, str(seed)],

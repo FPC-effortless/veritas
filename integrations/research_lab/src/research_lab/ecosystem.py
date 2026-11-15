@@ -183,6 +183,7 @@ def _examples(directory, protocol):
 
 def _recipe(directory, agent, protocol, cases):
     return {
+        "execution_purpose": "engineering_diagnostic",
         "schema": "trainlab.experiment.v2",
         "name": agent,
         "description": "Public constructed scripted baseline; no trained weights or qualification.",

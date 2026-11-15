@@ -16,7 +16,7 @@ from pathlib import Path
 from trainlab.runner import contained_file, digest, load_config, read_json
 
 from .agents import register_order
-from .core import LabError, canonical, identity, name, validate_protocol
+from .core import LabError, canonical, identity, name, resolve_protocol_recipes, validate_protocol
 from .evidence import put_node, validate_proposal
 from .execution import validate_completion
 
@@ -103,18 +103,13 @@ def register_lane(lab, spec, recipes_root):
         if p["program"] != spec["program"]:
             raise LabError("profile crosses program boundary")
         files.add(entry["protocol"])
-        configs = []
+        configs = resolve_protocol_recipes(p, root)
         for arm in ("candidate", "control"):
             files.add(p[arm])
-            cfg = load_config(contained_file(root, p[arm]))
-            if cfg["metrics"].get(p["metric"]) != p["direction"] or not set(
-                p["replay_artifacts"]
-            ) <= set(cfg["artifacts"]):
-                raise LabError("profile metric/artifact mismatch")
-            configs.append(cfg)
+            if "seed_recipes" in p:
+                files.update(p["seed_recipes"][arm].values())
+        for cfg in configs.values():
             files.update(cfg["inputs"])
-        if configs[0]["split_identity"] != configs[1]["split_identity"]:
-            raise LabError("profile splits differ")
         with lab.connect() as db:
             resource = db.execute("SELECT * FROM resources WHERE id=?", (p["resource"],)).fetchone()
             program = db.execute("SELECT * FROM programs WHERE id=?", (p["program"],)).fetchone()
@@ -244,13 +239,7 @@ def _affordable(lab, p, root):
     # Admission reserves no money; require enough remaining envelope for all primary,
     # replay and review work before creating another generation of tasks.
     seconds = (
-        2
-        * len(p["seeds"])
-        * sum(
-            load_config(contained_file(root, p[a]))["timeout_seconds"]
-            for a in ("candidate", "control")
-        )
-        + 30
+        2 * sum(cfg["timeout_seconds"] for cfg in resolve_protocol_recipes(p, root).values()) + 30
     )
     seconds *= p["slots"]
     with lab.connect() as db:

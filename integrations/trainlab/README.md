@@ -53,7 +53,7 @@ debugging, named-module profiling, validation tests, export and deployment check
 Declared metric thresholds fail runs when acceptance bounds are missed. The
 constructed Forge-to-model example exercises supervised training, checkpoint-based
 fine-tuning and local export parity while retaining `NOT_QUALIFIED`. Existing v1
-recipes continue to work.
+recipes remain readable; new research execution requires an adequacy contract.
 
 The optional [PyTorch backend](PYTORCH.md) adds real tensor/module diagnostics,
 two-rank CPU training, optimizer/RNG checkpoint replay, framework traces,
@@ -62,7 +62,19 @@ hardware validation. The base runner keeps its dependency-free installation.
 
 ## Your first real experiment
 
-Copy an example JSON recipe next to your code and input files. Its schema is `trainlab.experiment.v1`:
+Copy an example JSON recipe next to your code and input files. Its schema is `trainlab.experiment.v1`.
+
+**Before using a quickstart for research, replace its `execution_purpose` with
+`research` and attach a hash-pinned `research_adequacy` contract.** Shipped
+quickstarts are explicitly `engineering_diagnostic`, because they demonstrate
+software behavior rather than qualify a scientific claim. Omitting the purpose
+also defaults to research and requires the contract; it is not a legacy bypass.
+`historical_replay` is reserved for reproducing existing evidence, not fresh
+capability claims. Both non-claim purposes remain `UNASSESSED` without a contract.
+See [adequacy requirements](../../docs/ecosystem/research-adequacy.md) and the
+[recipe migration inventory](../../docs/ecosystem/research-adequacy-migration.md).
+
+Fields:
 
 - `name`, `description`: bounded human-readable labels;
 - `command`: an argv array, executed **without a shell**, with the recipe directory as working directory;
@@ -124,3 +136,20 @@ Run recipes only if you trust their code. The runner is **not a sandbox**: a rec
 POSIX timeouts terminate the process group; on Windows only the immediate process can be terminated with the standard library. Experiments must not detach workers. Each stdout/stderr stream is capped at 16 MiB; exceeding it fails the run. Artifact/dataset space still requires a host filesystem quota. Active stores support 1,000 runs and 8 MiB of aggregate metadata; archive/rotate stores before that limit. Input/record files have bounded JSON sizes. Artifact checksums prove byte identity against the saved record, not signed authenticity; editing both a file and its local record is outside this integrity check.
 
 The initial commercial hypothesis remains open models/local SDKs with paid integration, optimization, evidence tooling, and support. No customer adoption, revenue, hardware qualification, or commercial release is claimed.
+
+### Claim-specific research adequacy
+
+New model-claim experiments must follow the [research adequacy rule and gate](../../docs/ecosystem/research-adequacy.md).
+Research recipes must carry a pinned `research_adequacy` contract. TrainLab checks
+all four dimensions before execution and reconciles post-run observations before
+recording executed conditions. Explicit engineering/replay runs and historical
+receipts remain UNASSESSED; successful execution never qualifies a scientific claim. See the contract for the exact enforcement and review limits.
+
+
+### Measured and reviewed claim assurance
+
+The [claim assurance path](../../docs/ecosystem/claim-assurance.md) combines supported
+native capture, prediction rescoring, complete clean-directory replay and explicit
+trusted-key review before Research Lab can record a scoped reviewed claim. Unsupported
+frameworks/metrics remain unverified. A valid signature alone, or a passing declared
+condition, never becomes scientific qualification.

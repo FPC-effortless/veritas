@@ -34,6 +34,7 @@ class RunnerTests(unittest.TestCase):
             "(p/'model.json').write_text('{}')"
         )
         self.config = {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v1",
             "name": "Test run",
             "description": "Constructed only",

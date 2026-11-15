@@ -84,7 +84,10 @@ ROLES = {"experiment", "replication", "review", *AGENT_ROLES}
 
 
 def validate_protocol(p):
-    if not isinstance(p, dict) or set(p) != PROTOCOL_FIELDS:
+    if not isinstance(p, dict) or set(p) not in (
+        PROTOCOL_FIELDS,
+        PROTOCOL_FIELDS | {"seed_recipes"},
+    ):
         raise LabError("unknown or missing protocol fields")
     if p["schema"] != "research_lab.protocol.v1":
         raise LabError("unsupported protocol schema")
@@ -109,6 +112,20 @@ def validate_protocol(p):
         or len(set(seeds)) != len(seeds)
     ):
         raise LabError("protocol requires at least three distinct fixed seeds")
+    if "seed_recipes" in p:
+        mappings = p["seed_recipes"]
+        if not isinstance(mappings, dict) or set(mappings) != {"candidate", "control"}:
+            raise LabError("seed_recipes requires candidate and control maps")
+        for arm in ("candidate", "control"):
+            mapping = mappings[arm]
+            if (
+                not isinstance(mapping, dict)
+                or set(mapping) != {str(x) for x in seeds}
+                or any(not isinstance(path, str) or not path for path in mapping.values())
+            ):
+                raise LabError("seed_recipes must cover exactly the declared seeds")
+            if mapping[str(seeds[0])] != p[arm]:
+                raise LabError("base recipe must be the first seed recipe")
     for key, maximum in (("slots", 1024), ("max_attempts", 10)):
         if type(p[key]) is not int or not 1 <= p[key] <= maximum:
             raise LabError("invalid slots or maximum attempts")
@@ -118,6 +135,46 @@ def validate_protocol(p):
         "[a-f0-9]{40}", p["source_commit"]
     ):
         raise LabError("source commit must be pinned")
+
+
+def resolve_protocol_recipes(p, recipes_root):
+    """Resolve and validate exact per-seed configurations without re-authoring evidence."""
+    configs = {
+        arm: load_config(contained_file(recipes_root, p[arm])) for arm in ("candidate", "control")
+    }
+    # Exact-head adequacy binds the seed too. Never rewrite or re-author an
+    # approval when expanding the queue; research supplies each recipe.
+    if "seed_recipes" not in p and any(
+        cfg.get("execution_purpose", "research") == "research" or "research_adequacy" in cfg
+        for cfg in configs.values()
+    ):
+        raise LabError("research or assessed protocols require exact seed_recipes")
+    jobs_config = {}
+    for arm, base in configs.items():
+        for seed in p["seeds"]:
+            if "seed_recipes" in p:
+                cfg = load_config(contained_file(recipes_root, p["seed_recipes"][arm][str(seed)]))
+                if cfg["seed"] != seed:
+                    raise LabError("seed-specific recipe seed disagrees with protocol")
+                for field in ("budget", "split_identity", "source_kind", "workload", "checks"):
+                    if cfg.get(field) != base.get(field):
+                        raise LabError("seed-specific recipe changed " + field)
+                if cfg.get("execution_purpose", "research") != base.get(
+                    "execution_purpose", "research"
+                ):
+                    raise LabError("seed-specific recipe changed execution purpose")
+            else:
+                cfg = {**base, "seed": seed}
+            if cfg["metrics"].get(p["metric"]) != p["direction"]:
+                raise LabError("protocol and recipe metric disagree")
+            if p["scope"] == "ENGINEERING_ONLY" and cfg["source_kind"] != "CONSTRUCTED":
+                raise LabError("engineering fixture source kind mismatch")
+            if not set(p["replay_artifacts"]).issubset(cfg["artifacts"]):
+                raise LabError("replay artifacts must be declared recipe artifacts")
+            jobs_config[arm, seed] = cfg
+    if len({cfg["split_identity"] for cfg in jobs_config.values()}) != 1:
+        raise LabError("candidate/control splits must match")
+    return jobs_config
 
 
 class Controller:
@@ -306,19 +363,7 @@ class Controller:
         p = json.loads(canonical(protocol))
         validate_protocol(p)
         recipes_root = Path(recipes_root).resolve()
-        configs = {
-            arm: load_config(contained_file(recipes_root, p[arm]))
-            for arm in ("candidate", "control")
-        }
-        for cfg in configs.values():
-            if cfg["metrics"].get(p["metric"]) != p["direction"]:
-                raise LabError("protocol and recipe metric disagree")
-            if p["scope"] == "ENGINEERING_ONLY" and cfg["source_kind"] != "CONSTRUCTED":
-                raise LabError("engineering fixture source kind mismatch")
-            if not set(p["replay_artifacts"]).issubset(cfg["artifacts"]):
-                raise LabError("replay artifacts must be declared recipe artifacts")
-        if configs["candidate"]["split_identity"] != configs["control"]["split_identity"]:
-            raise LabError("candidate/control splits must match")
+        jobs_config = resolve_protocol_recipes(p, recipes_root)
         pin = identity(p)
         with self.transaction() as db:
             prior = db.execute("SELECT pin FROM protocols WHERE id=?", (p["id"],)).fetchone()
@@ -342,7 +387,7 @@ class Controller:
             with tempfile.TemporaryDirectory(dir=snapshots) as temporary:
                 stage = Path(temporary) / "source"
                 stage.mkdir()
-                inputs = set().union(*(set(c["inputs"]) for c in configs.values()))
+                inputs = set().union(*(set(c["inputs"]) for c in jobs_config.values()))
                 if (
                     sum(contained_file(recipes_root, x).stat().st_size for x in inputs)
                     > 128 * 1024 * 1024
@@ -354,15 +399,12 @@ class Controller:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(source, target)
                 jobs = []
-                for arm, config in configs.items():
-                    for seed in p["seeds"]:
-                        filename = f"lab-{arm}-{seed}.json"
-                        if filename in inputs or filename in ("protocol.json", "snapshot.json"):
-                            raise LabError("reserved snapshot filename")
-                        write_json(stage / filename, {**config, "seed": seed})
-                        jobs.append(
-                            (f"{p['id']}.{arm}.{seed}", filename, config["timeout_seconds"])
-                        )
+                for (arm, seed), config in jobs_config.items():
+                    filename = f"lab-{arm}-{seed}.json"
+                    if filename in inputs or filename in ("protocol.json", "snapshot.json"):
+                        raise LabError("reserved snapshot filename")
+                    write_json(stage / filename, config)
+                    jobs.append((f"{p['id']}.{arm}.{seed}", filename, config["timeout_seconds"]))
                 if {"protocol.json", "snapshot.json"} & inputs:
                     raise LabError("reserved snapshot filename")
                 write_json(stage / "protocol.json", p)
@@ -733,3 +775,64 @@ class Controller:
         from .evidence import synthesize
 
         return synthesize(self, protocol_id)
+
+    def prepare_claim_review(self, protocol_id, destination, *, data_classification):
+        from .claim_assurance import prepare_claim_review
+
+        return prepare_claim_review(
+            self, protocol_id, destination, data_classification=data_classification
+        )
+
+    def verify_claim_review(
+        self,
+        protocol_id,
+        root,
+        manifest_sha256,
+        envelope_path,
+        *,
+        signer,
+        trusted_signers,
+        trusted_signers_sha256,
+    ):
+        from .claim_assurance import verify_claim_review
+
+        return verify_claim_review(
+            self,
+            protocol_id,
+            root,
+            manifest_sha256,
+            envelope_path,
+            signer=signer,
+            trusted_signers=trusted_signers,
+            trusted_signers_sha256=trusted_signers_sha256,
+        )
+
+    def promote_claim(
+        self,
+        protocol_id,
+        root,
+        manifest_sha256,
+        envelope_path,
+        *,
+        signer,
+        trusted_signers,
+        trusted_signers_sha256,
+    ):
+        from .claim_assurance import promote_claim
+
+        return promote_claim(
+            self,
+            protocol_id,
+            root,
+            manifest_sha256,
+            envelope_path,
+            signer=signer,
+            trusted_signers=trusted_signers,
+            trusted_signers_sha256=trusted_signers_sha256,
+        )
+
+    def assess_private_training(self, report_payload, diagnostics=()):
+        """Private offline assessment; does not index, publish or promote a protocol claim."""
+        from trainlab.training_assessment import assess_private_training
+
+        return assess_private_training(report_payload, diagnostics)

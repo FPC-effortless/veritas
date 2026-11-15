@@ -251,7 +251,8 @@ def run(root, backends):
     import_forge(lab, source / "dataset", manifest)
     summary = []
     for backend in backends:
-        recipe = {"schema": "trainlab.experiment.v2", "name": "diagnose-" + backend,
+        recipe = {"execution_purpose": "engineering_diagnostic",
+                  "schema": "trainlab.experiment.v2", "name": "diagnose-" + backend,
                   "description": "Public fixed-weight diagnostic acceptance, no training",
                   "command": [sys.executable, "driver.py", "--worker", backend],
                   "seed": 1, "timeout_seconds": 90, "source_kind": "CONSTRUCTED",

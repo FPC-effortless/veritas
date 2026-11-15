@@ -26,6 +26,7 @@ class ControllerTests(unittest.TestCase):
             "(p/'predictions.json').write_text('[1,0,1,1]')\n"
         )
         recipe = {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v1",
             "name": "fixture",
             "description": "fixture",

@@ -165,6 +165,7 @@ def run_demo(destination: Path) -> dict:
         if "export_max_error" in metrics:
             checks["export_max_error"] = {"max": 1e-12}
         config = {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v2",
             "name": f"Constructed {label}",
             "description": "Constructed local software acceptance; no scientific qualification.",

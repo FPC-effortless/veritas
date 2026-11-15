@@ -110,6 +110,7 @@ def prepare(output: Path, *, run: bool = False) -> dict:
         shutil.copyfile(__file__, stage / "experiment.py")
         for method in ("linear", "quadratic"):
             config = {
+                "execution_purpose": "engineering_diagnostic",
                 "schema": "trainlab.experiment.v1",
                 "name": f"Forge {method} constructed demo",
                 "description": "Constructed data only; no scientific or protected TEST evidence.",

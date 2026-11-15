@@ -278,6 +278,7 @@ def prepare(source):
     write_json(
         source / "recipe.json",
         {
+            "execution_purpose": "engineering_diagnostic",
             "schema": "trainlab.experiment.v2",
             "name": "cpu-session-controls",
             "description": "Public constructed CPU cost controls; zero model fits",

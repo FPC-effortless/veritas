@@ -63,6 +63,7 @@ def make_source(root, *, observed=True, fail=False):
     (root / "design.md").write_text("Invented duplicate mechanics; no causal diversity claim.")
     (root / "driver.py").write_text("raise SystemExit(7)" if fail else DRIVER)
     write_json(root / "recipe.json", {
+        "execution_purpose": "engineering_diagnostic",
         "schema": "trainlab.experiment.v2", "name": "sentinel", "description": "No model fit",
         "command": [sys.executable, "driver.py"], "seed": 1, "timeout_seconds": 10,
         "source_kind": "CONSTRUCTED", "split_identity": pin,
