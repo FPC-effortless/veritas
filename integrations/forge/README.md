@@ -112,6 +112,11 @@ retaining `scientific_qualification: NOT_QUALIFIED`,
 `hardware_qualification: NOT_QUALIFIED` and `commercial_release: NOT_AUTHORIZED`.
 A clean JSON structure or SHA never constitutes source authenticity or fitness.
 
+The untrusted-number checks also reject integers too large to represent as
+finite device measurements with a controlled validation error, rather than a
+Python overflow traceback. Baseline parameter parity uses exact integer
+arithmetic at the 1% boundary; neither check verifies self-reported budgets.
+
 Fields are version-locked and checked fail-closed:
 
 - Source identity, publisher/original bytes (or explicit constructed fixture),

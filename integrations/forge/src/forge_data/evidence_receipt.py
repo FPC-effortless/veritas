@@ -57,14 +57,17 @@ def _count(value: object, name: str, *, positive: bool = True) -> int:
 
 
 def _number(value: object, name: str, *, positive: bool = False) -> float:
-    if (
-        type(value) not in (int, float)
-        or not math.isfinite(value)
-        or value < 0
-        or (positive and value == 0)
-    ):
+    # Untrusted JSON may contain a valid, enormous integer. math.isfinite(int)
+    # and float(int) can raise OverflowError instead of returning a verdict.
+    if type(value) not in (int, float):
         raise ForgeError(f"{name}: finite nonnegative number required")
-    return float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise ForgeError(f"{name}: finite nonnegative number required") from exc
+    if not math.isfinite(number) or number < 0 or (positive and number == 0):
+        raise ForgeError(f"{name}: finite nonnegative number required")
+    return number
 
 
 def _not_run(obj: dict, keys: tuple[str, ...], name: str) -> None:
@@ -204,7 +207,8 @@ def validate_evidence(receipt: object) -> dict:
             )
             _text(b["name"], "baseline.name")
             bp = _count(b["learned_parameters"], "baseline.learned_parameters")
-            if abs(bp - p) > 0.01 * p:
+            # Integer arithmetic avoids overflow and floating-point boundary drift.
+            if abs(bp - p) * 100 > p:
                 raise ForgeError("baseline learned parameters exceed 1 percent gap")
             for key in ("data_split_identity", "train_tokens", "train_updates", "tuning_budget"):
                 if type(b[key]) is not type(train[key]) or b[key] != train[key]:

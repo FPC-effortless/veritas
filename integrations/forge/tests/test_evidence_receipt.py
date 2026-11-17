@@ -222,6 +222,26 @@ class ReceiptTest(unittest.TestCase):
         with self.assertRaisesRegex(ForgeError, "baseline controls"):
             validate_evidence(r)
 
+    def test_oversized_json_integer_is_a_domain_error_not_an_overflow(self):
+        r = internal_candidate()
+        r["device"]["p50_ms"] = 10**1000
+        with self.assertRaisesRegex(ForgeError, "device.p50_ms"):
+            validate_evidence(r)
+
+    def test_large_parameter_baseline_gap_is_exact_and_bounded(self):
+        r = internal_candidate()
+        r["track"] = "OTHER"
+        parameters = 10**1000
+        r["training"]["learned_parameters"] = parameters
+        r["training"]["baselines"][0]["learned_parameters"] = (
+            parameters + parameters // 100
+        )
+        result = validate_evidence(r)
+        self.assertEqual(result["scientific_qualification"], "NOT_QUALIFIED")
+        r["training"]["baselines"][0]["learned_parameters"] += 1
+        with self.assertRaisesRegex(ForgeError, "baseline learned parameters"):
+            validate_evidence(r)
+
     def test_research_100k_budget(self):
         for bad in (94999, 105001, True, 100000.5):
             with self.subTest(bad=bad):
