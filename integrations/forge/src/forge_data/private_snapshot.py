@@ -91,8 +91,11 @@ def _validate_roster(files: object) -> list[str]:
     if len(set(names)) != len(names) or "manifest.json" in names:
         raise ForgeError("unique bounded file roster required")
     ordered = sorted(names)
-    if any(right.startswith(left + "/") for left, right in zip(ordered, ordered[1:])):
-        raise ForgeError("file roster contains a file/directory path collision")
+    name_set = set(names)
+    for name in ordered:
+        parts = name.split("/")
+        if any("/".join(parts[:index]) in name_set for index in range(1, len(parts))):
+            raise ForgeError("file roster contains a file/directory path collision")
     return ordered
 
 
