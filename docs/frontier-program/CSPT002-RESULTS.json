@@ -1,0 +1,875 @@
+{
+  "schema": "cspt002.bounded_aggregation.v1",
+  "status": "NOT_QUALIFIED",
+  "seeds": [
+    11,
+    23,
+    37
+  ],
+  "online_parameters": 65100,
+  "source_sha256": "6f399178eb7f28d577f433b789c4ab16883941052481b1fd399ea4ab49ccf146",
+  "preregistration_sha256": "69dcd2bae6b32cfa42080b5eda6218b01437ec1a40e96a2fc9ca0fd51c52d595",
+  "per_seed_training_identity_matched": true,
+  "all_twelve_checkpoints_exact_dev_test_replayed": true,
+  "positive_diagnostic_signal": false,
+  "summary": {
+    "answer_only": {
+      "dev": {
+        "state_triplet_exact": {
+          "mean": 0.0027611044417767106,
+          "per_seed": [
+            0.004081632653061225,
+            0.0,
+            0.004201680672268907
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.004340277777777778,
+          "per_seed": [
+            0.005208333333333333,
+            0.005208333333333333,
+            0.0026041666666666665
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4869791666666667,
+          "per_seed": [
+            0.5,
+            0.4765625,
+            0.484375
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.8480237658098735,
+          "per_seed": [
+            0.8325581395348837,
+            0.8052631578947368,
+            0.90625
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.09802075072693629,
+          "per_seed": [
+            0.07692307692307693,
+            0.15463917525773196,
+            0.0625
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6223958333333334,
+          "per_seed": [
+            0.6380208333333334,
+            0.609375,
+            0.6197916666666666
+          ]
+        }
+      },
+      "test": {
+        "state_triplet_exact": {
+          "mean": 0.0013717421124828533,
+          "per_seed": [
+            0.00411522633744856,
+            0.0,
+            0.0
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.0008680555555555555,
+          "per_seed": [
+            0.0026041666666666665,
+            0.0,
+            0.0
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4592013888888889,
+          "per_seed": [
+            0.4505208333333333,
+            0.4713541666666667,
+            0.4557291666666667
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.8207976520646427,
+          "per_seed": [
+            0.8469945355191257,
+            0.7939698492462312,
+            0.8214285714285714
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.09611488274555915,
+          "per_seed": [
+            0.08955223880597014,
+            0.12432432432432433,
+            0.07446808510638298
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6328125,
+          "per_seed": [
+            0.6328125,
+            0.6015625,
+            0.6640625
+          ]
+        }
+      },
+      "training_seconds_mean": 1.7882872483332903
+    },
+    "good_views": {
+      "dev": {
+        "state_triplet_exact": {
+          "mean": 0.0,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.001736111111111111,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.005208333333333333
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4592013888888889,
+          "per_seed": [
+            0.484375,
+            0.4453125,
+            0.4479166666666667
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.7518976098191215,
+          "per_seed": [
+            0.8046511627906977,
+            0.8,
+            0.6510416666666666
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.1398842959732135,
+          "per_seed": [
+            0.07692307692307693,
+            0.0979381443298969,
+            0.24479166666666666
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6223958333333334,
+          "per_seed": [
+            0.6380208333333334,
+            0.609375,
+            0.6197916666666666
+          ]
+        }
+      },
+      "test": {
+        "state_triplet_exact": {
+          "mean": 0.0,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.0026041666666666665,
+          "per_seed": [
+            0.005208333333333333,
+            0.0,
+            0.0026041666666666665
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4470486111111111,
+          "per_seed": [
+            0.4348958333333333,
+            0.4479166666666667,
+            0.4583333333333333
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.7313005961370735,
+          "per_seed": [
+            0.7978142076502732,
+            0.7889447236180904,
+            0.6071428571428571
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.16291672746102726,
+          "per_seed": [
+            0.1044776119402985,
+            0.08108108108108109,
+            0.30319148936170215
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6328125,
+          "per_seed": [
+            0.6328125,
+            0.6015625,
+            0.6640625
+          ]
+        }
+      },
+      "training_seconds_mean": 3.217681882000003
+    },
+    "completion": {
+      "dev": {
+        "state_triplet_exact": {
+          "mean": 0.0,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.001736111111111111,
+          "per_seed": [
+            0.0,
+            0.005208333333333333,
+            0.0
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4453125,
+          "per_seed": [
+            0.5104166666666666,
+            0.375,
+            0.4505208333333333
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.7195817183462532,
+          "per_seed": [
+            0.813953488372093,
+            0.6,
+            0.7447916666666666
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.14504984342910593,
+          "per_seed": [
+            0.1242603550295858,
+            0.15463917525773196,
+            0.15625
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6223958333333334,
+          "per_seed": [
+            0.6380208333333334,
+            0.609375,
+            0.6197916666666666
+          ]
+        }
+      },
+      "test": {
+        "state_triplet_exact": {
+          "mean": 0.0028147435554842963,
+          "per_seed": [
+            0.00411522633744856,
+            0.004329004329004329,
+            0.0
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.003472222222222222,
+          "per_seed": [
+            0.005208333333333333,
+            0.0026041666666666665,
+            0.0026041666666666665
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4123263888888889,
+          "per_seed": [
+            0.3958333333333333,
+            0.4036458333333333,
+            0.4375
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.6742632907296977,
+          "per_seed": [
+            0.7158469945355191,
+            0.6130653266331658,
+            0.6938775510204082
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.1510229187587079,
+          "per_seed": [
+            0.1044776119402985,
+            0.1783783783783784,
+            0.1702127659574468
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6328125,
+          "per_seed": [
+            0.6328125,
+            0.6015625,
+            0.6640625
+          ]
+        }
+      },
+      "training_seconds_mean": 4.786357348333316
+    },
+    "causal_latent": {
+      "dev": {
+        "state_triplet_exact": {
+          "mean": 0.0,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.0008680555555555555,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.0026041666666666665
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4592013888888889,
+          "per_seed": [
+            0.4895833333333333,
+            0.4088541666666667,
+            0.4791666666666667
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.7453518121855025,
+          "per_seed": [
+            0.7813953488372093,
+            0.6473684210526316,
+            0.8072916666666666
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.14821419796390056,
+          "per_seed": [
+            0.11834319526627218,
+            0.17525773195876287,
+            0.15104166666666666
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6223958333333334,
+          "per_seed": [
+            0.6380208333333334,
+            0.609375,
+            0.6197916666666666
+          ]
+        }
+      },
+      "test": {
+        "state_triplet_exact": {
+          "mean": 0.00261437908496732,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.00784313725490196
+          ]
+        },
+        "two_query_joint": {
+          "mean": 0.004340277777777778,
+          "per_seed": [
+            0.0,
+            0.0,
+            0.013020833333333334
+          ]
+        },
+        "exact_owner": {
+          "mean": 0.4227430555555556,
+          "per_seed": [
+            0.4244791666666667,
+            0.4036458333333333,
+            0.4401041666666667
+          ]
+        },
+        "affected_owner": {
+          "mean": 0.7120515779148522,
+          "per_seed": [
+            0.7431693989071039,
+            0.6582914572864321,
+            0.7346938775510204
+          ]
+        },
+        "unaffected_owner": {
+          "mean": 0.1323456037809801,
+          "per_seed": [
+            0.13432835820895522,
+            0.12972972972972974,
+            0.13297872340425532
+          ]
+        },
+        "counterfactual_coverage": {
+          "mean": 0.6328125,
+          "per_seed": [
+            0.6328125,
+            0.6015625,
+            0.6640625
+          ]
+        }
+      },
+      "training_seconds_mean": 5.543987982666674
+    }
+  },
+  "receipts": [
+    {
+      "study": "CSPT002",
+      "arm": "answer_only",
+      "seed": 11,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "1a61f6904bc9ba1360452b3fc574e0179d004eaa3649bfe598cc9430ea7ec5d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 1.5644493249999414,
+      "final_train_loss": 1.6311588287353516,
+      "dev": {
+        "exact_owner": 0.5,
+        "affected_owner": 0.8325581395348837,
+        "unaffected_owner": 0.07692307692307693,
+        "two_query_joint": 0.005208333333333333,
+        "state_triplet_exact": 0.004081632653061225,
+        "counterfactual_eligible": 245,
+        "counterfactual_coverage": 0.6380208333333334
+      },
+      "test": {
+        "exact_owner": 0.4505208333333333,
+        "affected_owner": 0.8469945355191257,
+        "unaffected_owner": 0.08955223880597014,
+        "two_query_joint": 0.0026041666666666665,
+        "state_triplet_exact": 0.00411522633744856,
+        "counterfactual_eligible": 243,
+        "counterfactual_coverage": 0.6328125
+      },
+      "checkpoint_sha256": "9eba605d45a2ae886a5fd512b1146f5e2a40c4457b24353ca8d5577fb0a3c71d",
+      "checkpoint_filename": "answer_only-11.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "answer_only",
+      "seed": 23,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "8863f9401bb70e567891376cf3ad744afa1f2c73a8397694081f8f7edd9d59d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 1.8976697739999508,
+      "final_train_loss": 1.7180936336517334,
+      "dev": {
+        "exact_owner": 0.4765625,
+        "affected_owner": 0.8052631578947368,
+        "unaffected_owner": 0.15463917525773196,
+        "two_query_joint": 0.005208333333333333,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 234,
+        "counterfactual_coverage": 0.609375
+      },
+      "test": {
+        "exact_owner": 0.4713541666666667,
+        "affected_owner": 0.7939698492462312,
+        "unaffected_owner": 0.12432432432432433,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 231,
+        "counterfactual_coverage": 0.6015625
+      },
+      "checkpoint_sha256": "241ff0403d8cd36443c3a1a128ebb795b5516387b28ec313e92ff192d3aa8a60",
+      "checkpoint_filename": "answer_only-23.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "answer_only",
+      "seed": 37,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "e6706b9a1eaf348010630e380a0aa89a17f2138a78d83e26039d70066214840f",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 1.9027426459999788,
+      "final_train_loss": 1.6756609678268433,
+      "dev": {
+        "exact_owner": 0.484375,
+        "affected_owner": 0.90625,
+        "unaffected_owner": 0.0625,
+        "two_query_joint": 0.0026041666666666665,
+        "state_triplet_exact": 0.004201680672268907,
+        "counterfactual_eligible": 238,
+        "counterfactual_coverage": 0.6197916666666666
+      },
+      "test": {
+        "exact_owner": 0.4557291666666667,
+        "affected_owner": 0.8214285714285714,
+        "unaffected_owner": 0.07446808510638298,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 255,
+        "counterfactual_coverage": 0.6640625
+      },
+      "checkpoint_sha256": "beb8fef8c0b1149f0555f0e76151b74ac14cd855238f17cb3b50036f5e9e2b29",
+      "checkpoint_filename": "answer_only-37.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "good_views",
+      "seed": 11,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "1a61f6904bc9ba1360452b3fc574e0179d004eaa3649bfe598cc9430ea7ec5d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 3.3683728349999456,
+      "final_train_loss": 1.649170994758606,
+      "dev": {
+        "exact_owner": 0.484375,
+        "affected_owner": 0.8046511627906977,
+        "unaffected_owner": 0.07692307692307693,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 245,
+        "counterfactual_coverage": 0.6380208333333334
+      },
+      "test": {
+        "exact_owner": 0.4348958333333333,
+        "affected_owner": 0.7978142076502732,
+        "unaffected_owner": 0.1044776119402985,
+        "two_query_joint": 0.005208333333333333,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 243,
+        "counterfactual_coverage": 0.6328125
+      },
+      "checkpoint_sha256": "2f409c680f83bb773ba91f335b2fc263a3a981d6baaaa4b19e6e8d807be3c5d9",
+      "checkpoint_filename": "good_views-11.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "good_views",
+      "seed": 23,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "8863f9401bb70e567891376cf3ad744afa1f2c73a8397694081f8f7edd9d59d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 3.1452034429999003,
+      "final_train_loss": 1.8221710920333862,
+      "dev": {
+        "exact_owner": 0.4453125,
+        "affected_owner": 0.8,
+        "unaffected_owner": 0.0979381443298969,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 234,
+        "counterfactual_coverage": 0.609375
+      },
+      "test": {
+        "exact_owner": 0.4479166666666667,
+        "affected_owner": 0.7889447236180904,
+        "unaffected_owner": 0.08108108108108109,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 231,
+        "counterfactual_coverage": 0.6015625
+      },
+      "checkpoint_sha256": "fa700b4421b4a5da4cd484bc2c1a970eeb4bd89f007e5862633be1fb2281b8d7",
+      "checkpoint_filename": "good_views-23.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "good_views",
+      "seed": 37,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "e6706b9a1eaf348010630e380a0aa89a17f2138a78d83e26039d70066214840f",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 3.1394693680001637,
+      "final_train_loss": 1.7902859449386597,
+      "dev": {
+        "exact_owner": 0.4479166666666667,
+        "affected_owner": 0.6510416666666666,
+        "unaffected_owner": 0.24479166666666666,
+        "two_query_joint": 0.005208333333333333,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 238,
+        "counterfactual_coverage": 0.6197916666666666
+      },
+      "test": {
+        "exact_owner": 0.4583333333333333,
+        "affected_owner": 0.6071428571428571,
+        "unaffected_owner": 0.30319148936170215,
+        "two_query_joint": 0.0026041666666666665,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 255,
+        "counterfactual_coverage": 0.6640625
+      },
+      "checkpoint_sha256": "1b5311e267131ceebacfe5659e937eec4c252df8f3f8f3d0450b035db8953a33",
+      "checkpoint_filename": "good_views-37.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "completion",
+      "seed": 11,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "1a61f6904bc9ba1360452b3fc574e0179d004eaa3649bfe598cc9430ea7ec5d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 4.889017944999978,
+      "final_train_loss": 2.1305527687072754,
+      "dev": {
+        "exact_owner": 0.5104166666666666,
+        "affected_owner": 0.813953488372093,
+        "unaffected_owner": 0.1242603550295858,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 245,
+        "counterfactual_coverage": 0.6380208333333334
+      },
+      "test": {
+        "exact_owner": 0.3958333333333333,
+        "affected_owner": 0.7158469945355191,
+        "unaffected_owner": 0.1044776119402985,
+        "two_query_joint": 0.005208333333333333,
+        "state_triplet_exact": 0.00411522633744856,
+        "counterfactual_eligible": 243,
+        "counterfactual_coverage": 0.6328125
+      },
+      "checkpoint_sha256": "b7ccffe93f88d4fc4be743e39d037855d98270ec57b2e3f83f2fcf11e32e7a7e",
+      "checkpoint_filename": "completion-11.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "completion",
+      "seed": 23,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "8863f9401bb70e567891376cf3ad744afa1f2c73a8397694081f8f7edd9d59d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 4.962891747999947,
+      "final_train_loss": 2.0896105766296387,
+      "dev": {
+        "exact_owner": 0.375,
+        "affected_owner": 0.6,
+        "unaffected_owner": 0.15463917525773196,
+        "two_query_joint": 0.005208333333333333,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 234,
+        "counterfactual_coverage": 0.609375
+      },
+      "test": {
+        "exact_owner": 0.4036458333333333,
+        "affected_owner": 0.6130653266331658,
+        "unaffected_owner": 0.1783783783783784,
+        "two_query_joint": 0.0026041666666666665,
+        "state_triplet_exact": 0.004329004329004329,
+        "counterfactual_eligible": 231,
+        "counterfactual_coverage": 0.6015625
+      },
+      "checkpoint_sha256": "954c8040eb19375b58d35de123465d46686788c717d61e4801ede1c1c1bba5ba",
+      "checkpoint_filename": "completion-23.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "completion",
+      "seed": 37,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "e6706b9a1eaf348010630e380a0aa89a17f2138a78d83e26039d70066214840f",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 4.507162352000023,
+      "final_train_loss": 2.3003315925598145,
+      "dev": {
+        "exact_owner": 0.4505208333333333,
+        "affected_owner": 0.7447916666666666,
+        "unaffected_owner": 0.15625,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 238,
+        "counterfactual_coverage": 0.6197916666666666
+      },
+      "test": {
+        "exact_owner": 0.4375,
+        "affected_owner": 0.6938775510204082,
+        "unaffected_owner": 0.1702127659574468,
+        "two_query_joint": 0.0026041666666666665,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 255,
+        "counterfactual_coverage": 0.6640625
+      },
+      "checkpoint_sha256": "9970256e84e85ae408f9c3d3f651b22a73a5c76c7948b7e66655a25f69d13a70",
+      "checkpoint_filename": "completion-37.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "causal_latent",
+      "seed": 11,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "1a61f6904bc9ba1360452b3fc574e0179d004eaa3649bfe598cc9430ea7ec5d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 5.828963041999941,
+      "final_train_loss": 2.1278700828552246,
+      "dev": {
+        "exact_owner": 0.4895833333333333,
+        "affected_owner": 0.7813953488372093,
+        "unaffected_owner": 0.11834319526627218,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 245,
+        "counterfactual_coverage": 0.6380208333333334
+      },
+      "test": {
+        "exact_owner": 0.4244791666666667,
+        "affected_owner": 0.7431693989071039,
+        "unaffected_owner": 0.13432835820895522,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 243,
+        "counterfactual_coverage": 0.6328125
+      },
+      "checkpoint_sha256": "607a3c04b3d4bd3da141b8bb1bb108da1702d3dc927c00a4f61cc653fef5a6db",
+      "checkpoint_filename": "causal_latent-11.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "causal_latent",
+      "seed": 23,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "8863f9401bb70e567891376cf3ad744afa1f2c73a8397694081f8f7edd9d59d0",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 5.5361739340000895,
+      "final_train_loss": 2.251368284225464,
+      "dev": {
+        "exact_owner": 0.4088541666666667,
+        "affected_owner": 0.6473684210526316,
+        "unaffected_owner": 0.17525773195876287,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 234,
+        "counterfactual_coverage": 0.609375
+      },
+      "test": {
+        "exact_owner": 0.4036458333333333,
+        "affected_owner": 0.6582914572864321,
+        "unaffected_owner": 0.12972972972972974,
+        "two_query_joint": 0.0,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 231,
+        "counterfactual_coverage": 0.6015625
+      },
+      "checkpoint_sha256": "838746aafde3eac19e0759f8e00f8414be9058d3b7d08192421c32f25fb01c16",
+      "checkpoint_filename": "causal_latent-23.pt",
+      "exact_dev_test_replay": "PASS"
+    },
+    {
+      "study": "CSPT002",
+      "arm": "causal_latent",
+      "seed": 37,
+      "source_kind": "CONSTRUCTED_SYNTHETIC_DIAGNOSTIC",
+      "science_status": "NOT_QUALIFIED",
+      "evaluation_status": "EXPLORATORY_UNSEALED",
+      "steps": 120,
+      "batch_size": 32,
+      "train_scenarios_sha256": "e6706b9a1eaf348010630e380a0aa89a17f2138a78d83e26039d70066214840f",
+      "instantiated_online_trainable_parameters": 65100,
+      "ema_nontrainable_parameters": 59808,
+      "device": "cpu",
+      "seconds_training": 5.26682697199999,
+      "final_train_loss": 2.416825294494629,
+      "dev": {
+        "exact_owner": 0.4791666666666667,
+        "affected_owner": 0.8072916666666666,
+        "unaffected_owner": 0.15104166666666666,
+        "two_query_joint": 0.0026041666666666665,
+        "state_triplet_exact": 0.0,
+        "counterfactual_eligible": 238,
+        "counterfactual_coverage": 0.6197916666666666
+      },
+      "test": {
+        "exact_owner": 0.4401041666666667,
+        "affected_owner": 0.7346938775510204,
+        "unaffected_owner": 0.13297872340425532,
+        "two_query_joint": 0.013020833333333334,
+        "state_triplet_exact": 0.00784313725490196,
+        "counterfactual_eligible": 255,
+        "counterfactual_coverage": 0.6640625
+      },
+      "checkpoint_sha256": "9fba04b0df658fc3d219588a59f527ebf959d501a6216e266a0953a0e6164cef",
+      "checkpoint_filename": "causal_latent-37.pt",
+      "exact_dev_test_replay": "PASS"
+    }
+  ]
+}
