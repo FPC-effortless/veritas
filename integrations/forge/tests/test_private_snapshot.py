@@ -100,6 +100,35 @@ class PrivateSnapshotTests(unittest.TestCase):
             with self.assertRaises(ForgeError):
                 freeze_private(source, ["link"], SPEC, root / "symlink")
 
+    def test_nonadjacent_prefix_collision_rejected_before_source_access(self) -> None:
+        rosters = (
+            ["a", "a-b", "a/b"],
+            ["a/b/c", "a-b", "a"],
+            ["nested/a", "nested/a-b", "nested/a/b"],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for index, roster in enumerate(rosters):
+                with self.subTest(roster=roster):
+                    destination = root / f"snapshot-{index}"
+                    with self.assertRaisesRegex(ForgeError, "path collision"):
+                        freeze_private(root / "missing-source", roster, SPEC, destination)
+                    self.assertFalse(destination.exists())
+
+    def test_lexical_prefix_siblings_are_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            (source / "a").mkdir(parents=True)
+            (source / "a" / "b").write_text("nested", encoding="utf-8")
+            (source / "a-b").write_text("sibling", encoding="utf-8")
+            destination = root / "snapshot"
+            freeze_private(source, ["a/b", "a-b"], SPEC, destination)
+            manifest_hash = hashlib.sha256(
+                (destination / "manifest.json").read_bytes()
+            ).hexdigest()
+            self.assertTrue(verify_private(destination, manifest_hash)["valid"])
+
     def test_manifest_rejects_duplicate_nonfinite_and_noncanonical_json(self) -> None:
         def duplicate_schema(raw: bytes) -> bytes:
             return raw.replace(
