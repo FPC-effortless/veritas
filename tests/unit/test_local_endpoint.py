@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from io import BytesIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 from threading import Thread
 from urllib.error import HTTPError
 from urllib.request import Request
