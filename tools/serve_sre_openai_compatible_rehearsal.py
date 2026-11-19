@@ -10,7 +10,11 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from investigation_world.commercial.local_endpoint import validate_loopback_host
+from investigation_world.commercial.local_endpoint import (
+    RequestBodyTooLarge,
+    read_bounded_json_object,
+    validate_loopback_host,
+)
 
 
 def main() -> None:
@@ -86,8 +90,12 @@ def main() -> None:
                 return
 
             try:
-                length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if self.headers.get_all("Transfer-Encoding"):
+                    raise ValueError("transfer-encoded request bodies are unsupported")
+                payload = read_bounded_json_object(
+                    self.rfile,
+                    self.headers.get_all("Content-Length"),
+                )
                 messages = payload["messages"]
                 if not isinstance(messages, list) or not messages:
                     raise ValueError("messages must be a non-empty list")
@@ -112,6 +120,9 @@ def main() -> None:
                 generated = output[0][prompt_tokens:]
                 content = tokenizer.decode(generated, skip_special_tokens=True).strip()
                 completion_tokens = int(generated.shape[0])
+            except RequestBodyTooLarge as exc:
+                self._json(413, {"error": "request_too_large", "detail": str(exc)[:200]})
+                return
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 self._json(400, {"error": "bad_request", "detail": str(exc)[:200]})
                 return
