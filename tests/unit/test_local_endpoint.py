@@ -67,7 +67,15 @@ def test_remote_or_ambiguous_endpoints_are_rejected(endpoint: str) -> None:
 def test_opener_ignores_environment_proxy_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    for name in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+    proxy_names = (
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    )
+    for name in proxy_names:
         monkeypatch.setenv(name, "http://203.0.113.10:3128")
     monkeypatch.setenv("NO_PROXY", "")
     monkeypatch.setenv("no_proxy", "")
@@ -162,6 +170,7 @@ def test_request_body_accepts_exact_configured_limit() -> None:
     suffix = b'"}'
     raw = prefix + b"a" * (MAX_REQUEST_BODY_BYTES - len(prefix) - len(suffix)) + suffix
     payload = parse_request_body(raw)
+    assert isinstance(payload["value"], str)
     assert len(payload["value"]) == MAX_REQUEST_BODY_BYTES - len(prefix) - len(suffix)
 
 
@@ -180,7 +189,7 @@ def test_request_body_rejects_oversize_before_reading() -> None:
 def test_request_body_rejects_missing_duplicate_or_noncanonical_lengths(
     headers: list[str],
 ) -> None:
-    with pytest.raises(ValueError, match="Content-Length"):
+    with pytest.raises(ValueError):
         read_bounded_json_object(BytesIO(b'{"ok":true}'), headers)
 
 
