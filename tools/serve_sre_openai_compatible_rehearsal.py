@@ -23,7 +23,9 @@ from investigation_world.commercial.local_endpoint import validate_loopback_host
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Serve a local authenticated OpenAI-compatible endpoint for the Veritas pilot dress rehearsal"
+        description=(
+            "Serve a local authenticated OpenAI-compatible endpoint for the Veritas pilot dress rehearsal"
+        )
     )
     parser.add_argument("--model", required=True)
     parser.add_argument("--host", default="127.0.0.1", help="literal loopback IP only")
