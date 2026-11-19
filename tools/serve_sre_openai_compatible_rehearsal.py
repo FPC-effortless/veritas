@@ -10,6 +10,11 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+# The rehearsal server must never fetch model files or emit Hub telemetry at run time.
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -37,11 +42,12 @@ def main() -> None:
         raise RuntimeError(f"{args.api_key_env} must be configured")
 
     torch.set_num_threads(2)
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
         torch_dtype=torch.float32,
         low_cpu_mem_usage=True,
+        local_files_only=True,
     )
     model.eval()
     generation_lock = threading.Lock()
