@@ -10,14 +10,6 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-# The rehearsal server must never fetch model files or emit Hub telemetry at run time.
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
-os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
-
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
 from investigation_world.commercial.local_endpoint import validate_loopback_host
 
 
@@ -42,6 +34,13 @@ def main() -> None:
     expected_api_key = os.getenv(args.api_key_env)
     if not expected_api_key:
         raise RuntimeError(f"{args.api_key_env} must be configured")
+
+    # Set offline flags before importing model libraries; weights must be pre-staged.
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     torch.set_num_threads(2)
     tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
