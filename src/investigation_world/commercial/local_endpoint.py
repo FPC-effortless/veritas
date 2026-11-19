@@ -8,10 +8,10 @@ import math
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit
 from urllib.request import (
-     HTTPRedirectHandler,
-     OpenerDirector,
-     ProxyHandler,
-     build_opener,
+    HTTPRedirectHandler,
+    OpenerDirector,
+    ProxyHandler,
+    build_opener,
  )
 
 
@@ -35,7 +35,11 @@ def read_bounded_json_object(
         raise ValueError("exactly one Content-Length header is required")
 
     content_length = content_length_values[0]
-    if not content_length or not content_length.isascii() or not content_length.isdecimal():
+    if (
+        not content_length
+        or not content_length.isascii()
+        or not content_length.isdecimal()
+    ):
         raise ValueError("Content-Length must be canonical decimal digits")
     if len(content_length) > 1 and content_length.startswith("0"):
         raise ValueError("Content-Length must not contain leading zeroes")
