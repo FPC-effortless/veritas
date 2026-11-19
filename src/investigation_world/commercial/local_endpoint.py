@@ -12,7 +12,7 @@ from urllib.request import (
     OpenerDirector,
     ProxyHandler,
     build_opener,
- )
+)
 
 
 MAX_REQUEST_BODY_BYTES = 1024 * 1024
