@@ -4,7 +4,7 @@ A paid pilot is considered technically complete only when the following conditio
 
 ## Integration acceptance
 
-- The agreed customer model/agent is uniquely identified by model, endpoint/container/harness version, and configuration.
+- The agreed customer model/agent is uniquely identified by model, same-device loopback endpoint or local container/harness version, and configuration. Remote/cloud inference endpoints are not accepted.
 - Authentication works without recording reusable secrets in the report or repository.
 - Test prompts/tasks can be sent and parsed successfully.
 - Tool calls and structured final outputs follow the agreed schema.
