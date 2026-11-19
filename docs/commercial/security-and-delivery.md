@@ -60,7 +60,9 @@ For endpoint-based evaluation, production deployments must enforce:
 - environment proxies disabled and redirects rejected;
 - optional local bearer authentication and customer-managed token limits;
 - TLS verification when local HTTPS is used;
-- deterministic request logging with secrets redacted.
+- deterministic request logging with secrets redacted;
+- for the rehearsal HTTP server, exactly one canonical decimal `Content-Length` is required, request bodies are capped at 1 MiB, and transfer-encoded bodies are rejected;
+- malformed UTF-8/JSON, duplicate JSON keys, non-finite numbers, truncated bodies and non-object JSON are rejected before tokenization; oversized bodies receive HTTP 413.
 
 The endpoint restriction protects the evaluator's transport boundary; it does not prove the model process itself makes no network requests. Model files must be pre-staged from a trusted, checksum-verified distribution; the rehearsal server runs with Hugging Face/Transformers offline mode and `local_files_only=True`. Airplane-mode execution and a physical network trace are separate acceptance evidence.
 
