@@ -92,7 +92,7 @@ python tools/run_sre_endpoint_evaluation.py \
   --public-output customer-sre-evaluation.json
 ```
 
-The endpoint must be served by the model process on the **same user-controlled device**. Only literal loopback IP addresses (`127.0.0.1` or `::1`) are accepted; DNS names, LAN/public addresses, URL credentials, query strings and fragments are rejected. The evaluator ignores proxy environment variables and refuses HTTP redirects. An optional bearer credential is read from `VERITAS_MODEL_API_KEY`; keep it local and out of command arguments. The detailed operator report remains private; `--public-output` omits scenario IDs, per-case predictions and per-case expected labels. Remote/cloud endpoints are unsupported.
+The endpoint must be served by the model process on the **same user-controlled device**. Only literal loopback IP addresses (`127.0.0.1` or `::1`) are accepted; DNS names, LAN/public addresses, URL credentials, query strings and fragments are rejected. The evaluator ignores proxy environment variables and refuses HTTP redirects. An optional bearer credential is read from `VERITAS_MODEL_API_KEY`; keep it local and out of command arguments. The detailed operator report remains private; `--public-output` omits scenario IDs, per-case predictions and per-case expected labels. Remote/cloud endpoints are unsupported. The rehearsal server sets Hugging Face/Transformers offline mode and loads only pre-staged local model files (`local_files_only=True`); missing weights cause a hard failure rather than a download.
 
 ### In-process local/open checkpoint
 
