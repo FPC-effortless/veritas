@@ -139,13 +139,16 @@ def main() -> None:
                 },
             )
 
+    address = ipaddress.ip_address(args.host)
     server_type = ThreadingHTTPServer
-    if ipaddress.ip_address(args.host).version == 6:
+    bind_address = (args.host, args.port)
+    if address.version == 6:
         class IPv6ThreadingHTTPServer(ThreadingHTTPServer):
             address_family = socket.AF_INET6
 
         server_type = IPv6ThreadingHTTPServer
-    server = server_type((args.host, args.port), Handler)
+        bind_address = (args.host, args.port, 0, 0)
+    server = server_type(bind_address, Handler)
     print(
         json.dumps(
             {
