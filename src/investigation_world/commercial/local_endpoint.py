@@ -96,7 +96,7 @@ def validate_loopback_host(host: str) -> str:
     except ValueError as exc:
         raise ValueError("host must be a literal loopback IP address") from exc
     if host not in {"127.0.0.1", "::1"} or str(address) != host:
-        raise ValueError("host must be exactly 127.0.0.1 or ::1 in canonical form")
+        raise ValueError("host must be exactly 127.0.0.1 or ::1 loopback literal in canonical form")
     if not address.is_loopback:
         raise ValueError("host must be a loopback IP address")
     return host
