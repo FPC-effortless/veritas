@@ -16,11 +16,13 @@ This is the minimum checklist before accepting payment for the first design-part
 - [x] SRE v3 is explicitly retired from private scoring after class-coverage failure under the stronger gate and prior public artifact exposure.
 - [x] ProjectWorld v2 has a qualified benchmark candidate and can serve as the second environment family.
 - [x] OpenAI-compatible endpoint evaluation surface implemented for the SRE pack.
+- [ ] Loopback-only endpoint policy passes exact-head CI on the commercial release line and is merged.
+- [ ] Same-device airplane-mode run and physical zero-network-request trace completed for the selected model/device.
 - [x] Local Hugging Face checkpoint evaluation surface implemented for the SRE pack.
 - [x] Buyer-safe SRE report renderer implemented with balanced accuracy, macro F1 and majority-baseline reporting.
 - [x] SRE v4 is frozen in controlled private storage with candidate ID and SHA-256 pinned.
 - [x] Manual real-model commercial evidence workflow passed on two model families using the identical frozen v4 panel.
-- [x] End-to-end paid-pilot dress rehearsal passed on the commercial release line using the authenticated OpenAI-compatible endpoint path.
+- [x] End-to-end paid-pilot dress rehearsal passed on the commercial release line using the authenticated local-loopback OpenAI-compatible endpoint path.
 - [x] HUD and Prime portability adapters passed clean external install/package validation, deterministic identity/reset and canonical reward-parity checks.
 - [x] Root Apache-2.0 license plus explicit commercial-private licensing policy are part of the 0.11 release.
 - [x] Release artifacts include wheel/sdist, checksums, SBOM, provenance and pinned portability identities.
@@ -104,6 +106,6 @@ They may become procurement requirements for a particular buyer, but they should
 
 ## First paid-pilot readiness threshold
 
-The software, qualified frozen benchmark, real-model evidence, release, portability layer and endpoint dress rehearsal are now complete. The remaining blockers to accepting payment are seller-controlled commercial administration plus the first customer-specific delivery controls: legal identity/payment rail, transaction documents, private credential channel, retention/deletion terms and incident owner.
+The software, qualified frozen benchmark, internal real-model evidence, release, portability layer and local-loopback dress rehearsal are present. The loopback-only endpoint enforcement proposed on the current draft branch must still pass exact-head CI and be merged; same-device airplane-mode execution and a physical zero-network-request trace remain NOT RUN. The remaining blockers to accepting payment also include seller-controlled commercial administration and customer-specific delivery controls: legal identity/payment rail, transaction documents, private credential channel, retention/deletion terms and incident owner.
 
 The first paid pilot is intended to validate **decision usefulness**, not merely produce revenue: record what decision the customer was trying to make, what Veritas result changed or clarified that decision, and whether the customer would pay for a re-evaluation or a second environment.

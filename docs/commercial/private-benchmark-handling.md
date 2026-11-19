@@ -87,7 +87,7 @@ A new private panel must be qualified before replacing consumed cases in a procu
 Preferred order of operations:
 
 1. keep the private suite evaluator-side;
-2. send only the public prompt/evidence to the customer's model endpoint;
+2. send only the public prompt/evidence to the customer's model process through a same-device loopback endpoint or local adapter; remote/cloud endpoints are unsupported;
 3. receive the model output;
 4. score locally against private truth;
 5. persist only the private operator record in controlled storage;

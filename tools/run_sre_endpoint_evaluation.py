@@ -7,8 +7,12 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
+from investigation_world.commercial.local_endpoint import (
+    build_offline_local_opener,
+    validate_local_chat_endpoint,
+)
 from investigation_world.commercial.sre_evaluation import (
     evaluate_sre_generator,
     sanitize_sre_evaluation,
@@ -34,6 +38,11 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--max-new-tokens", type=int, default=48)
     args = parser.parse_args()
+
+    # Reject remote endpoints before opening private benchmark material. The opener
+    # also ignores proxy environment variables and refuses all redirects.
+    endpoint = validate_local_chat_endpoint(args.endpoint)
+    opener = build_offline_local_opener()
 
     release = load_sealed_sre_release(
         args.qualification,
@@ -66,14 +75,14 @@ def main() -> None:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
         request = urllib.request.Request(
-            args.endpoint,
+            endpoint,
             data=json.dumps(body).encode("utf-8"),
             headers=headers,
             method="POST",
         )
         tick = time.time()
         try:
-            with urllib.request.urlopen(request, timeout=args.timeout) as response:  # nosec B310
+            with opener.open(request, timeout=args.timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:1000]
@@ -111,7 +120,7 @@ def main() -> None:
         "request_seconds": round(request_seconds, 3),
         "model_calls": calls,
         "transport": "openai-compatible-http",
-        "endpoint_host": urlparse(args.endpoint).netloc,
+        "endpoint_host": urlsplit(endpoint).netloc,
         "generation": "temperature-0",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

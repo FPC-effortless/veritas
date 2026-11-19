@@ -14,7 +14,7 @@ SRE v3 is retired from private commercial scoring: the stronger current stratum-
 
 SRE v4 is the qualified frozen commercial benchmark. Its sealed release contains 87 scenarios and a 30-case private panel across 16 fresh Statuspage providers. All 18 scientific qualification gates pass; exact release identities are pinned and every commercial evaluator consumes the sealed `qualification.json` rather than rebuilding the candidate from provider feeds.
 
-The exact sealed panel has passed real-model execution on two model families and a customer-equivalent authenticated OpenAI-compatible endpoint dress rehearsal. Veritas 0.11 also exports the SKU through validated HUD v6 and Prime Verifiers v1 adapters without putting the private evaluator truth into buyer-safe manifests.
+The exact sealed panel has passed real-model execution on two model families and an authenticated **local-loopback** OpenAI-compatible endpoint dress rehearsal on an internal CI host. This is software workflow evidence, not physical customer-device or airplane-mode qualification. Veritas 0.11 also exports the SKU through validated HUD v6 and Prime Verifiers v1 adapters without putting the private evaluator truth into buyer-safe manifests.
 
 ProjectWorld v2 remains a qualified second environment family and is the next candidate for a separate commercial pack. CompanyWorld remains useful for enterprise-workflow evaluation and training experiments but is not presented as the primary generic-qualification SKU.
 
@@ -50,10 +50,10 @@ Use the repository's **Commercial evaluation inquiry** issue template for buyer-
 ## Standard SRE evaluation flow
 
 ```bash
-# 1. Evaluate an OpenAI-compatible endpoint against the exact sealed v4 panel.
+# 1. Evaluate a same-device loopback endpoint against the exact sealed v4 panel.
 python tools/run_sre_endpoint_evaluation.py \
   --qualification <private-v4-bundle>/results/sre-v4/qualification.json \
-  --endpoint https://example.internal/v1/chat/completions \
+  --endpoint http://127.0.0.1:8765/v1/chat/completions \
   --model customer-agent \
   --expected-candidate-id SRE-CAND-92A84929AD1E82E24357 \
   --expected-evidence-manifest-id EVID-2C69B48DCDD5F2232EABDC9B \
@@ -73,4 +73,4 @@ python tools/build_sre_customer_evaluation_report.py \
 
 Balanced accuracy and macro F1 are primary SRE metrics. Raw accuracy is always reported beside the majority-class baseline.
 
-Customer-controlled inference is preferred where the buyer cannot send model inputs or outputs to a third-party hosted service.
+Customer-controlled local inference is mandatory for every company-delivered model pilot. Model weights must be pre-staged from a trusted, checksum-verified distribution; inference-time model downloads are disabled. The model, preprocessing, embeddings, state updates and optional speech must remain on the same user-controlled device; remote/cloud inference and hidden fallback are unsupported. The endpoint evaluator accepts only literal loopback IPs, disables environment proxies and refuses redirects. Run the model and evaluator in airplane mode and retain a physical network trace; loopback validation alone does not prove the model process is network-silent.

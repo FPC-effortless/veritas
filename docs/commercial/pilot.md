@@ -8,7 +8,7 @@ The default first pilot uses the qualified and frozen **Veritas SRE Evaluation P
 
 ## Standard pilot scope
 
-1. **Integration** — connect the customer's model or agent harness through an OpenAI-compatible endpoint, local checkpoint, container or agreed adapter without exposing evaluator truth.
+1. **Integration** — run the customer's model or agent harness on the same user-controlled device as the evaluator, through a literal loopback endpoint, local checkpoint, local container or agreed local adapter. Remote endpoints and hosted inference are unsupported.
 2. **Dry run** — validate prompt/tool schemas, structured outputs, deterministic or replicate semantics, budgets and trajectory capture on non-private cases.
 3. **Private evaluation** — run the exact frozen private panel while retaining candidate, evidence-manifest, qualification-report, panel and private-release-manifest IDs.
 4. **Failure analysis** — classify capability gaps without automatically disclosing private case truth.
@@ -47,12 +47,13 @@ The pilot does **not** require the evaluated model to achieve a predetermined sc
 
 The customer supplies one of:
 
-- an OpenAI-compatible model endpoint;
-- an agent endpoint or harness;
-- a container/CLI runnable in an isolated environment;
-- a model checkpoint evaluated in the agreed compute environment.
+- a same-device loopback OpenAI-compatible endpoint (`127.0.0.1` or `::1`);
+- a local agent harness, container or CLI;
+- a model checkpoint loaded by the local runtime.
 
-The customer also supplies the exact model/harness identifier and any relevant inference constraints.
+All model preprocessing, embeddings, inference, state updates and optional speech must execute on that user-controlled device. The pilot must operate in airplane mode without a network or hosted fallback.
+
+The customer also supplies the exact model/harness identifier and relevant device/runtime constraints. Physical device, operator support, numerical parity, p50/p95 latency, peak RAM, energy, airplane-mode network trace and restart/state replay are recorded separately; missing measurements remain NOT RUN/BLOCKED.
 
 ## Private evaluation boundary
 

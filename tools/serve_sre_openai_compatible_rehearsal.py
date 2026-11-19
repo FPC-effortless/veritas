@@ -1,37 +1,59 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from investigation_world.commercial.local_endpoint import (
+    RequestBodyTooLarge,
+    read_bounded_json_object,
+    validate_loopback_host,
+)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Serve a local authenticated OpenAI-compatible endpoint for the Veritas pilot dress rehearsal"
+        description=(
+            "Serve a local authenticated OpenAI-compatible endpoint for the Veritas "
+            "pilot dress rehearsal"
+        )
     )
     parser.add_argument("--model", required=True)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="127.0.0.1", help="literal loopback IP only")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--api-key-env", default="VERITAS_REHEARSAL_API_KEY")
     args = parser.parse_args()
+    try:
+        args.host = validate_loopback_host(args.host)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not 1 <= args.port <= 65535:
+        parser.error("port must be between 1 and 65535")
 
     expected_api_key = os.getenv(args.api_key_env)
     if not expected_api_key:
         raise RuntimeError(f"{args.api_key_env} must be configured")
 
+    # Set offline flags before importing model libraries; weights must be pre-staged.
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
     torch.set_num_threads(2)
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
         torch_dtype=torch.float32,
         low_cpu_mem_usage=True,
+        local_files_only=True,
     )
     model.eval()
     generation_lock = threading.Lock()
@@ -43,7 +65,8 @@ def main() -> None:
         server_version = "VeritasRehearsalEndpoint/1.0"
 
         def log_message(self, format: str, *values: Any) -> None:  # noqa: A002
-            # Never log prompts, headers, or credentials during a private-panel rehearsal.
+            # Never log prompts, headers, or credentials during a private-panel
+            # rehearsal.
             return
 
         def _json(self, status: int, payload: dict[str, Any]) -> None:
@@ -69,8 +92,12 @@ def main() -> None:
                 return
 
             try:
-                length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if self.headers.get_all("Transfer-Encoding"):
+                    raise ValueError("transfer-encoded request bodies are unsupported")
+                payload = read_bounded_json_object(
+                    self.rfile,
+                    self.headers.get_all("Content-Length"),
+                )
                 messages = payload["messages"]
                 if not isinstance(messages, list) or not messages:
                     raise ValueError("messages must be a non-empty list")
@@ -95,11 +122,20 @@ def main() -> None:
                 generated = output[0][prompt_tokens:]
                 content = tokenizer.decode(generated, skip_special_tokens=True).strip()
                 completion_tokens = int(generated.shape[0])
+            except RequestBodyTooLarge as exc:
+                self._json(
+                    413,
+                    {"error": "request_too_large", "detail": str(exc)[:200]},
+                )
+                return
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 self._json(400, {"error": "bad_request", "detail": str(exc)[:200]})
                 return
             except Exception as exc:  # pragma: no cover - defensive endpoint boundary
-                self._json(500, {"error": "generation_failed", "detail": type(exc).__name__})
+                self._json(
+                    500,
+                    {"error": "generation_failed", "detail": type(exc).__name__},
+                )
                 return
 
             self._json(
@@ -123,7 +159,16 @@ def main() -> None:
                 },
             )
 
-    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    address = ipaddress.ip_address(args.host)
+    server_type = ThreadingHTTPServer
+    bind_address = (args.host, args.port)
+    if address.version == 6:
+        class IPv6ThreadingHTTPServer(ThreadingHTTPServer):
+            address_family = socket.AF_INET6
+
+        server_type = IPv6ThreadingHTTPServer
+        bind_address = (args.host, args.port, 0, 0)
+    server = server_type(bind_address, Handler)
     print(
         json.dumps(
             {

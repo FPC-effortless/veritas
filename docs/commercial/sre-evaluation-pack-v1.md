@@ -74,14 +74,14 @@ A completed evaluation produces:
 11. a buyer-safe evaluation report;
 12. optional confidential failure analysis under a case-retirement policy.
 
-## Supported integration modes
+## Supported local integration modes
 
-### OpenAI-compatible endpoint
+### Same-device loopback OpenAI-compatible endpoint
 
 ```bash
 python tools/run_sre_endpoint_evaluation.py \
   --qualification <private-v4-bundle>/results/sre-v4/qualification.json \
-  --endpoint https://customer.example/v1/chat/completions \
+  --endpoint http://127.0.0.1:8765/v1/chat/completions \
   --model customer-agent \
   --expected-candidate-id SRE-CAND-92A84929AD1E82E24357 \
   --expected-evidence-manifest-id EVID-2C69B48DCDD5F2232EABDC9B \
@@ -92,9 +92,9 @@ python tools/run_sre_endpoint_evaluation.py \
   --public-output customer-sre-evaluation.json
 ```
 
-Authentication is read from `VERITAS_MODEL_API_KEY` by default. The detailed operator report remains private; `--public-output` omits scenario IDs, per-case predictions and per-case expected labels.
+The endpoint must be served by the model process on the **same user-controlled device**. Only literal loopback IP addresses (`127.0.0.1` or `::1`) are accepted; DNS names, LAN/public addresses, URL credentials, query strings and fragments are rejected. The evaluator ignores proxy environment variables and refuses HTTP redirects. An optional bearer credential is read from `VERITAS_MODEL_API_KEY`; keep it local and out of command arguments. The detailed operator report remains private; `--public-output` omits scenario IDs, per-case predictions and per-case expected labels. Remote/cloud endpoints are unsupported. The rehearsal server sets Hugging Face/Transformers offline mode and loads only pre-staged local model files (`local_files_only=True`); missing weights cause a hard failure rather than a download.
 
-### Local/open checkpoint
+### In-process local/open checkpoint
 
 ```bash
 python tools/run_sre_open_model_evaluation.py \
