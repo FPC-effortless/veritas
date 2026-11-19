@@ -39,6 +39,7 @@ Create the evaluation manifest before the scored run.
 - run one development task in airplane mode;
 - verify the evaluator does not use environment proxies or follow redirects;
 - verify structured output parsing;
+- verify oversized, truncated, duplicate-key and non-finite request bodies are rejected before tokenization (the rehearsal request cap is 1 MiB);
 - verify failures/timeouts are explicit;
 - confirm API credentials do not appear in generated artifacts.
 
