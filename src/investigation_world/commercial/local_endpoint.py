@@ -42,9 +42,13 @@ def validate_local_chat_endpoint(endpoint: str) -> str:
         raise ValueError("endpoint query strings and fragments are not allowed")
     if parsed.path != "/v1/chat/completions":
         raise ValueError("endpoint path must be /v1/chat/completions")
-    validate_loopback_host(host)
+    canonical_host = validate_loopback_host(host)
     if port is not None and not 1 <= port <= 65535:
         raise ValueError("endpoint port must be between 1 and 65535")
+    authority_host = f"[{canonical_host}]" if ":" in canonical_host else canonical_host
+    expected_netloc = authority_host + (f":{port}" if port is not None else "")
+    if parsed.netloc != expected_netloc:
+        raise ValueError("endpoint authority must be a canonical loopback IP and optional port")
     return endpoint
 
 
