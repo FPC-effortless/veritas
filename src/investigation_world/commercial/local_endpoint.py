@@ -7,7 +7,12 @@ import json
 import math
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, OpenerDirector, ProxyHandler, build_opener
+from urllib.request import (
+     HTTPRedirectHandler,
+     OpenerDirector,
+     ProxyHandler,
+     build_opener,
+ )
 
 
 MAX_REQUEST_BODY_BYTES = 1024 * 1024
@@ -84,7 +89,7 @@ def read_bounded_json_object(
 
 
 def validate_loopback_host(host: str) -> str:
-    """Accept only a literal loopback IP; DNS names and non-loopback hosts fail closed."""
+    """Accept literal loopback IPs; reject DNS names and non-loopback hosts."""
     if type(host) is not str or not host or "%" in host:
         raise ValueError("host must be a literal loopback IP address")
     try:
