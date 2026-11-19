@@ -16,11 +16,13 @@ This is the minimum checklist before accepting payment for the first design-part
 - [x] SRE v3 is explicitly retired from private scoring after class-coverage failure under the stronger gate and prior public artifact exposure.
 - [x] ProjectWorld v2 has a qualified benchmark candidate and can serve as the second environment family.
 - [x] OpenAI-compatible endpoint evaluation surface implemented for the SRE pack.
+- [ ] Loopback-only endpoint policy passes exact-head CI on the commercial release line and is merged.
+- [ ] Same-device airplane-mode run and physical zero-network-request trace completed for the selected model/device.
 - [x] Local Hugging Face checkpoint evaluation surface implemented for the SRE pack.
 - [x] Buyer-safe SRE report renderer implemented with balanced accuracy, macro F1 and majority-baseline reporting.
 - [x] SRE v4 is frozen in controlled private storage with candidate ID and SHA-256 pinned.
 - [x] Manual real-model commercial evidence workflow passed on two model families using the identical frozen v4 panel.
-- [x] End-to-end paid-pilot dress rehearsal passed on the commercial release line using the authenticated OpenAI-compatible endpoint path.
+- [x] End-to-end paid-pilot dress rehearsal passed on the commercial release line using the authenticated local-loopback OpenAI-compatible endpoint path.
 - [x] HUD and Prime portability adapters passed clean external install/package validation, deterministic identity/reset and canonical reward-parity checks.
 - [x] Root Apache-2.0 license plus explicit commercial-private licensing policy are part of the 0.11 release.
 - [x] Release artifacts include wheel/sdist, checksums, SBOM, provenance and pinned portability identities.
