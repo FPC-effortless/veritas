@@ -18,13 +18,23 @@ from investigation_world.commercial.local_endpoint import (
 )
 
 
-@pytest.mark.parametrize("host", ["127.0.0.1", "127.0.0.2", "::1"])
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1"])
 def test_literal_loopback_hosts_are_accepted(host: str) -> None:
     assert validate_loopback_host(host)
 
 
 @pytest.mark.parametrize(
-    "host", ["localhost", "example.com", "0.0.0.0", "192.168.1.10", "203.0.113.8"]
+    "host",
+    [
+        "localhost",
+        "example.com",
+        "0.0.0.0",
+        "127.0.0.2",
+        "127.255.255.254",
+        "0:0:0:0:0:0:0:1",
+        "192.168.1.10",
+        "203.0.113.8",
+    ],
 )
 def test_dns_and_non_loopback_hosts_are_rejected(host: str) -> None:
     with pytest.raises(ValueError, match="loopback"):
@@ -36,7 +46,6 @@ def test_dns_and_non_loopback_hosts_are_rejected(host: str) -> None:
     [
         "http://127.0.0.1:8765/v1/chat/completions",
         "https://[::1]:8765/v1/chat/completions",
-        "http://127.0.0.2/v1/chat/completions",
     ],
 )
 def test_local_chat_endpoint_accepts_literal_loopback(endpoint: str) -> None:
@@ -47,6 +56,8 @@ def test_local_chat_endpoint_accepts_literal_loopback(endpoint: str) -> None:
     "endpoint",
     [
         "https://customer.example/v1/chat/completions",
+        "http://127.0.0.2:8765/v1/chat/completions",
+        "http://[0:0:0:0:0:0:0:1]:8765/v1/chat/completions",
         "http://192.168.1.10:8765/v1/chat/completions",
         "http://localhost:8765/v1/chat/completions",
         "ftp://127.0.0.1/v1/chat/completions",
