@@ -8,10 +8,10 @@ import math
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit
 from urllib.request import (
+    build_opener,
     HTTPRedirectHandler,
     OpenerDirector,
     ProxyHandler,
-    build_opener,
 )
 
 
