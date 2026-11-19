@@ -16,14 +16,14 @@ The pilot should not begin with an undefined request to “benchmark our AI.”
 
 Preferred first-pilot integration:
 
-- OpenAI-compatible `/v1/chat/completions` endpoint;
-- model identifier;
-- temporary/revocable API credential supplied out of band;
-- endpoint/network restrictions if any;
-- maximum input/output token limits;
-- expected rate limits;
-- retry policy;
-- required system prompt or immutable harness instructions, if applicable.
+- same-device loopback `/v1/chat/completions` endpoint bound to a literal loopback IP (`127.0.0.1` or `::1`), or an in-process local checkpoint/adapter;
+- exact model and harness identifier;
+- optional temporary local bearer credential supplied out of band;
+- maximum input/output token limits and local resource limits;
+- retry policy and immutable system prompt/harness instructions, if applicable;
+- confirmation that the model and evaluator run on the same user-controlled device in airplane mode.
+
+Remote DNS names, LAN/public endpoints, hosted inference, proxy routing and redirects are unsupported.
 
 Alternative integrations (agent endpoint, container, CLI, checkpoint) are scoped separately because they add integration work.
 
@@ -39,7 +39,7 @@ Agree before the private run:
 - wall-clock timeout;
 - allowed tools/systems;
 - retry policy;
-- whether customer-managed inference is required;
+- confirmation that customer-controlled on-device inference is mandatory and works in airplane mode;
 - whether any model outputs are considered confidential.
 
 ## 4. Data/security
@@ -64,7 +64,7 @@ Never place customer credentials, private benchmark assets, or customer-confiden
 - [ ] Commercial/contracting owner identified.
 - [ ] SOW/order form agreed.
 - [ ] Credential exchange channel agreed.
-- [ ] Endpoint/harness dry run passed.
+- [ ] Same-device loopback/local-runtime dry run passed in airplane mode with no remote fallback.
 - [ ] Benchmark version and private-suite hash frozen.
 - [ ] Manifest created.
 - [ ] Evaluation budgets/retry rules signed off.
