@@ -16,7 +16,7 @@ def validate_loopback_host(host: str) -> str:
     except ValueError as exc:
         raise ValueError("host must be a literal loopback IP address") from exc
     if not address.is_loopback:
-        raise ValueError("host must resolve syntactically to a loopback IP address")
+        raise ValueError("host must be a loopback IP address")
     return str(address)
 
 
