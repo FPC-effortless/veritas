@@ -4,17 +4,17 @@
 
 Veritas is designed to support several evaluation delivery modes:
 
-### Vendor-hosted evaluation
+### Customer-controlled offline evaluation
 
-The customer supplies an endpoint or temporary credentials. Veritas runs the benchmark and returns results. Private benchmark truth remains inside the evaluator boundary.
+The customer's model and the Veritas evaluator run on the same user-controlled device. Model preprocessing, embeddings, inference, state updates and optional speech remain local. The evaluator uses an in-process adapter or a literal loopback endpoint; remote/cloud inference is not supported. Private benchmark truth remains in a separate evaluator-only process/workspace on that device.
 
 ### Customer-controlled evaluation runner
 
-Veritas runs inside customer-controlled compute while private evaluator assets are mounted separately from the evaluated agent. This mode is appropriate when customer prompts, model endpoints or internal tool schemas must remain inside the customer's environment.
+Veritas runs inside customer-controlled compute while private evaluator assets are mounted separately from the evaluated model process. The model still executes locally on the same device; local process/loopback boundaries do not authorize outbound inference.
 
 ### Isolated container evaluation
 
-The evaluated agent and Veritas runtime are placed in separate containers or processes with explicit network and filesystem boundaries. Public task data flows to the agent; private oracle data remains evaluator-only.
+The evaluated model and Veritas runtime may be placed in separate containers or processes on the same device with explicit filesystem boundaries. Model inference receives only local task inputs; deny outbound network access and keep private oracle data evaluator-only.
 
 ### Air-gapped/private deployment
 
@@ -52,15 +52,17 @@ A production commercial deployment should keep these classes separate:
 
 ## Model endpoint handling
 
-For endpoint-based evaluation, production deployments should support:
+For endpoint-based evaluation, production deployments must enforce:
 
-- OpenAI-compatible chat/completions endpoints;
-- configurable authentication headers;
-- customer-managed rate and token limits;
-- zero-retention endpoints where the customer requires them;
-- endpoint hostname allowlists;
-- TLS verification;
+- literal loopback IP endpoints only (`127.0.0.1` or `::1`);
+- exact `/v1/chat/completions` path;
+- no DNS names, LAN/public addresses or URL-embedded credentials;
+- environment proxies disabled and redirects rejected;
+- optional local bearer authentication and customer-managed token limits;
+- TLS verification when local HTTPS is used;
 - deterministic request logging with secrets redacted.
+
+The endpoint restriction protects the evaluator's transport boundary; it does not prove the model process itself makes no network requests. Airplane-mode execution and a physical network trace are separate acceptance evidence.
 
 ## Benchmark confidentiality
 
@@ -76,9 +78,9 @@ The Veritas repository already runs package, container, Python-version, frontend
 - dependency and container inventory;
 - vulnerability scan results;
 - data retention statement;
-- subprocessor list for any hosted third-party inference providers;
+- subprocessor list for any approved data-storage or tooling services; model inference providers are not permitted for company-delivered customer models;
 - incident-response contact and process;
 - business continuity/recovery statement;
-- model/provider data-use settings where applicable;
+- model artifact provenance and local runtime/operator inventory;
 - benchmark confidentiality statement;
 - customer-specific deployment and network diagram.
