@@ -154,14 +154,17 @@ def test_opener_does_not_follow_redirects() -> None:
         target_thread.join(timeout=2)
 
 
-
 def parse_request_body(
     raw: bytes,
     content_length_values: list[str] | None = None,
     *,
     max_bytes: int = MAX_REQUEST_BODY_BYTES,
 ) -> dict[str, object]:
-    headers = content_length_values if content_length_values is not None else [str(len(raw))]
+    headers = (
+        content_length_values
+        if content_length_values is not None
+        else [str(len(raw))]
+    )
     return read_bounded_json_object(BytesIO(raw), headers, max_bytes=max_bytes)
 
 
