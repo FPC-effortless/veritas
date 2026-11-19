@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from io import BytesIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 from urllib.error import HTTPError
-from urllib.request import ProxyHandler, Request
+from urllib.request import Request
 
 import pytest
 
 from investigation_world.commercial.local_endpoint import (
+    MAX_REQUEST_BODY_BYTES,
+    RequestBodyTooLarge,
     build_offline_local_opener,
+    read_bounded_json_object,
     validate_local_chat_endpoint,
     validate_loopback_host,
 )
@@ -60,13 +64,35 @@ def test_remote_or_ambiguous_endpoints_are_rejected(endpoint: str) -> None:
         validate_local_chat_endpoint(endpoint)
 
 
-def test_opener_ignores_environment_proxy_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HTTP_PROXY", "http://203.0.113.10:3128")
-    monkeypatch.setenv("http_proxy", "http://203.0.113.10:3128")
-    opener = build_offline_local_opener()
-    proxy_handlers = [handler for handler in opener.handlers if isinstance(handler, ProxyHandler)]
-    assert len(proxy_handlers) == 1
-    assert proxy_handlers[0].proxies == {}
+def test_opener_ignores_environment_proxy_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(name, "http://203.0.113.10:3128")
+    monkeypatch.setenv("NO_PROXY", "")
+    monkeypatch.setenv("no_proxy", "")
+
+    class DirectHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"direct")
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), DirectHandler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/health"
+        with build_offline_local_opener().open(url, timeout=2) as response:
+            assert response.status == 200
+            assert response.read() == b"direct"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_opener_does_not_follow_redirects() -> None:
@@ -82,7 +108,7 @@ def test_opener_does_not_follow_redirects() -> None:
             return
 
     target = ThreadingHTTPServer(("127.0.0.1", 0), TargetHandler)
-    target_thread = Thread(target.serve_forever, daemon=True)
+    target_thread = Thread(target=target.serve_forever, daemon=True)
     target_thread.start()
 
     class RedirectHandler(BaseHTTPRequestHandler):
@@ -118,3 +144,65 @@ def test_opener_does_not_follow_redirects() -> None:
         target.server_close()
         redirect_thread.join(timeout=2)
         target_thread.join(timeout=2)
+
+
+
+def parse_request_body(
+    raw: bytes,
+    content_length_values: list[str] | None = None,
+    *,
+    max_bytes: int = MAX_REQUEST_BODY_BYTES,
+) -> dict[str, object]:
+    headers = content_length_values if content_length_values is not None else [str(len(raw))]
+    return read_bounded_json_object(BytesIO(raw), headers, max_bytes=max_bytes)
+
+
+def test_request_body_accepts_exact_configured_limit() -> None:
+    prefix = b'{"value":"'
+    suffix = b'"}'
+    raw = prefix + b"a" * (MAX_REQUEST_BODY_BYTES - len(prefix) - len(suffix)) + suffix
+    payload = parse_request_body(raw)
+    assert len(payload["value"]) == MAX_REQUEST_BODY_BYTES - len(prefix) - len(suffix)
+
+
+def test_request_body_rejects_oversize_before_reading() -> None:
+    raw = b'{"ok":true}'
+    stream = BytesIO(raw)
+    with pytest.raises(RequestBodyTooLarge, match="1 MiB"):
+        read_bounded_json_object(stream, [str(len(raw))], max_bytes=len(raw) - 1)
+    assert stream.tell() == 0
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [[], ["10", "10"], ["-1"], ["0"], ["01"], ["١"]],
+)
+def test_request_body_rejects_missing_duplicate_or_noncanonical_lengths(
+    headers: list[str],
+) -> None:
+    with pytest.raises(ValueError, match="Content-Length"):
+        read_bounded_json_object(BytesIO(b'{"ok":true}'), headers)
+
+
+def test_request_body_rejects_truncated_body() -> None:
+    with pytest.raises(ValueError, match="truncated"):
+        read_bounded_json_object(BytesIO(b"{}"), ["3"])
+
+
+def test_request_body_rejects_invalid_utf8_and_non_object_json() -> None:
+    with pytest.raises(ValueError, match="valid bounded UTF-8 JSON"):
+        read_bounded_json_object(BytesIO(b"\xff"), ["1"])
+    with pytest.raises(ValueError, match="JSON object"):
+        read_bounded_json_object(BytesIO(b"[]"), ["2"])
+
+
+def test_request_body_rejects_duplicate_nested_keys() -> None:
+    raw = b'{"outer":{"value":1,"value":2}}'
+    with pytest.raises(ValueError, match="duplicate JSON object key"):
+        read_bounded_json_object(BytesIO(raw), [str(len(raw))])
+
+
+@pytest.mark.parametrize("raw", [b'{"value":NaN}', b'{"value":1e999}'])
+def test_request_body_rejects_nonfinite_json_numbers(raw: bytes) -> None:
+    with pytest.raises(ValueError, match="non-finite|finite"):
+        read_bounded_json_object(BytesIO(raw), [str(len(raw))])
