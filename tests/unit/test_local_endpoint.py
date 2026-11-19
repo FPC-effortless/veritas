@@ -19,7 +19,9 @@ def test_literal_loopback_hosts_are_accepted(host: str) -> None:
     assert validate_loopback_host(host)
 
 
-@pytest.mark.parametrize("host", ["localhost", "example.com", "0.0.0.0", "192.168.1.10", "203.0.113.8"])
+@pytest.mark.parametrize(
+    "host", ["localhost", "example.com", "0.0.0.0", "192.168.1.10", "203.0.113.8"]
+)
 def test_dns_and_non_loopback_hosts_are_rejected(host: str) -> None:
     with pytest.raises(ValueError, match="loopback"):
         validate_loopback_host(host)
