@@ -20,7 +20,8 @@ from investigation_world.commercial.local_endpoint import (
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Serve a local authenticated OpenAI-compatible endpoint for the Veritas pilot dress rehearsal"
+            "Serve a local authenticated OpenAI-compatible endpoint for the Veritas "
+            "pilot dress rehearsal"
         )
     )
     parser.add_argument("--model", required=True)
@@ -64,7 +65,8 @@ def main() -> None:
         server_version = "VeritasRehearsalEndpoint/1.0"
 
         def log_message(self, format: str, *values: Any) -> None:  # noqa: A002
-            # Never log prompts, headers, or credentials during a private-panel rehearsal.
+            # Never log prompts, headers, or credentials during a private-panel
+            # rehearsal.
             return
 
         def _json(self, status: int, payload: dict[str, Any]) -> None:
@@ -121,13 +123,19 @@ def main() -> None:
                 content = tokenizer.decode(generated, skip_special_tokens=True).strip()
                 completion_tokens = int(generated.shape[0])
             except RequestBodyTooLarge as exc:
-                self._json(413, {"error": "request_too_large", "detail": str(exc)[:200]})
+                self._json(
+                    413,
+                    {"error": "request_too_large", "detail": str(exc)[:200]},
+                )
                 return
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 self._json(400, {"error": "bad_request", "detail": str(exc)[:200]})
                 return
             except Exception as exc:  # pragma: no cover - defensive endpoint boundary
-                self._json(500, {"error": "generation_failed", "detail": type(exc).__name__})
+                self._json(
+                    500,
+                    {"error": "generation_failed", "detail": type(exc).__name__},
+                )
                 return
 
             self._json(
