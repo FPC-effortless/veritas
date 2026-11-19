@@ -19,7 +19,7 @@ See `datavendor-listing.md` for the copy-ready Tier 1 listing.
 
 ## One-paragraph submission description
 
-Veritas builds qualified, verifier-grounded environments for training and evaluating AI agents in persistent or partially observable operational worlds. The first commercial SKU is SRE Evaluation Pack v1: a frozen, source-disjoint 30-case private panel drawn from 87 qualified incident scenarios across 16 source families, with four causal classes, immutable release identities, hidden evaluator truth and buyer-safe reporting. The exact sealed panel has been run against two real model families and through an authenticated customer-equivalent OpenAI-compatible endpoint rehearsal. Veritas 0.11.0 adds a standalone HUD v6 package with deterministic reset, canonical reward parity, opaque private task identities and leak-resistant metering.
+Veritas builds qualified, verifier-grounded environments for training and evaluating AI agents in persistent or partially observable operational worlds. The first commercial SKU is SRE Evaluation Pack v1: a frozen, source-disjoint 30-case private panel drawn from 87 qualified incident scenarios across 16 source families, with four causal classes, immutable release identities, hidden evaluator truth and buyer-safe reporting. The exact sealed panel has been run against two real model families and through an authenticated local-loopback OpenAI-compatible endpoint rehearsal on a CI host. This is not physical customer-device or airplane-mode qualification. Veritas 0.11.0 adds a standalone HUD v6 package with deterministic reset, canonical reward parity, opaque private task identities and leak-resistant metering.
 
 ## Buyer problem
 
