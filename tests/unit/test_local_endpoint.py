@@ -49,6 +49,8 @@ def test_local_chat_endpoint_accepts_literal_loopback(endpoint: str) -> None:
         "http://user:secret@127.0.0.1:8765/v1/chat/completions",
         "http://127.0.0.1:0/v1/chat/completions",
         "http://127.0.0.1:8765/other",
+        "http://127.0.0.1:8765\\@evil.example/v1/chat/completions",
+        "http://127.0.0.1:08765/v1/chat/completions",
     ],
 )
 def test_remote_or_ambiguous_endpoints_are_rejected(endpoint: str) -> None:
