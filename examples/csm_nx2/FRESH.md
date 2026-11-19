@@ -1,0 +1,3 @@
+# Fresh-seed replication and extensions
+
+Freeze this follow-up before evaluating the Forge validation subset of 9500–9819, disjoint from the primary candidate range. Repeat all ten families and the independent-consequence intervention. Measure held-synonym pipeline accuracy with the same random stream, vocabulary, requests and admissions for a loaded checkpoint versus fresh reader weights. Add a grounded teacher/listener test with independently learned action lexicons. The teacher infers a procedure from an observed outcome and transmits actions to a listener operating on fresh record values. Score against silent and scrambled-token controls. Treat the new experiments as exploratory. The original primary gates continue to apply to the unmodified verifier.
