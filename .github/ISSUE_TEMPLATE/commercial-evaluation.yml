@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Use this form for buyer-safe commercial inquiries only. Do not paste API keys, customer-confidential data, private benchmark rows, hidden labels, or other secrets into this public issue.
+        Use this form for buyer-safe commercial inquiries only. Company-delivered model inference must run on the user's device in airplane mode; remote/cloud endpoints are unsupported. Do not paste API keys, customer-confidential data, private benchmark rows, hidden labels, or other secrets into this public issue.
   - type: dropdown
     id: request_type
     attributes:
@@ -37,7 +37,7 @@ body:
     id: system
     attributes:
       label: System to evaluate
-      description: Buyer-safe description only. Do not include credentials or private endpoint details.
+      description: Buyer-safe description only. State the target device and local runtime; remote/cloud inference is unsupported. Do not include credentials or private endpoint details.
     validations:
       required: true
   - type: dropdown
@@ -45,7 +45,7 @@ body:
     attributes:
       label: Preferred integration
       options:
-        - OpenAI-compatible endpoint
+        - Same-device loopback OpenAI-compatible endpoint
         - Local/open checkpoint
         - Customer-controlled runner
         - HUD
