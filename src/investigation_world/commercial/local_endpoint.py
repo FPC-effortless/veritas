@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import ipaddress
+from typing import Any
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, ProxyHandler, build_opener
+from urllib.request import HTTPRedirectHandler, OpenerDirector, ProxyHandler, build_opener
 
 
 def validate_loopback_host(host: str) -> str:
@@ -53,10 +54,18 @@ def validate_local_chat_endpoint(endpoint: str) -> str:
 
 
 class _RejectRedirects(HTTPRedirectHandler):
-    def redirect_request(self, request, response, code, message, headers, new_url):
+    def redirect_request(
+        self,
+        request: Any,
+        response: Any,
+        code: int,
+        message: str,
+        headers: Any,
+        new_url: str,
+    ) -> None:
         return None
 
 
-def build_offline_local_opener():
+def build_offline_local_opener() -> OpenerDirector:
     """Build a direct opener with environment proxies and HTTP redirects disabled."""
     return build_opener(ProxyHandler({}), _RejectRedirects())
