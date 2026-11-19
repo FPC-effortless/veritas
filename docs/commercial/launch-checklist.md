@@ -106,6 +106,6 @@ They may become procurement requirements for a particular buyer, but they should
 
 ## First paid-pilot readiness threshold
 
-The software, qualified frozen benchmark, real-model evidence, release, portability layer and endpoint dress rehearsal are now complete. The remaining blockers to accepting payment are seller-controlled commercial administration plus the first customer-specific delivery controls: legal identity/payment rail, transaction documents, private credential channel, retention/deletion terms and incident owner.
+The software, qualified frozen benchmark, internal real-model evidence, release, portability layer and local-loopback dress rehearsal are present. The loopback-only endpoint enforcement proposed on the current draft branch must still pass exact-head CI and be merged; same-device airplane-mode execution and a physical zero-network-request trace remain NOT RUN. The remaining blockers to accepting payment also include seller-controlled commercial administration and customer-specific delivery controls: legal identity/payment rail, transaction documents, private credential channel, retention/deletion terms and incident owner.
 
 The first paid pilot is intended to validate **decision usefulness**, not merely produce revenue: record what decision the customer was trying to make, what Veritas result changed or clarified that decision, and whether the customer would pay for a re-evaluation or a second environment.
