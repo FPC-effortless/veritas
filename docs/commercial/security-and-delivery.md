@@ -62,7 +62,7 @@ For endpoint-based evaluation, production deployments must enforce:
 - TLS verification when local HTTPS is used;
 - deterministic request logging with secrets redacted.
 
-The endpoint restriction protects the evaluator's transport boundary; it does not prove the model process itself makes no network requests. Airplane-mode execution and a physical network trace are separate acceptance evidence.
+The endpoint restriction protects the evaluator's transport boundary; it does not prove the model process itself makes no network requests. Model files must be pre-staged from a trusted, checksum-verified distribution; the rehearsal server runs with Hugging Face/Transformers offline mode and `local_files_only=True`. Airplane-mode execution and a physical network trace are separate acceptance evidence.
 
 ## Benchmark confidentiality
 
