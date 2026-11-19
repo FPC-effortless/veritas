@@ -56,12 +56,12 @@ def validate_local_chat_endpoint(endpoint: str) -> str:
 class _RejectRedirects(HTTPRedirectHandler):
     def redirect_request(
         self,
-        request: Any,
-        response: Any,
+        req: Any,
+        fp: Any,
         code: int,
-        message: str,
+        msg: str,
         headers: Any,
-        new_url: str,
+        newurl: str,
     ) -> None:
         return None
 
