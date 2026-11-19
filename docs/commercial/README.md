@@ -14,7 +14,7 @@ SRE v3 is retired from private commercial scoring: the stronger current stratum-
 
 SRE v4 is the qualified frozen commercial benchmark. Its sealed release contains 87 scenarios and a 30-case private panel across 16 fresh Statuspage providers. All 18 scientific qualification gates pass; exact release identities are pinned and every commercial evaluator consumes the sealed `qualification.json` rather than rebuilding the candidate from provider feeds.
 
-The exact sealed panel has passed real-model execution on two model families and a customer-equivalent authenticated **local-loopback** OpenAI-compatible endpoint dress rehearsal. The model process and evaluator run on the same user-controlled machine. Veritas 0.11 also exports the SKU through validated HUD v6 and Prime Verifiers v1 adapters without putting the private evaluator truth into buyer-safe manifests.
+The exact sealed panel has passed real-model execution on two model families and an authenticated **local-loopback** OpenAI-compatible endpoint dress rehearsal on an internal CI host. This is software workflow evidence, not physical customer-device or airplane-mode qualification. Veritas 0.11 also exports the SKU through validated HUD v6 and Prime Verifiers v1 adapters without putting the private evaluator truth into buyer-safe manifests.
 
 ProjectWorld v2 remains a qualified second environment family and is the next candidate for a separate commercial pack. CompanyWorld remains useful for enterprise-workflow evaluation and training experiments but is not presented as the primary generic-qualification SKU.
 
