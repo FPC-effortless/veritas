@@ -32,7 +32,7 @@ The exact sealed 30-case panel has been exercised through two real open-model fa
 - Qwen2.5-0.5B-Instruct: balanced accuracy 25.0%, macro F1 13.2%, parse failures 0/30;
 - SmolLM2-360M-Instruct: balanced accuracy 12.5%, macro F1 9.5%, parse failures 17/30.
 
-A customer-equivalent authenticated OpenAI-compatible endpoint rehearsal also completed all 30 cases with one attempt, zero retries, zero operator interventions and exact buyer-safe metric reproduction.
+An internal customer-equivalent authenticated **local-loopback** OpenAI-compatible endpoint rehearsal on a CI host also completed all 30 cases with one attempt, zero retries, zero operator interventions and exact buyer-safe metric reproduction. This is a software workflow rehearsal, not physical customer-device or airplane-mode qualification.
 
 These results prove execution/reproducibility of the commercial pack. They are not a claim that SRE v4 is already frontier-qualified; Frontier Qualification remains a separate evidence gate.
 
@@ -64,7 +64,7 @@ Operator-private HUD/Prime exports may contain the restricted task material only
 
 The first commercial release supports three buyer motions:
 
-1. **Private model/agent evaluation** — buyer supplies a model endpoint, harness or checkpoint; Veritas returns a buyer-safe scorecard and failure analysis.
+1. **Private model/agent evaluation** — buyer runs a model endpoint, harness or checkpoint locally on the same user-controlled device as the evaluator; Veritas returns a buyer-safe scorecard and failure analysis. Remote/cloud inference is unsupported.
 2. **Environment/taskset license** — non-exclusive access to an authorized environment/taskset package under transaction-specific terms.
 3. **Custom capability environment** — commissioned construction of a task distribution, executable world, verifier, adversarial cases and evaluation/training assets for a buyer-defined capability.
 
