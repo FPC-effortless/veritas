@@ -11,6 +11,7 @@ Prove that an operator can run a model locally on the same user-controlled devic
 Use:
 
 - a non-customer model served on the same device at `http://127.0.0.1:8765/v1/chat/completions`;
+- pre-staged, checksum-verified model files; the rehearsal server must run with model-hub offline mode and must not download weights;
 - the intended commercial software release candidate;
 - a frozen non-production private test suite distinct from any customer suite;
 - the same manifest/report tools intended for customers;
