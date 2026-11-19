@@ -7,7 +7,12 @@ import json
 import math
 from typing import Any, BinaryIO
 from urllib.parse import urlsplit
-from urllib.request import build_opener, HTTPRedirectHandler, OpenerDirector, ProxyHandler
+from urllib.request import (
+    build_opener,
+    HTTPRedirectHandler,
+    OpenerDirector,
+    ProxyHandler,
+)
 
 
 MAX_REQUEST_BODY_BYTES = 1024 * 1024
