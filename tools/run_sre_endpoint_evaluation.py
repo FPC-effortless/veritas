@@ -9,15 +9,15 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from investigation_world.commercial.local_endpoint import (
+    build_offline_local_opener,
+    validate_local_chat_endpoint,
+)
 from investigation_world.commercial.sre_evaluation import (
     evaluate_sre_generator,
     sanitize_sre_evaluation,
 )
 from investigation_world.commercial.sre_release import load_sealed_sre_release
-from investigation_world.commercial.local_endpoint import (
-    build_offline_local_opener,
-    validate_local_chat_endpoint,
-)
 
 
 def main() -> None:
