@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
+import socket
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,16 +13,24 @@ from typing import Any
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from investigation_world.commercial.local_endpoint import validate_loopback_host
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Serve a local authenticated OpenAI-compatible endpoint for the Veritas pilot dress rehearsal"
     )
     parser.add_argument("--model", required=True)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="127.0.0.1", help="literal loopback IP only")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--api-key-env", default="VERITAS_REHEARSAL_API_KEY")
     args = parser.parse_args()
+    try:
+        args.host = validate_loopback_host(args.host)
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not 1 <= args.port <= 65535:
+        parser.error("port must be between 1 and 65535")
 
     expected_api_key = os.getenv(args.api_key_env)
     if not expected_api_key:
@@ -123,7 +133,13 @@ def main() -> None:
                 },
             )
 
-    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    server_type = ThreadingHTTPServer
+    if ipaddress.ip_address(args.host).version == 6:
+        class IPv6ThreadingHTTPServer(ThreadingHTTPServer):
+            address_family = socket.AF_INET6
+
+        server_type = IPv6ThreadingHTTPServer
+    server = server_type((args.host, args.port), Handler)
     print(
         json.dumps(
             {
