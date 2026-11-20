@@ -217,7 +217,7 @@ def test_request_body_rejects_truncated_body() -> None:
 
 def test_request_body_rejects_invalid_utf8_and_non_object_json() -> None:
     with pytest.raises(ValueError, match="valid bounded UTF-8 JSON"):
-        read_bounded_json_object(BytesIO(b"\\xff"), ["1"])
+        read_bounded_json_object(BytesIO(b"\xff"), ["1"])
     with pytest.raises(ValueError, match="JSON object"):
         read_bounded_json_object(BytesIO(b"[]"), ["2"])
 
