@@ -1,0 +1,126 @@
+{
+  "primary": {
+    "seeds": 32,
+    "veto_0": {
+      "accuracy": 0.75,
+      "precision": 0.9949452401010952,
+      "coverage": 0.771484375,
+      "writes": 2374,
+      "replacements": 0,
+      "correct_replacements": 0,
+      "extra_outcomes_per_event": 0.673828125
+    },
+    "inverse_0": {
+      "accuracy": 0.91015625,
+      "precision": 0.9023188405797101,
+      "coverage": 1.0,
+      "writes": 3450,
+      "replacements": 1076,
+      "correct_replacements": 751,
+      "extra_outcomes_per_event": 0.673828125
+    },
+    "confirmed_0": {
+      "accuracy": 0.990234375,
+      "precision": 0.9950867998689813,
+      "coverage": 1.0,
+      "writes": 3053,
+      "replacements": 679,
+      "correct_replacements": 676,
+      "extra_outcomes_per_event": 0.883984375
+    },
+    "veto_1": {
+      "accuracy": 0.740234375,
+      "precision": 0.7624561403508772,
+      "coverage": 0.99609375,
+      "writes": 2850,
+      "replacements": 0,
+      "correct_replacements": 0,
+      "extra_outcomes_per_event": 0.673828125
+    },
+    "inverse_1": {
+      "accuracy": 0.630859375,
+      "precision": 0.6368115942028986,
+      "coverage": 1.0,
+      "writes": 3450,
+      "replacements": 600,
+      "correct_replacements": 24,
+      "extra_outcomes_per_event": 0.673828125
+    },
+    "confirmed_1": {
+      "accuracy": 0.677734375,
+      "precision": 0.7061488673139159,
+      "coverage": 0.998046875,
+      "writes": 3090,
+      "replacements": 240,
+      "correct_replacements": 9,
+      "extra_outcomes_per_event": 0.791015625
+    },
+    "paired_gain": [
+      0.240234375,
+      0.232421875,
+      0.248046875
+    ]
+  },
+  "fresh": {
+    "seeds": 32,
+    "veto_0": {
+      "accuracy": 0.755859375,
+      "precision": 0.9931389365351629,
+      "coverage": 0.779296875,
+      "writes": 2332,
+      "replacements": 0,
+      "correct_replacements": 0,
+      "extra_outcomes_per_event": 0.6701171875
+    },
+    "inverse_0": {
+      "accuracy": 0.890625,
+      "precision": 0.9006120664529291,
+      "coverage": 1.0,
+      "writes": 3431,
+      "replacements": 1099,
+      "correct_replacements": 774,
+      "extra_outcomes_per_event": 0.6701171875
+    },
+    "confirmed_0": {
+      "accuracy": 0.990234375,
+      "precision": 0.9937273027401783,
+      "coverage": 0.99609375,
+      "writes": 3029,
+      "replacements": 697,
+      "correct_replacements": 694,
+      "extra_outcomes_per_event": 0.884765625
+    },
+    "veto_1": {
+      "accuracy": 0.748046875,
+      "precision": 0.7545968882602546,
+      "coverage": 0.998046875,
+      "writes": 2828,
+      "replacements": 0,
+      "correct_replacements": 0,
+      "extra_outcomes_per_event": 0.6701171875
+    },
+    "inverse_1": {
+      "accuracy": 0.6171875,
+      "precision": 0.6301369863013698,
+      "coverage": 1.0,
+      "writes": 3431,
+      "replacements": 603,
+      "correct_replacements": 28,
+      "extra_outcomes_per_event": 0.6701171875
+    },
+    "confirmed_1": {
+      "accuracy": 0.68359375,
+      "precision": 0.6978487614080835,
+      "coverage": 1.0,
+      "writes": 3068,
+      "replacements": 240,
+      "correct_replacements": 7,
+      "extra_outcomes_per_event": 0.787890625
+    },
+    "paired_gain": [
+      0.234375,
+      0.224609375,
+      0.2421875
+    ]
+  }
+}
