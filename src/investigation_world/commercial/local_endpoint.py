@@ -138,6 +138,14 @@ def validate_local_chat_endpoint(endpoint: str) -> str:
         raise ValueError(
             "endpoint authority must be a canonical loopback IP and optional port"
         )
+
+    # urlsplit reports an empty trailing "?" or "#" as an empty component, so
+    # checking parsed.query/fragment alone does not reject those delimiters.
+    # Reconstructing the only accepted representation also rejects alternate
+    # scheme casing and other syntactic aliases before any private data is loaded.
+    canonical_endpoint = f"{parsed.scheme}://{expected_netloc}{parsed.path}"
+    if endpoint != canonical_endpoint:
+        raise ValueError("endpoint must use its exact canonical URL without query or fragment")
     return endpoint
 
 
