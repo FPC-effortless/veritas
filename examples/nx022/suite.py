@@ -20,19 +20,26 @@ def study(seed):
     gate=Confidence(seed+100000)
     events,targets=stream(seed,True)
     dependent=set(rng.sample(range(16),8))
+    # Mirror the key-level fault roster in verification.stream.
+    roster=random.Random(seed)
+    for _ in range(16):
+        roster.randrange(8)
+    biased=set(roster.sample(range(16),4))
     results={}
     for topology in ('downstream','upstream'):
+        rng.seed(seed+89145)
         active_votes=[0]*16
         sham_votes=[0]*16
         for key in range(16):
             for _ in range(6):
                 state=rng.randrange(8)
-                primary=reading(rng,state,.9)
+                primary=reading(rng,(state+int(key in biased))%8,.9)
                 decoy=rng.randrange(8)
                 natural=primary if key in dependent else state
                 exposed=decoy if key in dependent and topology=='downstream' else natural
                 active_votes[key]+=effect(exposed)==predicted[decoy]
                 sham_votes[key]+=effect(natural)==predicted[decoy]
+        rng.seed(seed+69811)
         observations=[]
         for _,key,p,probes,gold in events:
             signal=probes[0] if key in dependent else gold
@@ -65,7 +72,8 @@ def study(seed):
                 writes+=1
             panel[arm]=dict(accuracy=sum(x==y for x,y in zip(memory,targets))/16,
                 true_positive=len(blocked & dependent),false_positive=len(blocked-dependent),
-                correct=correct,writes=writes,checks=checks,
+                correct=correct,writes=writes,checks=checks,coverage=sum(x is not None for x in memory)/16,
+                biased_dependent_keys=len(biased & dependent),
                 audit_outcomes=96 if arm in ('active','sham') else 0)
         results[topology]=panel
     return results,len(counts),sum(map(sum,counts))
