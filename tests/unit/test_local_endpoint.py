@@ -63,6 +63,9 @@ def test_local_chat_endpoint_accepts_literal_loopback(endpoint: str) -> None:
         "ftp://127.0.0.1/v1/chat/completions",
         "http://127.0.0.1:8765/v1/chat/completions?token=secret",
         "http://127.0.0.1:8765/v1/chat/completions#fragment",
+        "http://127.0.0.1:8765/v1/chat/completions?",
+        "http://127.0.0.1:8765/v1/chat/completions#",
+        "HTTP://127.0.0.1:8765/v1/chat/completions",
         "http://user:secret@127.0.0.1:8765/v1/chat/completions",
         "http://127.0.0.1:0/v1/chat/completions",
         "http://127.0.0.1:8765/other",
@@ -214,7 +217,7 @@ def test_request_body_rejects_truncated_body() -> None:
 
 def test_request_body_rejects_invalid_utf8_and_non_object_json() -> None:
     with pytest.raises(ValueError, match="valid bounded UTF-8 JSON"):
-        read_bounded_json_object(BytesIO(b"\xff"), ["1"])
+        read_bounded_json_object(BytesIO(b"\\xff"), ["1"])
     with pytest.raises(ValueError, match="JSON object"):
         read_bounded_json_object(BytesIO(b"[]"), ["2"])
 
