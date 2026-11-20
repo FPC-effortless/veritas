@@ -1,0 +1,139 @@
+{
+  "seeds": 32,
+  "panels": {
+    "downstream": {
+      "repair": {
+        "accuracy": 0.84765625,
+        "coverage": 0.99609375,
+        "precision": 0.84289931124959,
+        "sensitivity": 0.0,
+        "specificity": 1.0,
+        "balanced": 0.5,
+        "deployment_outcomes": 132.5,
+        "audit_outcomes": 0,
+        "fault_overlap": 1.96875
+      },
+      "veto": {
+        "accuracy": 0.748046875,
+        "coverage": 0.876953125,
+        "precision": 0.8533950617283951,
+        "sensitivity": 1.0,
+        "specificity": 0.0,
+        "balanced": 0.5,
+        "deployment_outcomes": 106.75,
+        "audit_outcomes": 0,
+        "fault_overlap": 1.96875
+      },
+      "active": {
+        "accuracy": 0.8671875,
+        "coverage": 0.9921875,
+        "precision": 0.8698164513936097,
+        "sensitivity": 1.0,
+        "specificity": 0.96875,
+        "balanced": 0.984375,
+        "deployment_outcomes": 123.78125,
+        "audit_outcomes": 96,
+        "fault_overlap": 1.96875
+      },
+      "sham": {
+        "accuracy": 0.84375,
+        "coverage": 0.9921875,
+        "precision": 0.8427114182296808,
+        "sensitivity": 0.0078125,
+        "specificity": 0.96875,
+        "balanced": 0.48828125,
+        "deployment_outcomes": 132.03125,
+        "audit_outcomes": 96,
+        "fault_overlap": 1.96875
+      },
+      "oracle": {
+        "accuracy": 0.87109375,
+        "coverage": 0.99609375,
+        "precision": 0.8700814111261872,
+        "sensitivity": 1.0,
+        "specificity": 1.0,
+        "balanced": 1.0,
+        "deployment_outcomes": 124.25,
+        "audit_outcomes": 0,
+        "fault_overlap": 1.96875
+      },
+      "gain_over_veto": [
+        0.119140625,
+        0.099609375,
+        0.138671875
+      ],
+      "gain_over_repair": [
+        0.01953125,
+        0.005859375,
+        0.03515625
+      ]
+    },
+    "upstream": {
+      "repair": {
+        "accuracy": 0.84765625,
+        "coverage": 0.99609375,
+        "precision": 0.84289931124959,
+        "sensitivity": 0.0,
+        "specificity": 1.0,
+        "balanced": 0.5,
+        "deployment_outcomes": 132.5,
+        "audit_outcomes": 0,
+        "fault_overlap": 1.96875
+      },
+      "veto": {
+        "accuracy": 0.748046875,
+        "coverage": 0.876953125,
+        "precision": 0.8533950617283951,
+        "sensitivity": 1.0,
+        "specificity": 0.0,
+        "balanced": 0.5,
+        "deployment_outcomes": 106.75,
+        "audit_outcomes": 0,
+        "fault_overlap": 1.96875
+      },
+      "active": {
+        "accuracy": 0.84375,
+        "coverage": 0.9921875,
+        "precision": 0.843421052631579,
+        "sensitivity": 0.015625,
+        "specificity": 0.96875,
+        "balanced": 0.4921875,
+        "deployment_outcomes": 131.9375,
+        "audit_outcomes": 96,
+        "fault_overlap": 1.96875
+      },
+      "sham": {
+        "accuracy": 0.84375,
+        "coverage": 0.9921875,
+        "precision": 0.8427114182296808,
+        "sensitivity": 0.0078125,
+        "specificity": 0.96875,
+        "balanced": 0.48828125,
+        "deployment_outcomes": 132.03125,
+        "audit_outcomes": 96,
+        "fault_overlap": 1.96875
+      },
+      "oracle": {
+        "accuracy": 0.87109375,
+        "coverage": 0.99609375,
+        "precision": 0.8700814111261872,
+        "sensitivity": 1.0,
+        "specificity": 1.0,
+        "balanced": 1.0,
+        "deployment_outcomes": 124.25,
+        "audit_outcomes": 0,
+        "fault_overlap": 1.96875
+      },
+      "gain_over_veto": [
+        0.095703125,
+        0.07421875,
+        0.115234375
+      ],
+      "gain_over_repair": [
+        -0.00390625,
+        -0.009765625,
+        0.0
+      ]
+    }
+  }
+}
