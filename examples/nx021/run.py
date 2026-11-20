@@ -38,13 +38,13 @@ pin = digest(dataset/'manifest.json')
 rows = Dataset(dataset,manifest_sha256=pin).examples('validation',cutoff=cutoff,feature_fields=['seed'])
 seeds = sorted(row['features']['seed'] for row in rows)
 write_json(stage/'seeds.json',seeds)
-pre = dict(seed_count=len(seeds),confidence_bins=8,calibration_encounters=1200,families=1)
+pre = dict(seed_count=len(seeds),consequence_rows=8,calibration_encounters=1200,families=1)
 write_json(stage/'design.json',pre)
 inputs = sorted(str(p.relative_to(stage)) for p in stage.rglob('*') if p.is_file())
 recipe = dict(schema='trainlab.experiment.v1',execution_purpose='research',name='NX-021 inverse consequence repair',description='Paired consequence intervention under persistent sensor corruption',command=[sys.executable,'suite.py'],seed=0,timeout_seconds=600,source_kind='CONSTRUCTED',split_identity=pin,inputs=[*inputs,'adequacy.json'],artifacts=['results.json','observations.json'],metrics={'experiments':'max'},budget={'replicates':len(seeds),'consequence_calibration_encounters':1200})
 dimensions,execution = {},{}
 for dim,field,threshold,op,reason in [
-    ('model_size','confidence_bins',8,'eq','Fit eight consequence distributions.'),
+    ('model_size','consequence_rows',8,'eq','Fit eight consequence distributions.'),
     ('training_duration','calibration_encounters',1200,'eq','Use a fixed number of future consequences in calibration.'),
     ('datasets','seed_count',12,'ge','Require at least twelve independent procedural realizations.'),
     ('training_regime','families',1,'eq','Execute each specified bounded diagnostic.')]:

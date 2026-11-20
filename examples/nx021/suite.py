@@ -27,13 +27,14 @@ def study(seed):
             observations.append((effect(latent),effect(latent)))
         for arm in ('veto','inverse','confirmed'):
             memory=[None]*16
-            writes=correct=checks=0
+            writes=correct=checks=attempts=repairs=correct_repairs=0
             for event,(first,second) in zip(events,observations):
                 _,key,p,probes,gold=event
                 if not gate.accept(p,probes):
                     continue
                 checks+=1
                 if predicted[p]!=first:
+                    attempts+=1
                     if arm=='veto':
                         continue
                     p=inverse[first]
@@ -41,22 +42,26 @@ def study(seed):
                         checks+=1
                         if predicted[p]!=second:
                             continue
+                    repairs+=1
+                    correct_repairs+=p==gold
                 memory[key]=p
                 writes+=1
                 correct+=p==gold
-            results[f'{arm}_{int(shared)}']=dict(writes=writes,correct=correct,checks=checks,
+            results[f'{arm}_{int(shared)}']=dict(writes=writes,correct=correct,checks=checks,attempts=attempts,repairs=repairs,correct_repairs=correct_repairs,opportunities=len(events),
                 accuracy=sum(a==b for a,b in zip(memory,targets))/16,coverage=sum(a is not None for a in memory)/16)
     return results,len(counts),sum(map(sum,counts))
 
 if __name__=='__main__':
     seeds=json.loads(Path('seeds.json').read_text())
     rows={}
+    sizes=[]
     for seed in seeds:
         rows[seed],bins,n=study(seed)
+        sizes.append((bins,n))
     dest=Path(os.environ['TRAINLAB_OUTPUT_DIR'])
     config=json.loads(Path('recipe.json').read_text())
     pins={k:digest(Path(k)) for k in config['inputs']}
-    obs=dict(seed_count=len(rows),families=1,confidence_bins=bins,calibration_encounters=n)
+    obs=dict(seed_count=len(rows),families=1,consequence_rows=min(x for x,_ in sizes),calibration_encounters=min(x for _,x in sizes))
     receipt=dict(schema='trainlab.execution-adequacy-observations.v1',recipe_sha256=recipe_identity(config),inputs=pins,producer=dict(file='suite.py',sha256=pins['suite.py']),observations=obs)
     for name,data in [('results',rows),('metrics',{'experiments':1}),('observations',receipt)]:
         (dest/(name+'.json')).write_text(json.dumps(data))
