@@ -16,6 +16,8 @@ from urllib.request import (
 
 
 MAX_REQUEST_BODY_BYTES = 1024 * 1024
+MAX_REQUEST_JSON_DEPTH = 64
+MAX_REQUEST_JSON_NODES = 200_000
 
 
 class RequestBodyTooLarge(ValueError):
@@ -76,17 +78,29 @@ def read_bounded_json_object(
     except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ValueError("request body must be valid bounded UTF-8 JSON") from exc
 
-    def reject_nonfinite(value: Any) -> None:
+    # Traverse iteratively: recursive post-parse validation could itself overflow
+    # Python's call stack on attacker-controlled nested arrays/objects. Bound both
+    # nesting and total values independently of the 1 MiB byte limit.
+    pending: list[tuple[Any, int]] = [(payload, 0)]
+    nodes = 0
+    while pending:
+        value, depth = pending.pop()
+        if depth > MAX_REQUEST_JSON_DEPTH:
+            raise ValueError(
+                f"request JSON nesting exceeds {MAX_REQUEST_JSON_DEPTH} levels"
+            )
+        nodes += 1
+        if nodes > MAX_REQUEST_JSON_NODES:
+            raise ValueError(
+                f"request JSON value count exceeds {MAX_REQUEST_JSON_NODES}"
+            )
         if type(value) is float and not math.isfinite(value):
             raise ValueError("request JSON numbers must be finite")
         if isinstance(value, dict):
-            for child in value.values():
-                reject_nonfinite(child)
+            pending.extend((child, depth + 1) for child in value.values())
         elif isinstance(value, list):
-            for child in value:
-                reject_nonfinite(child)
+            pending.extend((child, depth + 1) for child in value)
 
-    reject_nonfinite(payload)
     if type(payload) is not dict:
         raise ValueError("request body must be a JSON object")
     return payload
