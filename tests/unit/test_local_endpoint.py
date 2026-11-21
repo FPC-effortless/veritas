@@ -232,3 +232,33 @@ def test_request_body_rejects_duplicate_nested_keys() -> None:
 def test_request_body_rejects_nonfinite_json_numbers(raw: bytes) -> None:
     with pytest.raises(ValueError, match="non-finite|finite"):
         read_bounded_json_object(BytesIO(raw), [str(len(raw))])
+
+
+
+def test_request_body_accepts_json_at_the_nesting_limit() -> None:
+    # The root object is depth 0, its value array is depth 1, and the scalar
+    # reaches depth 64 after 63 nested arrays.
+    raw = b'{"value":' + b"[" * 63 + b"0" + b"]" * 63 + b"}"
+    payload = parse_request_body(raw)
+    assert isinstance(payload["value"], list)
+
+
+def test_request_body_rejects_json_beyond_the_nesting_limit() -> None:
+    raw = b'{"value":' + b"[" * 64 + b"0" + b"]" * 64 + b"}"
+    with pytest.raises(ValueError, match="nesting exceeds 64"):
+        parse_request_body(raw)
+
+
+def test_request_body_converts_parser_recursion_overflow_to_value_error() -> None:
+    raw = b'{"value":' + b"[" * 1100 + b"0" + b"]" * 1100 + b"}"
+    with pytest.raises(ValueError, match="valid bounded UTF-8 JSON"):
+        parse_request_body(raw)
+
+
+def test_request_body_rejects_value_count_above_limit() -> None:
+    # 199,999 null elements plus the root object and array exceed 200,000
+    # JSON values while remaining below the independent 1 MiB body cap.
+    raw = b'{"items":[' + b",".join([b"null"] * 199_999) + b"]}"
+    assert len(raw) < MAX_REQUEST_BODY_BYTES
+    with pytest.raises(ValueError, match="value count exceeds 200000"):
+        parse_request_body(raw)
