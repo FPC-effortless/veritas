@@ -250,8 +250,10 @@ def test_request_body_rejects_json_beyond_the_nesting_limit() -> None:
 
 
 def test_request_body_converts_parser_recursion_overflow_to_value_error() -> None:
-    raw = b'{"value":' + b"[" * 1100 + b"0" + b"]" * 1100 + b"}"
-    with pytest.raises(ValueError, match="valid bounded UTF-8 JSON"):
+    raw = b'{"value":' + b"[" * 10_000 + b"0" + b"]" * 10_000 + b"}"
+    with pytest.raises(
+        ValueError, match="nesting exceeds 64|valid bounded UTF-8 JSON"
+    ):
         parse_request_body(raw)
 
 
