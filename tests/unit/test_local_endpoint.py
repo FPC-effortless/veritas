@@ -234,7 +234,6 @@ def test_request_body_rejects_nonfinite_json_numbers(raw: bytes) -> None:
         read_bounded_json_object(BytesIO(raw), [str(len(raw))])
 
 
-
 def test_request_body_accepts_json_at_the_nesting_limit() -> None:
     # The root object is depth 0, its value array is depth 1, and the scalar
     # reaches depth 64 after 63 nested arrays.
@@ -249,12 +248,25 @@ def test_request_body_rejects_json_beyond_the_nesting_limit() -> None:
         parse_request_body(raw)
 
 
-def test_request_body_converts_parser_recursion_overflow_to_value_error() -> None:
+def test_request_body_rejects_pathological_json_nesting_with_value_error() -> None:
     raw = b'{"value":' + b"[" * 10_000 + b"0" + b"]" * 10_000 + b"}"
     with pytest.raises(
         ValueError, match="nesting exceeds 64|valid bounded UTF-8 JSON"
     ):
         parse_request_body(raw)
+
+
+def test_request_body_converts_parser_recursion_overflow_to_value_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def overflow(*args: object, **kwargs: object) -> None:
+        raise RecursionError("constructed parser recursion overflow")
+
+    monkeypatch.setattr(
+        "investigation_world.commercial.local_endpoint.json.loads", overflow
+    )
+    with pytest.raises(ValueError, match="valid bounded UTF-8 JSON"):
+        parse_request_body(b"{}")
 
 
 def test_request_body_rejects_value_count_above_limit() -> None:
