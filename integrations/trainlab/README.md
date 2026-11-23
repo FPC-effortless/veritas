@@ -60,6 +60,13 @@ two-rank CPU training, optimizer/RNG checkpoint replay, framework traces,
 `torch.export` parity and an offline CPU container. CUDA support requires separate
 hardware validation. The base runner keeps its dependency-free installation.
 
+The optional [latent research suite](../../docs/ecosystem/latent-research.md) adds
+`veritas-latent`: native activation/state/readout diagnostics, cross-fitted
+compression, counterfactual scoring, paired uncertainty, competence/retention gates,
+plots, an interactive atlas and exact saved-output replay. It composes with Forge
+inputs and Research Lab receipts through the existing runner. Native hooks and
+fitting remain explicit capabilities; missing measurements never become a pass.
+
 ## Your first real experiment
 
 Copy an example JSON recipe next to your code and input files. Its schema is `trainlab.experiment.v1`.

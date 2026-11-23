@@ -10,6 +10,12 @@ adapters, explicit check coverage and a bounded session timing ledger. Its
 [roadmap](diagnostic-roadmap.md) separates the implemented slice from broader
 dataset, training, behavioral and repair diagnostics still to build.
 
+The [latent research suite](latent-research.md) implements the atlas and six-cycle
+research methods: geometry, compression, native state/readout interventions,
+counterfactual panels, matched-learning audits, retention, calibration, plots and
+reproducible evidence. Its constructed ecosystem example runs through Forge,
+TrainLab and Research Lab without model fitting.
+
 | Component | Owns | Start here |
 | --- | --- | --- |
 | Veritas | Executable environments, verifier semantics, evaluation and qualification contracts | [Veritas](../../README.md), [commercial entry point](../commercial/README.md) |

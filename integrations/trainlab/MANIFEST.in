@@ -4,3 +4,4 @@ recursive-include deploy *.yaml Caddyfile
 recursive-include examples *.json *.py
 recursive-include tests *.py
 recursive-include tests_torch *.py
+recursive-include tests_latent *.py

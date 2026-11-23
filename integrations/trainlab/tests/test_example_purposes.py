@@ -50,6 +50,7 @@ class ExamplePurposeTests(unittest.TestCase):
                 "diagnose_data_quality.py",
                 "diagnose_models.py",
                 "diagnose_experiments.py",
+                "diagnose_latent.py",
                 "diagnose_state.py",
                 "diagnose_session_cost.py",
                 "dataset_quickstart.py",
