@@ -57,7 +57,8 @@ upload/body limits, immutable data and TEST boundaries are in
 [Forge WORKBENCH.md](../forge/WORKBENCH.md). The reverse-proxy body limit is 12 MiB;
 experiment command bodies remain limited to 4 KiB inside the TrainLab API.
 
-The `trainlab backup` command covers the finalized **run store only**. Back up
+The `trainlab backup` command covers finalized runs and retained research-plan
+refusals in the **run store only**. Back up
 Forge's separate source/release workspace offline with an access-controlled
 filesystem snapshot, test restoration to a new location, and reverify the dataset
 pins. Do not infer that a run-store backup also protects the datasets.
@@ -161,10 +162,17 @@ Extend and scan a derived image for frameworks required by real experiments.
 
 ## Health, shutdown and restart
 
-`GET /healthz` returns aggregate status without authentication: counts, free
-space, unfinished/invalid counts and no names, tokens, commands or data rows.
-It reports 503 on malformed records, low free space (less than 64 MiB) or a
-store exceeding 1,000 entries. This is metadata/store health, **not** a job
+`GET /healthz` returns aggregate status without authentication: run and refusal
+counts, free space, unfinished/invalid counts and no names, tokens, commands or data rows.
+It reports 503 on malformed records, low free space (less than 64 MiB), a
+store exceeding 1,000 run entries or more than 8 MiB of aggregate run metadata,
+using the same metadata limit as the dashboard. The reserved `adequacy-refusals` directory
+holds up to 1,000 refusal records and 8 MiB of aggregate refusal metadata; these
+are counted separately from executed runs. A correctly retained `UNKNOWN` or
+`INADEQUATE` refusal is an operationally healthy outcome, never a successful run
+or scientific admission. Malformed, linked or oversized refusal records degrade
+health and block backup; unknown run-store directories are not silently ignored.
+This is metadata/store health, **not** a job
 liveness guarantee or continuous artifact-integrity verification. Alert on
 unfinished records when the service is idle and inspect them after a host crash.
 Use an external monitor for HTTPS availability, disk quota, memory, process
@@ -192,7 +200,11 @@ manufacture a successful result. Never run recovery against live workers.
 ## Backup, restore and rollback
 
 Stop the service and all writers before backup. The archive includes finalized
-run records, saved config, recorded logs, metrics and declared artifacts. It
+run records, saved config, recorded logs, metrics, declared artifacts and the
+original bytes of recognized research-plan refusal records. Refusal statuses
+remain `UNKNOWN`/`INADEQUATE` and `NOT_QUALIFIED` after restore. The manifest and
+receipts count refusals separately; legacy archives without refusals still restore.
+This preservation does not reassess or scientifically qualify a refused plan. It
 does **not** include original recipe directories, datasets, source code,
 credentials, model runtime dependencies or every undeclared output file. Back up
 those separately under their privacy/retention policy. Incomplete or corrupt

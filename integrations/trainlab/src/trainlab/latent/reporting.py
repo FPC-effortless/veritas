@@ -5,12 +5,21 @@ from __future__ import annotations
 import csv
 import html
 import json
+import re
 from pathlib import Path
 
 import numpy as np
 
 from ..runner import LabError, write_json
 from .artifacts import NAME, require, resolve
+
+
+def _csv_cell(value):
+    # Match the existing Forge/TrainLab spreadsheet boundary; numeric measurements
+    # remain numeric, while source-controlled text cannot become a formula.
+    if isinstance(value, str) and re.match(r"^(?:\s*[=+@\-]|[\t\r\n])", value):
+        return "'" + value
+    return value
 
 
 def metric_rows(value, path=""):
@@ -244,7 +253,7 @@ def render(plan, results, coverage, root, *, inputs=None):
             fieldnames=["job", "operation", "metric", "value", "unit", "role", "scope", "source"],
         )
         writer.writeheader()
-        writer.writerows(table)
+        writer.writerows({key: _csv_cell(value) for key, value in row.items()} for row in table)
     seen = set()
     atlas_views = []
     for declaration in plan.get("figures", []):

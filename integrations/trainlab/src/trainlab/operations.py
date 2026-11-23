@@ -5,15 +5,18 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import tempfile
 import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from itertools import islice
 from pathlib import Path
 
 from .runner import (
+    MAX_ACTIVE_RECORD_BYTES,
     MAX_ACTIVE_RUNS,
     LabError,
     _relative,
@@ -27,6 +30,92 @@ from .runner import (
 
 MAX_BACKUP_BYTES = 2 * 1024 * 1024 * 1024
 MAX_BACKUP_FILES = 8192
+MAX_REFUSALS = 1000
+MAX_REFUSAL_BYTES = MAX_ACTIVE_RECORD_BYTES
+REFUSAL_DIRECTORY = "adequacy-refusals"
+
+
+def _refusal_files(root: Path) -> list[Path]:
+    """Recognize retained refusals without treating them as admitted runs.
+
+    This checks the saved envelope, not scientific adequacy. Backup pins and
+    preserves its original bytes; only the research gate can assess a claim.
+    """
+    directory = root / REFUSAL_DIRECTORY
+    if not directory.exists() and not directory.is_symlink():
+        return []
+    if not directory.is_dir() or directory.is_symlink():
+        raise LabError("refusal store must be a regular directory")
+    paths = list(islice(directory.iterdir(), MAX_REFUSALS + 1))
+    if len(paths) > MAX_REFUSALS:
+        raise LabError("refusal store capacity exceeded; archive it offline")
+    total = 0
+    for path in paths:
+        if not re.fullmatch(r"[a-f0-9]{32}\.json", path.name):
+            raise LabError("refusal store contains an unsupported entry")
+        path = contained_file(root, REFUSAL_DIRECTORY + "/" + path.name)
+        total += path.stat().st_size
+        if total > MAX_REFUSAL_BYTES:
+            raise LabError("refusal metadata exceeds supported capacity; archive it offline")
+        document = read_json(path)
+        if not isinstance(document, dict) or document.get("qualification") != "NOT_QUALIFIED":
+            raise LabError("invalid research refusal record")
+        schema = document.get("schema")
+        if schema == "trainlab.research-adequacy-refusal.v1":
+            valid = (
+                set(document) == {"schema", "status", "reason", "recipe", "inputs", "qualification"}
+                and document["status"] == "UNKNOWN"
+                and isinstance(document["reason"], str)
+                and bool(document["reason"].strip())
+                and isinstance(document["recipe"], dict)
+                and document["recipe"].get("schema")
+                in ("trainlab.experiment.v1", "trainlab.experiment.v2")
+                and isinstance(document["inputs"], dict)
+                and bool(document["inputs"])
+            )
+        elif schema == "trainlab.research-adequacy-report.v1":
+            valid = (
+                set(document)
+                == {
+                    "schema",
+                    "status",
+                    "claim",
+                    "claim_kind",
+                    "checks",
+                    "contract",
+                    "evidence",
+                    "input_hashes",
+                    "qualification",
+                    "guarantee",
+                    "source_texts",
+                }
+                and document["status"] in ("UNKNOWN", "INADEQUATE")
+                and all(
+                    isinstance(document[k], str) and document[k].strip()
+                    for k in ("claim", "claim_kind", "guarantee")
+                )
+                and all(
+                    isinstance(document[k], dict) and document[k]
+                    for k in ("contract", "evidence", "input_hashes", "source_texts")
+                )
+                and isinstance(document["checks"], list)
+                and bool(document["checks"])
+                and all(
+                    isinstance(check, dict)
+                    and check.get("status") in ("MET", "UNKNOWN", "INADEQUATE")
+                    for check in document["checks"]
+                )
+            )
+            if valid:
+                statuses = {check["status"] for check in document["checks"]}
+                valid = document["status"] == (
+                    "INADEQUATE" if "INADEQUATE" in statuses else "UNKNOWN"
+                ) and bool(statuses & {"UNKNOWN", "INADEQUATE"})
+        else:
+            valid = False
+        if not valid:
+            raise LabError("invalid research refusal record")
+    return sorted(paths)
 
 
 @contextmanager
@@ -86,6 +175,8 @@ def _records(root: Path):
     for directory in sorted(root.iterdir()):
         if not directory.is_dir() or directory.is_symlink():
             raise LabError("run store contains an unsupported entry")
+        if directory.name == REFUSAL_DIRECTORY:
+            continue  # Validated separately by _refusal_files, never counted as a run.
         record = read_json(contained_file(root, directory.name + "/run.json"))
         validate_record(record)
         if record["id"] != directory.name:
@@ -95,12 +186,19 @@ def _records(root: Path):
 
 def store_health(root: Path) -> dict:
     """Aggregate health only. This is not full integrity or scientific verification."""
-    counts = {"runs": 0, "unfinished": 0, "invalid": 0}
+    counts = {"runs": 0, "unfinished": 0, "invalid": 0, "refusals": 0}
+    retained_bytes = 0
     try:
         if not root.exists():
             return {"status": "degraded", **counts, "reason": "run store unavailable"}
         # Read individually so corrupt metadata is visible without exposing paths.
         for directory in root.iterdir():
+            if directory.name == REFUSAL_DIRECTORY:
+                try:
+                    counts["refusals"] = len(_refusal_files(root))
+                except (LabError, OSError):
+                    counts["invalid"] += 1
+                continue
             counts["runs"] += 1
             if counts["runs"] > MAX_ACTIVE_RUNS:
                 return {
@@ -114,7 +212,14 @@ def store_health(root: Path) -> dict:
                 if record["id"] != directory.name:
                     raise LabError("identity mismatch")
                 counts["unfinished"] += record["status"] == "running"
-            except (LabError, OSError):
+                retained_bytes += len(json.dumps(record, allow_nan=False).encode())
+                if retained_bytes > MAX_ACTIVE_RECORD_BYTES:
+                    return {
+                        "status": "degraded",
+                        **counts,
+                        "reason": "active run metadata capacity exceeded",
+                    }
+            except (ValueError, OSError, RecursionError):
                 counts["invalid"] += 1
         free = shutil.disk_usage(root).free
         return {
@@ -127,13 +232,14 @@ def store_health(root: Path) -> dict:
 
 
 def backup_runs(root: Path, destination: Path, *, max_bytes: int = MAX_BACKUP_BYTES) -> dict:
-    """Back up finalized verified records only; recipes/source inputs are separate."""
+    """Back up finalized runs and refusals; recipes/source inputs remain separate."""
     if type(max_bytes) is not int or max_bytes <= 0:
         raise LabError("backup size limit must be positive")
     if destination.exists() or destination.is_symlink():
         raise LabError("backup destination already exists")
     root = root.absolute()
-    paths = []
+    refusals = _refusal_files(root)
+    paths = [(path, REFUSAL_DIRECTORY + "/" + path.name) for path in refusals]
     runs = 0
     for directory, record in _records(root):
         if not verify_run(directory)["valid"]:
@@ -150,7 +256,12 @@ def backup_runs(root: Path, destination: Path, *, max_bytes: int = MAX_BACKUP_BY
             dir=destination.parent, prefix=".backup-", delete=False
         ) as stream:
             temporary = Path(stream.name)
-            manifest = {"schema": "trainlab.backup.v1", "runs": runs, "files": {}}
+            manifest = {
+                "schema": "trainlab.backup.v1",
+                "runs": runs,
+                "refusals": len(refusals),
+                "files": {},
+            }
             with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_STORED) as archive:
                 total = 0
                 for path, name in paths:
@@ -180,7 +291,8 @@ def backup_runs(root: Path, destination: Path, *, max_bytes: int = MAX_BACKUP_BY
             "archive": str(destination),
             "sha256": digest(destination),
             "runs": runs,
-            "scope": "FINALIZED_RUN_RECORDS_ONLY",
+            "refusals": len(refusals),
+            "scope": "FINALIZED_RUNS_AND_ADEQUACY_REFUSALS",
             "qualification": "NOT_QUALIFIED",
         }
     finally:
@@ -224,6 +336,10 @@ def restore_runs(
                     not isinstance(manifest, dict)
                     or manifest.get("schema") != "trainlab.backup.v1"
                     or not isinstance(manifest.get("files"), dict)
+                    or type(manifest.get("runs")) is not int
+                    or manifest["runs"] < 0
+                    or type(manifest.get("refusals", 0)) is not int
+                    or manifest.get("refusals", 0) < 0
                     or set(manifest["files"]) != set(names) - {"backup-manifest.json"}
                 ):
                     raise LabError("invalid backup manifest")
@@ -257,6 +373,9 @@ def restore_runs(
             records = list(_records(stage))
             if len(records) != manifest.get("runs"):
                 raise LabError("backup run count mismatch")
+            refusals = _refusal_files(stage)
+            if len(refusals) != manifest.get("refusals", 0):
+                raise LabError("backup refusal count mismatch")
             if any(not verify_run(directory)["valid"] for directory, _ in records):
                 raise LabError("restored run verification failed")
         except (ValueError, KeyError, zipfile.BadZipFile, RuntimeError) as error:
@@ -270,4 +389,9 @@ def restore_runs(
         except OSError:
             shutil.rmtree(destination)
             raise
-    return {"runs": len(records), "integrity": "PASS", "qualification": "NOT_QUALIFIED"}
+    return {
+        "runs": len(records),
+        "refusals": len(refusals),
+        "integrity": "PASS",
+        "qualification": "NOT_QUALIFIED",
+    }

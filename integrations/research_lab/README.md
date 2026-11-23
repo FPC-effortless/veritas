@@ -54,7 +54,7 @@ or establish a live LLM scientist or permanent host.
 | Compute management | Atomic CPU/GPU slot reservations, program caps, declared rates, measured local GPU observations when available, heartbeat/cancellation and conservative lost-worker recovery | Logical reservations are not cloud provisioning, device isolation or actual provider invoices |
 | Research memory | Immutable hypotheses, experiments, papers, evidence, failures and next tests with support/contradiction/supersession links | Literal retrieval is bounded; imported findings retain their source and trust level |
 | Replication | Separate-principal replay from clean declared-input directories; all seeds/arms required; preregistered metric tolerances and deterministic artifact checks | Replay shares host/interpreter; clean-environment or external scientific replication is not inferred |
-| Live observatory | Read-only polling dashboard, queue, programs, budgets, workers, knowledge and synthesis; existing TrainLab and Forge views | Loopback local deployment uses TrainLab's Host/Origin/CSP boundary |
+| Live observatory | Read-only polling dashboard, queue, programs, budgets, workers, knowledge and synthesis; existing TrainLab and Forge views | Loopback mode or authenticated Waitress hosting reuse TrainLab's Host/Origin/CSP boundary; no tenant isolation |
 | Scientific synthesis | Per-seed effects, descriptive range, negative/incomplete/invalid conclusions, exact-evidence review and next discriminating test | Scientific qualification always remains `NOT_QUALIFIED` |
 | Publication preparation | Verified allowlisted artifacts, all saved attempts/checkpoints, manuscript draft and SHA256 manifest; atomic local packet creation | No submission, public sharing, source-rights attestation or release authorization |
 
@@ -100,6 +100,48 @@ research-lab --root .trainlab/labos serve --port 8770 --forge-workspace .trainla
 Open `http://127.0.0.1:8770` on the same machine. The research view is read-only;
 registered commands run through the operator CLI. It also serves the existing
 TrainLab run viewer and, when configured, the existing Forge workspace.
+
+### Authenticated observatory hosting
+
+For an operator-managed server, install the existing pinned TrainLab server runtime
+and reuse its shared-operator authentication and HTTPS-origin checks. Use a research
+root already initialized with the `init` command above; production startup refuses
+a missing or unhealthy database before the controller can create or repair it:
+
+```bash
+python -m pip install --require-hashes -r integrations/trainlab/requirements-server.txt
+trainlab init-auth /private/research-operator.json --username operator
+research-lab --root /private/research-lab serve --production \
+  --auth-file /private/research-operator.json \
+  --public-origin https://research.example.com --port 8770
+```
+
+Keep the backend on loopback and put a TLS reverse proxy in front of it. The
+[TrainLab deployment contract](../trainlab/PRODUCTION.md) supplies the credential,
+proxy, monitoring, trust and host-acceptance requirements; use port 8770 for this
+observatory. The UI and evidence APIs require authentication. Every authenticated
+operator can read the whole workspace. All HTTP mutation routes remain disabled;
+the existing worker/supervisor CLI controls execution. Passing remote security
+options without `--production` is rejected, so a credential argument cannot create
+a false impression of protected development serving.
+
+The anonymous `/healthz` reports aggregate run-store, configured Forge and research
+database health. Its database probe opens the existing file read-only, performs
+SQLite's `quick_check(1)` and verifies the core research tables. Query work and
+lock waits have one-second budgets; an unavailable, corrupted, incomplete or
+over-budget database returns 503 without exposing research names, paths or rows.
+Database failures on the authenticated research API also return a controlled 503.
+This is storage readiness. Worker liveness still requires the separate
+`research-lab --root ROOT health WORKERS.json` supervisor check; evidence validity
+requires the existing replay/review gates.
+
+Before promotion on a chosen host, verify anonymous denial, HTTPS, authenticated
+read access, SIGTERM/restart, the supervisor health check, and an offline restore
+of the entire research root. TrainLab's run-store archive does not include the
+research database or snapshots; follow the [offline recovery procedure](AUTONOMY.md).
+The installed production HTTP regression runs the actual CLI, authentication,
+origin checks, read-only enforcement, shutdown/restart and a database-failure probe.
+It does not attest DNS, certificates, machine recovery or a permanent live host.
 
 No installation is required for repository development:
 

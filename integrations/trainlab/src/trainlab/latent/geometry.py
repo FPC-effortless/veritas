@@ -17,16 +17,32 @@ try:
 except ImportError as exc:  # The base TrainLab installation remains dependency-free.
     raise LabError("latent geometry requires the TrainLab latent NumPy extra") from exc
 
+MAX_WORKSPACE_ELEMENTS = 50_000_000
+
 
 def _require(condition, message):
     if not condition:
         raise LabError(message)
 
 
+def _workspace(elements, operation):
+    # Bound known dense arrays before allocation. This is not an RSS guarantee:
+    # BLAS workspaces, live caller arrays and other jobs still need OS limits.
+    _require(
+        elements <= MAX_WORKSPACE_ELEMENTS,
+        f"{operation} workspace exceeds the {MAX_WORKSPACE_ELEMENTS}-element limit",
+    )
+
+
 def _matrix(value, name="matrix", *, rows=None, min_rows=1):
     _require(not np.iscomplexobj(value), f"{name} must contain real numeric values")
     try:
-        result = np.asarray(value, dtype=np.float64)
+        raw = np.asarray(value)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise LabError(f"{name} must be a finite numeric matrix") from exc
+    _workspace(raw.size, name)
+    try:
+        result = raw.astype(np.float64, copy=False)
     except (ValueError, TypeError, OverflowError) as exc:
         raise LabError(f"{name} must be a finite numeric matrix") from exc
     _require(
@@ -107,6 +123,7 @@ def _partition(folds, clusters, domains, n):
 def pca_fit(calibration, *, variance_fraction=0.9):
     """Fit a centered, unscaled, unwhitened full basis using calibration rows."""
     x = _matrix(calibration, "calibration", min_rows=2)
+    _workspace(3 * x.size + 5 * x.shape[1] ** 2, "full-basis PCA")
     _require(
         np.isfinite(variance_fraction) and 0 < variance_fraction <= 1,
         "variance_fraction must lie in (0, 1]",
@@ -200,6 +217,7 @@ def pca_reconstruct(values, fit, rank, *, norm_match=False):
 def random_subspace(dimensions, *, seed=0):
     """Deterministic Gaussian-QR orthonormal columns, including full width."""
     d = _integer(dimensions, "dimensions", minimum=1)
+    _workspace(4 * d * d, "random subspace")
     seed = _integer(seed, "seed")
     q, r = np.linalg.qr(np.random.default_rng(seed).normal(size=(d, d)))
     return q * np.where(np.diag(r) < 0, -1.0, 1.0)[None, :]
@@ -217,6 +235,7 @@ def neighborhood_quality(original, embedded, *, ks=(5, 15), max_pairs=25_000_000
     _require(
         n * n <= _integer(max_pairs, "max_pairs", minimum=1), "neighborhood pair budget exceeded"
     )
+    _workspace(5 * n * n + 2 * (x.size + y.size), "neighborhood quality")
     _require(isinstance(ks, (list, tuple)) and len(ks) > 0, "neighbor counts required")
     orders = []
     try:
@@ -332,15 +351,28 @@ def linear_cka(left, right):
     y = _matrix(right, "right", rows=len(x))
     if bool(np.all(x == x[0])) or bool(np.all(y == y[0])):
         return None
+    n, p, q = len(x), x.shape[1], y.shape[1]
+    feature_entries = p * p + q * q + p * q
+    use_gram = 3 * n * n < feature_entries
+    _workspace(
+        3 * (x.size + y.size) + (3 * n * n if use_gram else feature_entries),
+        "linear CKA",
+    )
     # CKA is scale invariant; scaling first prevents avoidable squared overflow.
     a = x / max(float(np.abs(x).max()), 1e-300)
     b = y / max(float(np.abs(y).max()), 1e-300)
     a = a - a.mean(axis=0)
     b = b - b.mean(axis=0)
-    denom = float(np.linalg.norm(a.T @ a) * np.linalg.norm(b.T @ b))
+    if use_gram:
+        left_gram, right_gram = a @ a.T, b @ b.T
+        denom = float(np.linalg.norm(left_gram) * np.linalg.norm(right_gram))
+        numerator = float(np.sum(left_gram * right_gram))
+    else:
+        denom = float(np.linalg.norm(a.T @ a) * np.linalg.norm(b.T @ b))
+        numerator = float(np.square(a.T @ b).sum())
     if denom == 0:
         return None
-    value = float(np.square(a.T @ b).sum() / denom)
+    value = numerator / denom
     _require(np.isfinite(value) and -1e-10 <= value <= 1 + 1e-10, "invalid CKA calculation")
     return float(np.clip(value, 0, 1))
 
@@ -364,6 +396,7 @@ def conditional_permutations(
     domains = _labels(domains, n, "domains")
     clusters = _labels(clusters, n, "clusters") if clusters is not None else None
     draws = _integer(draws, "draws", minimum=1)
+    _workspace(3 * draws * n, "conditional permutations")
     seed = _integer(seed, "seed")
     if position_bin is not None:
         position_bin = _integer(position_bin, "position_bin", minimum=1)
@@ -709,6 +742,16 @@ def cka_bootstrap(
         "CKA Gram entry budget exceeded",
     )
     keys = list(dict.fromkeys(zip(d.tolist(), c.tolist())))
+    k = len(keys)
+    _workspace(
+        n * n * m
+        + n * k * (m + 1)
+        + k * k * m * (m + 1) // 2
+        + 2 * draws * m * m
+        + 3 * k * draws
+        + min(128, draws) * n * (m + 1),
+        "bootstrap CKA",
+    )
     lookup = {key: i for i, key in enumerate(keys)}
     labels = np.array([lookup[(domain, record)] for domain, record in zip(d, c)])
     h = np.eye(len(keys))[labels]
@@ -787,6 +830,10 @@ def decoder_metric_fit(calibration, output_weights, rank, *, ridge_ratio=1e-6, r
     weight = _matrix(output_weights, "output_weights")
     d = x.shape[1]
     _require(weight.shape[1] == d and len(weight) >= 2, "vocabulary output-weight shape mismatch")
+    _workspace(
+        4 * x.size + 3 * weight.size + 18 * d * d + len(x) * len(weight),
+        "decoder-aware PCA",
+    )
     k = _integer(rank, "rank", maximum=d)
     _require(np.isfinite(ridge_ratio) and ridge_ratio > 0, "positive finite ridge ratio required")
     centered_weight = weight - weight.mean(axis=0)

@@ -212,7 +212,9 @@ class CanonicalWorld(BaseModel):
             return set()
         resolved: set[str] = set()
         if allow_canonical_ids:
-            all_ids = set(self.people) | set(self.organizations) | set(self.addresses) | set(self.domains)
+            all_ids = (
+                set(self.people) | set(self.organizations) | set(self.addresses) | set(self.domains)
+            )
             if reference in all_ids:
                 resolved.add(reference)
         for entity_id, person in self.people.items():
@@ -257,34 +259,70 @@ class CanonicalWorld(BaseModel):
         ]
 
     def validate(self) -> bool:
+        def require(condition: bool, message: str) -> None:
+            # Preserve the established exception contract without allowing -O
+            # to remove world integrity checks at privileged ingestion seams.
+            if not condition:
+                raise AssertionError(message)
+
         ids = set(self.people) | set(self.organizations) | set(self.addresses) | set(self.domains)
-        assert len(ids) == len(self.people) + len(self.organizations) + len(self.addresses) + len(self.domains)
-        assert len({person.canonical_name for person in self.people.values()}) == len(self.people)
-        assert len({organization.legal_name for organization in self.organizations.values()}) == len(
-            self.organizations
+        entity_count = (
+            len(self.people) + len(self.organizations) + len(self.addresses) + len(self.domains)
+        )
+        require(
+            len(ids) == entity_count,
+            "entity IDs must be disjoint",
+        )
+        require(
+            len({person.canonical_name for person in self.people.values()}) == len(self.people),
+            "person names must be unique",
+        )
+        require(
+            len({org.legal_name for org in self.organizations.values()}) == len(self.organizations),
+            "organization names must be unique",
         )
         for organization in self.organizations.values():
-            assert organization.dissolution_date is None or organization.incorporation_date <= organization.dissolution_date
+            require(
+                organization.dissolution_date is None
+                or organization.incorporation_date <= organization.dissolution_date,
+                "organization dates must be ordered",
+            )
             for period in organization.name_history:
-                assert period.valid_to is None or period.valid_from <= period.valid_to
+                require(period.valid_to is None or period.valid_from <= period.valid_to,
+                        "name-history dates must be ordered")
         for relationship in self.relationships:
-            assert relationship.subject_id in ids
-            assert relationship.object_id in ids
-            assert relationship.valid_to is None or relationship.valid_from <= relationship.valid_to
-        assert len({relationship.relationship_id for relationship in self.relationships}) == len(self.relationships)
-        assert len({event.event_id for event in self.events}) == len(self.events)
+            require(relationship.subject_id in ids, "relationship subject must exist")
+            require(relationship.object_id in ids, "relationship object must exist")
+            require(
+                relationship.valid_to is None or relationship.valid_from <= relationship.valid_to,
+                "relationship dates must be ordered",
+            )
+        require(
+            len({rel.relationship_id for rel in self.relationships}) == len(self.relationships),
+            "relationship IDs must be unique",
+        )
+        require(len({event.event_id for event in self.events}) == len(self.events),
+                "event IDs must be unique")
         source_ids = {source.source_id for source in self.sources}
         claim_ids = {claim.claim_id for claim in self.claims}
         document_ids = {document.document_id for document in self.documents}
         for claim in self.claims:
-            assert claim.subject_id in ids
-            assert claim.object_id is None or claim.object_id in ids
-            assert not source_ids or claim.origin_source_id in source_ids
-            assert claim.valid_to is None or claim.valid_from is None or claim.valid_from <= claim.valid_to
+            require(claim.subject_id in ids, "claim subject must exist")
+            require(claim.object_id is None or claim.object_id in ids, "claim object must exist")
+            require(not source_ids or claim.origin_source_id in source_ids,
+                    "claim source must exist")
+            require(
+                claim.valid_to is None or claim.valid_from is None
+                or claim.valid_from <= claim.valid_to,
+                "claim dates must be ordered",
+            )
         for document in self.documents:
-            assert not source_ids or document.source_id in source_ids
-            assert all(claim_id in claim_ids for claim_id in document.claim_ids)
-            assert all(parent in document_ids for parent in document.cites_document_ids)
+            require(not source_ids or document.source_id in source_ids,
+                    "document source must exist")
+            require(all(claim_id in claim_ids for claim_id in document.claim_ids),
+                    "document claim references must exist")
+            require(all(parent in document_ids for parent in document.cites_document_ids),
+                    "document citations must exist")
         return True
 
 

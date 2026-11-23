@@ -16,6 +16,10 @@ counterfactual panels, matched-learning audits, retention, calibration, plots an
 reproducible evidence. Its constructed ecosystem example runs through Forge,
 TrainLab and Research Lab without model fitting.
 
+For an operated installation, use the [production readiness guide](production-readiness.md).
+It connects the workbench, observatory, diagnostic and episode-service deployment
+contracts with their failure checks, recovery procedures and release gates.
+
 | Component | Owns | Start here |
 | --- | --- | --- |
 | Veritas | Executable environments, verifier semantics, evaluation and qualification contracts | [Veritas](../../README.md), [commercial entry point](../commercial/README.md) |

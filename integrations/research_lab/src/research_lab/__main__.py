@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -81,13 +82,25 @@ def parser():
     server = sub.add_parser("serve")
     server.add_argument("--port", type=int, default=8770)
     server.add_argument("--forge-workspace", type=Path)
+    server.add_argument("--production", action="store_true")
+    server.add_argument("--host", default="127.0.0.1")
+    server.add_argument("--auth-file", type=Path)
+    server.add_argument("--public-origin")
     return p
 
 
 def main(argv=None):
     args = parser().parse_args(argv)
-    lab = Controller(args.root)
     try:
+        if args.command == "serve" and args.production:
+            from .server import database_health
+
+            if database_health(args.root.resolve() / "lab.sqlite3")["status"] != "ok":
+                raise LabError(
+                    "Production observatory requires an initialized, healthy research database; "
+                    "initialize a new lab explicitly or restore the existing one offline."
+                )
+        lab = Controller(args.root)
         from . import adapters, evidence
         from .agents import register_order
         from .execution import run_worker
@@ -193,6 +206,22 @@ def main(argv=None):
 
             from .server import LabWorkspace
 
+            if args.production:
+                from trainlab.production import serve_production
+
+                serve_production(
+                    args.root,
+                    None,
+                    host=args.host,
+                    port=args.port,
+                    auth_file=args.auth_file,
+                    public_origin=args.public_origin,
+                    workspace_factory=LabWorkspace,
+                    forge_workspace=args.forge_workspace,
+                )
+                return 0
+            if args.host != "127.0.0.1" or args.auth_file or args.public_origin:
+                raise LabError("Remote hosting options require --production.")
             server = Dashboard(
                 args.root,
                 None,
@@ -208,6 +237,9 @@ def main(argv=None):
             return 0
         print(json.dumps(result, indent=2, allow_nan=False))
         return 1 if args.command == "health" and not result["healthy"] else 0
+    except sqlite3.Error:
+        print("Research Lab OS: research database unavailable or invalid.", file=sys.stderr)
+        return 1
     except (LabError, OSError, ValueError) as exc:
         print("Research Lab OS: " + str(exc), file=sys.stderr)
         return 1

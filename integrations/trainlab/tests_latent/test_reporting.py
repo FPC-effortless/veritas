@@ -1,9 +1,11 @@
+import csv
 import json
 import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 from trainlab.latent.reporting import atlas, draw_figure, render
@@ -11,6 +13,61 @@ from trainlab.runner import read_json
 
 
 class ReportingTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node is optional for atlas formatter validation")
+    def test_atlas_csv_text_is_safe_without_changing_negative_coordinates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            atlas([{"label": "observed", "coordinates": [[-1.25, 2]]}], root / "atlas.html")
+            document = (root / "atlas.html").read_text()
+            formatter = (
+                "function csvCell" + document.split("function csvCell", 1)[1].split("\n", 1)[0]
+            )
+            probe = (
+                formatter
+                + "\nconsole.log(JSON.stringify("
+                "['=1+1','\\t=2+2','@SUM(1,2)',-1.25,'ordinary'].map(csvCell)));"
+            )
+            process = subprocess.run(
+                [shutil.which("node"), "-e", probe],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            )
+            self.assertEqual(
+                json.loads(process.stdout),
+                ['"\'=1+1"', '"\'\t=2+2"', '"\'@SUM(1,2)"', '"-1.25"', '"ordinary"'],
+            )
+
+    def test_csv_neutralizes_metadata_formulas_and_preserves_numeric_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch("trainlab.latent.reporting.report_pdf", side_effect=ImportError):
+                render(
+                    {
+                        "title": "constructed",
+                        "identities": {"configuration": "a" * 64},
+                        "jobs": [
+                            {
+                                "id": "score",
+                                "operation": "constructed",
+                                "unit": "=1+1",
+                                "scope": "\t@SUM(1,2)",
+                            }
+                        ],
+                        "figures": [],
+                    },
+                    {"score": {'=HYPERLINK("invalid")': -1.25}},
+                    [],
+                    root,
+                )
+            with (root / "metrics.csv").open(newline="") as stream:
+                row = next(csv.DictReader(stream))
+            self.assertEqual(row["unit"], "'=1+1")
+            self.assertEqual(row["scope"], "'\t@SUM(1,2)")
+            self.assertTrue(row["metric"].startswith("'="))
+            self.assertEqual(row["value"], "-1.25")
+
     def test_declared_figure_families_have_source_based_exports(self):
         coordinates = [[0, 0], [1, 2], [2, 1]]
         fixtures = {
