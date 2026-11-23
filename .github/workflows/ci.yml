@@ -329,7 +329,10 @@ jobs:
               PYTHONDONTWRITEBYTECODE=1
           WORKDIR /baseline
           COPY . /baseline
-          RUN node --version && \
+          RUN apt-get update && \
+              apt-get install -y --no-install-recommends git && \
+              rm -rf /var/lib/apt/lists/* && \
+              git --version && node --version && \
               python -m pip install --no-cache-dir --upgrade pip && \
               python -m pip install --no-cache-dir -e ".[test]"
           ENTRYPOINT []
