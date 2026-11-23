@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>__TITLE__</title>
+<style>body{font:15px system-ui;margin:auto;padding:20px;max-width:1200px;color:#15324a}
+header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}select,button{padding:8px}
+canvas{width:100%;height:65vh;min-height:300px;border:1px solid #ccd5df;touch-action:none}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f0f4f8;padding:12px}
+label{display:flex;gap:5px;align-items:center}</style><h1>__TITLE__</h1>
+<p>Drag to rotate a 3D view. Click a point to pin its observed record. Coordinates are saved measurements.</p>
+<header><label>View <select id="view"></select></label><label>Color <select id="color"></select></label>
+<label><input id="lines" type="checkbox">Sequence paths</label><button id="reset">Reset view</button>
+<button id="export">Export plotted rows</button></header><p id="meta"></p>
+<canvas id="plot" aria-label="Latent projection scatter plot"></canvas><pre id="detail">Select a point.</pre>
+<script id="data" type="application/json">__DATA__</script><script>
+"use strict";const views=JSON.parse(document.getElementById('data').textContent),
+sel=document.getElementById('view'),color=document.getElementById('color'),canvas=document.getElementById('plot'),
+ctx=canvas.getContext('2d'),detail=document.getElementById('detail');let yaw=0,pitch=0,drag=null,screen=[],pinned=null;
+const palette=['#23689b','#cc6427','#26876b','#9063a8','#c14266','#977e24','#2b8e9c'];
+views.forEach((v,i)=>{const o=document.createElement('option');o.value=i;o.textContent=v.label;sel.append(o)});
+function view(){return views[+sel.value]}function update(){yaw=pitch=0;pinned=null;color.replaceChildren();
+ const keys=new Set(['id']);view().rows.forEach(r=>Object.keys(r).forEach(k=>keys.add(k)));
+ keys.forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;color.append(o)});
+ for(const k of ['domain','token_category','correct','position'])if(keys.has(k)){color.value=k;break}
+ document.getElementById('meta').textContent=JSON.stringify(view().metadata);draw()}
+function project(p){const x=p[0]*Math.cos(yaw)+(p[2]||0)*Math.sin(yaw),z=-p[0]*Math.sin(yaw)+(p[2]||0)*Math.cos(yaw);
+ return [x,p[1]*Math.cos(pitch)-z*Math.sin(pitch)]}
+function draw(){const dpr=window.devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;
+ canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);
+ const points=view().coordinates.map(project),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+ const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),
+ scale=Math.min((w-40)/(maxX-minX||1),(h-40)/(maxY-minY||1));
+ screen=points.map(p=>[(p[0]-(minX+maxX)/2)*scale+w/2,h/2-(p[1]-(minY+maxY)/2)*scale]);
+ const values=view().rows.map(r=>r[color.value]),numeric=values.every(v=>typeof v==='number'&&Number.isFinite(v));
+ const unique=[...new Set(values.map(String))],lo=numeric?Math.min(...values):0,hi=numeric?Math.max(...values):1;
+ if(document.getElementById('lines').checked){const seq=new Map();view().rows.forEach((r,i)=>{const k=r.sequence??r.record_id??'all';
+ if(!seq.has(k))seq.set(k,[]);seq.get(k).push(i)});ctx.strokeStyle='#b5bec8';ctx.lineWidth=.7;
+ seq.forEach(ids=>{ctx.beginPath();ids.forEach((i,n)=>n?ctx.lineTo(...screen[i]):ctx.moveTo(...screen[i]));ctx.stroke()})}
+ screen.forEach((p,i)=>{ctx.fillStyle=numeric?'hsl('+(235-210*(values[i]-lo)/(hi-lo||1))+',65%,45%)':palette[unique.indexOf(String(values[i]))%palette.length];
+ ctx.globalAlpha=.7;ctx.beginPath();ctx.arc(p[0],p[1],i===pinned?6:2.5,0,Math.PI*2);ctx.fill()});ctx.globalAlpha=1;
+ if(pinned!==null){ctx.strokeStyle='#111';ctx.beginPath();ctx.arc(...screen[pinned],8,0,Math.PI*2);ctx.stroke()}}
+canvas.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,moved:false};canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointermove',e=>{if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+ if(Math.abs(dx)+Math.abs(dy)>1)drag.moved=true;yaw+=dx*.009;pitch+=dy*.009;drag.x=e.clientX;drag.y=e.clientY;draw()}});
+canvas.addEventListener('pointerup',e=>{if(drag&&!drag.moved){const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+ let best=100;screen.forEach((p,i)=>{const d=(p[0]-x)**2+(p[1]-y)**2;if(d<best){best=d;pinned=i}});
+ if(pinned!==null)detail.textContent=JSON.stringify(view().rows[pinned],null,2);draw()}drag=null});
+document.getElementById('reset').onclick=()=>{yaw=pitch=0;draw()};sel.onchange=update;color.onchange=draw;
+document.getElementById('lines').onchange=draw;window.addEventListener('resize',draw);
+document.getElementById('export').onclick=()=>{const v=view(),keys=[...new Set(v.rows.flatMap(Object.keys))],
+ quote=x=>'"'+String(x??'').replaceAll('"','""')+'"',rows=[['x','y','z',...keys],...v.rows.map((r,i)=>[...v.coordinates[i],
+ ...(v.coordinates[i].length===2?['']:[]),...keys.map(k=>r[k])])],blob=new Blob([rows.map(r=>r.map(quote).join(',')).join('\n')],{type:'text/csv;charset=utf-8'}),
+ a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='latent-projection.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),0)};update();
+</script></html>

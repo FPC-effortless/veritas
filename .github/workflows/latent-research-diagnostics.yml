@@ -1,0 +1,86 @@
+name: Latent research diagnostics
+
+on:
+  pull_request:
+    paths:
+      - 'integrations/trainlab/src/trainlab/latent/**'
+      - 'integrations/trainlab/tests_latent/**'
+      - 'integrations/trainlab/examples/*latent*'
+      - 'integrations/trainlab/pyproject.toml'
+      - '.github/workflows/latent-research-diagnostics.yml'
+  push:
+    paths:
+      - 'integrations/trainlab/src/trainlab/latent/**'
+      - 'integrations/trainlab/tests_latent/**'
+      - 'integrations/trainlab/examples/*latent*'
+      - 'integrations/trainlab/pyproject.toml'
+      - '.github/workflows/latent-research-diagnostics.yml'
+  workflow_dispatch:
+    inputs:
+      native_cpu:
+        description: 'Also run bounded constructed native CPU tests; no training'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  numerical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install optional numerical diagnostics
+        run: python -m pip install './integrations/trainlab[latent,latent-tsne]' ./integrations/forge ./integrations/research_lab
+      - name: Numerical and evidence falsifiers
+        run: |
+          python -m unittest discover -s integrations/trainlab/tests_latent -v
+          python -O -m unittest discover -s integrations/trainlab/tests_latent -v
+      - name: Existing runner regressions
+        run: python -m unittest discover -s integrations/trainlab/tests -v
+      - name: Constructed zero-fit plan and exact saved-output replay
+        run: python integrations/trainlab/examples/diagnose_latent.py --root "$RUNNER_TEMP/latent-acceptance"
+      - name: Existing TrainLab receipt integration
+        run: python integrations/trainlab/examples/diagnose_latent.py --root "$RUNNER_TEMP/latent-runner" --ecosystem
+      - name: Browser interaction and mobile report
+        if: matrix.python == '3.13'
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+          python integrations/trainlab/tests_latent/browser_smoke.py --bundle "$RUNNER_TEMP/latent-acceptance/evidence" --output "$RUNNER_TEMP/latent-browser"
+      - name: Retain constructed evidence only
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: latent-constructed-${{ matrix.python }}
+          path: ${{ runner.temp }}/latent-acceptance
+          if-no-files-found: error
+
+  native-cpu:
+    if: github.event_name == 'workflow_dispatch' && inputs.native_cpu
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reuse the existing pinned CPU runtime
+        run: |
+          python -m pip install --require-hashes -r integrations/trainlab/requirements-pytorch-cpu.txt
+          python -m pip install './integrations/trainlab[latent]'
+      - name: Native hook, state and position falsifiers
+        run: python -m unittest discover -s integrations/trainlab/tests_latent -v
