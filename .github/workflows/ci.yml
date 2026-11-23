@@ -203,6 +203,7 @@ jobs:
           push: false
           load: true
           tags: veritas:ci
+          labels: org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Verify local run stores stay outside the build context
@@ -257,12 +258,39 @@ jobs:
           exit-code: '1'
           format: json
           output: ${{ runner.temp }}/veritas-image-audit.json
+      - name: Bind the scanned image inventory to its source and CycloneDX SBOM
+        env:
+          IMAGE_AUDIT: ${{ runner.temp }}/veritas-image-audit.json
+          IMAGE_INSPECTION: ${{ runner.temp }}/veritas-image-inspect.json
+          IMAGE_SBOM: ${{ runner.temp }}/veritas-image-sbom.json
+          IMAGE_VALIDATION: ${{ runner.temp }}/veritas-image-validation.json
+        run: |
+          set -euo pipefail
+          docker image inspect veritas:ci > "$IMAGE_INSPECTION"
+          trivy convert --format cyclonedx --output "$IMAGE_SBOM" "$IMAGE_AUDIT"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from tools.build_release_manifest import verify_image_evidence
+          inspection = Path(os.environ["IMAGE_INSPECTION"])
+          image_id = json.loads(inspection.read_text())[0]["Id"]
+          evidence = verify_image_evidence(
+              image_id, os.environ["GITHUB_SHA"], inspection,
+              Path(os.environ["IMAGE_AUDIT"]), Path(os.environ["IMAGE_SBOM"]),
+          )
+          Path(os.environ["IMAGE_VALIDATION"]).write_text(json.dumps(evidence, indent=2) + "\n")
+          PY
       - name: Retain API-image audit and package inventory
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: veritas-image-audit
-          path: ${{ runner.temp }}/veritas-image-audit.json
+          path: |
+            ${{ runner.temp }}/veritas-image-audit.json
+            ${{ runner.temp }}/veritas-image-inspect.json
+            ${{ runner.temp }}/veritas-image-sbom.json
+            ${{ runner.temp }}/veritas-image-validation.json
           if-no-files-found: warn
 
   semantic-isolated-execution:
@@ -301,7 +329,10 @@ jobs:
               PYTHONDONTWRITEBYTECODE=1
           WORKDIR /baseline
           COPY . /baseline
-          RUN node --version && \
+          RUN apt-get update && \
+              apt-get install -y --no-install-recommends git && \
+              rm -rf /var/lib/apt/lists/* && \
+              git --version && node --version && \
               python -m pip install --no-cache-dir --upgrade pip && \
               python -m pip install --no-cache-dir -e ".[test]"
           ENTRYPOINT []

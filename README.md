@@ -26,6 +26,8 @@ records, Veritas verification and an experimental Research Lab coordination laye
 The [ecosystem guide](docs/ecosystem/README.md) provides an account-free installed
 comparison of two public scripted agents, the [compatibility matrix](docs/ecosystem/compatibility.md),
 and an evidence-based [open-source launch worklist](docs/ecosystem/open-source-launch.md).
+The [production readiness guide](docs/ecosystem/production-readiness.md) defines
+supported service boundaries, operational checks, recovery and deployment acceptance.
 Public software remains Apache-2.0; private benchmarks and customer assets retain
 their separate terms. See [contributing](CONTRIBUTING.md), [governance](GOVERNANCE.md)
 and [security reporting](SECURITY.md).

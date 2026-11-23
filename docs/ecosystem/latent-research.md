@@ -143,6 +143,12 @@ The returned bundle hash should be retained in the external TrainLab receipt or
 other trusted research record. A hash inside its own editable directory does not
 authenticate the operator.
 
+ZIP exports are staged as private mode-600 files, checked against the pinned
+evidence, and published atomically without overwriting an existing destination.
+A failed capture or verification does not leave an archive at the requested
+destination. Export supports at most 8,192 files and 2 GiB of uncompressed bytes;
+hash checks stream file contents rather than loading whole archives into memory.
+
 The catalog is an allowlist. A plan cannot import an arbitrary Python function or
 launch training as an analysis job. Training execution uses the separate existing
 runner, with its declared purpose and adequacy gates intact.
@@ -194,6 +200,16 @@ process supervision. Native latency measures the actual native forward separatel
 from the directly measured whole diagnostic session. It does not claim GPU memory,
 energy or monetary measurements that were not taken.
 
+Dense geometry also checks planned workspace sizes before expensive allocations.
+The supported ceiling is 50 million estimated numeric elements per operation;
+this includes full PCA bases, random bases, neighborhood matrices, permutation
+draws, and CKA bootstrap draws and representation pairs. Linear CKA uses the
+smaller of equivalent feature-covariance and observation-Gram calculations.
+Full-basis PCA retains its complete-basis contract and rejects oversized plans.
+These checks are not an RSS quota: live inputs, native callbacks and numerical
+library workspaces still require process/container memory limits. A refused
+diagnostic remains incomplete evidence.
+
 ## Training and the full research cycle
 
 Reuse the existing Research Lab protocol and queue for hypothesis, falsifier,
@@ -235,6 +251,10 @@ Figure types are scatter, trajectory, spectrum, heatmap, forest, curve, reliabil
 signed stacked contributions and empirical CDF. They cover the historical
 compression curves, context similarity, intervention effects, delay/position
 contrasts, retention/decomposition, calibration and future-access figures.
+
+Both metrics and atlas CSV exports neutralize spreadsheet-formula text while
+preserving numeric values, including negative measurements. Original metadata
+remains unchanged in the source JSON and the evidence bundle.
 
 Offline replay verifies the complete source bundle and current analysis runtime.
 It reuses native/callback captures and recomputes numerical jobs. It compares the

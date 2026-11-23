@@ -45,8 +45,9 @@ canvas.addEventListener('pointerup',e=>{if(drag&&!drag.moved){const r=canvas.get
  if(pinned!==null)detail.textContent=JSON.stringify(view().rows[pinned],null,2);draw()}drag=null});
 document.getElementById('reset').onclick=()=>{yaw=pitch=0;draw()};sel.onchange=update;color.onchange=draw;
 document.getElementById('lines').onchange=draw;window.addEventListener('resize',draw);
+function csvCell(value){let text=String(value??'');if(typeof value==='string'&&/^(?:\s*[=+@\-]|[\t\r\n])/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"'}
 document.getElementById('export').onclick=()=>{const v=view(),keys=[...new Set(v.rows.flatMap(Object.keys))],
- quote=x=>'"'+String(x??'').replaceAll('"','""')+'"',rows=[['x','y','z',...keys],...v.rows.map((r,i)=>[...v.coordinates[i],
- ...(v.coordinates[i].length===2?['']:[]),...keys.map(k=>r[k])])],blob=new Blob([rows.map(r=>r.map(quote).join(',')).join('\n')],{type:'text/csv;charset=utf-8'}),
+ rows=[['x','y','z',...keys],...v.rows.map((r,i)=>[...v.coordinates[i],
+ ...(v.coordinates[i].length===2?['']:[]),...keys.map(k=>r[k])])],blob=new Blob([rows.map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),
  a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='latent-projection.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),0)};update();
 </script></html>

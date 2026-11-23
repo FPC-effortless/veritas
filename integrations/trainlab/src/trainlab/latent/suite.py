@@ -10,7 +10,7 @@ import shutil
 import sys
 import zipfile
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 import numpy as np
 
@@ -31,6 +31,9 @@ from .artifacts import (
     verify_bundle,
 )
 from .registry import get_operation
+
+MAX_EXPORT_BYTES = 2 * 1024 * 1024 * 1024
+MAX_EXPORT_FILES = 8192
 
 
 def _capabilities(value):
@@ -339,36 +342,85 @@ def reanalyze(source, expected_sha256, output, *, render_figures=True):
 
 
 def export_bundle(source, expected_sha256, destination):
+    """Publish a verified private archive without exposing partial exports."""
     source, destination = Path(source).resolve(), Path(destination)
     doc = verify_bundle(source, expected_sha256)
     require(
-        not destination.exists() and not destination.resolve().is_relative_to(source),
+        not destination.exists()
+        and not destination.is_symlink()
+        and not destination.resolve().is_relative_to(source),
         "export needs a new destination outside the source bundle",
     )
     names = [row["path"] for row in doc["files"]] + ["bundle.json", "SHA256SUMS"]
     expected_hashes = {row["path"]: row["sha256"] for row in doc["files"]}
+    expected_sizes = {row["path"]: row["bytes"] for row in doc["files"]}
     expected_hashes["bundle.json"] = expected_sha256
+    expected_sizes["bundle.json"] = (source / "bundle.json").stat().st_size
     checksums = "".join(f"{row['sha256']}  {row['path']}\n" for row in doc["files"]).encode()
     expected_hashes["SHA256SUMS"] = hashlib.sha256(checksums).hexdigest()
-    with zipfile.ZipFile(destination, "x", compression=zipfile.ZIP_DEFLATED) as archive:
-        for name in sorted(names):
-            archive.write(contained_file(source, name), name)
-    with zipfile.ZipFile(destination) as archive:
-        require(
-            archive.testzip() is None and sorted(archive.namelist()) == sorted(names),
-            "archive integrity mismatch",
-        )
-        for name in names:
-            require(
-                hashlib.sha256(archive.read(name)).hexdigest() == expected_hashes[name],
-                "exported content differs from the pinned evidence",
-            )
-    return {
-        "path": str(destination.resolve()),
-        "sha256": digest(destination),
-        "bundle_sha256": expected_sha256,
-        "files": len(names),
-    }
+    expected_sizes["SHA256SUMS"] = len(checksums)
+    require(
+        len(names) <= MAX_EXPORT_FILES and sum(expected_sizes.values()) <= MAX_EXPORT_BYTES,
+        "export exceeds supported file or byte limit",
+    )
+    temporary = None
+    try:
+        # Like the existing run-store backup, stage mode-600 bytes beside the
+        # destination and publish with a no-overwrite hard link after verification.
+        with NamedTemporaryFile(
+            dir=destination.parent, prefix=".latent-export-", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for name in sorted(names):
+                    hasher, size = hashlib.sha256(), 0
+                    with contained_file(source, name).open("rb") as input_stream:
+                        with archive.open(name, "w") as output_stream:
+                            while block := input_stream.read(65536):
+                                size += len(block)
+                                require(
+                                    size <= expected_sizes[name],
+                                    "exported content differs from the pinned evidence",
+                                )
+                                output_stream.write(block)
+                                hasher.update(block)
+                    require(
+                        size == expected_sizes[name]
+                        and hasher.hexdigest() == expected_hashes[name],
+                        "exported content differs from the pinned evidence",
+                    )
+            stream.flush()
+            os.fsync(stream.fileno())
+        with zipfile.ZipFile(temporary) as archive:
+            require(sorted(archive.namelist()) == sorted(names), "archive integrity mismatch")
+            for name in names:
+                hasher, size = hashlib.sha256(), 0
+                with archive.open(name) as captured:
+                    while block := captured.read(65536):
+                        size += len(block)
+                        require(size <= expected_sizes[name], "archive size mismatch")
+                        hasher.update(block)
+                require(
+                    size == expected_sizes[name] and hasher.hexdigest() == expected_hashes[name],
+                    "exported content differs from the pinned evidence",
+                )
+        archive_sha256 = digest(temporary)
+        os.link(temporary, destination)
+        if os.name == "posix":
+            descriptor = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        return {
+            "path": str(destination.resolve()),
+            "sha256": archive_sha256,
+            "bundle_sha256": expected_sha256,
+            "files": len(names),
+        }
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def worker(plan_path, *, allow_native=False):

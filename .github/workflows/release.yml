@@ -15,12 +15,14 @@ on:
       - "release/**"
       - "tools/verify_release_identity.py"
       - "tools/build_release_manifest.py"
+      - "tools/verify_release_gates.py"
+      - "tools/review_provenance.py"
       - ".github/workflows/release.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  actions: read
 
 concurrency:
   group: release-${{ github.repository }}
@@ -68,6 +70,37 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
 
+  release-gates:
+    name: Require exact-source CI and Security
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Wait for main-source verification and bind the release tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          python -m tools.verify_release_gates \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-commit "$GITHUB_SHA" \
+            --tag "$TAG" --ref "$GITHUB_REF" \
+            --wait-seconds 1800 --output release-gates.json
+      - name: Retain release-gate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-gates
+          path: release-gates.json
+          if-no-files-found: warn
+
   validate-release:
     name: Validate release
     if: needs.prepare.outputs.should_release == 'true'
@@ -109,7 +142,12 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - prepare
+      - release-gates
       - validate-release
+    permissions:
+      contents: write
+      packages: write
+      actions: read
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       TAG: ${{ needs.prepare.outputs.tag }}
@@ -128,37 +166,18 @@ jobs:
           python -m build
           python -m twine check dist/*
 
-      - name: Build CycloneDX SBOM
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m venv .release-sbom
-          .release-sbom/bin/python -m pip install --upgrade pip
-          .release-sbom/bin/python -m pip install dist/*.whl cyclonedx-bom
-          .release-sbom/bin/cyclonedx-py environment \
-            --output-format JSON \
-            --output-file sbom.cdx.json
-
       - uses: docker/setup-buildx-action@v4
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Resolve image name
         id: image
         shell: bash
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-      - name: Build and push immutable release image
-        id: container
+      - name: Build candidate image without publishing
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: true
-          tags: |
-            ${{ steps.image.outputs.name }}:${{ env.VERSION }}
-            ${{ steps.image.outputs.name }}:${{ env.TAG }}
+          push: false
+          load: true
+          tags: veritas-release:${{ github.sha }}
           labels: |
             org.opencontainers.image.title=Veritas
             org.opencontainers.image.version=${{ env.VERSION }}
@@ -167,10 +186,126 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Capture candidate image identity
+        id: candidate
+        run: |
+          set -euo pipefail
+          image_id=$(docker image inspect --format '{{.Id}}' "veritas-release:$GITHUB_SHA")
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
+          docker image inspect "$image_id" > image-inspect.json
+
+      - name: Boot the exact candidate image before publication
+        env:
+          IMAGE_ID: ${{ steps.candidate.outputs.image_id }}
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name veritas-release-probe -p 127.0.0.1:18000:8000 "$IMAGE_ID"
+          trap 'docker rm -f veritas-release-probe >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:18000/healthz > image-health.json; then
+              python -c 'import json,os; p=json.load(open("image-health.json")); raise SystemExit(0 if p.get("status")=="ok" and p.get("version")==os.environ["VERSION"] else 1)'
+              exit 0
+            fi
+            if ! docker inspect -f '{{.State.Running}}' veritas-release-probe 2>/dev/null | grep -q true; then
+              echo "Candidate image exited before becoming healthy"
+              docker logs veritas-release-probe || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "Candidate image did not become healthy within 30 seconds"
+          exit 1
+
+      - name: Reject high or critical candidate-image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: ${{ steps.candidate.outputs.image_id }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          list-all-pkgs: true
+          exit-code: '1'
+          format: json
+          output: image-audit.json
+
+      - name: Convert the same scanned image inventory to CycloneDX
+        env:
+          IMAGE_ID: ${{ steps.candidate.outputs.image_id }}
+        run: |
+          set -euo pipefail
+          trivy convert --format cyclonedx --output sbom.cdx.json image-audit.json
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from tools.build_release_manifest import verify_image_evidence
+          evidence = verify_image_evidence(
+              os.environ["IMAGE_ID"], os.environ["GITHUB_SHA"],
+              Path("image-inspect.json"), Path("image-audit.json"), Path("sbom.cdx.json"),
+          )
+          Path("image-validation.json").write_text(json.dumps(evidence, indent=2) + "\n")
+          PY
+
+      - name: Recheck exact-source gates before registry publication
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
+          python -m tools.verify_release_gates \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-commit "$GITHUB_SHA" \
+            --tag "$TAG" --ref "$GITHUB_REF" \
+            --output release-gates.json
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push the scanned image without rebuilding
+        id: container
+        env:
+          IMAGE_ID: ${{ steps.candidate.outputs.image_id }}
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+        run: |
+          set -euo pipefail
+          docker tag "$IMAGE_ID" "$IMAGE_NAME:$VERSION"
+          docker tag "$IMAGE_ID" "$IMAGE_NAME:$TAG"
+          docker push "$IMAGE_NAME:$VERSION"
+          docker push "$IMAGE_NAME:$TAG"
+          docker image inspect "$IMAGE_ID" > pushed-image-inspect.json
+          digest=$(python - <<'PY'
+          import json
+          import os
+          import re
+          image = json.load(open("pushed-image-inspect.json"))[0]
+          if image["Id"] != os.environ["IMAGE_ID"]:
+              raise SystemExit("pushed image identity changed")
+          prefix = os.environ["IMAGE_NAME"] + "@"
+          digests = {value[len(prefix):] for value in image.get("RepoDigests", []) if value.startswith(prefix)}
+          if len(digests) != 1 or not re.fullmatch(r"sha256:[0-9a-f]{64}", next(iter(digests))):
+              raise SystemExit("could not bind a unique registry digest")
+          print(next(iter(digests)))
+          PY
+          )
+          docker buildx imagetools inspect --raw "$IMAGE_NAME@$digest" > image-manifest.json
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from tools.build_release_manifest import verify_published_image
+          verify_published_image(os.environ["IMAGE_ID"], Path("image-manifest.json"))
+          PY
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
       - name: Build release provenance
         env:
           CONTAINER_IMAGE: ${{ steps.image.outputs.name }}
           CONTAINER_DIGEST: ${{ steps.container.outputs.digest }}
+          IMAGE_ID: ${{ steps.candidate.outputs.image_id }}
         shell: bash
         run: |
           set -euo pipefail
@@ -182,8 +317,13 @@ jobs:
             --workflow-run "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --container-image "$CONTAINER_IMAGE" \
             --container-digest "$CONTAINER_DIGEST" \
+            --container-image-id "$IMAGE_ID" \
+            --image-inspection image-inspect.json \
+            --image-audit image-audit.json \
+            --published-manifest image-manifest.json \
             --dist-dir dist \
             --sbom sbom.cdx.json \
+            --release-gates release-gates.json \
             --portability-identities "release/$VERSION/PORTABILITY_IDENTITIES.json" \
             --license LICENSE \
             --licensing-policy LICENSING.md \
@@ -197,6 +337,8 @@ jobs:
             dist/* \
             sbom.cdx.json \
             provenance.json \
+            release-gates.json \
+            image-audit.json image-inspect.json image-manifest.json image-validation.json image-health.json \
             "release/$VERSION/PORTABILITY_IDENTITIES.json" \
             LICENSE \
             LICENSING.md \
@@ -209,11 +351,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
+          python -m tools.verify_release_gates \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-commit "$GITHUB_SHA" \
+            --tag "$TAG" --ref "$GITHUB_REF"
           assets=(
             dist/*
             SHA256SUMS
             sbom.cdx.json
             provenance.json
+            release-gates.json
+            image-audit.json image-inspect.json image-manifest.json image-validation.json image-health.json
             "release/$VERSION/PORTABILITY_IDENTITIES.json"
             LICENSE
             LICENSING.md
@@ -230,3 +379,18 @@ jobs:
             --title "Veritas $VERSION" \
             --notes-file "release/$VERSION/RELEASE_NOTES.md" \
             "${tag_args[@]}"
+
+      - name: Retain exact-image acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-image-acceptance
+          path: |
+            image-audit.json
+            image-inspect.json
+            image-validation.json
+            image-health.json
+            image-manifest.json
+            sbom.cdx.json
+            release-gates.json
+          if-no-files-found: warn

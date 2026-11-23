@@ -716,17 +716,17 @@ class Controller:
     def status(self):
         with self.connect() as db:
             data = {
-                table: [dict(row) for row in db.execute(f"SELECT * FROM {table}")]
-                for table in (
-                    "programs",
-                    "resources",
-                    "workers",
-                    "authors",
-                    "protocols",
-                    "tasks",
-                    "attempts",
-                    "executions",
-                )
+                table: [dict(row) for row in db.execute(query)]
+                for table, query in {
+                    "programs": "SELECT * FROM programs",
+                    "resources": "SELECT * FROM resources",
+                    "workers": "SELECT * FROM workers",
+                    "authors": "SELECT * FROM authors",
+                    "protocols": "SELECT * FROM protocols",
+                    "tasks": "SELECT * FROM tasks",
+                    "attempts": "SELECT * FROM attempts",
+                    "executions": "SELECT * FROM executions",
+                }.items()
             }
         for row in data["tasks"]:
             row.pop("token", None)
