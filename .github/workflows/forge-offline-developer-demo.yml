@@ -1,0 +1,115 @@
+name: Forge offline developer demo
+
+on:
+  pull_request:
+    paths:
+      - 'integrations/forge/**'
+      - '.github/workflows/forge-offline-developer-demo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/forge/**'
+      - '.github/workflows/forge-offline-developer-demo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-demo:
+    name: Fresh-checkout, no-network, no-training demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Image acquisition happens before the offline boundary. The demo itself
+      # runs in a separate container with no network namespace connectivity.
+      - name: Pull Python runtime before offline execution
+        run: docker pull python:3.13-slim
+
+      - name: Run measured quickstart with no network and read-only source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/forge-offline-demo"
+          chmod 777 "$RUNNER_TEMP/forge-offline-demo"
+          docker image inspect --format '{{.Id}}' python:3.13-slim > "$RUNNER_TEMP/forge-offline-demo/image-id.txt"
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777 \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --pids-limit 64 \
+            --memory 512m \
+            --cpus 1 \
+            --user "$(id -u):$(id -g)" \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$RUNNER_TEMP/forge-offline-demo:/out:rw" \
+            -w /workspace/integrations/forge \
+            python:3.13-slim \
+            python examples/measure_offline_quickstart.py \
+              --receipt /out/receipt.json \
+              --commit "$GITHUB_SHA"
+
+      - name: Verify receipt and record sandbox configuration
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python - "$RUNNER_TEMP/forge-offline-demo" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import sys
+
+          root = pathlib.Path(sys.argv[1])
+          receipt_path = root / "receipt.json"
+          receipt_bytes = receipt_path.read_bytes()
+          receipt = json.loads(receipt_bytes)
+          assert receipt["schema"] == "forge.offline-demo-measurement.v1"
+          assert receipt["result"] == "PASS", receipt
+          assert receipt["commit"] == __import__("os").environ["SOURCE_COMMIT"]
+          assert receipt["measurement"]["within_ten_minutes"] is True
+          assert receipt["measurement"]["elapsed_ms"] <= 600_000
+          assert receipt["environment"]["secret_environment_forwarding"] == "DISABLED_BY_ALLOWLIST"
+          assert receipt["quickstart"]["model_training"] == "NOT_PERFORMED"
+          assert receipt["quickstart"]["outcomes"] == "UNKNOWN_UNVERIFIED_ONLY"
+          assert receipt["quickstart"]["hidden_labels"] == "NOT_USED"
+          assert receipt["quickstart"]["scientific_qualification"] == "NOT_PERFORMED"
+          assert receipt["quickstart"]["physical_offline_inference"] == "NOT_RUN"
+
+          execution = {
+              "schema": "forge.offline-demo-ci-execution.v1",
+              "run_id": __import__("os").environ["RUN_ID"],
+              "source_commit": __import__("os").environ["SOURCE_COMMIT"],
+              "container_image": "python:3.13-slim",
+              "container_image_id": (root / "image-id.txt").read_text().strip(),
+              "network_mode": "none",
+              "container_root_filesystem": "read-only",
+              "checkout_mount": "read-only",
+              "temporary_storage": "isolated tmpfs and receipt mount",
+              "secrets_passed_to_container": False,
+              "model_training": "NOT_PERFORMED",
+              "hidden_labels": "NOT_USED",
+              "demo_elapsed_ms": receipt["measurement"]["elapsed_ms"],
+              "demo_limit_ms": 600_000,
+              "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+              "scientific_qualification": "NOT_PERFORMED",
+              "physical_offline_inference": "NOT_RUN",
+          }
+          (root / "execution.json").write_text(
+              json.dumps(execution, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(execution, sort_keys=True, indent=2))
+          PY
+
+      - name: Publish constructed demo receipt
+        uses: actions/upload-artifact@v7
+        with:
+          name: forge-offline-demo-${{ github.run_id }}
+          path: ${{ runner.temp }}/forge-offline-demo/
+          if-no-files-found: error
+          retention-days: 14
