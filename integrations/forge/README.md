@@ -56,17 +56,57 @@ Without a real persistent robot/entity ID, subject-level holdout is unavailable 
 
 ## Ten-minute offline developer smoke demo (constructed data only)
 
-From a fresh checkout of this branch, with Python 3.11+ and **no network or package installation required**:
+The quickstart uses twelve constructed machine subjects, creates an ephemeral
+release, verifies its manifest and subject-disjoint splits, and checks
+point-in-time masking. Outcomes remain unknown/unverified; there are no hidden
+target labels, no model fitting and no inference. Its result is explicitly
+`CONSTRUCTED_ONLY`, `NOT_PERFORMED` scientific qualification and `NOT_RUN`
+physical inference. Rights booleans are fixture declarations, not permission
+evidence.
+
+From a fresh checkout, the measured command requires Python 3.11+ and no package
+installation:
 
 ```bash
 cd integrations/forge
-PYTHONPATH=src python examples/offline_quickstart.py
-PYTHONPATH=src python -m unittest discover -s tests -v
+python examples/measure_offline_quickstart.py --receipt /tmp/forge-demo-receipt.json --commit "$(git rev-parse HEAD)"
 ```
 
-The demo uses twelve **constructed** independent machine subjects, writes an ephemeral release, verifies its manifest and disjoint subject splits, and checks that point-in-time reads hide unavailable observations, actions and outcomes. Its JSON result explicitly reports `CONSTRUCTED_ONLY`, `NOT_PERFORMED` scientific qualification, and `NOT_RUN` physical inference. No remote acquisition, training, Woyengi authentication, model export or Veritas certification occurs. A successful demo is **developer contract evidence**, never a real-world capability result or independently verified source-rights claim.
+The receipt measures child-interpreter startup, imports and the complete
+quickstart with a monotonic clock. It records elapsed milliseconds, the
+600,000 ms target, the checked-out commit supplied by the caller, a nonqualifying
+scope summary and the exact child environment keys. The child receives an
+allowlisted environment; tokens and other unlisted environment variables are
+not forwarded. Receipt paths are create-only and are never silently overwritten.
 
-The end-to-end product path remains: authorized real source → Woyengi permission-checked as-of export (where applicable) → independently qualified Forge release → TrainLab source/split/compute receipts → independently verified predictive capability → **fully local** user-device model SDK. The Woyengi candidate export currently needs its offline-only hardening in [draft PR #57](https://github.com/FPC-effortless/Woyengi/pull/57); this demo deliberately does not treat that draft or any operator-declared source rights as a qualified dataset. Customer preprocessing, embeddings, inference, state updates and optional speech must never depend on hosted inference or hidden cloud fallback.
+**The measurer does not itself disable OS networking.** For the actual offline
+gate, use the repository workflow
+`.github/workflows/forge-offline-developer-demo.yml`. It checks out the source,
+pulls the Python runtime image before the boundary, then runs the measured demo
+inside a container with `--network none`, a read-only root filesystem, a
+read-only checkout mount, bounded memory/CPU/PIDs, no added capabilities and
+only an isolated temporary receipt mount. No token or secret is passed to that
+container. The workflow validates and retains both the timing receipt and the
+sandbox execution record as a CI artifact.
+
+The measured interval excludes Git checkout, runner provisioning and container
+image acquisition. A successful CI run is constructed developer-contract
+evidence, **not** an independently observed external developer acceptance,
+authentic-source permission, scientific qualification or physical-device result.
+Do not describe this as proof that a complete first-time workstation setup takes
+under ten minutes; it proves the no-network demo command meets the ten-minute
+target in the recorded CI environment.
+
+Manual command without the sandbox is useful for timing only. Its receipt
+correctly says `EXTERNAL_SANDBOX_REQUIRED`; do not upgrade that local run into
+no-network evidence.
+
+The end-to-end product path remains: authorized real source → Woyengi
+permission-checked as-of export (where applicable) → independently qualified
+Forge release → TrainLab source/split/compute receipts → independently verified
+predictive capability → **fully local** user-device model SDK. Customer
+preprocessing, embeddings, inference, state updates and optional speech must
+never depend on hosted inference or hidden cloud fallback.
 
 ## Scientific boundaries
 
