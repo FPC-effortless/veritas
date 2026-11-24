@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # Image acquisition happens before the offline boundary. The demo itself
       # runs in a separate container with no network namespace connectivity.
@@ -45,9 +47,11 @@ jobs:
             --memory 512m \
             --cpus 1 \
             --user "$(id -u):$(id -g)" \
-            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            -e PYTHONNOUSERSITE=1 \
+            -v "$GITHUB_WORKSPACE/integrations/forge:/workspace:ro" \
             -v "$RUNNER_TEMP/forge-offline-demo:/out:rw" \
-            -w /workspace/integrations/forge \
+            -w /workspace \
             python:3.13-slim \
             python examples/measure_offline_quickstart.py \
               --receipt /out/receipt.json \
