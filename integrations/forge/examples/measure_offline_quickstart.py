@@ -28,6 +28,7 @@ def child_environment(root: Path, parent: dict[str, str] | None = None) -> dict[
             "PYTHONPATH": str(root / "src"),
             "PYTHONHASHSEED": "0",
             "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
             "TMPDIR": tempfile.gettempdir(),
         }
     )
