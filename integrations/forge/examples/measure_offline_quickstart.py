@@ -45,8 +45,13 @@ def _write_receipt(path: Path, receipt: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--receipt", type=Path, help="create a new JSON receipt at this path")
-    parser.add_argument("--commit", help="checked-out source commit SHA (recorded, not independently attested)")
+    parser.add_argument(
+        "--receipt", type=Path, help="create a new JSON receipt at this path"
+    )
+    parser.add_argument(
+        "--commit",
+        help="checked-out source commit SHA (recorded, not independently attested)",
+    )
     args = parser.parse_args(argv)
 
     root = Path(__file__).resolve().parents[1]
@@ -97,15 +102,21 @@ def main(argv: list[str] | None = None) -> int:
     if not within_limit and failure_reason is None:
         failure_reason = "ten_minute_limit_exceeded"
     passed = failure_reason is None and child_exit_code == 0 and within_limit
+    result = "PASS" if passed else "FAIL"
+    if failure_reason == "quickstart_timeout":
+        result = "TIMED_OUT"
     receipt = {
         "schema": SCHEMA,
-        "result": "PASS" if passed else ("TIMED_OUT" if failure_reason == "quickstart_timeout" else "FAIL"),
+        "result": result,
         "commit": args.commit,
         "measurement": {
             "elapsed_ms": elapsed_ms,
             "limit_ms": LIMIT_MS,
             "within_ten_minutes": bool(passed),
-            "timer": "time.perf_counter_ns around child interpreter startup, imports and quickstart",
+            "timer": (
+                "time.perf_counter_ns around child interpreter startup, imports "
+                "and quickstart"
+            ),
             "scope": "excludes checkout, runner provisioning and container-image acquisition",
         },
         "environment": {
@@ -114,7 +125,10 @@ def main(argv: list[str] | None = None) -> int:
         },
         "network": {
             "enforcement": "EXTERNAL_SANDBOX_REQUIRED",
-            "note": "This measurer does not disable OS networking; the CI workflow runs it in a Docker --network=none container.",
+            "note": (
+                "This measurer does not disable OS networking; the CI workflow "
+                "runs it in a Docker --network=none container."
+            ),
         },
         "child_exit_code": child_exit_code,
         "failure_reason": failure_reason,
