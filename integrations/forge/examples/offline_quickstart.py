@@ -89,6 +89,8 @@ def run_demo() -> dict:
         "authentic_dataset": "NOT_USED",
         "scientific_qualification": "NOT_PERFORMED",
         "model_training": "NOT_PERFORMED",
+        "outcomes": "UNKNOWN_UNVERIFIED_ONLY",
+        "hidden_labels": "NOT_USED",
         "physical_offline_inference": "NOT_RUN",
         "trainlab_receipt_structural": receipt_result["structural_validation"],
         "trainlab_receipt_science": receipt_result["scientific_qualification"],
