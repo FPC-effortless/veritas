@@ -77,6 +77,7 @@ class QuickstartTests(unittest.TestCase):
                 "DISABLED_BY_ALLOWLIST",
             )
             self.assertNotIn("GITHUB_TOKEN", receipt["environment"]["child_environment_keys"])
+            self.assertIn("PYTHONNOUSERSITE", receipt["environment"]["child_environment_keys"])
             self.assertEqual(
                 receipt["network"]["enforcement"],
                 "EXTERNAL_SANDBOX_REQUIRED",
