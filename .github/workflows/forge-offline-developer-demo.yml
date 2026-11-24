@@ -24,6 +24,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       # Image acquisition happens before the offline boundary. The demo itself
       # runs in a separate container with no network namespace connectivity.
@@ -31,6 +32,8 @@ jobs:
         run: docker pull python:3.13-slim
 
       - name: Run measured quickstart with no network and read-only source
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -55,11 +58,11 @@ jobs:
             python:3.13-slim \
             python examples/measure_offline_quickstart.py \
               --receipt /out/receipt.json \
-              --commit "$GITHUB_SHA"
+              --commit "$SOURCE_COMMIT"
 
       - name: Verify receipt and record sandbox configuration
         env:
-          SOURCE_COMMIT: ${{ github.sha }}
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           RUN_ID: ${{ github.run_id }}
         run: |
           python - "$RUNNER_TEMP/forge-offline-demo" <<'PY'
