@@ -220,5 +220,71 @@ class OfflineDemoReceiptTest(unittest.TestCase):
             self.assertNotIn("run_id", output)
 
 
+    def test_execution_identity_fields_reject_noncanonical_values(self):
+        cases = (
+            ("run_id", "0"),
+            ("run_id", "01"),
+            ("run_id", "1" * 21),
+            ("container_image_id", "sha256:" + "g" * 64),
+            ("source_commit", "A" * 40),
+        )
+        for key, value in cases:
+            with self.subTest(key=key, value=value):
+                with self.assertRaises(ForgeError):
+                    self.verify(
+                        mutate_execution=lambda e, k=key, v=value: e.update({k: v})
+                    )
+
+    def test_invalid_utf8_rejected_in_each_document(self):
+        _, _, receipt_raw, execution_raw = valid_pair()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            receipt_path = root / "receipt.json"
+            execution_path = root / "execution.json"
+
+            receipt_path.write_bytes(b"\\xff")
+            execution_path.write_bytes(execution_raw)
+            with self.assertRaisesRegex(ForgeError, "invalid UTF-8 JSON"):
+                validate_offline_demo_files(receipt_path, execution_path, COMMIT)
+
+            receipt_path.write_bytes(receipt_raw)
+            execution_path.write_bytes(b"\\xff")
+            with self.assertRaisesRegex(ForgeError, "invalid UTF-8 JSON"):
+                validate_offline_demo_files(receipt_path, execution_path, COMMIT)
+
+    def test_deeply_nested_json_is_rejected_as_a_controlled_error(self):
+        _, _, _, execution_raw = valid_pair()
+        nested = b"[" * 1500 + b"0" + b"]" * 1500
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            receipt_path = root / "receipt.json"
+            execution_path = root / "execution.json"
+            receipt_path.write_bytes(nested)
+            execution_path.write_bytes(execution_raw)
+            with self.assertRaisesRegex(ForgeError, "JSON nesting"):
+                validate_offline_demo_files(receipt_path, execution_path, COMMIT)
+
+    def test_elapsed_boolean_and_execution_mismatch_are_rejected(self):
+        with self.assertRaisesRegex(ForgeError, "integer"):
+            self.verify(
+                mutate_receipt=lambda r: r["measurement"].update(elapsed_ms=True)
+            )
+        with self.assertRaisesRegex(ForgeError, "must match"):
+            self.verify(
+                mutate_execution=lambda e: e.update(demo_elapsed_ms=109)
+            )
+
+    def test_oversized_execution_record_is_rejected(self):
+        _, _, receipt_raw, _ = valid_pair()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            receipt_path = root / "receipt.json"
+            execution_path = root / "execution.json"
+            receipt_path.write_bytes(receipt_raw)
+            execution_path.write_bytes(b" " * (256 * 1024 + 1))
+            with self.assertRaisesRegex(ForgeError, "exceeds size limit"):
+                validate_offline_demo_files(receipt_path, execution_path, COMMIT)
+
+
 if __name__ == "__main__":
     unittest.main()
