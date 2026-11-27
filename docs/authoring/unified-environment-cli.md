@@ -14,6 +14,7 @@ veritas env run
 veritas env export
 veritas env conformance
 veritas env reverify
+veritas env woyengi-work
 ```
 
 ### Compile
@@ -101,3 +102,27 @@ This interface does not:
 - expose evaluator-private state by default.
 
 Environment scaffolding/authoring is owned by the fluent authoring API and can be surfaced under `veritas env` only after that API is integrated; this lane does not invent a competing scaffold format.
+
+## Built-in Woyengi Work environment
+
+```bash
+veritas env woyengi-work --help
+veritas env woyengi-work --task reconciliation \
+  --output work-contract.json --public-output work-public.json
+veritas env validate --contract work-contract.json
+```
+
+| Task selector | Agent's job | Shortcut that is rejected |
+|---|---|---|
+| `handoff` (default) | Resume paused work from the saved checkpoint, verify the artifact, and close the task. | Use a stale checkpoint or close without verification. |
+| `approval` | Check the supervisor's decision and release the report to the authorized audience. | Release before checking the approval, or release externally. |
+| `reconciliation` | Compare a derived summary with its authoritative ledger and correct the number. | Copy the stale count or update the summary without comparison. |
+| `revision` | Mark a stale brief as superseded and point its dependent index at the reviewed revision. | Refresh before recording the supersession or retarget to the old revision. |
+| `escalation` | Recognize that approval is pending and route the issue to a supervisor. | Close the request without approval. |
+
+These are deterministic offline tasks in one environment. No Woyengi service, real account,
+or real workflow is touched. The first handoff task simulates resuming work; it is not a
+durability test of a real process restart. Each task has independent evidence and scoring, and
+each gets a separate portable contract. Share only the public output with evaluated agents;
+the full contract is evaluator-only. These scenarios verify the environment's behavior, not
+an agent's real-world reliability.
