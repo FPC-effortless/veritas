@@ -242,13 +242,13 @@ class OfflineDemoReceiptTest(unittest.TestCase):
             receipt_path = root / "receipt.json"
             execution_path = root / "execution.json"
 
-            receipt_path.write_bytes(b"\\xff")
+            receipt_path.write_bytes(bytes((0xFF,)))
             execution_path.write_bytes(execution_raw)
             with self.assertRaisesRegex(ForgeError, "invalid UTF-8 JSON"):
                 validate_offline_demo_files(receipt_path, execution_path, COMMIT)
 
             receipt_path.write_bytes(receipt_raw)
-            execution_path.write_bytes(b"\\xff")
+            execution_path.write_bytes(bytes((0xFF,)))
             with self.assertRaisesRegex(ForgeError, "invalid UTF-8 JSON"):
                 validate_offline_demo_files(receipt_path, execution_path, COMMIT)
 
