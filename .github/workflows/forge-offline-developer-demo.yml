@@ -60,37 +60,28 @@ jobs:
               --receipt /out/receipt.json \
               --commit "$SOURCE_COMMIT"
 
-      - name: Verify receipt and record sandbox configuration
+      - name: Record sandbox execution metadata
         env:
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           RUN_ID: ${{ github.run_id }}
         run: |
+          set -euo pipefail
           python - "$RUNNER_TEMP/forge-offline-demo" <<'PY'
           import hashlib
           import json
+          import os
           import pathlib
           import sys
 
           root = pathlib.Path(sys.argv[1])
-          receipt_path = root / "receipt.json"
-          receipt_bytes = receipt_path.read_bytes()
+          receipt_bytes = (root / "receipt.json").read_bytes()
           receipt = json.loads(receipt_bytes)
-          assert receipt["schema"] == "forge.offline-demo-measurement.v1"
-          assert receipt["result"] == "PASS", receipt
-          assert receipt["commit"] == __import__("os").environ["SOURCE_COMMIT"]
-          assert receipt["measurement"]["within_ten_minutes"] is True
-          assert receipt["measurement"]["elapsed_ms"] <= 600_000
-          assert receipt["environment"]["secret_environment_forwarding"] == "DISABLED_BY_ALLOWLIST"
-          assert receipt["quickstart"]["model_training"] == "NOT_PERFORMED"
-          assert receipt["quickstart"]["outcomes"] == "UNKNOWN_UNVERIFIED_ONLY"
-          assert receipt["quickstart"]["hidden_labels"] == "NOT_USED"
-          assert receipt["quickstart"]["scientific_qualification"] == "NOT_PERFORMED"
-          assert receipt["quickstart"]["physical_offline_inference"] == "NOT_RUN"
-
+          measurement = receipt.get("measurement") if isinstance(receipt, dict) else None
+          elapsed = measurement.get("elapsed_ms") if isinstance(measurement, dict) else None
           execution = {
               "schema": "forge.offline-demo-ci-execution.v1",
-              "run_id": __import__("os").environ["RUN_ID"],
-              "source_commit": __import__("os").environ["SOURCE_COMMIT"],
+              "run_id": os.environ["RUN_ID"],
+              "source_commit": os.environ["SOURCE_COMMIT"],
               "container_image": "python:3.13-slim",
               "container_image_id": (root / "image-id.txt").read_text().strip(),
               "network_mode": "none",
@@ -100,18 +91,27 @@ jobs:
               "secrets_passed_to_container": False,
               "model_training": "NOT_PERFORMED",
               "hidden_labels": "NOT_USED",
-              "demo_elapsed_ms": receipt["measurement"]["elapsed_ms"],
+              "demo_elapsed_ms": elapsed,
               "demo_limit_ms": 600_000,
               "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
               "scientific_qualification": "NOT_PERFORMED",
               "physical_offline_inference": "NOT_RUN",
           }
           (root / "execution.json").write_text(
-              json.dumps(execution, sort_keys=True, indent=2) + "\n",
+              json.dumps(execution, sort_keys=True, indent=2, allow_nan=False) + "\n",
               encoding="utf-8",
           )
-          print(json.dumps(execution, sort_keys=True, indent=2))
           PY
+
+      - name: Verify receipt pair with the reusable Forge validator
+        env:
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=integrations/forge/src python -m forge_data verify-offline-demo \
+            --receipt "$RUNNER_TEMP/forge-offline-demo/receipt.json" \
+            --execution "$RUNNER_TEMP/forge-offline-demo/execution.json" \
+            --commit "$SOURCE_COMMIT"
 
       - name: Publish constructed demo receipt
         uses: actions/upload-artifact@v7

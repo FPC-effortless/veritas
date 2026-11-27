@@ -72,6 +72,28 @@ cd integrations/forge
 python examples/measure_offline_quickstart.py --receipt /tmp/forge-demo-receipt.json --commit "$(git rev-parse HEAD)"
 ```
 
+
+The dedicated CI workflow also records the Docker sandbox configuration and
+binds it to the exact measurement-receipt bytes. After downloading a workflow
+artifact, verify the pair with the reusable strict validator (use the exact
+40-character source commit recorded by that workflow run):
+
+```bash
+PYTHONPATH=src python -m forge_data verify-offline-demo \
+  --receipt /path/to/receipt.json \
+  --execution /path/to/execution.json \
+  --commit <exact-workflow-head-sha>
+```
+
+The command rejects duplicate JSON keys, non-finite values, oversized files,
+symbolic links and non-regular receipt paths, unexpected fields, source-commit
+mismatches, receipt-hash mismatches, unsafe environment keys, writable
+container/checkout claims, network modes other than `none`, secret passage,
+training/hidden-label claims, and qualification self-promotion. Its redacted `structural_validation: PASS` is only a check of
+the supplied receipt pair; it is not GitHub artifact attestation, source-rights
+approval, scientific qualification, physical-device readiness, independent
+developer acceptance, or commercial release authority.
+
 The receipt measures child-interpreter startup, imports and the complete
 quickstart with a monotonic clock. It records elapsed milliseconds, the
 600,000 ms target, the checked-out commit supplied by the caller, a nonqualifying

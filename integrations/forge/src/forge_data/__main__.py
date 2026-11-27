@@ -1,4 +1,4 @@
-"""CLI: python -m forge_data {release,verify,validate-evidence}."""
+"""CLI: python -m forge_data {release,verify,validate-evidence,verify-offline-demo}."""
 from __future__ import annotations
 
 import argparse
@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .core import ForgeError, release, verify_release
 from .evidence_receipt import validate_evidence_file
+from .offline_demo_receipt import validate_offline_demo_files
 
 
 def main() -> int:
@@ -24,14 +25,22 @@ def main() -> int:
         "validate-evidence", help="Validate untrusted TrainLab receipt (never qualify)"
     )
     evidence.add_argument("--input", required=True, type=Path)
+    offline = commands.add_parser(
+        "verify-offline-demo", help="Verify untrusted offline-demo receipt pair (never qualify)"
+    )
+    offline.add_argument("--receipt", required=True, type=Path)
+    offline.add_argument("--execution", required=True, type=Path)
+    offline.add_argument("--commit", required=True)
     args = parser.parse_args()
     try:
         if args.command == "release":
             result = release(args.input, args.spec, args.output)
         elif args.command == "verify":
             result = verify_release(args.release)
-        else:
+        elif args.command == "validate-evidence":
             result = validate_evidence_file(args.input)
+        else:
+            result = validate_offline_demo_files(args.receipt, args.execution, args.commit)
     except (ForgeError, OSError, ValueError) as exc:
         parser.exit(2, f"forge error: {exc}\n")
     print(json.dumps(result, indent=2, sort_keys=True))
