@@ -6,6 +6,8 @@ import tempfile
 
 import typer
 
+from investigation_world.authoring.woyengi_work import WoyengiWorkTask
+
 env_app = typer.Typer(
     help="Unified environment compile, validation, execution, export, and replay commands.",
     no_args_is_help=True,
@@ -65,13 +67,16 @@ def compile_environment_cmd(
 def woyengi_work_environment_cmd(
     output: pathlib.Path = typer.Option(..., "--output"),
     public_output: pathlib.Path | None = typer.Option(None, "--public-output"),
+    task: WoyengiWorkTask = typer.Option(WoyengiWorkTask.HANDOFF, "--task"),
 ) -> None:
-    """Compile the built-in, offline Woyengi Work environment."""
+    """Compile one task from the built-in, offline Woyengi Work environment."""
     from investigation_world.authoring.woyengi_work import build_woyengi_work_environment
 
     with tempfile.TemporaryDirectory(prefix="veritas-woyengi-work-") as temp:
         episode = pathlib.Path(temp) / "episode.json"
-        episode.write_text(build_woyengi_work_environment().model_dump_json(), encoding="utf-8")
+        episode.write_text(
+            build_woyengi_work_environment(task).model_dump_json(), encoding="utf-8",
+        )
         compile_environment_cmd(episode=episode, output=output, public_output=public_output)
 
 

@@ -106,14 +106,23 @@ Environment scaffolding/authoring is owned by the fluent authoring API and can b
 ## Built-in Woyengi Work environment
 
 ```bash
-veritas env woyengi-work --output work-contract.json --public-output work-public.json
+veritas env woyengi-work --help
+veritas env woyengi-work --task reconciliation \
+  --output work-contract.json --public-output work-public.json
 veritas env validate --contract work-contract.json
 ```
 
-This is a self-contained Veritas simulation, not a connector to a Woyengi Work service.
-An agent receives a paused case and a handoff record, resumes from the correct checkpoint,
-verifies the artifact, and closes the work. A wrong checkpoint, a skipped verification, or
-a premature close cannot advance the corresponding state. A successful submission also needs
-the handoff evidence ID. Share only the public output with the evaluated agent; the full
-contract is for the evaluator. The initial scenario tests a simulated handoff, not the
-durability of a real workspace across process restarts.
+| Task selector | Agent's job | Shortcut that is rejected |
+|---|---|---|
+| `handoff` (default) | Resume paused work from the saved checkpoint, verify the artifact, and close the task. | Use a stale checkpoint or close without verification. |
+| `approval` | Check the supervisor's decision and release the report to the authorized audience. | Release before checking the approval, or release externally. |
+| `reconciliation` | Compare a derived summary with its authoritative ledger and correct the number. | Copy the stale count or update the summary without comparison. |
+| `revision` | Mark a stale brief as superseded and point its dependent index at the reviewed revision. | Refresh before recording the supersession or retarget to the old revision. |
+| `escalation` | Recognize that approval is pending and route the issue to a supervisor. | Close the request without approval. |
+
+These are deterministic offline tasks in one environment. No Woyengi service, real account,
+or real workflow is touched. The first handoff task simulates resuming work; it is not a
+durability test of a real process restart. Each task has independent evidence and scoring, and
+each gets a separate portable contract. Share only the public output with evaluated agents;
+the full contract is evaluator-only. These scenarios verify the environment's behavior, not
+an agent's real-world reliability.
