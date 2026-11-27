@@ -1,0 +1,254 @@
+{
+  "study": "DEPT-EXEC-005",
+  "date": "2026-11-27",
+  "sourceHead": "99a97c1b2ff9c669f4e45356b02083d3bc29a621",
+  "producerBlob": "5d0d726338a3fd635c25a9fbbd7e7a1f4cec822d",
+  "precheckBlob": "3eafd629dc2efcbcc2472478ea0eeca94b02399b",
+  "producerFacts": {
+    "numpyFloat64DocumentStatistics": true,
+    "numpyReduction": true,
+    "bpbStoredWithoutCast": true,
+    "curveStored": true,
+    "checkpointStoresCurve": true,
+    "trainerSafeLoad": true,
+    "precheckSafeLoad": true
+  },
+  "stage2Jobs": [
+    {
+      "id": 140697109696,
+      "name": "stage2 (U, 9029)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109700,
+      "name": "stage2 (U, 9001)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109701,
+      "name": "stage2 (gpt, 9001)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109755,
+      "name": "stage2 (gpt, 9029)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109779,
+      "name": "stage2 (HH, 9029)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109790,
+      "name": "stage2 (A0, 9011)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109797,
+      "name": "stage2 (HH, 9001)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109820,
+      "name": "stage2 (A0, 9029)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109845,
+      "name": "stage2 (A0, 9001)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109847,
+      "name": "stage2 (UA, 9001)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109853,
+      "name": "stage2 (U, 9011)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109857,
+      "name": "stage2 (gpt, 9011)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109909,
+      "name": "stage2 (AU, 9001)",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 140697109971,
+      "name": "stage2 (UA, 9011)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697109997,
+      "name": "stage2 (HH, 9011)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697110030,
+      "name": "stage2 (UA, 9029)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 140697111393,
+      "name": "stage2 (AU, 9011)",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 140697111466,
+      "name": "stage2 (AU, 9029)",
+      "status": "in_progress",
+      "conclusion": null
+    }
+  ],
+  "failedLogChecks": [
+    {
+      "job": 140697109696,
+      "name": "stage2 (U, 9029)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109696"
+    },
+    {
+      "job": 140697109700,
+      "name": "stage2 (U, 9001)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109700"
+    },
+    {
+      "job": 140697109701,
+      "name": "stage2 (gpt, 9001)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109701"
+    },
+    {
+      "job": 140697109755,
+      "name": "stage2 (gpt, 9029)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109755"
+    },
+    {
+      "job": 140697109779,
+      "name": "stage2 (HH, 9029)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109779"
+    },
+    {
+      "job": 140697109790,
+      "name": "stage2 (A0, 9011)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109790"
+    },
+    {
+      "job": 140697109797,
+      "name": "stage2 (HH, 9001)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109797"
+    },
+    {
+      "job": 140697109820,
+      "name": "stage2 (A0, 9029)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109820"
+    },
+    {
+      "job": 140697109845,
+      "name": "stage2 (A0, 9001)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109845"
+    },
+    {
+      "job": 140697109847,
+      "name": "stage2 (UA, 9001)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109847"
+    },
+    {
+      "job": 140697109853,
+      "name": "stage2 (U, 9011)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109853"
+    },
+    {
+      "job": 140697109857,
+      "name": "stage2 (gpt, 9011)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109857"
+    },
+    {
+      "job": 140697109971,
+      "name": "stage2 (UA, 9011)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109971"
+    },
+    {
+      "job": 140697109997,
+      "name": "stage2 (HH, 9011)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697109997"
+    },
+    {
+      "job": 140697110030,
+      "name": "stage2 (UA, 9029)",
+      "traceAtRecoverLine68": true,
+      "safeLoadScalarError": true,
+      "exitOne": true,
+      "logLink": "https://github.com/FPC-effortless/cdl-attention-experiment/actions/runs/46041424800/job/140697110030"
+    }
+  ],
+  "originalStage1Run": 46039004295,
+  "recoveryRun": 46041424800,
+  "resumeOnlyRun": 46044686359,
+  "latestOwnerArchiveVerification": 15,
+  "ownerHandoff": "https://github.com/FPC-effortless/cdl-attention-experiment/pull/99#issuecomment-7226394819",
+  "limits": "Source/remote job audit only; no model invocation or checkpoint decode; exact raw logs remain on linked provider, no private content published; no independent review or new fit."
+}
