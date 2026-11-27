@@ -254,7 +254,7 @@ class OfflineDemoReceiptTest(unittest.TestCase):
 
     def test_deeply_nested_json_is_rejected_as_a_controlled_error(self):
         _, _, _, execution_raw = valid_pair()
-        nested = b"[" * 1500 + b"0" + b"]" * 1500
+        nested = b"[" * 12000 + b"0" + b"]" * 12000
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             receipt_path = root / "receipt.json"
