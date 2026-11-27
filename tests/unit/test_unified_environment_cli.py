@@ -137,4 +137,5 @@ def test_command_registry_exposes_only_supported_unified_environment_commands() 
         "export",
         "conformance",
         "reverify",
+        "woyengi-work",
     }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 import pathlib
+import tempfile
 
 import typer
 
@@ -58,6 +59,20 @@ def compile_environment_cmd(
     arguments = ["compile", "--episode", str(episode), "--output", str(output)]
     _append_optional_path(arguments, "--public-output", public_output)
     _run_portability(arguments)
+
+
+@env_app.command("woyengi-work")
+def woyengi_work_environment_cmd(
+    output: pathlib.Path = typer.Option(..., "--output"),
+    public_output: pathlib.Path | None = typer.Option(None, "--public-output"),
+) -> None:
+    """Compile the built-in, offline Woyengi Work environment."""
+    from investigation_world.authoring.woyengi_work import build_woyengi_work_environment
+
+    with tempfile.TemporaryDirectory(prefix="veritas-woyengi-work-") as temp:
+        episode = pathlib.Path(temp) / "episode.json"
+        episode.write_text(build_woyengi_work_environment().model_dump_json(), encoding="utf-8")
+        compile_environment_cmd(episode=episode, output=output, public_output=public_output)
 
 
 @env_app.command("inspect")

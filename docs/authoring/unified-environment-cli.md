@@ -14,6 +14,7 @@ veritas env run
 veritas env export
 veritas env conformance
 veritas env reverify
+veritas env woyengi-work
 ```
 
 ### Compile
@@ -101,3 +102,18 @@ This interface does not:
 - expose evaluator-private state by default.
 
 Environment scaffolding/authoring is owned by the fluent authoring API and can be surfaced under `veritas env` only after that API is integrated; this lane does not invent a competing scaffold format.
+
+## Built-in Woyengi Work environment
+
+```bash
+veritas env woyengi-work --output work-contract.json --public-output work-public.json
+veritas env validate --contract work-contract.json
+```
+
+This is a self-contained Veritas simulation, not a connector to a Woyengi Work service.
+An agent receives a paused case and a handoff record, resumes from the correct checkpoint,
+verifies the artifact, and closes the work. A wrong checkpoint, a skipped verification, or
+a premature close cannot advance the corresponding state. A successful submission also needs
+the handoff evidence ID. Share only the public output with the evaluated agent; the full
+contract is for the evaluator. The initial scenario tests a simulated handoff, not the
+durability of a real workspace across process restarts.
