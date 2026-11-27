@@ -119,6 +119,8 @@ class OfflineDemoReceiptTest(unittest.TestCase):
         self.assertEqual(result["physical_device"], "NOT_RUN")
         self.assertEqual(result["external_developer_acceptance"], "NOT_ESTABLISHED")
         self.assertEqual(result["commercial_release"], "NOT_AUTHORIZED")
+        self.assertEqual(result["claimed_network_mode"], "none")
+        self.assertEqual(result["claimed_secrets_passed_to_container"], False)
         self.assertNotIn("run_id", result)
 
     def test_wrong_expected_commit_rejected(self):
