@@ -35,6 +35,7 @@
     },
     "oracle_shared_coverage": "13/16",
     "ordered_batches": 256,
-    "per_row_oracle_coverage": "1"
+    "per_row_oracle_coverage": "1",
+    "top_k": 2
   }
 }
