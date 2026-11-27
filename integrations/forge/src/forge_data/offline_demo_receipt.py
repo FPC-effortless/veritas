@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 from pathlib import Path
 
 from .core import ForgeError
@@ -72,8 +74,30 @@ def _decode_json(raw: bytes, label: str) -> object:
 
 
 def _read_bytes(path: Path, label: str) -> bytes:
-    with Path(path).open("rb") as stream:
-        raw = stream.read(MAX_JSON_BYTES + 1)
+    """Read one bounded regular file without following a final symlink or blocking on a FIFO."""
+    source = Path(path)
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        # O_NOFOLLOW closes the final-component symlink race on platforms that support it.
+        # The pre-open check is the portable fallback; fstat below still verifies the opened
+        # object itself is a regular file.
+        if not nofollow and source.is_symlink():
+            raise ForgeError(f"{label}: regular, non-symlink file required")
+        descriptor = os.open(source, flags | nofollow)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ForgeError(f"{label}: regular, non-symlink file required")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1  # fdopen now owns and closes the descriptor.
+            raw = stream.read(MAX_JSON_BYTES + 1)
+    except ForgeError:
+        raise
+    except OSError as exc:
+        raise ForgeError(f"{label}: regular, non-symlink file required") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
     if len(raw) > MAX_JSON_BYTES:
         raise ForgeError(f"{label}: JSON file exceeds size limit")
     return raw
