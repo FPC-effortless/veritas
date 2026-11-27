@@ -86,10 +86,10 @@ PYTHONPATH=src python -m forge_data verify-offline-demo \
 ```
 
 The command rejects duplicate JSON keys, non-finite values, oversized files,
-unexpected fields, source-commit mismatches, receipt-hash mismatches, unsafe
-environment keys, writable container/checkout claims, network modes other than
-`none`, secret passage, training/hidden-label claims, and qualification
-self-promotion. Its redacted `structural_validation: PASS` is only a check of
+symbolic links and non-regular receipt paths, unexpected fields, source-commit
+mismatches, receipt-hash mismatches, unsafe environment keys, writable
+container/checkout claims, network modes other than `none`, secret passage,
+training/hidden-label claims, and qualification self-promotion. Its redacted `structural_validation: PASS` is only a check of
 the supplied receipt pair; it is not GitHub artifact attestation, source-rights
 approval, scientific qualification, physical-device readiness, independent
 developer acceptance, or commercial release authority.
