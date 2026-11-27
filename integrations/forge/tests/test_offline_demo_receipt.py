@@ -29,7 +29,9 @@ def valid_pair():
             "elapsed_ms": 108,
             "limit_ms": LIMIT_MS,
             "within_ten_minutes": True,
-            "timer": "time.perf_counter_ns around child interpreter startup, imports and quickstart",
+            "timer": (
+                "time.perf_counter_ns around child interpreter startup, imports and quickstart"
+            ),
             "scope": "excludes checkout, runner provisioning and container-image acquisition",
         },
         "environment": {
@@ -41,7 +43,10 @@ def valid_pair():
         },
         "network": {
             "enforcement": "EXTERNAL_SANDBOX_REQUIRED",
-            "note": "This measurer does not disable OS networking; the CI workflow runs it in a Docker --network=none container.",
+            "note": (
+                "This measurer does not disable OS networking; the CI workflow runs it in a "
+                "Docker --network=none container."
+            ),
         },
         "child_exit_code": 0,
         "failure_reason": None,
