@@ -26,7 +26,9 @@ SAFE_CHILD_KEYS = {
     "PATH", "SYSTEMROOT", "WINDIR", "TMP", "TEMP", "TMPDIR", "LANG", "LC_ALL",
     "PYTHONPATH", "PYTHONHASHSEED", "PYTHONDONTWRITEBYTECODE", "PYTHONNOUSERSITE",
 }
-TIMER = "time.perf_counter_ns around child interpreter startup, imports and quickstart"
+TIMER = (
+    "time.perf_counter_ns around child interpreter startup, imports and quickstart"
+)
 MEASUREMENT_SCOPE = "excludes checkout, runner provisioning and container-image acquisition"
 NETWORK_NOTE = (
     "This measurer does not disable OS networking; the CI workflow runs it in a "
