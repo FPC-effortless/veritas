@@ -1,0 +1,40 @@
+{
+  "dataset": null,
+  "psn_floor": {
+    "candidate_failures": 0,
+    "cases": 10626,
+    "floor_violations": 6750,
+    "grid_denominator": 20,
+    "maximum": "5/6",
+    "minimum": "1/24",
+    "upper_bound_violations": 75
+  },
+  "scope": "source-equation and combinatorial witness only",
+  "seed": null,
+  "usef_resize": {
+    "both_resized_to": "0",
+    "collision_a": [
+      "1",
+      "-1"
+    ],
+    "collision_b": [
+      "0",
+      "0"
+    ]
+  },
+  "usef_shared_route": {
+    "batch_size": 4,
+    "experts": 4,
+    "limited_batches": 168,
+    "oracle_covered_rows_histogram": {
+      "0": 0,
+      "1": 0,
+      "2": 24,
+      "3": 144,
+      "4": 88
+    },
+    "oracle_shared_coverage": "13/16",
+    "ordered_batches": 256,
+    "per_row_oracle_coverage": "1"
+  }
+}
