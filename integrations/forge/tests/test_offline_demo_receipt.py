@@ -286,5 +286,51 @@ class OfflineDemoReceiptTest(unittest.TestCase):
                 validate_offline_demo_files(receipt_path, execution_path, COMMIT)
 
 
+    @unittest.skipUnless(hasattr(os, "symlink"), "symbolic links are unavailable")
+    def test_file_loader_rejects_symlink_receipts(self):
+        _, _, _, execution_raw = valid_pair()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "target.json"
+            link = root / "receipt.json"
+            execution_path = root / "execution.json"
+            target.write_bytes(b"{}")
+            execution_path.write_bytes(execution_raw)
+            try:
+                link.symlink_to(target)
+            except OSError as exc:
+                self.skipTest(f"cannot create symlink in this environment: {exc}")
+            with self.assertRaisesRegex(ForgeError, "regular, non-symlink file required"):
+                validate_offline_demo_files(link, execution_path, COMMIT)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "named pipes are unavailable")
+    def test_file_loader_rejects_fifo_without_blocking(self):
+        _, _, _, execution_raw = valid_pair()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            receipt_path = root / "receipt.fifo"
+            execution_path = root / "execution.json"
+            os.mkfifo(receipt_path)
+            execution_path.write_bytes(execution_raw)
+            with self.assertRaisesRegex(ForgeError, "regular, non-symlink file required"):
+                validate_offline_demo_files(receipt_path, execution_path, COMMIT)
+
+    def test_file_loader_rejects_directory_and_missing_paths_as_controlled_errors(self):
+        _, _, _, execution_raw = valid_pair()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            execution_path = root / "execution.json"
+            execution_path.write_bytes(execution_raw)
+            directory = root / "receipt-directory"
+            directory.mkdir()
+            missing = root / "missing.json"
+            for candidate in (directory, missing):
+                with self.subTest(path=candidate.name):
+                    with self.assertRaisesRegex(
+                        ForgeError, "regular, non-symlink file required"
+                    ):
+                        validate_offline_demo_files(candidate, execution_path, COMMIT)
+
+
 if __name__ == "__main__":
     unittest.main()
