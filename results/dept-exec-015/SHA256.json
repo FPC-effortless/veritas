@@ -1,0 +1,35 @@
+{
+  "classification": "Public source/fixture evidence only; no private checkpoint or validation rows.",
+  "source": {
+    "repo": "FPC-effortless/cdl-attention-experiment",
+    "commit": "99a97c1b2ff9c669f4e45356b02083d3bc29a621",
+    "path": "research/math-repair-009/model.py",
+    "git_blob": "31c3555521469425d884c700aed01b48c4fab50e",
+    "sha256": "eaf5ae7973957bc68330fe754a8aa6cdb1199189413fee6995aa749f809e75c8"
+  },
+  "execution_environment": "Connector JS V8 isolate; precise version not exposed, no external packages; Node CLI replay not executed here.",
+  "dataset": "N/A, generated deterministic public fixtures only",
+  "members": {
+    "audit.cjs": {
+      "git_blob": "3473b8343af1a4e44b24c1c64f1e5ff1536cf7e2",
+      "sha256": "f2d3b4d2a489ac34c999d37d67b81f0e78a48f4b6a04d3403f3bdb575da0f7f1",
+      "utf8_bytes": 4001
+    },
+    "result.json": {
+      "git_blob": "9652a962e4b96921111d58b3dd9ed4ad65e4de8e",
+      "sha256": "87fbddf61945f398500083e1c803892f24b53da08183721f3ffc422c889ed18e",
+      "utf8_bytes": 17807
+    },
+    "REPORT.md": {
+      "git_blob": "4df5a4020d5fe2199c66478bc7c49c55ad5ef6d4",
+      "sha256": "8539fe8a0765af6bd4c3951fc09f6371c1b321e21633b394daeb2da18fbd1461",
+      "utf8_bytes": 12599
+    }
+  },
+  "prior_custody_error": {
+    "destination": "/Research/DEPT_EXEC_013_Recovery.zip",
+    "source_snapshot": "file_00000000450881fda2e340e2a114e2fa",
+    "failed_attachment": "file_000000004e3c81fdaf1080fbce34266c",
+    "status": "AccessDeny, no stable Library receipt"
+  }
+}
