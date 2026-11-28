@@ -1,0 +1,867 @@
+{
+  "source_anchors": [
+    {
+      "id": "local-window",
+      "line": 35
+    },
+    {
+      "id": "local-ax",
+      "line": 36
+    },
+    {
+      "id": "same-ax",
+      "line": 96
+    },
+    {
+      "id": "same-ax-each-H",
+      "line": 100
+    },
+    {
+      "id": "hard-local-route",
+      "line": 42
+    },
+    {
+      "id": "hard-forward",
+      "line": 10
+    },
+    {
+      "id": "slot-count",
+      "line": 43
+    },
+    {
+      "id": "local-slot-read",
+      "line": 48
+    },
+    {
+      "id": "contextual-background",
+      "line": 48
+    },
+    {
+      "id": "role-mixture",
+      "line": 48
+    },
+    {
+      "id": "gqa-position",
+      "line": 56
+    },
+    {
+      "id": "side-default",
+      "line": 71
+    }
+  ],
+  "negative_anchor_deletions_rejected": [
+    "local-window",
+    "local-ax",
+    "same-ax",
+    "same-ax-each-H",
+    "hard-local-route",
+    "hard-forward",
+    "slot-count",
+    "local-slot-read",
+    "contextual-background",
+    "role-mixture",
+    "gqa-position",
+    "side-default"
+  ],
+  "fixture_summary": [
+    {
+      "length": 128,
+      "rows": 32,
+      "families": 16,
+      "optimal_deterministic_suffix_only_correct": 16,
+      "oracle_correct": 32
+    },
+    {
+      "length": 768,
+      "rows": 32,
+      "families": 16,
+      "optimal_deterministic_suffix_only_correct": 16,
+      "oracle_correct": 32
+    },
+    {
+      "length": 1024,
+      "rows": 32,
+      "families": 16,
+      "optimal_deterministic_suffix_only_correct": 16,
+      "oracle_correct": 32
+    },
+    {
+      "length": 8192,
+      "rows": 32,
+      "families": 16,
+      "optimal_deterministic_suffix_only_correct": 16,
+      "oracle_correct": 32
+    }
+  ],
+  "fixtures": [
+    {
+      "length": 128,
+      "family": 0,
+      "common_suffix": "Q:00?",
+      "prefix_A": "A=A;B=a;SELECT=A;",
+      "prefix_B": "A=A;B=a;SELECT=B;",
+      "labels": [
+        "A",
+        "a"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 1,
+      "common_suffix": "Q:01?",
+      "prefix_A": "A=B;B=b;SELECT=A;",
+      "prefix_B": "A=B;B=b;SELECT=B;",
+      "labels": [
+        "B",
+        "b"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 2,
+      "common_suffix": "Q:02?",
+      "prefix_A": "A=C;B=c;SELECT=A;",
+      "prefix_B": "A=C;B=c;SELECT=B;",
+      "labels": [
+        "C",
+        "c"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 3,
+      "common_suffix": "Q:03?",
+      "prefix_A": "A=D;B=d;SELECT=A;",
+      "prefix_B": "A=D;B=d;SELECT=B;",
+      "labels": [
+        "D",
+        "d"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 4,
+      "common_suffix": "Q:04?",
+      "prefix_A": "A=E;B=e;SELECT=A;",
+      "prefix_B": "A=E;B=e;SELECT=B;",
+      "labels": [
+        "E",
+        "e"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 5,
+      "common_suffix": "Q:05?",
+      "prefix_A": "A=F;B=f;SELECT=A;",
+      "prefix_B": "A=F;B=f;SELECT=B;",
+      "labels": [
+        "F",
+        "f"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 6,
+      "common_suffix": "Q:06?",
+      "prefix_A": "A=G;B=g;SELECT=A;",
+      "prefix_B": "A=G;B=g;SELECT=B;",
+      "labels": [
+        "G",
+        "g"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 7,
+      "common_suffix": "Q:07?",
+      "prefix_A": "A=H;B=h;SELECT=A;",
+      "prefix_B": "A=H;B=h;SELECT=B;",
+      "labels": [
+        "H",
+        "h"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 8,
+      "common_suffix": "Q:08?",
+      "prefix_A": "A=I;B=i;SELECT=A;",
+      "prefix_B": "A=I;B=i;SELECT=B;",
+      "labels": [
+        "I",
+        "i"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 9,
+      "common_suffix": "Q:09?",
+      "prefix_A": "A=J;B=j;SELECT=A;",
+      "prefix_B": "A=J;B=j;SELECT=B;",
+      "labels": [
+        "J",
+        "j"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 10,
+      "common_suffix": "Q:10?",
+      "prefix_A": "A=K;B=k;SELECT=A;",
+      "prefix_B": "A=K;B=k;SELECT=B;",
+      "labels": [
+        "K",
+        "k"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 11,
+      "common_suffix": "Q:11?",
+      "prefix_A": "A=L;B=l;SELECT=A;",
+      "prefix_B": "A=L;B=l;SELECT=B;",
+      "labels": [
+        "L",
+        "l"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 12,
+      "common_suffix": "Q:12?",
+      "prefix_A": "A=M;B=m;SELECT=A;",
+      "prefix_B": "A=M;B=m;SELECT=B;",
+      "labels": [
+        "M",
+        "m"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 13,
+      "common_suffix": "Q:13?",
+      "prefix_A": "A=N;B=n;SELECT=A;",
+      "prefix_B": "A=N;B=n;SELECT=B;",
+      "labels": [
+        "N",
+        "n"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 14,
+      "common_suffix": "Q:14?",
+      "prefix_A": "A=O;B=o;SELECT=A;",
+      "prefix_B": "A=O;B=o;SELECT=B;",
+      "labels": [
+        "O",
+        "o"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 128,
+      "family": 15,
+      "common_suffix": "Q:15?",
+      "prefix_A": "A=P;B=p;SELECT=A;",
+      "prefix_B": "A=P;B=p;SELECT=B;",
+      "labels": [
+        "P",
+        "p"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 0,
+      "common_suffix": "Q:00?",
+      "prefix_A": "A=A;B=a;SELECT=A;",
+      "prefix_B": "A=A;B=a;SELECT=B;",
+      "labels": [
+        "A",
+        "a"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 1,
+      "common_suffix": "Q:01?",
+      "prefix_A": "A=B;B=b;SELECT=A;",
+      "prefix_B": "A=B;B=b;SELECT=B;",
+      "labels": [
+        "B",
+        "b"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 2,
+      "common_suffix": "Q:02?",
+      "prefix_A": "A=C;B=c;SELECT=A;",
+      "prefix_B": "A=C;B=c;SELECT=B;",
+      "labels": [
+        "C",
+        "c"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 3,
+      "common_suffix": "Q:03?",
+      "prefix_A": "A=D;B=d;SELECT=A;",
+      "prefix_B": "A=D;B=d;SELECT=B;",
+      "labels": [
+        "D",
+        "d"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 4,
+      "common_suffix": "Q:04?",
+      "prefix_A": "A=E;B=e;SELECT=A;",
+      "prefix_B": "A=E;B=e;SELECT=B;",
+      "labels": [
+        "E",
+        "e"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 5,
+      "common_suffix": "Q:05?",
+      "prefix_A": "A=F;B=f;SELECT=A;",
+      "prefix_B": "A=F;B=f;SELECT=B;",
+      "labels": [
+        "F",
+        "f"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 6,
+      "common_suffix": "Q:06?",
+      "prefix_A": "A=G;B=g;SELECT=A;",
+      "prefix_B": "A=G;B=g;SELECT=B;",
+      "labels": [
+        "G",
+        "g"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 7,
+      "common_suffix": "Q:07?",
+      "prefix_A": "A=H;B=h;SELECT=A;",
+      "prefix_B": "A=H;B=h;SELECT=B;",
+      "labels": [
+        "H",
+        "h"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 8,
+      "common_suffix": "Q:08?",
+      "prefix_A": "A=I;B=i;SELECT=A;",
+      "prefix_B": "A=I;B=i;SELECT=B;",
+      "labels": [
+        "I",
+        "i"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 9,
+      "common_suffix": "Q:09?",
+      "prefix_A": "A=J;B=j;SELECT=A;",
+      "prefix_B": "A=J;B=j;SELECT=B;",
+      "labels": [
+        "J",
+        "j"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 10,
+      "common_suffix": "Q:10?",
+      "prefix_A": "A=K;B=k;SELECT=A;",
+      "prefix_B": "A=K;B=k;SELECT=B;",
+      "labels": [
+        "K",
+        "k"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 11,
+      "common_suffix": "Q:11?",
+      "prefix_A": "A=L;B=l;SELECT=A;",
+      "prefix_B": "A=L;B=l;SELECT=B;",
+      "labels": [
+        "L",
+        "l"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 12,
+      "common_suffix": "Q:12?",
+      "prefix_A": "A=M;B=m;SELECT=A;",
+      "prefix_B": "A=M;B=m;SELECT=B;",
+      "labels": [
+        "M",
+        "m"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 13,
+      "common_suffix": "Q:13?",
+      "prefix_A": "A=N;B=n;SELECT=A;",
+      "prefix_B": "A=N;B=n;SELECT=B;",
+      "labels": [
+        "N",
+        "n"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 14,
+      "common_suffix": "Q:14?",
+      "prefix_A": "A=O;B=o;SELECT=A;",
+      "prefix_B": "A=O;B=o;SELECT=B;",
+      "labels": [
+        "O",
+        "o"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 768,
+      "family": 15,
+      "common_suffix": "Q:15?",
+      "prefix_A": "A=P;B=p;SELECT=A;",
+      "prefix_B": "A=P;B=p;SELECT=B;",
+      "labels": [
+        "P",
+        "p"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 0,
+      "common_suffix": "Q:00?",
+      "prefix_A": "A=A;B=a;SELECT=A;",
+      "prefix_B": "A=A;B=a;SELECT=B;",
+      "labels": [
+        "A",
+        "a"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 1,
+      "common_suffix": "Q:01?",
+      "prefix_A": "A=B;B=b;SELECT=A;",
+      "prefix_B": "A=B;B=b;SELECT=B;",
+      "labels": [
+        "B",
+        "b"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 2,
+      "common_suffix": "Q:02?",
+      "prefix_A": "A=C;B=c;SELECT=A;",
+      "prefix_B": "A=C;B=c;SELECT=B;",
+      "labels": [
+        "C",
+        "c"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 3,
+      "common_suffix": "Q:03?",
+      "prefix_A": "A=D;B=d;SELECT=A;",
+      "prefix_B": "A=D;B=d;SELECT=B;",
+      "labels": [
+        "D",
+        "d"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 4,
+      "common_suffix": "Q:04?",
+      "prefix_A": "A=E;B=e;SELECT=A;",
+      "prefix_B": "A=E;B=e;SELECT=B;",
+      "labels": [
+        "E",
+        "e"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 5,
+      "common_suffix": "Q:05?",
+      "prefix_A": "A=F;B=f;SELECT=A;",
+      "prefix_B": "A=F;B=f;SELECT=B;",
+      "labels": [
+        "F",
+        "f"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 6,
+      "common_suffix": "Q:06?",
+      "prefix_A": "A=G;B=g;SELECT=A;",
+      "prefix_B": "A=G;B=g;SELECT=B;",
+      "labels": [
+        "G",
+        "g"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 7,
+      "common_suffix": "Q:07?",
+      "prefix_A": "A=H;B=h;SELECT=A;",
+      "prefix_B": "A=H;B=h;SELECT=B;",
+      "labels": [
+        "H",
+        "h"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 8,
+      "common_suffix": "Q:08?",
+      "prefix_A": "A=I;B=i;SELECT=A;",
+      "prefix_B": "A=I;B=i;SELECT=B;",
+      "labels": [
+        "I",
+        "i"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 9,
+      "common_suffix": "Q:09?",
+      "prefix_A": "A=J;B=j;SELECT=A;",
+      "prefix_B": "A=J;B=j;SELECT=B;",
+      "labels": [
+        "J",
+        "j"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 10,
+      "common_suffix": "Q:10?",
+      "prefix_A": "A=K;B=k;SELECT=A;",
+      "prefix_B": "A=K;B=k;SELECT=B;",
+      "labels": [
+        "K",
+        "k"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 11,
+      "common_suffix": "Q:11?",
+      "prefix_A": "A=L;B=l;SELECT=A;",
+      "prefix_B": "A=L;B=l;SELECT=B;",
+      "labels": [
+        "L",
+        "l"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 12,
+      "common_suffix": "Q:12?",
+      "prefix_A": "A=M;B=m;SELECT=A;",
+      "prefix_B": "A=M;B=m;SELECT=B;",
+      "labels": [
+        "M",
+        "m"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 13,
+      "common_suffix": "Q:13?",
+      "prefix_A": "A=N;B=n;SELECT=A;",
+      "prefix_B": "A=N;B=n;SELECT=B;",
+      "labels": [
+        "N",
+        "n"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 14,
+      "common_suffix": "Q:14?",
+      "prefix_A": "A=O;B=o;SELECT=A;",
+      "prefix_B": "A=O;B=o;SELECT=B;",
+      "labels": [
+        "O",
+        "o"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 1024,
+      "family": 15,
+      "common_suffix": "Q:15?",
+      "prefix_A": "A=P;B=p;SELECT=A;",
+      "prefix_B": "A=P;B=p;SELECT=B;",
+      "labels": [
+        "P",
+        "p"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 0,
+      "common_suffix": "Q:00?",
+      "prefix_A": "A=A;B=a;SELECT=A;",
+      "prefix_B": "A=A;B=a;SELECT=B;",
+      "labels": [
+        "A",
+        "a"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 1,
+      "common_suffix": "Q:01?",
+      "prefix_A": "A=B;B=b;SELECT=A;",
+      "prefix_B": "A=B;B=b;SELECT=B;",
+      "labels": [
+        "B",
+        "b"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 2,
+      "common_suffix": "Q:02?",
+      "prefix_A": "A=C;B=c;SELECT=A;",
+      "prefix_B": "A=C;B=c;SELECT=B;",
+      "labels": [
+        "C",
+        "c"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 3,
+      "common_suffix": "Q:03?",
+      "prefix_A": "A=D;B=d;SELECT=A;",
+      "prefix_B": "A=D;B=d;SELECT=B;",
+      "labels": [
+        "D",
+        "d"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 4,
+      "common_suffix": "Q:04?",
+      "prefix_A": "A=E;B=e;SELECT=A;",
+      "prefix_B": "A=E;B=e;SELECT=B;",
+      "labels": [
+        "E",
+        "e"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 5,
+      "common_suffix": "Q:05?",
+      "prefix_A": "A=F;B=f;SELECT=A;",
+      "prefix_B": "A=F;B=f;SELECT=B;",
+      "labels": [
+        "F",
+        "f"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 6,
+      "common_suffix": "Q:06?",
+      "prefix_A": "A=G;B=g;SELECT=A;",
+      "prefix_B": "A=G;B=g;SELECT=B;",
+      "labels": [
+        "G",
+        "g"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 7,
+      "common_suffix": "Q:07?",
+      "prefix_A": "A=H;B=h;SELECT=A;",
+      "prefix_B": "A=H;B=h;SELECT=B;",
+      "labels": [
+        "H",
+        "h"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 8,
+      "common_suffix": "Q:08?",
+      "prefix_A": "A=I;B=i;SELECT=A;",
+      "prefix_B": "A=I;B=i;SELECT=B;",
+      "labels": [
+        "I",
+        "i"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 9,
+      "common_suffix": "Q:09?",
+      "prefix_A": "A=J;B=j;SELECT=A;",
+      "prefix_B": "A=J;B=j;SELECT=B;",
+      "labels": [
+        "J",
+        "j"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 10,
+      "common_suffix": "Q:10?",
+      "prefix_A": "A=K;B=k;SELECT=A;",
+      "prefix_B": "A=K;B=k;SELECT=B;",
+      "labels": [
+        "K",
+        "k"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 11,
+      "common_suffix": "Q:11?",
+      "prefix_A": "A=L;B=l;SELECT=A;",
+      "prefix_B": "A=L;B=l;SELECT=B;",
+      "labels": [
+        "L",
+        "l"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 12,
+      "common_suffix": "Q:12?",
+      "prefix_A": "A=M;B=m;SELECT=A;",
+      "prefix_B": "A=M;B=m;SELECT=B;",
+      "labels": [
+        "M",
+        "m"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 13,
+      "common_suffix": "Q:13?",
+      "prefix_A": "A=N;B=n;SELECT=A;",
+      "prefix_B": "A=N;B=n;SELECT=B;",
+      "labels": [
+        "N",
+        "n"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 14,
+      "common_suffix": "Q:14?",
+      "prefix_A": "A=O;B=o;SELECT=A;",
+      "prefix_B": "A=O;B=o;SELECT=B;",
+      "labels": [
+        "O",
+        "o"
+      ],
+      "different_input_bytes": 1
+    },
+    {
+      "length": 8192,
+      "family": 15,
+      "common_suffix": "Q:15?",
+      "prefix_A": "A=P;B=p;SELECT=A;",
+      "prefix_B": "A=P;B=p;SELECT=B;",
+      "labels": [
+        "P",
+        "p"
+      ],
+      "different_input_bytes": 1
+    }
+  ],
+  "classification": "Source-anchor checks and deterministic synthetic fixture arithmetic only; no model/checkpoint execution, training, protected data, or scientific acceptance."
+}
